@@ -1,27 +1,62 @@
+import os
 from pathlib import Path
-
-import environ
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
-env = environ.Env(
-    DJANGO_DEBUG=(bool, False),
-)
 
-environ.Env.read_env(BASE_DIR / '.env')
+def load_env_file(env_path: Path) -> None:
+    if not env_path.exists():
+        return
 
-SECRET_KEY = env('DJANGO_SECRET_KEY', default='change-me')
-DEBUG = env('DJANGO_DEBUG')
-ALLOWED_HOSTS = [host.strip() for host in env('DJANGO_ALLOWED_HOSTS', default='127.0.0.1,localhost').split(',') if host.strip()]
+    for raw_line in env_path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        os.environ.setdefault(key.strip(), value.strip())
 
-INSTALLED_APPS = [
+
+load_env_file(BASE_DIR / '.env')
+
+
+def get_env(name: str, default: str | None = None) -> str | None:
+    return os.getenv(name, default)
+
+
+def get_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def get_list(name: str, default: list[str] | None = None) -> list[str]:
+    value = os.getenv(name)
+    if value is None:
+        return default[:] if default else []
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
+SECRET_KEY = get_env('DJANGO_SECRET_KEY', 'change-me')
+DEBUG = get_bool('DJANGO_DEBUG', default=False)
+ENVIRONMENT = get_env('DJANGO_ENV', 'local')
+ALLOWED_HOSTS = get_list('DJANGO_ALLOWED_HOSTS', default=['127.0.0.1', 'localhost'])
+
+DJANGO_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+]
+
+THIRD_PARTY_APPS = [
+    'corsheaders',
     'rest_framework',
+]
+
+LOCAL_APPS = [
     'apps.common',
     'apps.health',
     'apps.markets',
@@ -29,8 +64,11 @@ INSTALLED_APPS = [
     'apps.audit',
 ]
 
+INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -61,19 +99,19 @@ ASGI_APPLICATION = 'config.asgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': env('DJANGO_DB_ENGINE', default='django.db.backends.postgresql'),
-        'NAME': env('DJANGO_DB_NAME', default='market_trading_bot'),
-        'USER': env('DJANGO_DB_USER', default='market_user'),
-        'PASSWORD': env('DJANGO_DB_PASSWORD', default='market_password'),
-        'HOST': env('DJANGO_DB_HOST', default='localhost'),
-        'PORT': env('DJANGO_DB_PORT', default='5432'),
-    }
+        'ENGINE': get_env('DJANGO_DB_ENGINE', 'django.db.backends.postgresql'),
+        'NAME': get_env('POSTGRES_DB', get_env('DJANGO_DB_NAME', 'market_trading_bot')),
+        'USER': get_env('POSTGRES_USER', get_env('DJANGO_DB_USER', 'market_user')),
+        'PASSWORD': get_env('POSTGRES_PASSWORD', get_env('DJANGO_DB_PASSWORD', 'market_password')),
+        'HOST': get_env('POSTGRES_HOST', get_env('DJANGO_DB_HOST', 'localhost')),
+        'PORT': get_env('POSTGRES_PORT', get_env('DJANGO_DB_PORT', '5432')),
+    },
 }
 
 AUTH_PASSWORD_VALIDATORS = []
 
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+TIME_ZONE = get_env('DJANGO_TIME_ZONE', 'UTC')
 USE_I18N = True
 USE_TZ = True
 
@@ -85,12 +123,29 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
     ],
     'DEFAULT_PARSER_CLASSES': [
         'rest_framework.parsers.JSONParser',
     ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
+    ],
 }
 
-REDIS_URL = env('REDIS_URL', default='redis://localhost:6379/0')
-CELERY_BROKER_URL = env('CELERY_BROKER_URL', default=REDIS_URL)
-CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default='redis://localhost:6379/1')
+CORS_ALLOWED_ORIGINS = get_list(
+    'DJANGO_CORS_ALLOWED_ORIGINS',
+    default=[
+        'http://127.0.0.1:5173',
+        'http://localhost:5173',
+        'http://127.0.0.1:4173',
+        'http://localhost:4173',
+    ],
+)
+
+REDIS_URL = get_env('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_BROKER_URL = get_env('CELERY_BROKER_URL', REDIS_URL)
+CELERY_RESULT_BACKEND = get_env('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
+CELERY_TASK_ALWAYS_EAGER = False
+CELERY_TASK_EAGER_PROPAGATES = False
+CELERY_TIMEZONE = TIME_ZONE
