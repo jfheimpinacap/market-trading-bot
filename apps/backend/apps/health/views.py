@@ -2,6 +2,8 @@ from django.conf import settings
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .serializers import HealthCheckSerializer
+
 
 class HealthCheckView(APIView):
     authentication_classes = []
@@ -11,10 +13,9 @@ class HealthCheckView(APIView):
         payload = {
             'status': 'ok',
             'service': 'market-trading-bot-backend',
-            'environment': 'development' if settings.DEBUG else 'production',
-            'dependencies': {
-                'database': settings.DATABASES['default']['ENGINE'],
-                'broker': settings.CELERY_BROKER_URL,
-            },
+            'environment': settings.ENVIRONMENT,
+            'database_configured': bool(settings.DATABASES.get('default', {}).get('NAME')),
+            'redis_configured': bool(getattr(settings, 'REDIS_URL', '')),
         }
-        return Response(payload)
+        serializer = HealthCheckSerializer(payload)
+        return Response(serializer.data)
