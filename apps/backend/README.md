@@ -6,7 +6,8 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 - Provide a modular Django + DRF API base inside the monorepo.
 - Keep a stable local development setup for PostgreSQL, Redis, Celery, and the frontend.
 - Expose a lightweight healthcheck at `/api/health/`.
-- Leave serious but intentionally empty domain apps ready for future iterations.
+- Provide an initial provider-agnostic market domain for catalog, metadata, and snapshot history work.
+- Leave other domain apps intentionally small until their scope is ready.
 
 ## Internal structure
 
@@ -37,15 +38,33 @@ apps/backend/
 ## Apps available today
 - `apps.common`: shared technical building blocks like abstract models and simple shared tasks.
 - `apps.health`: configuration-oriented health endpoint.
-- `apps.markets`: placeholder app for future market domain work.
+- `apps.markets`: provider, event, market, market snapshot, and market rule domain models plus basic read-only API endpoints.
 - `apps.agents`: placeholder app for future agent domain work.
 - `apps.audit`: placeholder app for future audit and post-mortem work.
 
+## Markets app summary
+The `apps.markets` app now provides the initial database foundation for prediction-market data without adding trading workflows or provider integrations.
+
+Current market models:
+- `Provider`
+- `Event`
+- `Market`
+- `MarketSnapshot`
+- `MarketRule`
+
+Current read-only market endpoints:
+- `/api/markets/providers/`
+- `/api/markets/events/`
+- `/api/markets/`
+- `/api/markets/<id>/`
+
+Use Django admin to inspect this data locally once migrated.
+
 ## Settings layout
-- `config/settings/base.py`: shared settings, installed apps, middleware, DRF, CORS, PostgreSQL, Redis, and Celery defaults.
-- `config/settings/local.py`: local development defaults.
-- `config/settings/test.py`: lightweight SQLite-backed test configuration.
-- `config/settings/production.py`: reserved minimal production profile for later hardening.
+- `base.py` contains shared defaults, installed apps, middleware, DRF, CORS, PostgreSQL, Redis, and Celery defaults.
+- `local.py` keeps local development behavior simple.
+- `test.py` uses SQLite and eager Celery execution for lightweight test runs.
+- `production.py` is reserved as a minimal production profile for later hardening.
 
 By default, `manage.py`, ASGI, WSGI, and Celery use `config.settings.local` unless `DJANGO_SETTINGS_MODULE` is provided explicitly.
 
@@ -90,6 +109,13 @@ cd apps/backend
 python manage.py migrate
 ```
 
+If you are working on the market domain and need to generate a new migration after modifying models:
+
+```bash
+cd apps/backend
+python manage.py makemigrations markets
+```
+
 ## Run the development server
 
 ```bash
@@ -99,31 +125,28 @@ python manage.py runserver
 
 The API will be available on `http://localhost:8000/`.
 
-## Healthcheck
-Test the health endpoint:
+## API examples
+Healthcheck:
 
 ```bash
 curl http://localhost:8000/api/health/
 ```
 
-Expected JSON shape:
+Markets endpoints:
 
-```json
-{
-  "status": "ok",
-  "service": "market-trading-bot-backend",
-  "environment": "local",
-  "database_configured": true,
-  "redis_configured": true
-}
+```bash
+curl http://localhost:8000/api/markets/providers/
+curl http://localhost:8000/api/markets/
+curl http://localhost:8000/api/markets/events/
+curl http://localhost:8000/api/markets/1/
 ```
 
 ## DRF conventions for future work
 - Keep routes grouped per app in each app's own `urls.py`.
 - Mount app routes centrally from `config/api.py` under `/api/`.
 - Keep `views.py` for endpoint classes/functions and `serializers.py` for request/response shaping.
-- Add domain models only when the business scope for that app is ready.
 - Prefer simple serializers and service extraction over custom internal frameworks.
+- Grow domain apps incrementally instead of introducing internal abstraction layers early.
 
 ## Local frontend integration
 CORS is configured for local Vite defaults only:
@@ -157,11 +180,11 @@ DJANGO_SETTINGS_MODULE=config.settings.test python manage.py test
 
 ## What is intentionally not implemented yet
 - Trading logic
-- Provider integrations
+- Provider integrations or sync jobs
 - Authentication and authorization layers
-- Market/order/position models
-- Risk, signals, or paper trading workflows
+- Orders, positions, fills, or paper trading workflows
+- Signals, risk, or portfolio workflows
 - Audit event persistence
 - Background workflows beyond Celery wiring
 
-This backend is now prepared for those future stages without adding premature business complexity.
+This backend is prepared for future stages without adding premature business complexity.

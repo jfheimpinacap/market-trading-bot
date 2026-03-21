@@ -1,3 +1,4 @@
+import importlib.util
 import os
 from pathlib import Path
 
@@ -52,9 +53,11 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
-    'corsheaders',
     'rest_framework',
 ]
+
+if importlib.util.find_spec('corsheaders') is not None:
+    THIRD_PARTY_APPS.insert(0, 'corsheaders')
 
 LOCAL_APPS = [
     'apps.common',
@@ -68,7 +71,6 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -76,6 +78,9 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+if importlib.util.find_spec('corsheaders') is not None:
+    MIDDLEWARE.insert(1, 'corsheaders.middleware.CorsMiddleware')
 
 ROOT_URLCONF = 'config.urls'
 
