@@ -1,10 +1,10 @@
 # market-trading-bot
 
-Professional initial scaffold for a modular prediction markets intelligence and paper-trading platform. This version is intentionally limited to project structure, local development tooling, a placeholder frontend, and a minimal backend healthcheck.
+Professional initial scaffold for a modular prediction markets intelligence and paper-trading platform. This version is intentionally limited to project structure, local development tooling, a professional frontend shell, and a minimal backend healthcheck.
 
 ## Current scope
 
-- **Frontend:** React + Vite + TypeScript placeholder dashboard.
+- **Frontend:** React + Vite + TypeScript application shell with dashboard, navigation, and local backend health visibility.
 - **Backend:** Django + Django REST Framework scaffold with `GET /api/health/`.
 - **Infrastructure:** Docker Compose services for PostgreSQL and Redis.
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
@@ -80,6 +80,7 @@ market-trading-bot/
 4. Install frontend dependencies.
    ```bash
    cd apps/frontend
+   cp .env.example .env
    npm install
    npm run dev
    ```
@@ -114,15 +115,22 @@ GET http://localhost:8000/api/health/
 
 ```bash
 cd apps/frontend
+cp .env.example .env
 npm install
 npm run dev
 npm run build
 ```
 
+Important frontend environment variable:
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
+```
+
 ## Current modules
 
 ### Apps
-- `apps/frontend`: user-facing web UI scaffold.
+- `apps/frontend`: local-first dashboard shell with multi-page navigation and backend health visibility.
 - `apps/backend`: API scaffold and project configuration.
 
 ### Services
@@ -146,6 +154,8 @@ Each library currently contains only a README describing its intended future res
 
 ## Documentation
 
+- `apps/frontend/README.md`: frontend setup, routing, healthcheck behavior, and local configuration.
+- `docs/architecture/frontend-architecture.md`: frontend layout and routing decisions for this phase.
 - `docs/architecture/monorepo-architecture.md`: initial architecture description.
 - `docs/prompts-codex/README.md`: guidelines for future Codex-assisted tasks.
 - `docs/api/README.md`: placeholder for future API reference material.
@@ -166,12 +176,12 @@ make infra-down
 
 ## Pending work
 
-- Add frontend routing and domain feature slices.
-- Define backend domain APIs beyond health monitoring.
-- Introduce shared types/contracts for provider adapters.
+- Add domain data and APIs beyond the health monitoring scaffold.
+- Upgrade placeholder pages into feature modules progressively.
+- Introduce shared contracts for future provider adapters.
 - Add containerization for the frontend and backend apps.
 - Expand architecture decisions, contribution guidance, and test coverage.
 
 ## Summary
 
-This repository is now ready to serve as the base for staged implementation. The current version is a clean scaffold only, designed to grow without introducing premature business logic.
+This repository is now ready to serve as the base for staged implementation. The current version is a clean, local-first scaffold designed to grow without introducing premature business logic.

@@ -1,17 +1,24 @@
 import type { PropsWithChildren } from 'react';
+import { getRouteByPath } from '../app/routes';
+import type { NavRoute } from '../types/system';
+import { Sidebar } from '../components/Sidebar';
+import { Topbar } from '../components/Topbar';
 
-export function AppShell({ children }: PropsWithChildren) {
+type AppShellProps = PropsWithChildren<{
+  currentPath: string;
+  routes: NavRoute[];
+}>;
+
+export function AppShell({ children, currentPath, routes }: AppShellProps) {
+  const currentRoute = getRouteByPath(currentPath);
+
   return (
     <div className="app-shell">
-      <header className="hero">
-        <p className="eyebrow">Prediction Markets Intelligence Platform</p>
-        <h1>market-trading-bot</h1>
-        <p className="hero-copy">
-          Initial monorepo scaffold for a modular web platform focused on analysis,
-          paper trading, and future automation workflows.
-        </p>
-      </header>
-      <main>{children}</main>
+      <Sidebar routes={routes} currentPath={currentPath} />
+      <div className="app-shell__main">
+        <Topbar route={currentRoute} />
+        <main className="app-shell__content">{children}</main>
+      </div>
     </div>
   );
 }
