@@ -4,6 +4,9 @@ from .models import Event, Market, MarketRule, MarketSnapshot, Provider
 
 
 class ProviderSerializer(serializers.ModelSerializer):
+    event_count = serializers.IntegerField(read_only=True)
+    market_count = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = Provider
         fields = (
@@ -15,13 +18,22 @@ class ProviderSerializer(serializers.ModelSerializer):
             'base_url',
             'api_base_url',
             'notes',
+            'event_count',
+            'market_count',
             'created_at',
             'updated_at',
         )
 
 
-class EventSerializer(serializers.ModelSerializer):
-    provider = ProviderSerializer(read_only=True)
+class ProviderSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Provider
+        fields = ('id', 'name', 'slug', 'is_active')
+
+
+class EventListSerializer(serializers.ModelSerializer):
+    provider = ProviderSummarySerializer(read_only=True)
+    market_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Event
@@ -32,68 +44,25 @@ class EventSerializer(serializers.ModelSerializer):
             'title',
             'slug',
             'category',
-            'description',
             'status',
             'open_time',
             'close_time',
             'resolution_time',
-            'metadata',
+            'market_count',
             'created_at',
             'updated_at',
         )
+
+
+class EventDetailSerializer(EventListSerializer):
+    class Meta(EventListSerializer.Meta):
+        fields = EventListSerializer.Meta.fields + ('description', 'metadata')
 
 
 class MarketRuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = MarketRule
         fields = ('id', 'source_type', 'rule_text', 'resolution_criteria', 'created_at', 'updated_at')
-
-
-class MarketSerializer(serializers.ModelSerializer):
-    provider = ProviderSerializer(read_only=True)
-    event_id = serializers.IntegerField(source='event.id', read_only=True)
-    event_title = serializers.CharField(source='event.title', read_only=True)
-
-    class Meta:
-        model = Market
-        fields = (
-            'id',
-            'provider',
-            'event_id',
-            'event_title',
-            'provider_market_id',
-            'ticker',
-            'title',
-            'slug',
-            'category',
-            'market_type',
-            'outcome_type',
-            'status',
-            'resolution_source',
-            'short_rules',
-            'url',
-            'is_active',
-            'open_time',
-            'close_time',
-            'resolution_time',
-            'current_market_probability',
-            'current_yes_price',
-            'current_no_price',
-            'liquidity',
-            'volume_24h',
-            'volume_total',
-            'spread_bps',
-            'metadata',
-            'created_at',
-            'updated_at',
-        )
-
-
-class MarketDetailSerializer(MarketSerializer):
-    rules = MarketRuleSerializer(many=True, read_only=True)
-
-    class Meta(MarketSerializer.Meta):
-        fields = MarketSerializer.Meta.fields + ('rules',)
 
 
 class MarketSnapshotSerializer(serializers.ModelSerializer):
@@ -120,3 +89,75 @@ class MarketSnapshotSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         )
+
+
+class MarketListSerializer(serializers.ModelSerializer):
+    provider = ProviderSummarySerializer(read_only=True)
+    event_id = serializers.IntegerField(source='event.id', read_only=True)
+    event_title = serializers.CharField(source='event.title', read_only=True)
+    snapshot_count = serializers.IntegerField(read_only=True)
+    latest_snapshot_at = serializers.DateTimeField(read_only=True)
+
+    class Meta:
+        model = Market
+        fields = (
+            'id',
+            'provider',
+            'event_id',
+            'event_title',
+            'provider_market_id',
+            'ticker',
+            'title',
+            'slug',
+            'category',
+            'market_type',
+            'outcome_type',
+            'status',
+            'resolution_source',
+            'url',
+            'is_active',
+            'open_time',
+            'close_time',
+            'resolution_time',
+            'current_market_probability',
+            'current_yes_price',
+            'current_no_price',
+            'liquidity',
+            'volume_24h',
+            'volume_total',
+            'spread_bps',
+            'snapshot_count',
+            'latest_snapshot_at',
+            'created_at',
+            'updated_at',
+        )
+
+
+class MarketDetailSerializer(MarketListSerializer):
+    event = EventDetailSerializer(read_only=True)
+    rules = MarketRuleSerializer(many=True, read_only=True)
+    recent_snapshots = serializers.SerializerMethodField()
+
+    class Meta(MarketListSerializer.Meta):
+        fields = MarketListSerializer.Meta.fields + (
+            'event',
+            'short_rules',
+            'metadata',
+            'rules',
+            'recent_snapshots',
+        )
+
+    def get_recent_snapshots(self, obj):
+        snapshots = getattr(obj, 'recent_snapshots_cache', None)
+        if snapshots is None:
+            snapshots = obj.snapshots.order_by('-captured_at', '-id')[:5]
+        return MarketSnapshotSerializer(snapshots, many=True).data
+
+
+class MarketSystemSummarySerializer(serializers.Serializer):
+    total_providers = serializers.IntegerField()
+    total_events = serializers.IntegerField()
+    total_markets = serializers.IntegerField()
+    active_markets = serializers.IntegerField()
+    resolved_markets = serializers.IntegerField()
+    total_snapshots = serializers.IntegerField()
