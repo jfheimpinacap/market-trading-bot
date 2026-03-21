@@ -1,129 +1,128 @@
-from decimal import Decimal
+from io import StringIO
 
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
-from django.utils import timezone
 from rest_framework.test import APIClient
 
-from .models import Event, EventStatus, Market, MarketRule, MarketSnapshot, MarketStatus, Provider
+from .demo_data import seed_demo_markets
+from .models import Event, Market, MarketRule, MarketSnapshot, Provider
 
 
 class MarketsModelTests(TestCase):
-    def setUp(self):
-        self.provider = Provider.objects.create(
-            name='Kalshi',
-            slug='kalshi',
-            base_url='https://kalshi.com',
-            api_base_url='https://api.elections.kalshi.com',
-        )
+    def test_seed_demo_markets_creates_expected_dataset(self):
+        counts = seed_demo_markets()
 
-    def test_create_provider(self):
-        self.assertEqual(Provider.objects.count(), 1)
-        self.assertEqual(str(self.provider), 'Kalshi')
-        self.assertTrue(self.provider.is_active)
+        self.assertEqual(counts['providers'], 2)
+        self.assertEqual(counts['events'], 6)
+        self.assertEqual(counts['markets'], 12)
+        self.assertEqual(counts['snapshots'], 72)
+        self.assertEqual(counts['rules'], 6)
 
-    def test_create_event(self):
-        event = Event.objects.create(
-            provider=self.provider,
-            provider_event_id='event-001',
-            title='US Presidential Election 2028',
-            category='politics',
-            status=EventStatus.OPEN,
-        )
+        self.assertEqual(Provider.objects.count(), 2)
+        self.assertEqual(Event.objects.count(), 6)
+        self.assertEqual(Market.objects.count(), 12)
+        self.assertEqual(MarketSnapshot.objects.count(), 72)
+        self.assertEqual(MarketRule.objects.count(), 6)
 
-        self.assertEqual(event.slug, 'us-presidential-election-2028')
-        self.assertEqual(str(event), 'kalshi: US Presidential Election 2028')
+        open_market = Market.objects.get(slug='will-candidate-a-win-the-2028-election')
+        self.assertEqual(open_market.provider.slug, 'kalshi')
+        self.assertEqual(open_market.event.slug, 'us-presidential-election-2028-demo')
+        self.assertEqual(open_market.snapshots.count(), 6)
+        self.assertEqual(open_market.rules.count(), 2)
 
-    def test_create_market(self):
-        event = Event.objects.create(
-            provider=self.provider,
-            provider_event_id='event-002',
-            title='US CPI Release - April 2027',
-            status=EventStatus.UPCOMING,
-        )
+    def test_seed_demo_markets_is_idempotent(self):
+        first_counts = seed_demo_markets()
+        second_counts = seed_demo_markets()
 
-        market = Market.objects.create(
-            provider=self.provider,
-            event=event,
-            provider_market_id='market-001',
-            ticker='CPIAPR27',
-            title='Will CPI print above 3.0% in April 2027?',
-            category='economics',
-            status=MarketStatus.OPEN,
-            current_market_probability=Decimal('0.5725'),
-        )
+        self.assertEqual(first_counts, second_counts)
+        self.assertEqual(Provider.objects.count(), 2)
+        self.assertEqual(Event.objects.count(), 6)
+        self.assertEqual(Market.objects.count(), 12)
+        self.assertEqual(MarketSnapshot.objects.count(), 72)
+        self.assertEqual(MarketRule.objects.count(), 6)
 
-        self.assertEqual(market.slug, 'will-cpi-print-above-30-in-april-2027')
-        self.assertEqual(market.event, event)
-        self.assertEqual(str(market), 'kalshi: Will CPI print above 3.0% in April 2027?')
 
-    def test_create_market_snapshot(self):
-        market = Market.objects.create(
-            provider=self.provider,
-            provider_market_id='market-002',
-            title='Will ETH trade above $5,000 on December 31, 2027?',
-            status=MarketStatus.OPEN,
-        )
+class MarketsManagementCommandTests(TestCase):
+    def test_seed_markets_demo_command_outputs_summary(self):
+        stdout = StringIO()
 
-        snapshot = MarketSnapshot.objects.create(
-            market=market,
-            captured_at=timezone.now(),
-            market_probability=Decimal('0.4100'),
-            yes_price=Decimal('41.0000'),
-            no_price=Decimal('59.0000'),
-            spread=Decimal('1.2500'),
-            volume_24h=Decimal('12000.0000'),
-        )
+        call_command('seed_markets_demo', stdout=stdout)
 
-        self.assertEqual(snapshot.market, market)
-        self.assertEqual(snapshot.market_probability, Decimal('0.4100'))
+        output = stdout.getvalue()
+        self.assertIn('Seeding demo markets data...', output)
+        self.assertIn('Demo markets data ready.', output)
+        self.assertIn('providers=2', output)
+        self.assertIn('markets=12', output)
+        self.assertEqual(MarketSnapshot.objects.count(), 72)
 
 
 class MarketsApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.provider = Provider.objects.create(
-            name='Polymarket',
-            slug='polymarket',
-            base_url='https://polymarket.com',
-            api_base_url='https://api.polymarket.com',
-        )
-        self.event = Event.objects.create(
-            provider=self.provider,
-            provider_event_id='pm-event-001',
-            title='US Recession in 2027',
-            status=EventStatus.OPEN,
-        )
-        self.market = Market.objects.create(
-            provider=self.provider,
-            event=self.event,
-            provider_market_id='pm-market-001',
-            title='Will the US enter a recession in 2027?',
-            status=MarketStatus.OPEN,
-            current_market_probability=Decimal('0.3300'),
-        )
-        MarketRule.objects.create(
-            market=self.market,
-            rule_text='Provider resolution text placeholder.',
-            resolution_criteria='Resolves yes if the NBER declares a recession in 2027.',
-        )
+        seed_demo_markets()
+        self.market = Market.objects.get(slug='will-candidate-a-win-the-2028-election')
 
-    def test_provider_list_endpoint(self):
+    def test_provider_list_endpoint_includes_counts(self):
         response = self.client.get(reverse('markets:provider-list'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()[0]['slug'], 'polymarket')
+        self.assertEqual(len(response.json()), 2)
+        self.assertEqual(response.json()[0]['event_count'], 3)
+        self.assertEqual(response.json()[0]['market_count'], 6)
 
-    def test_market_list_endpoint(self):
-        response = self.client.get('/api/markets/')
+    def test_event_list_endpoint_supports_filters(self):
+        response = self.client.get(reverse('markets:event-list'), {'provider': 'polymarket', 'category': 'technology'})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()[0]['title'], 'Will the US enter a recession in 2027?')
-        self.assertEqual(response.json()[0]['provider']['slug'], 'polymarket')
+        payload = response.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]['title'], 'AI Platform Launch Window 2026 Demo')
+        self.assertEqual(payload[0]['market_count'], 2)
 
-    def test_market_detail_endpoint_includes_rules(self):
+    def test_market_list_endpoint_supports_filters_search_and_ordering(self):
+        response = self.client.get(
+            reverse('markets:market-list'),
+            {
+                'provider': 'kalshi',
+                'category': 'politics',
+                'status': 'open',
+                'is_active': 'true',
+                'search': 'Candidate',
+                'ordering': '-current_market_probability',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]['title'], 'Will Candidate A win the 2028 election?')
+        self.assertEqual(payload[0]['snapshot_count'], 6)
+        self.assertIsNotNone(payload[0]['latest_snapshot_at'])
+
+    def test_market_detail_endpoint_includes_rules_event_and_recent_snapshots(self):
         response = self.client.get(reverse('markets:market-detail', kwargs={'pk': self.market.pk}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['id'], self.market.id)
-        self.assertEqual(len(response.json()['rules']), 1)
+        payload = response.json()
+        self.assertEqual(payload['id'], self.market.id)
+        self.assertEqual(payload['event']['title'], 'US Presidential Election 2028 Demo')
+        self.assertEqual(len(payload['rules']), 2)
+        self.assertEqual(len(payload['recent_snapshots']), 5)
+        self.assertEqual(payload['recent_snapshots'][0]['market_probability'], '0.5400')
+
+    def test_market_system_summary_endpoint_returns_counts(self):
+        response = self.client.get(reverse('markets:market-system-summary'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                'total_providers': 2,
+                'total_events': 6,
+                'total_markets': 12,
+                'active_markets': 8,
+                'resolved_markets': 1,
+                'total_snapshots': 72,
+            },
+        )

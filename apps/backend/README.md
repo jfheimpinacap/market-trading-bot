@@ -1,13 +1,13 @@
 # Backend Django API
 
-Backend base for the `market-trading-bot` monorepo. This service is intentionally local-first and currently focuses on clean project structure, environment-driven configuration, and reusable backend foundations rather than trading logic.
+Backend base for the `market-trading-bot` monorepo. This service is intentionally local-first and currently focuses on clean project structure, a practical prediction-market catalog, and a smooth local workflow.
 
 ## Current purpose
 - Provide a modular Django + DRF API base inside the monorepo.
 - Keep a stable local development setup for PostgreSQL, Redis, Celery, and the frontend.
 - Expose a lightweight healthcheck at `/api/health/`.
-- Provide an initial provider-agnostic market domain for catalog, metadata, and snapshot history work.
-- Leave other domain apps intentionally small until their scope is ready.
+- Provide a provider-agnostic market domain for catalog, metadata, rule text, and snapshot history work.
+- Make it easy to seed realistic demo data locally for admin and frontend development.
 
 ## Internal structure
 
@@ -38,12 +38,12 @@ apps/backend/
 ## Apps available today
 - `apps.common`: shared technical building blocks like abstract models and simple shared tasks.
 - `apps.health`: configuration-oriented health endpoint.
-- `apps.markets`: provider, event, market, market snapshot, and market rule domain models plus basic read-only API endpoints.
+- `apps.markets`: provider, event, market, market snapshot, and market rule models plus demo seeding, admin tooling, and read-only API endpoints.
 - `apps.agents`: placeholder app for future agent domain work.
 - `apps.audit`: placeholder app for future audit and post-mortem work.
 
 ## Markets app summary
-The `apps.markets` app now provides the initial database foundation for prediction-market data without adding trading workflows or provider integrations.
+The `apps.markets` app now provides a practical local catalog for prediction-market development without adding trading workflows or provider integrations.
 
 Current market models:
 - `Provider`
@@ -57,16 +57,7 @@ Current read-only market endpoints:
 - `/api/markets/events/`
 - `/api/markets/`
 - `/api/markets/<id>/`
-
-Use Django admin to inspect this data locally once migrated.
-
-## Settings layout
-- `base.py` contains shared defaults, installed apps, middleware, DRF, CORS, PostgreSQL, Redis, and Celery defaults.
-- `local.py` keeps local development behavior simple.
-- `test.py` uses SQLite and eager Celery execution for lightweight test runs.
-- `production.py` is reserved as a minimal production profile for later hardening.
-
-By default, `manage.py`, ASGI, WSGI, and Celery use `config.settings.local` unless `DJANGO_SETTINGS_MODULE` is provided explicitly.
+- `/api/markets/system-summary/`
 
 ## Environment configuration
 1. Copy the backend env file:
@@ -99,24 +90,51 @@ From the repository root or from `apps/backend`, install the backend requirement
 pip install -r apps/backend/requirements.txt
 ```
 
-## Database and migrations
-The default runtime database is PostgreSQL configured via environment variables.
+## Local development flow
+A clean local-first flow for this stage looks like this:
 
-Run migrations from `apps/backend`:
+1. Start PostgreSQL and Redis.
+2. Run migrations.
+3. Seed demo market data.
+4. Start the backend server.
+5. Open Django admin.
+6. Inspect or query the read-only API.
+7. Point the frontend at the backend and render live demo catalog data.
+
+### Run migrations
+From `apps/backend`:
 
 ```bash
 cd apps/backend
 python manage.py migrate
 ```
 
-If you are working on the market domain and need to generate a new migration after modifying models:
+If you later modify models and need a new migration:
 
 ```bash
 cd apps/backend
 python manage.py makemigrations markets
+python manage.py migrate
 ```
 
-## Run the development server
+### Seed demo data
+Populate the local database with coherent demo catalog data:
+
+```bash
+cd apps/backend
+python manage.py seed_markets_demo
+```
+
+What gets created right now:
+- 2 demo providers
+- 6 demo events
+- 12 demo markets
+- 72 demo snapshots
+- 6 demo market rules
+
+The seed is update-or-create based, so it is reasonably safe to run more than once during local development.
+
+### Run the development server
 
 ```bash
 cd apps/backend
@@ -125,6 +143,25 @@ python manage.py runserver
 
 The API will be available on `http://localhost:8000/`.
 
+## Admin workflow
+Create a superuser if needed:
+
+```bash
+cd apps/backend
+python manage.py createsuperuser
+```
+
+Then open:
+- Admin: `http://localhost:8000/admin/`
+- Health API: `http://localhost:8000/api/health/`
+
+Recommended admin checks after seeding:
+- open **Providers** and verify counts per provider
+- open **Events** and review category/status coverage
+- open **Markets** and inspect status badges, liquidity, linked events, and snapshot counts
+- open a market detail page and review rule inlines plus the latest snapshots inline
+- open **Market Snapshots** to verify recent time-series values
+
 ## API examples
 Healthcheck:
 
@@ -132,21 +169,71 @@ Healthcheck:
 curl http://localhost:8000/api/health/
 ```
 
-Markets endpoints:
+Provider and event catalogs:
 
 ```bash
 curl http://localhost:8000/api/markets/providers/
-curl http://localhost:8000/api/markets/
-curl http://localhost:8000/api/markets/events/
-curl http://localhost:8000/api/markets/1/
+curl "http://localhost:8000/api/markets/events/?provider=polymarket&category=technology"
 ```
 
-## DRF conventions for future work
-- Keep routes grouped per app in each app's own `urls.py`.
-- Mount app routes centrally from `config/api.py` under `/api/`.
-- Keep `views.py` for endpoint classes/functions and `serializers.py` for request/response shaping.
-- Prefer simple serializers and service extraction over custom internal frameworks.
-- Grow domain apps incrementally instead of introducing internal abstraction layers early.
+Market catalogs and detail:
+
+```bash
+curl http://localhost:8000/api/markets/
+curl "http://localhost:8000/api/markets/?provider=kalshi&status=open&is_active=true&ordering=-current_market_probability"
+curl http://localhost:8000/api/markets/1/
+curl http://localhost:8000/api/markets/system-summary/
+```
+
+## Market endpoint behavior
+### `GET /api/markets/providers/`
+Returns providers with lightweight aggregate counts:
+- `event_count`
+- `market_count`
+
+### `GET /api/markets/events/`
+Read-only event catalog.
+
+Supported filters:
+- `provider`
+- `status`
+- `category`
+
+### `GET /api/markets/`
+Read-only market catalog for frontend listing views.
+
+Supported filters:
+- `provider`
+- `category`
+- `status`
+- `is_active`
+- `event`
+- `search`
+
+Supported ordering:
+- `title`
+- `created_at`
+- `resolution_time`
+- `current_market_probability`
+- `liquidity`
+- `volume_24h`
+
+### `GET /api/markets/<id>/`
+Returns a richer market detail payload with:
+- nested event detail
+- related rules
+- recent snapshots
+
+### `GET /api/markets/system-summary/`
+Returns lightweight system totals for local dashboards.
+
+## Settings layout
+- `base.py` contains shared defaults, installed apps, middleware, DRF, CORS, PostgreSQL, Redis, and Celery defaults.
+- `local.py` keeps local development behavior simple.
+- `test.py` uses SQLite and eager Celery execution for lightweight test runs.
+- `production.py` is reserved as a minimal production profile for later hardening.
+
+By default, `manage.py`, ASGI, WSGI, and Celery use `config.settings.local` unless `DJANGO_SETTINGS_MODULE` is provided explicitly.
 
 ## Local frontend integration
 CORS is configured for local Vite defaults only:
@@ -156,6 +243,13 @@ CORS is configured for local Vite defaults only:
 - `http://127.0.0.1:4173`
 
 Adjust `DJANGO_CORS_ALLOWED_ORIGINS` if your local frontend runs elsewhere.
+
+With the new market seed and read-only endpoints in place, the frontend can now start rendering:
+- provider catalogs
+- event groupings
+- market list cards/tables
+- detail pages with recent price history
+- simple dashboard counts
 
 ## Celery readiness
 Celery is wired through `config/celery.py` and autodiscovers tasks from installed apps.
@@ -185,6 +279,7 @@ DJANGO_SETTINGS_MODULE=config.settings.test python manage.py test
 - Orders, positions, fills, or paper trading workflows
 - Signals, risk, or portfolio workflows
 - Audit event persistence
-- Background workflows beyond Celery wiring
+- Background ingestion workflows beyond Celery wiring
+- Machine learning or advanced dashboards
 
-This backend is prepared for future stages without adding premature business complexity.
+This backend is prepared for the next stage without adding premature business complexity.
