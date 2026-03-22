@@ -332,6 +332,11 @@ button {
   color: var(--brand);
 }
 
+.secondary-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 @media (max-width: 1100px) {
   .content-grid--three-columns,
   .content-grid--two-columns,
@@ -821,5 +826,175 @@ button {
   .dashboard-key-value-list dd,
   .dashboard-recent-list__meta dd {
     text-align: left;
+  }
+}
+
+
+.system-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.system-toolbar__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.system-observation-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.system-observation-card,
+.system-command-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: var(--bg-panel-alt);
+}
+
+.system-observation-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+}
+
+.system-observation-card__header,
+.system-command-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.system-observation-card__header span {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.system-observation-card strong {
+  font-size: 1.2rem;
+}
+
+.system-observation-card p,
+.system-command-card p,
+.system-command-group p {
+  margin: 0;
+}
+
+.system-activity-item {
+  display: grid;
+  gap: 14px;
+}
+
+.system-activity-item__badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.system-activity-item__meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.system-activity-item__meta div {
+  display: grid;
+  gap: 4px;
+}
+
+.system-activity-item__meta dt,
+.system-command-card code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.system-activity-item__meta dt {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-soft);
+}
+
+.system-activity-item__meta dd {
+  margin: 0;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.system-command-groups {
+  display: grid;
+  gap: 20px;
+}
+
+.system-command-group {
+  display: grid;
+  gap: 14px;
+}
+
+.system-command-group h3,
+.system-command-card h4 {
+  margin: 0;
+}
+
+.system-command-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.system-command-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+}
+
+.system-command-card code {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: #fff;
+  color: var(--text-main);
+  overflow-x: auto;
+  font-size: 0.86rem;
+}
+
+@media (max-width: 1280px) {
+  .system-observation-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .system-command-grid,
+  .system-activity-item__meta {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .system-toolbar,
+  .system-toolbar__meta,
+  .system-observation-card__header,
+  .system-command-card__header,
+  .system-activity-item__badges {
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .system-observation-grid,
+  .system-command-grid,
+  .system-activity-item__meta {
+    grid-template-columns: 1fr;
   }
 }

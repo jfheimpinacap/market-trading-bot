@@ -4,7 +4,7 @@ Frontend local-first para `market-trading-bot`, construido con React + Vite + Ty
 
 ## Qué muestra ahora el dashboard principal
 
-La ruta `/` ya no es un placeholder. Ahora funciona como un centro de control local conectado al backend Django y muestra información real del sistema demo.
+La ruta `/` funciona como un centro de control local conectado al backend Django y muestra información real del sistema demo.
 
 ### Dashboard implementado en esta etapa
 
@@ -17,9 +17,28 @@ La ruta `/` ya no es un placeholder. Ahora funciona como un centro de control lo
 - sección liviana de markets recientes usando `GET /api/markets/`
 - manejo robusto de loading, error y empty state por sección
 
+## Qué hace ahora la página `/system`
+
+La ruta `/system` ya no es un placeholder. Ahora funciona como un panel técnico para desarrollo local, pensado para verificar rápidamente el estado del backend, el contexto del entorno y señales observables de la simulación demo sin introducir nuevos endpoints ni control operativo desde la UI.
+
+### Implementado en `/system`
+
+- header técnico con badge de entorno local demo y refresh manual
+- bloque **Backend health** reutilizando `useSystemHealth`
+- bloque **Local runtime context** con API base URL, execution mode, data source y disponibilidad del simulation engine
+- bloque **Market system overview** usando `GET /api/markets/system-summary/`
+- bloque **Simulation activity view** usando `GET /api/markets/` para inferir actividad a partir de:
+  - `latest_snapshot_at`
+  - `snapshot_count`
+  - cambios entre refreshes en `current_market_probability`, `liquidity`, `volume_24h`, `status` y timestamps
+- bloque **Module readiness** con módulos ready vs pending
+- bloque **Developer operations** con comandos útiles para operar localmente
+- bloque **Quick links** hacia Dashboard, Markets y Settings
+- manejo de loading, error parcial y empty state por sección
+
 ## Qué hace ahora el módulo Markets
 
-El frontend ya incluye un módulo `Markets` funcional, conectado al backend Django local y orientado a inspeccionar datos demo reales sin introducir todavía trading, websockets ni integraciones externas.
+El frontend incluye un módulo `Markets` funcional, conectado al backend Django local y orientado a inspeccionar datos demo reales sin introducir todavía trading, websockets ni integraciones externas.
 
 ### Implementado en esta etapa
 
@@ -44,10 +63,11 @@ apps/frontend/src/
 ├── components/
 │   ├── dashboard/      # UI reutilizable del dashboard principal
 │   ├── markets/        # UI reutilizable del módulo Markets
+│   ├── system/         # UI técnica específica para la página System
 │   └── ...             # componentes compartidos del shell
 ├── hooks/              # hooks de frontend para datos y comportamiento
 ├── layouts/            # shell principal de la aplicación
-├── lib/                # configuración y utilidades simples
+├── lib/                # configuración y catálogos estáticos del frontend
 ├── pages/              # vistas por ruta
 ├── services/           # capa mínima de acceso a API
 ├── styles/             # estilos globales
@@ -74,6 +94,14 @@ apps/frontend/src/
 - `GET /api/health/`
 - `GET /api/markets/system-summary/`
 - `GET /api/markets/` (solo para una muestra liviana de markets recientes)
+
+### System page
+
+- `GET /api/health/`
+- `GET /api/markets/system-summary/`
+- `GET /api/markets/`
+
+La página `/system` no agrega endpoints nuevos. Toda la evidencia de actividad se infiere comparando respuestas reales ya disponibles.
 
 ### Markets module
 
@@ -108,7 +136,7 @@ Contenido base:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-## Cómo levantar backend + seed demo + frontend
+## Cómo levantar backend + seed demo + simulación + frontend
 
 ### 1. Backend Django
 
@@ -125,7 +153,23 @@ El backend local quedará disponible normalmente en:
 http://localhost:8000
 ```
 
-### 2. Frontend
+### 2. Simulación local
+
+Para generar movimiento observable en `/system`, ejecuta uno de estos comandos en otra terminal:
+
+```bash
+cd apps/backend
+python manage.py simulate_markets_tick
+```
+
+O bien:
+
+```bash
+cd apps/backend
+python manage.py simulate_markets_loop
+```
+
+### 3. Frontend
 
 ```bash
 cd apps/frontend
@@ -140,22 +184,29 @@ La app normalmente quedará disponible en la URL que imprima Vite, por ejemplo:
 http://localhost:5173
 ```
 
-## Cómo verificar que el dashboard funciona
+## Cómo verificar visualmente que `/system` funciona
+
+1. Abre `http://localhost:5173/system`.
+2. Confirma que **Backend health** refleje el estado real de `GET /api/health/`.
+3. Revisa que **Local runtime context** muestre la `VITE_API_BASE_URL` esperada y el modo `Local demo`.
+4. Verifica que **Market system overview** muestre providers, events, markets, active/resolved y snapshots.
+5. Mira **Simulation activity view** y confirma que exista una lista de markets recientes con `snapshot_count`, `latest_snapshot_at`, probabilidad, liquidez y volumen.
+6. Ejecuta `python manage.py simulate_markets_tick`.
+7. Pulsa **Refresh system data**.
+8. Verifica que cambie al menos una de estas señales:
+   - **Snapshot delta since refresh**
+   - **Changed market rows**
+   - timestamps recientes en **Latest observed snapshot**
+   - métricas de markets como probability, liquidity o volume 24h
+
+## Cómo verificar que el dashboard y Markets siguen funcionando
 
 1. Abre `http://localhost:5173/`.
 2. Confirma que el bloque **Backend API** refleja el estado real de `GET /api/health/`.
 3. Verifica que **Market system overview** muestre providers, events, markets y snapshots.
 4. Revisa que **Recent markets** liste contratos reales y permita navegar a `/markets/:marketId`.
-5. Si apagas el backend, confirma que la home no rompe y muestra los estados de error/offline por sección.
-
-## Cómo navegar y probar el módulo Markets
-
-1. Abre `http://localhost:5173/markets`.
-2. Revisa las tarjetas de resumen superior.
-3. Usa filtros por provider, category, status, active o search.
-4. Haz click sobre cualquier fila de la tabla.
-5. El frontend navegará a `http://localhost:5173/markets/<marketId>`.
-6. Desde el detalle puedes volver con **Back to markets**.
+5. Abre `http://localhost:5173/markets` y valida filtros, tabla y navegación al detalle.
+6. Si apagas el backend, confirma que la UI no rompe y muestra los estados de error/offline por sección.
 
 ## Build de producción local
 
@@ -166,13 +217,13 @@ npm run build
 
 ## Qué quedó preparado para la siguiente etapa
 
-La implementación ya deja lista una base útil para evolucionar sin reescribir el frontend:
+La implementación deja lista una base útil para evolucionar sin reescribir el frontend:
 
-- dashboard conectado a salud del sistema y resumen real del catálogo
-- reutilización del provider compartido de health y de `services/markets.ts`
-- separación entre páginas, componentes y tipos del dashboard
-- accesos rápidos que sirven como mapa del roadmap del producto
-- base visual compatible con futuros resúmenes de Portfolio, Agents o Post-Mortem
+- `/system` ya consume salud, resumen del catálogo y actividad observable usando solo APIs existentes
+- la comparación entre refreshes deja preparada una base sencilla para futuras señales o auto-refresh liviano
+- la estructura `components/system/` permite ampliar la vista técnica sin volver la página monolítica
+- la página sigue reutilizando `useSystemHealth`, `services/markets.ts`, `services/api/client.ts` y `DataStateWrapper`
+- la UI técnica ya separa claramente lo disponible hoy de lo que sigue pendiente
 
 ## Qué partes siguen siendo placeholder
 
@@ -183,15 +234,17 @@ Todavía siguen como placeholder o reservadas para roadmap:
 - Portfolio
 - Post-Mortem
 - Settings avanzados
-- integraciones técnicas más profundas en System
+- sincronización real con providers
+- señales operativas, paper trading y risk engine
 
 ## Qué sigue después
 
 Siguientes pasos razonables después de esta iteración:
 
-- exponer más señales técnicas del backend en `/system`
+- añadir auto-refresh opcional muy ligero si realmente aporta durante desarrollo local
+- exponer más diagnósticos del backend cuando existan endpoints específicos
 - conectar resúmenes reales para Portfolio o Agents cuando existan endpoints
-- incorporar acciones simples de productividad local sin entrar todavía en trading real
+- preparar una capa de señales o telemetry local sin caer aún en observabilidad compleja
 
 ## Qué NO se implementó todavía
 
@@ -199,22 +252,24 @@ Sigue fuera de alcance en esta etapa:
 
 - trading real
 - paper trading operativo
-- charts avanzados
+- start/stop del simulation loop desde la UI
 - websockets
+- streaming en tiempo real
+- charts avanzados
 - autenticación
 - machine learning
 - integración real con providers
-- dashboards complejos
-- CRUD de markets
+- paneles complejos de observabilidad
+- consola o terminal embebida
+- logs persistentes
 - estado global sofisticado
-- cache avanzada
-- comparación de mercados
-- watchlists
-- tiempo real
+- risk engine
+- signals engine operativo
 
 ## Notas de desarrollo
 
 - La capa de datos se mantiene simple con `fetch`, sin React Query.
-- El dashboard reutiliza `useSystemHealth`, `services/health.ts`, `services/markets.ts` y `DataStateWrapper`.
+- El dashboard y `/system` reutilizan `useSystemHealth`, `services/health.ts`, `services/markets.ts` y `DataStateWrapper`.
+- La evidencia de simulación en `/system` es deliberadamente inferida; no pretende inventar precisión que el backend aún no expone directamente.
 - El diseño sigue siendo sobrio, desktop-first y orientado a entorno local.
 - Si el backend no está activo, la UI muestra errores claros y no rompe la navegación general.
