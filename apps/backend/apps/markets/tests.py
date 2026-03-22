@@ -1,3 +1,4 @@
+from decimal import Decimal
 from io import StringIO
 
 from django.core.management import call_command
@@ -6,7 +7,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from .demo_data import seed_demo_markets
-from .models import Event, Market, MarketRule, MarketSnapshot, Provider
+from .models import Event, Market, MarketRule, MarketSnapshot, MarketStatus, Provider
 
 
 class MarketsModelTests(TestCase):
@@ -126,3 +127,67 @@ class MarketsApiTests(TestCase):
                 'total_snapshots': 72,
             },
         )
+
+
+class MarketSimulationTests(TestCase):
+    def setUp(self):
+        seed_demo_markets()
+        self.open_market = Market.objects.get(slug='will-candidate-a-win-the-2028-election')
+        self.resolved_market = Market.objects.get(slug='will-export-controls-tighten-before-november-2025')
+
+    def test_simulate_markets_tick_updates_eligible_markets_and_creates_snapshots(self):
+        previous_snapshot_count = MarketSnapshot.objects.count()
+        previous_probability = self.open_market.current_market_probability
+
+        stdout = StringIO()
+        call_command('simulate_markets_tick', '--seed', '7', stdout=stdout)
+
+        self.open_market.refresh_from_db()
+        output = stdout.getvalue()
+        self.assertIn('Simulation tick complete.', output)
+        self.assertGreater(MarketSnapshot.objects.count(), previous_snapshot_count)
+        self.assertNotEqual(self.open_market.current_market_probability, previous_probability)
+        self.assertIn('simulation', self.open_market.metadata)
+
+    def test_simulation_respects_basic_value_limits(self):
+        call_command('simulate_markets_tick', '--seed', '11')
+        market = Market.objects.get(pk=self.open_market.pk)
+
+        self.assertGreaterEqual(market.current_market_probability, Decimal('0.0100'))
+        self.assertLessEqual(market.current_market_probability, Decimal('0.9900'))
+        self.assertGreaterEqual(market.current_yes_price, Decimal('0.0000'))
+        self.assertGreaterEqual(market.current_no_price, Decimal('0.0000'))
+        self.assertGreaterEqual(market.liquidity, Decimal('0.0000'))
+        self.assertGreaterEqual(market.volume_total, self.open_market.volume_total)
+        self.assertGreaterEqual(market.spread_bps, 0)
+
+    def test_simulation_does_not_modify_terminal_markets(self):
+        previous_snapshot_count = self.resolved_market.snapshots.count()
+        previous_probability = self.resolved_market.current_market_probability
+
+        call_command('simulate_markets_tick', '--seed', '3')
+
+        self.resolved_market.refresh_from_db()
+        self.assertEqual(self.resolved_market.status, MarketStatus.RESOLVED)
+        self.assertEqual(self.resolved_market.current_market_probability, previous_probability)
+        self.assertEqual(self.resolved_market.snapshots.count(), previous_snapshot_count)
+
+    def test_simulate_markets_tick_dry_run_does_not_persist(self):
+        previous_snapshot_count = MarketSnapshot.objects.count()
+        previous_probability = self.open_market.current_market_probability
+
+        call_command('simulate_markets_tick', '--seed', '5', '--dry-run')
+
+        self.open_market.refresh_from_db()
+        self.assertEqual(MarketSnapshot.objects.count(), previous_snapshot_count)
+        self.assertEqual(self.open_market.current_market_probability, previous_probability)
+
+    def test_simulate_markets_loop_runs_requested_iterations(self):
+        stdout = StringIO()
+
+        call_command('simulate_markets_loop', '--seed', '9', '--interval', '0', '--iterations', '2', stdout=stdout)
+
+        output = stdout.getvalue()
+        self.assertIn('Tick 1:', output)
+        self.assertIn('Tick 2:', output)
+        self.assertIn('Simulation loop finished after 2 tick(s).', output)

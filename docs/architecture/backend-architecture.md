@@ -9,12 +9,12 @@ The backend is a local-first Django service inside the monorepo. Its current res
 - `apps/common/`: reusable technical primitives shared across future domain apps.
 - `apps/*/urls.py`: per-app route registration.
 - `apps/*/views.py` and `serializers.py`: DRF endpoint and payload boundaries.
-- `apps/*/management/commands/`: reusable Django management commands, including local seed workflows.
+- `apps/*/management/commands/`: reusable Django management commands, including local seed and simulation workflows.
 
 ## Current backend app roles
 - `apps.common`: abstract timestamped models and shared technical helpers.
 - `apps.health`: lightweight environment-oriented health endpoint.
-- `apps.markets`: provider-agnostic prediction-market catalog with providers, events, markets, historical snapshots, rules, demo seed data, and read-only endpoints for local UI work.
+- `apps.markets`: provider-agnostic prediction-market catalog with providers, events, markets, historical snapshots, rules, demo seed data, local simulation engine, admin tooling, and read-only endpoints for local UI work.
 - `apps.agents`: reserved for later agent orchestration work.
 - `apps.audit`: reserved for later audit and post-mortem persistence.
 
@@ -42,6 +42,33 @@ Key choices:
 
 This allows admin and frontend work to proceed before ingestion jobs exist.
 
+## Local simulation strategy
+A small simulation layer now complements the static seed data.
+
+### Package layout
+- `apps/markets/simulation/utils.py`: reusable math and normalization helpers
+- `apps/markets/simulation/rules.py`: eligibility, bounded drift, and conservative state-transition rules
+- `apps/markets/simulation/engine.py`: tick execution, market mutation, and snapshot creation
+- `apps/markets/management/commands/simulate_markets_tick.py`: single-run orchestration for local development
+- `apps/markets/management/commands/simulate_markets_loop.py`: optional repeating loop for local live-like behavior
+
+### Architectural intent
+The simulation layer is deliberately small and service-oriented:
+- management commands stay thin and mostly handle CLI I/O
+- simulation rules are explicit and easy to tune later
+- the existing market models remain the source of truth
+- no new API endpoints are required
+- the frontend simply reuses the existing read-only endpoints and refreshes them
+
+### Current simulation rules
+- only demo markets are eligible
+- terminal markets such as `resolved`, `cancelled`, and `archived` are skipped
+- open markets move more than paused or closed markets
+- category-specific volatility is intentionally light and readable
+- time pressure increases movement slightly as a market approaches resolution
+- status transitions are conservative and limited to `open`, `paused`, `closed`, and `resolved`
+- each useful tick creates a fresh `MarketSnapshot` aligned with the updated market fields
+
 ## API conventions
 - All endpoints live under `/api/`.
 - `config/api.py` is the single place where app endpoints are mounted.
@@ -57,6 +84,7 @@ Current goals:
 - inspect seeded catalog data quickly
 - understand provider/event/market relationships at a glance
 - review recent market snapshots without leaving the market detail page
+- verify simulation activity from market metadata and latest snapshots
 - keep editing surfaces simple and maintainable instead of building custom back-office tooling
 
 ## Settings strategy
@@ -76,4 +104,4 @@ Current goals:
 - Keep shared code in `apps/common` small and reusable.
 - Prefer explicit app boundaries instead of deeply nested internal frameworks.
 - Avoid cross-app coupling until domain workflows become concrete.
-- Extend the market domain next with provider ingestion and snapshot capture workflows only when real adapters are introduced.
+- Extend the market domain next with system diagnostics, launcher workflows, demo signals, mock agents, and paper-trading support on top of the current simulation-ready base.

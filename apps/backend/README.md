@@ -6,8 +6,9 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 - Provide a modular Django + DRF API base inside the monorepo.
 - Keep a stable local development setup for PostgreSQL, Redis, Celery, and the frontend.
 - Expose a lightweight healthcheck at `/api/health/`.
-- Provide a provider-agnostic market domain for catalog, metadata, rule text, and snapshot history work.
+- Provide a provider-agnostic market domain for catalog, metadata, rule text, snapshot history, and local simulation work.
 - Make it easy to seed realistic demo data locally for admin and frontend development.
+- Make the demo dataset feel alive locally without real provider integrations, trading, or websockets.
 
 ## Internal structure
 
@@ -38,7 +39,7 @@ apps/backend/
 ## Apps available today
 - `apps.common`: shared technical building blocks like abstract models and simple shared tasks.
 - `apps.health`: configuration-oriented health endpoint.
-- `apps.markets`: provider, event, market, market snapshot, and market rule models plus demo seeding, admin tooling, and read-only API endpoints.
+- `apps.markets`: provider, event, market, market snapshot, and market rule models plus demo seeding, simulation, admin tooling, and read-only API endpoints.
 - `apps.agents`: placeholder app for future agent domain work.
 - `apps.audit`: placeholder app for future audit and post-mortem work.
 
@@ -51,6 +52,11 @@ Current market models:
 - `Market`
 - `MarketSnapshot`
 - `MarketRule`
+
+Current market workflows:
+- deterministic demo seeding via `seed_markets_demo`
+- live-looking local simulation via `simulate_markets_tick`
+- optional local looping via `simulate_markets_loop`
 
 Current read-only market endpoints:
 - `/api/markets/providers/`
@@ -96,10 +102,11 @@ A clean local-first flow for this stage looks like this:
 1. Start PostgreSQL and Redis.
 2. Run migrations.
 3. Seed demo market data.
-4. Start the backend server.
-5. Open Django admin.
-6. Inspect or query the read-only API.
-7. Point the frontend at the backend and render live demo catalog data.
+4. Run one or more simulation ticks, or start the loop mode.
+5. Start the backend server.
+6. Open Django admin.
+7. Inspect the read-only API.
+8. Refresh the frontend and verify the dashboard plus market pages react to changing values.
 
 ### Run migrations
 From `apps/backend`:
@@ -134,6 +141,49 @@ What gets created right now:
 
 The seed is update-or-create based, so it is reasonably safe to run more than once during local development.
 
+### Run the simulation tick
+Apply one local simulation pass over the demo markets:
+
+```bash
+cd apps/backend
+python manage.py simulate_markets_tick
+```
+
+Useful variants:
+
+```bash
+python manage.py simulate_markets_tick --dry-run
+python manage.py simulate_markets_tick --limit 5
+python manage.py simulate_markets_tick --seed 7
+```
+
+What the tick can change:
+- `current_market_probability`
+- `current_yes_price`
+- `current_no_price`
+- `liquidity`
+- `volume_24h`
+- `volume_total`
+- `spread_bps`
+- `status` in conservative scenarios
+- fresh `MarketSnapshot` rows aligned with the updated market state
+
+### Run the simulation loop
+For a simple repeating local process:
+
+```bash
+cd apps/backend
+python manage.py simulate_markets_loop --interval 10 --iterations 20
+```
+
+Continuous mode:
+
+```bash
+python manage.py simulate_markets_loop --interval 5
+```
+
+Stop continuous mode with `Ctrl+C`.
+
 ### Run the development server
 
 ```bash
@@ -155,12 +205,12 @@ Then open:
 - Admin: `http://localhost:8000/admin/`
 - Health API: `http://localhost:8000/api/health/`
 
-Recommended admin checks after seeding:
+Recommended admin checks after seeding and simulation:
 - open **Providers** and verify counts per provider
 - open **Events** and review category/status coverage
-- open **Markets** and inspect status badges, liquidity, linked events, and snapshot counts
+- open **Markets** and inspect status badges, liquidity, snapshot counts, latest snapshot, and last simulation tick
 - open a market detail page and review rule inlines plus the latest snapshots inline
-- open **Market Snapshots** to verify recent time-series values
+- open **Market Snapshots** to verify recent time-series values and new simulated rows
 
 ## API examples
 Healthcheck:
@@ -184,6 +234,16 @@ curl "http://localhost:8000/api/markets/?provider=kalshi&status=open&is_active=t
 curl http://localhost:8000/api/markets/1/
 curl http://localhost:8000/api/markets/system-summary/
 ```
+
+Suggested simulation verification:
+
+```bash
+curl http://localhost:8000/api/markets/system-summary/
+python manage.py simulate_markets_tick
+curl http://localhost:8000/api/markets/system-summary/
+```
+
+The second summary response should report a higher `total_snapshots` count after a live tick.
 
 ## Market endpoint behavior
 ### `GET /api/markets/providers/`
@@ -227,6 +287,20 @@ Returns a richer market detail payload with:
 ### `GET /api/markets/system-summary/`
 Returns lightweight system totals for local dashboards.
 
+## Simulation design choices
+The simulation layer is intentionally conservative:
+- only demo markets are eligible
+- resolved/cancelled/archived markets are skipped
+- open markets move the most
+- paused markets mostly drift slightly and may occasionally reopen
+- closed markets are nearly static and only move toward resolution states
+- probabilities are clamped between `0.0100` and `0.9900`
+- prices are derived from probability rather than simulated independently
+- `volume_total` only increases
+- the API stays unchanged so the existing frontend sees changes via refresh alone
+
+This keeps the system maintainable and ready for later additions like a system page, launcher, signals, mock agents, and paper-trading layers.
+
 ## Settings layout
 - `base.py` contains shared defaults, installed apps, middleware, DRF, CORS, PostgreSQL, Redis, and Celery defaults.
 - `local.py` keeps local development behavior simple.
@@ -242,44 +316,23 @@ CORS is configured for local Vite defaults only:
 - `http://localhost:4173`
 - `http://127.0.0.1:4173`
 
-Adjust `DJANGO_CORS_ALLOWED_ORIGINS` if your local frontend runs elsewhere.
+Set `VITE_API_BASE_URL` in the frontend to the backend URL, typically `http://localhost:8000/api`.
 
-With the new market seed and read-only endpoints in place, the frontend can now start rendering:
-- provider catalogs
-- event groupings
-- market list cards/tables
-- detail pages with recent price history
-- simple dashboard counts
-
-## Celery readiness
-Celery is wired through `config/celery.py` and autodiscovers tasks from installed apps.
-
-Useful starter commands:
+## Testing
+Run backend market tests with the dedicated test settings:
 
 ```bash
 cd apps/backend
-celery -A config worker -l info
-celery -A config inspect ping
-```
-
-A minimal shared task exists in `apps.common.tasks.ping` as a wiring example only.
-
-## Tests
-Run backend tests with the dedicated test settings:
-
-```bash
-cd apps/backend
-DJANGO_SETTINGS_MODULE=config.settings.test python manage.py test
+DJANGO_SETTINGS_MODULE=config.settings.test python manage.py test apps.markets
 ```
 
 ## What is intentionally not implemented yet
-- Trading logic
-- Provider integrations or sync jobs
-- Authentication and authorization layers
-- Orders, positions, fills, or paper trading workflows
-- Signals, risk, or portfolio workflows
-- Audit event persistence
-- Background ingestion workflows beyond Celery wiring
-- Machine learning or advanced dashboards
-
-This backend is prepared for the next stage without adding premature business complexity.
+This stage does **not** add:
+- real Kalshi or Polymarket integrations
+- trading execution
+- paper trading workflows
+- orders, fills, positions, or portfolio state
+- Celery-based sync pipelines
+- websockets
+- signals or agent workflows
+- ML, forecasting, or advanced analytics dashboards
