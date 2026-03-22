@@ -8,7 +8,22 @@ type SidebarProps = {
   currentPath: string;
 };
 
+function isRouteActive(routePath: string, currentPath: string) {
+  if (routePath === '/') {
+    return currentPath === '/';
+  }
+
+  if (routePath.includes(':')) {
+    const basePath = routePath.split('/:')[0];
+    return currentPath.startsWith(`${basePath}/`);
+  }
+
+  return currentPath === routePath || currentPath.startsWith(`${routePath}/`);
+}
+
 export function Sidebar({ routes, currentPath }: SidebarProps) {
+  const primaryRoutes = routes.filter((route) => !route.path.includes('/:'));
+
   return (
     <aside className="sidebar">
       <div className="sidebar__brand">
@@ -18,8 +33,8 @@ export function Sidebar({ routes, currentPath }: SidebarProps) {
       </div>
 
       <nav className="sidebar__nav" aria-label="Primary navigation">
-        {routes.map((route) => (
-          <NavItem key={route.path} label={route.label} path={route.path} active={route.path === currentPath} />
+        {primaryRoutes.map((route) => (
+          <NavItem key={route.path} label={route.label} path={route.path} active={isRouteActive(route.path, currentPath)} />
         ))}
       </nav>
 

@@ -10,7 +10,15 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+    let detail = '';
+
+    try {
+      detail = await response.text();
+    } catch {
+      detail = '';
+    }
+
+    throw new Error(detail || `Request failed with status ${response.status}`);
   }
 
   return (await response.json()) as T;

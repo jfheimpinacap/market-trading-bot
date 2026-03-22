@@ -2,67 +2,81 @@
 
 Frontend local-first para `market-trading-bot`, construido con React + Vite + TypeScript.
 
-## Propósito en esta etapa
+## Qué hace ahora el módulo Markets
 
-Esta aplicación ya no es solo un placeholder mínimo: ahora funciona como una base de plataforma con layout persistente, navegación entre módulos, páginas estructuradas y una integración simple con el backend local para consultar `GET /api/health/`.
+El frontend ya incluye un módulo `Markets` funcional, conectado al backend Django local y orientado a inspeccionar datos demo reales sin introducir todavía trading, websockets ni integraciones externas.
 
-El objetivo de esta fase es preparar una UI clara y mantenible para futuras iteraciones, sin introducir todavía autenticación, trading real, providers de mercado, machine learning ni estado global complejo.
+### Implementado en esta etapa
+
+- página `/markets` con header, summary cards y listado real de mercados
+- filtros simples conectados al endpoint read-only del backend
+- carga de providers y categorías para exploración local
+- tabla desktop-first con navegación al detalle
+- página `/markets/:marketId` con:
+  - resumen principal del market
+  - reglas (`short_rules` + `rules`)
+  - snapshots recientes (`recent_snapshots`)
+  - metadata útil para inspección
+- estados claros de loading, error y empty state
+- capa de servicios tipada en `src/services/markets.ts`
+- tipos compartidos en `src/types/markets.ts`
 
 ## Estructura interna
 
 ```text
 apps/frontend/src/
-├── app/          # composición principal de la app y estado compartido de system health
-├── components/   # bloques reutilizables de UI
-├── hooks/        # hooks de frontend para datos y comportamiento
-├── layouts/      # shell principal de la aplicación
-├── lib/          # configuración y utilidades simples
-├── pages/        # vistas por ruta
-├── services/     # capa mínima de acceso a API
-├── styles/       # estilos globales de la app
-├── types/        # tipos TypeScript compartidos
-└── store/        # reservado para estado compartido futuro
+├── app/                # composición principal de la app y routing local
+├── components/
+│   ├── markets/        # UI reutilizable del módulo Markets
+│   └── ...             # componentes compartidos del shell
+├── hooks/              # hooks de frontend para datos y comportamiento
+├── layouts/            # shell principal de la aplicación
+├── lib/                # configuración y utilidades simples
+├── pages/
+│   ├── markets/        # páginas reales de Markets
+│   └── ...             # resto de páginas del shell
+├── services/           # capa mínima de acceso a API
+├── styles/             # estilos globales
+├── types/              # tipos TypeScript compartidos
+└── store/              # reservado para estado compartido futuro
 ```
 
-## Layout y navegación
-
-La app usa un layout persistente tipo dashboard con:
-
-- sidebar lateral con navegación principal
-- topbar contextual según la sección activa
-- área principal de contenido
-- diseño responsive básico para notebook y escritorio
-
-### Rutas actuales
+## Rutas actuales
 
 - `/` — Dashboard
-- `/markets` — Markets
-- `/signals` — Signals
-- `/agents` — Agents
-- `/portfolio` — Portfolio
-- `/postmortem` — Post-Mortem
-- `/settings` — Settings
-- `/system` — System
-- fallback simple de página no encontrada
+- `/markets` — Markets explorer
+- `/markets/:marketId` — Market detail
+- `/signals` — Signals placeholder
+- `/agents` — Agents placeholder
+- `/portfolio` — Portfolio placeholder
+- `/postmortem` — Post-Mortem placeholder
+- `/settings` — Settings placeholder
+- `/system` — System technical panel
 
-## Integración con backend local
+## Endpoints consumidos por el frontend
 
-La app consulta el healthcheck del backend mediante una capa liviana en `src/services/`.
+### Health general ya existente
 
-Endpoint esperado:
+- `GET /api/health/`
 
-```text
-GET http://localhost:8000/api/health/
-```
+### Markets module
 
-Variables mostradas en UI si el backend responde:
+- `GET /api/markets/system-summary/`
+- `GET /api/markets/providers/`
+- `GET /api/markets/events/`
+- `GET /api/markets/`
+- `GET /api/markets/<id>/`
 
-- backend online/offline
-- `environment`
-- `database_configured`
-- `redis_configured`
+### Filtros usados en `/markets`
 
-Si la llamada falla, el dashboard y la página System muestran un estado offline claro sin romper la aplicación.
+La UI envía estos parámetros al endpoint `GET /api/markets/` cuando corresponde:
+
+- `provider`
+- `category`
+- `status`
+- `is_active`
+- `search`
+- `ordering`
 
 ## Variable de entorno
 
@@ -78,17 +92,29 @@ Contenido base:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-## Instalación
+## Cómo levantar backend + seed demo + frontend
+
+### 1. Backend Django
+
+```bash
+cd apps/backend
+python manage.py migrate
+python manage.py seed_markets_demo
+python manage.py runserver
+```
+
+El backend local quedará disponible normalmente en:
+
+```text
+http://localhost:8000
+```
+
+### 2. Frontend
 
 ```bash
 cd apps/frontend
 npm install
-```
-
-## Ejecutar en local
-
-```bash
-cd apps/frontend
+cp .env.example .env
 npm run dev
 ```
 
@@ -98,6 +124,15 @@ La app normalmente quedará disponible en la URL que imprima Vite, por ejemplo:
 http://localhost:5173
 ```
 
+## Cómo navegar y probar el módulo Markets
+
+1. Abre `http://localhost:5173/markets`.
+2. Revisa las tarjetas de resumen superior.
+3. Usa filtros por provider, category, status, active o search.
+4. Haz click sobre cualquier fila de la tabla.
+5. El frontend navegará a `http://localhost:5173/markets/<marketId>`.
+6. Desde el detalle puedes volver con **Back to markets**.
+
 ## Build de producción local
 
 ```bash
@@ -105,40 +140,38 @@ cd apps/frontend
 npm run build
 ```
 
-## Cómo verificar la conexión al backend
+## Qué quedó preparado para la siguiente etapa
 
-1. Levanta el backend en `http://localhost:8000`.
-2. Asegúrate de que `VITE_API_BASE_URL` apunte a ese host.
-3. Abre el dashboard `/`.
-4. Revisa la tarjeta **Backend connection**.
-5. Abre `/system` y usa el botón **Refresh health** si quieres relanzar la comprobación.
+La implementación ya deja lista una base útil para evolucionar sin reescribir el módulo:
 
-Si el backend está activo, deberías ver:
+- servicios de API reutilizables y tipados
+- separación entre páginas, componentes y tipos
+- navegación entre listado y detalle
+- presentación consistente para estados y badges
+- soporte inicial para ordering desde la UI
+- base visual compatible con futuras mejoras como paginación simple, watchlists o comparativas
 
-- estado online
-- environment dev/local según backend
-- indicadores de database y redis
+## Qué NO se implementó todavía
 
-Si el backend no está activo, verás un estado offline con mensaje de error claro.
+Sigue fuera de alcance en esta etapa:
 
-## Qué es placeholder todavía
+- trading real
+- paper trading operativo
+- charts avanzados
+- websockets
+- autenticación
+- machine learning
+- integración real con providers
+- dashboards complejos
+- CRUD de markets
+- estado global sofisticado
+- cache avanzada
+- comparación de mercados
+- watchlists
+- tiempo real
 
-Las siguientes áreas siguen siendo placeholders serios, preparados para crecer en etapas futuras:
+## Notas de desarrollo
 
-- Markets
-- Signals
-- Agents
-- Portfolio
-- Post-Mortem
-- Settings
-- System
-
-Esto significa que ya tienen estructura, copy funcional y lugar dentro del shell, pero todavía no contienen lógica de negocio ni datos reales.
-
-## Próximas etapas sugeridas
-
-- añadir contratos de API para módulos reales
-- conectar vistas de dominio gradualmente
-- incorporar paneles técnicos adicionales para Redis, Celery y agentes
-- modelar paper trading sin ejecutar trading real
-- profundizar documentación de arquitectura frontend/backend
+- La capa de datos se mantiene simple con `fetch`, sin React Query.
+- El diseño es deliberadamente sobrio y desktop-first.
+- Si el backend no está activo, la UI muestra errores claros y no rompe la navegación general.
