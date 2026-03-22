@@ -2,6 +2,21 @@
 
 Frontend local-first para `market-trading-bot`, construido con React + Vite + TypeScript.
 
+## Qué muestra ahora el dashboard principal
+
+La ruta `/` ya no es un placeholder. Ahora funciona como un centro de control local conectado al backend Django y muestra información real del sistema demo.
+
+### Dashboard implementado en esta etapa
+
+- header principal con estado general del entorno local
+- bloque de estado del backend usando `GET /api/health/`
+- bloque de contexto local con API base URL, runtime y modo actual
+- resumen del catálogo de markets usando `GET /api/markets/system-summary/`
+- accesos rápidos a módulos activos y placeholders del roadmap
+- estado visual de módulos del proyecto con elementos listos vs pendientes
+- sección liviana de markets recientes usando `GET /api/markets/`
+- manejo robusto de loading, error y empty state por sección
+
 ## Qué hace ahora el módulo Markets
 
 El frontend ya incluye un módulo `Markets` funcional, conectado al backend Django local y orientado a inspeccionar datos demo reales sin introducir todavía trading, websockets ni integraciones externas.
@@ -27,14 +42,13 @@ El frontend ya incluye un módulo `Markets` funcional, conectado al backend Djan
 apps/frontend/src/
 ├── app/                # composición principal de la app y routing local
 ├── components/
+│   ├── dashboard/      # UI reutilizable del dashboard principal
 │   ├── markets/        # UI reutilizable del módulo Markets
 │   └── ...             # componentes compartidos del shell
 ├── hooks/              # hooks de frontend para datos y comportamiento
 ├── layouts/            # shell principal de la aplicación
 ├── lib/                # configuración y utilidades simples
-├── pages/
-│   ├── markets/        # páginas reales de Markets
-│   └── ...             # resto de páginas del shell
+├── pages/              # vistas por ruta
 ├── services/           # capa mínima de acceso a API
 ├── styles/             # estilos globales
 ├── types/              # tipos TypeScript compartidos
@@ -43,7 +57,7 @@ apps/frontend/src/
 
 ## Rutas actuales
 
-- `/` — Dashboard
+- `/` — Dashboard operativo local
 - `/markets` — Markets explorer
 - `/markets/:marketId` — Market detail
 - `/signals` — Signals placeholder
@@ -55,9 +69,11 @@ apps/frontend/src/
 
 ## Endpoints consumidos por el frontend
 
-### Health general ya existente
+### Dashboard principal
 
 - `GET /api/health/`
+- `GET /api/markets/system-summary/`
+- `GET /api/markets/` (solo para una muestra liviana de markets recientes)
 
 ### Markets module
 
@@ -124,6 +140,14 @@ La app normalmente quedará disponible en la URL que imprima Vite, por ejemplo:
 http://localhost:5173
 ```
 
+## Cómo verificar que el dashboard funciona
+
+1. Abre `http://localhost:5173/`.
+2. Confirma que el bloque **Backend API** refleja el estado real de `GET /api/health/`.
+3. Verifica que **Market system overview** muestre providers, events, markets y snapshots.
+4. Revisa que **Recent markets** liste contratos reales y permita navegar a `/markets/:marketId`.
+5. Si apagas el backend, confirma que la home no rompe y muestra los estados de error/offline por sección.
+
 ## Cómo navegar y probar el módulo Markets
 
 1. Abre `http://localhost:5173/markets`.
@@ -142,14 +166,32 @@ npm run build
 
 ## Qué quedó preparado para la siguiente etapa
 
-La implementación ya deja lista una base útil para evolucionar sin reescribir el módulo:
+La implementación ya deja lista una base útil para evolucionar sin reescribir el frontend:
 
-- servicios de API reutilizables y tipados
-- separación entre páginas, componentes y tipos
-- navegación entre listado y detalle
-- presentación consistente para estados y badges
-- soporte inicial para ordering desde la UI
-- base visual compatible con futuras mejoras como paginación simple, watchlists o comparativas
+- dashboard conectado a salud del sistema y resumen real del catálogo
+- reutilización del provider compartido de health y de `services/markets.ts`
+- separación entre páginas, componentes y tipos del dashboard
+- accesos rápidos que sirven como mapa del roadmap del producto
+- base visual compatible con futuros resúmenes de Portfolio, Agents o Post-Mortem
+
+## Qué partes siguen siendo placeholder
+
+Todavía siguen como placeholder o reservadas para roadmap:
+
+- Signals
+- Agents
+- Portfolio
+- Post-Mortem
+- Settings avanzados
+- integraciones técnicas más profundas en System
+
+## Qué sigue después
+
+Siguientes pasos razonables después de esta iteración:
+
+- exponer más señales técnicas del backend en `/system`
+- conectar resúmenes reales para Portfolio o Agents cuando existan endpoints
+- incorporar acciones simples de productividad local sin entrar todavía en trading real
 
 ## Qué NO se implementó todavía
 
@@ -173,5 +215,6 @@ Sigue fuera de alcance en esta etapa:
 ## Notas de desarrollo
 
 - La capa de datos se mantiene simple con `fetch`, sin React Query.
-- El diseño es deliberadamente sobrio y desktop-first.
+- El dashboard reutiliza `useSystemHealth`, `services/health.ts`, `services/markets.ts` y `DataStateWrapper`.
+- El diseño sigue siendo sobrio, desktop-first y orientado a entorno local.
 - Si el backend no está activo, la UI muestra errores claros y no rompe la navegación general.

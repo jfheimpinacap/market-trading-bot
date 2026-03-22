@@ -2,11 +2,12 @@
 
 ## Purpose
 
-The frontend is a local-first operator workspace for `market-trading-bot`. In the current phase it focuses on three responsibilities only:
+The frontend is a local-first operator workspace for `market-trading-bot`. In the current phase it focuses on four responsibilities only:
 
 1. provide a professional application shell
 2. expose clear navigation for planned modules
 3. surface minimal technical health from the backend
+4. present a useful dashboard powered by real local demo data
 
 This phase intentionally excludes authentication, real trading logic, market integrations, websockets, and advanced data visualization.
 
@@ -15,7 +16,7 @@ This phase intentionally excludes authentication, real trading logic, market int
 The frontend source tree is intentionally shallow and practical:
 
 - `app/`: app composition and shared providers
-- `components/`: reusable presentation building blocks
+- `components/`: reusable presentation building blocks, including dedicated dashboard and markets UI
 - `hooks/`: page-agnostic frontend behavior
 - `layouts/`: app shell and persistent navigation structure
 - `lib/`: static config and lightweight helpers
@@ -50,6 +51,16 @@ Why this approach:
 - avoids introducing a heavier client-state library too early
 - preserves a clean place for future refresh policies or polling
 
+## Dashboard integration strategy
+
+The home route now composes three existing frontend primitives instead of creating a parallel architecture:
+
+- `useSystemHealth` for shared health visibility
+- `services/markets.ts` for catalog summary and recent market requests
+- `DataStateWrapper` for section-level loading, error, and empty states
+
+This keeps the dashboard robust even when one backend request fails and another still succeeds.
+
 ## UI principles for this stage
 
 - sober, readable visual design
@@ -57,13 +68,15 @@ Why this approach:
 - responsive layout without overengineering
 - placeholders that explain purpose instead of empty screens
 - local-first configuration visibility
+- real data in the dashboard before introducing advanced analytics
 
 ## Planned evolution
 
 Near-term frontend evolution can proceed without reworking the shell:
 
-- add domain data cards and simple tables per page
 - expand technical system panels
+- expose richer provider and worker diagnostics
+- connect backend modules beyond healthcheck and market summary
 - add local settings forms
-- connect backend modules beyond healthcheck
 - introduce richer routing only when it provides clear value
+- prepare lightweight summaries for Portfolio, Agents, and Post-Mortem once backend endpoints exist

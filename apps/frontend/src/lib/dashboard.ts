@@ -1,47 +1,91 @@
-import type { DashboardModule } from '../types/system';
+import { API_BASE_URL, FRONTEND_RUNTIME } from './config';
+import type { DashboardModuleStatus, DashboardQuickLink } from '../types/dashboard';
 
-export const dashboardModules: DashboardModule[] = [
+export const dashboardQuickLinks: DashboardQuickLink[] = [
   {
-    name: 'Dashboard',
-    summary: 'Operational landing page with health, roadmap, and architecture context.',
-    status: 'available',
+    title: 'Markets',
+    description: 'Open the live demo catalog, apply filters, and drill into market detail pages.',
+    path: '/markets',
+    availability: 'live',
   },
   {
-    name: 'Markets',
-    summary: 'Future discovery view for market scanning, watchlists, and filters.',
-    status: 'planned',
+    title: 'System',
+    description: 'Review backend connectivity, environment details, and shared health state.',
+    path: '/system',
+    availability: 'live',
   },
   {
-    name: 'Signals',
-    summary: 'Future signal workspace for hypotheses, scorecards, and analyst output.',
-    status: 'planned',
+    title: 'Settings',
+    description: 'Keep local-first configuration notes and future environment controls in one place.',
+    path: '/settings',
+    availability: 'live',
   },
   {
-    name: 'Agents',
-    summary: 'Future automation control panel for orchestration and run monitoring.',
-    status: 'planned',
+    title: 'Agents',
+    description: 'Reserved for orchestration summaries, schedules, and agent run visibility.',
+    path: '/agents',
+    availability: 'placeholder',
   },
   {
-    name: 'Portfolio',
-    summary: 'Future paper trading exposure, positions, and risk visibility.',
-    status: 'planned',
-  },
-  {
-    name: 'Post-Mortem',
-    summary: 'Future retrospective area for incident analysis and iteration feedback.',
-    status: 'planned',
+    title: 'Portfolio',
+    description: 'Reserved for paper positions, exposure snapshots, and execution telemetry.',
+    path: '/portfolio',
+    availability: 'placeholder',
   },
 ];
 
-export const architectureLayers = [
-  'Frontend app for local navigation, technical visibility, and operator workflows.',
-  'Django API layer exposing health and future domain endpoints.',
-  'Shared provider and utility libraries isolated inside libs/ for future integrations.',
-  'Future services for discovery, probability, risk, execution, and post-mortem analysis.',
+export const dashboardModules: DashboardModuleStatus[] = [
+  {
+    name: 'Health API',
+    summary: 'Shared healthcheck integration is already wired into Dashboard and System views.',
+    status: 'ready',
+  },
+  {
+    name: 'Markets catalog',
+    summary: 'Read-only market discovery with filters, detail view, and seeded demo records is available.',
+    status: 'ready',
+  },
+  {
+    name: 'Markets detail',
+    summary: 'Rules, snapshots, metadata, and navigation from the catalog are implemented.',
+    status: 'ready',
+  },
+  {
+    name: 'Dashboard integration',
+    summary: 'The landing page now consumes live backend health and market summary data.',
+    status: 'ready',
+  },
+  {
+    name: 'Providers real sync',
+    summary: 'External provider ingestion is intentionally deferred until after the local demo workflow.',
+    status: 'pending',
+  },
+  {
+    name: 'Paper trading',
+    summary: 'Execution workflows, positions, and PnL remain out of scope for this milestone.',
+    status: 'pending',
+  },
+  {
+    name: 'Risk engine',
+    summary: 'Position limits, scenario checks, and risk overlays are still future roadmap items.',
+    status: 'pending',
+  },
+  {
+    name: 'Post-mortem',
+    summary: 'Retrospective tooling is reserved in navigation but not implemented yet.',
+    status: 'pending',
+  },
 ];
 
-export const immediateRoadmap = [
-  'Expand local UI modules without introducing real trading logic.',
-  'Add domain endpoints beyond the healthcheck when contracts are ready.',
-  'Prepare placeholder panels for Redis, Celery, agents, and paper trading lifecycle.',
+export const nextProjectSteps = [
+  'Extend the System panel with provider diagnostics, worker visibility, and richer local service checks.',
+  'Keep expanding the seeded demo catalog so the dashboard and Markets module feel realistic during development.',
+  'Prepare the Portfolio and Agents placeholders to consume backend summaries once those endpoints exist.',
+];
+
+export const localEnvironmentHighlights = [
+  { label: 'Runtime', value: FRONTEND_RUNTIME },
+  { label: 'System mode', value: 'Local demo' },
+  { label: 'Backend API', value: API_BASE_URL },
+  { label: 'Data source', value: 'Seeded Django demo catalog' },
 ];
