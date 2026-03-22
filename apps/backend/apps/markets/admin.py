@@ -93,6 +93,7 @@ class MarketAdmin(admin.ModelAdmin):
         'liquidity',
         'snapshot_count',
         'latest_snapshot_at',
+        'last_simulation_tick',
         'close_time',
     )
     search_fields = ('title', 'slug', 'ticker', 'provider_market_id', 'category', 'resolution_source')
@@ -162,6 +163,11 @@ class MarketAdmin(admin.ModelAdmin):
     @admin.display(ordering='latest_snapshot_value', description='Latest snapshot')
     def latest_snapshot_at(self, obj):
         return obj.latest_snapshot_value or '—'
+
+    @admin.display(description='Last simulation tick')
+    def last_simulation_tick(self, obj):
+        simulation = (obj.metadata or {}).get('simulation', {})
+        return simulation.get('last_tick_at', '—')
 
 
 @admin.register(MarketSnapshot)

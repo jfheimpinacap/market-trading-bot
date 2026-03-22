@@ -7,6 +7,7 @@ This stage keeps the domain intentionally simple while making it useful for loca
 - load coherent demo providers, events, markets, snapshots, and rules
 - inspect that catalog comfortably in Django admin
 - expose read-only API endpoints that the frontend can consume immediately
+- simulate live-looking market activity locally without real provider integrations or trading
 - stay provider-agnostic without real Kalshi or Polymarket integrations
 
 ## Models
@@ -131,6 +132,108 @@ The seeded data is intentionally fictitious but realistic enough for development
 - terminal states for detail and badge rendering
 - varied categories for filters and navigation
 
+## Local simulation engine
+The app now includes a small simulation layer under `apps/markets/simulation/`.
+
+Current modules:
+- `simulation/utils.py`: quantization, clamping, price derivation, and order-book helpers
+- `simulation/rules.py`: market eligibility, volatility scaling, time-pressure drift, and conservative status-transition rules
+- `simulation/engine.py`: orchestration that updates eligible demo markets and creates aligned `MarketSnapshot` rows
+
+### Simulation goals
+The simulation is intentionally simple and local-first:
+- only acts on demo markets already stored in the database
+- keeps prices/probabilities/liquidity/volume moving in small, bounded steps
+- skips terminal markets such as `resolved`, `cancelled`, and `archived`
+- treats `open`, `paused`, and `closed` differently
+- creates a new snapshot for each market that changes on a tick
+- does not introduce trading logic, provider sync, ML, or websockets
+
+### Fields updated by simulation
+A successful tick can update:
+- `current_market_probability`
+- `current_yes_price`
+- `current_no_price`
+- `liquidity`
+- `volume_24h`
+- `volume_total`
+- `spread_bps`
+- `status`
+- `is_active`
+- `metadata["simulation"]`
+
+A matching `MarketSnapshot` is created with aligned probability, prices, spread, liquidity, total volume, and `captured_at`.
+
+### Movement rules
+The movement logic is intentionally legible instead of mathematically complex:
+- probabilities are clamped between `0.0100` and `0.9900`
+- yes/no prices are re-derived from probability on every tick
+- volatility is slightly different by category
+- markets closer to `resolution_time` can move a bit more
+- paused markets move far less than open markets
+- closed markets barely move and primarily exist to carry final pre-resolution state forward
+- spread stays non-negative and bounded
+- liquidity never goes negative
+- `volume_total` never decreases
+
+### Status transitions simulated today
+Status changes are conservative and intentionally rare:
+- `open -> paused` occasionally
+- `paused -> open` occasionally
+- `open -> closed` when `close_time` is reached, or very rarely near the close window
+- `closed -> resolved` when `resolution_time` is reached, or very rarely close to that window
+
+The engine does **not** attempt to simulate every lifecycle path or infer real outcomes.
+
+## Simulation commands
+
+### Manual tick
+Run a single tick:
+
+```bash
+cd apps/backend
+python manage.py simulate_markets_tick
+```
+
+Useful options:
+
+```bash
+python manage.py simulate_markets_tick --dry-run
+python manage.py simulate_markets_tick --limit 5
+python manage.py simulate_markets_tick --seed 7
+```
+
+The command prints a development-oriented summary including:
+- markets processed
+- markets updated
+- markets skipped
+- snapshots created
+- any status changes
+- per-market probability movement for updated rows
+
+### Local loop mode
+Run a simple local loop that applies repeated ticks:
+
+```bash
+cd apps/backend
+python manage.py simulate_markets_loop --interval 10 --iterations 20
+```
+
+Continuous mode is also supported:
+
+```bash
+python manage.py simulate_markets_loop --interval 5
+```
+
+Stop continuous mode with `Ctrl+C`.
+
+Useful loop options:
+- `--interval <seconds>`
+- `--iterations <count>`
+- `--limit <count>`
+- `--dry-run`
+- `--seed <int>`
+
 ## Admin improvements
 The Django admin is intended to be practical for local inspection.
 
@@ -149,6 +252,7 @@ The Django admin is intended to be practical for local inspection.
 - inline market rules
 - inline recent snapshots limited to the latest 5 rows
 - readonly operational fields such as timestamps, slug, provider market id, and snapshot summary data
+- last simulation tick visible from market metadata once a tick has run
 
 ### Snapshot and rule admin
 - provider visible directly in list tables
@@ -161,6 +265,8 @@ Read-only endpoints currently exposed under `/api/markets/`:
 - `GET /api/markets/`
 - `GET /api/markets/<id>/`
 - `GET /api/markets/system-summary/`
+
+No new API endpoints are required for simulation. The frontend can see changes by refreshing the existing endpoints.
 
 ### Provider response
 Provider list responses include lightweight aggregate counts:
@@ -225,6 +331,44 @@ The market detail serializer is richer than the list serializer and includes:
 - `resolved_markets`
 - `total_snapshots`
 
+## Local verification flow
+A practical local flow for this stage is:
+
+```bash
+cd apps/backend
+python manage.py migrate
+python manage.py seed_markets_demo
+python manage.py simulate_markets_tick
+python manage.py runserver
+```
+
+Or, for continuous local activity:
+
+```bash
+cd apps/backend
+python manage.py migrate
+python manage.py seed_markets_demo
+python manage.py simulate_markets_loop --interval 10
+python manage.py runserver
+```
+
+### How to verify simulation worked
+- Open Django admin and inspect a market's `Last simulation tick` plus recent snapshots.
+- Open `/api/markets/` and confirm `current_market_probability`, `liquidity`, `volume_24h`, `volume_total`, and `latest_snapshot_at` change.
+- Open `/api/markets/<id>/` and confirm `recent_snapshots` includes the newest simulated row.
+- Open `/api/markets/system-summary/` and confirm `total_snapshots` increases after each live tick.
+
+## Limitations of this stage
+This stage intentionally does **not** include:
+- provider integrations
+- real market sync jobs
+- websockets
+- trading workflows
+- orders, fills, positions, or portfolio accounting
+- signals or agents
+- ML or forecasting
+- advanced charts or dashboards
+
 ## Testing
 Run market tests with the dedicated test settings:
 
@@ -238,14 +382,8 @@ Current coverage includes:
 - seed idempotence
 - management command output
 - provider/event/market/system-summary endpoints
-- filters, search, ordering, and market detail snapshots/rules
-
-## Intentionally out of scope
-Still not implemented in this stage:
-- real provider integrations
-- sync jobs or ingestion tasks
-- websocket feeds
-- paper trading
-- orders, positions, fills, or portfolio logic
-- signals, risk, or machine learning
-- advanced auth flows
+- simulation tick persistence
+- snapshot creation
+- value bounds for simulated fields
+- dry-run behavior
+- loop command iterations
