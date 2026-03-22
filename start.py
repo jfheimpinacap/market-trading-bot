@@ -38,6 +38,12 @@ class ProjectPaths:
     state_file: Path
 
 
+@dataclass(frozen=True)
+class PythonInterpreter:
+    command: str
+    source: str
+
+
 ROOT = Path(__file__).resolve().parent
 PATHS = ProjectPaths(
     root=ROOT,
@@ -146,6 +152,43 @@ def find_executable(name: str) -> str | None:
     return shutil.which(name)
 
 
+def is_valid_python_interpreter(command: str) -> bool:
+    try:
+        result = subprocess.run(
+            [command, '--version'],
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+    except (FileNotFoundError, OSError):
+        return False
+    return result.returncode == 0
+
+
+def resolve_python_interpreter() -> PythonInterpreter | None:
+    candidates: list[PythonInterpreter] = []
+
+    if sys.executable:
+        candidates.append(PythonInterpreter(command=sys.executable, source='sys.executable'))
+
+    candidates.extend(
+        PythonInterpreter(command=name, source=name)
+        for name in ('python', 'python3')
+    )
+
+    if os.name == 'nt':
+        candidates.append(PythonInterpreter(command='py', source='py'))
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        if candidate.command in seen:
+            continue
+        seen.add(candidate.command)
+        if is_valid_python_interpreter(candidate.command):
+            return candidate
+    return None
+
+
 def command_version(command: Sequence[str]) -> str:
     result = run_command(command, capture_output=True, check=False)
     output = '\n'.join(part for part in [result.stdout, result.stderr] if part).strip()
@@ -171,9 +214,9 @@ def detect_docker_compose() -> list[str] | None:
 
 
 def verify_prerequisites(*, require_node: bool, require_docker: bool) -> dict[str, Any]:
-    python_path = find_executable('python3') or find_executable('python')
-    if not python_path:
-        fail('Python is required but was not found in PATH.')
+    python = resolve_python_interpreter()
+    if python is None:
+        fail('Python is required but no valid interpreter was found. Try running this launcher with py, python, or python3.')
 
     node_path = find_executable('node')
     npm_path = find_executable('npm')
@@ -185,7 +228,8 @@ def verify_prerequisites(*, require_node: bool, require_docker: bool) -> dict[st
         fail('Docker Compose is required to start PostgreSQL and Redis, but neither docker compose nor docker-compose was found.')
 
     return {
-        'python': python_path,
+        'python': python.command,
+        'python_source': python.source,
         'node': node_path,
         'npm': npm_path,
         'docker_compose': compose_command,
@@ -229,8 +273,12 @@ def ensure_backend_venv(paths: ProjectPaths) -> Path:
         ok('Backend virtual environment already present.')
         return venv_python
 
+    interpreter = resolve_python_interpreter()
+    if interpreter is None:
+        fail('Python is required to create the backend virtual environment. Try running this launcher with py, python, or python3.')
+
     info('Creating backend virtual environment...')
-    run_command([sys.executable, '-m', 'venv', str(paths.backend / '.venv')], cwd=paths.backend)
+    run_command([interpreter.command, '-m', 'venv', str(paths.backend / '.venv')], cwd=paths.backend)
     ok('Backend virtual environment created.')
     return venv_python
 
@@ -551,14 +599,14 @@ def command_status(_: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
     compose_command = detect_docker_compose()
-    python_path = find_executable('python3') or find_executable('python')
+    python = resolve_python_interpreter()
     node_path = find_executable('node')
     npm_path = find_executable('npm')
     root_env_values = parse_env_file(paths.root_env)
 
     backend_status = 'OK' if paths.backend.exists() else 'MISSING'
     frontend_status = 'OK' if paths.frontend.exists() else 'MISSING'
-    python_version = command_version([python_path, '--version']) if python_path else 'MISSING'
+    python_version = command_version([python.command, '--version']) if python else 'MISSING'
     node_version = command_version([node_path, '--version']) if node_path else 'MISSING'
     npm_version = command_version([npm_path, '--version']) if npm_path else 'MISSING'
 
@@ -568,6 +616,8 @@ def command_status(_: argparse.Namespace) -> int:
     print(f'Frontend dir:   {frontend_status} -> {paths.frontend}')
     print(f'Docker compose: {" ".join(compose_command) if compose_command else "MISSING"}')
     print(f'Python:         {python_version}')
+    print(f'Current interpreter: {python.command if python else "MISSING"}')
+    print(f'Python source:  {python.source if python else "not detected"}')
     print(f'Node:           {node_version}')
     print(f'npm:            {npm_version}')
     print('')
