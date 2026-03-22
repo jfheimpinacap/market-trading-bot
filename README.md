@@ -60,32 +60,70 @@ market-trading-bot/
 
 ## Local setup
 
-1. Copy the environment template.
-   ```bash
-   cp .env.example .env
-   ```
-2. Start PostgreSQL and Redis.
-   ```bash
-   docker compose up -d postgres redis
-   ```
-3. Install backend dependencies.
-   ```bash
-   cd apps/backend
-   python3 -m venv .venv
-   . .venv/bin/activate
-   pip install -r requirements.txt
-   python manage.py migrate
-   python manage.py runserver
-   ```
-4. Install frontend dependencies.
-   ```bash
-   cd apps/frontend
-   cp .env.example .env
-   npm install
-   npm run dev
-   ```
+### Recommended flow: `start.py`
 
-## Running each part
+The repository now includes a project-specific launcher at the repo root:
+
+```bash
+python start.py
+```
+
+That default command is equivalent to:
+
+```bash
+python start.py up
+```
+
+What the launcher does for this monorepo:
+
+- validates the expected repo structure (`apps/backend`, `apps/frontend`, `docker-compose.yml`)
+- checks local prerequisites such as Python, Node.js, npm, and Docker Compose
+- creates `.env` files from `.env.example` when they are missing
+- creates `apps/backend/.venv` when needed
+- installs backend requirements only when `requirements.txt` changes
+- installs frontend dependencies only when `package.json` or `package-lock.json` changes
+- starts PostgreSQL and Redis with Docker Compose
+- runs Django migrations
+- auto-seeds demo markets only when the database has no `Market` rows yet
+- starts the Django dev server and the Vite dev server
+- optionally starts the local simulation loop
+
+### Main launcher commands
+
+```bash
+python start.py
+python start.py up
+python start.py setup
+python start.py status
+python start.py down
+python start.py seed
+python start.py simulate-tick
+python start.py simulate-loop
+```
+
+Useful optional flags:
+
+```bash
+python start.py up --no-seed
+python start.py up --with-sim-loop
+python start.py setup --skip-frontend
+python start.py setup --skip-backend
+python start.py setup --skip-install
+```
+
+### What each command does
+
+- `python start.py` / `python start.py up`: prepares the local environment, starts Postgres + Redis, runs migrations, seeds demo data if needed, and launches backend + frontend.
+- `python start.py setup`: prepares `.env`, `.venv`, backend/frontend dependencies, Docker services, and migrations without starting the dev servers.
+- `python start.py status`: prints a quick diagnostic of tools, env files, dependency folders, expected ports, and recommended commands.
+- `python start.py down`: stops launcher-managed backend/frontend processes and runs `docker compose down` (or `docker-compose down`).
+- `python start.py seed`: runs `python manage.py seed_markets_demo`.
+- `python start.py simulate-tick`: runs one simulation tick with `python manage.py simulate_markets_tick`.
+- `python start.py simulate-loop`: runs the existing loop command `python manage.py simulate_markets_loop`.
+
+## Running each part manually
+
+You can still use the existing manual commands if you want finer control.
 
 ### PostgreSQL and Redis
 
@@ -163,6 +201,9 @@ Each library currently contains only a README describing its intended future res
 ## Helpful commands
 
 ```bash
+python start.py
+python start.py status
+python start.py down
 make install-frontend
 make install-backend
 make frontend-dev

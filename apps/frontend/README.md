@@ -136,7 +136,47 @@ Contenido base:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
+Si usas el launcher del repo, `python start.py setup` o `python start.py up` crea automáticamente `apps/frontend/.env` a partir de `apps/frontend/.env.example` cuando falta.
+
+## Flujo recomendado desde la raíz del monorepo
+
+La forma más simple de levantar la UI junto con el backend local es:
+
+```bash
+python start.py
+```
+
+También puedes usar:
+
+```bash
+python start.py up
+python start.py setup
+python start.py status
+python start.py down
+```
+
+Qué resuelve el launcher para el frontend:
+
+- valida que `apps/frontend/package.json` exista
+- verifica que Node.js y npm estén disponibles
+- crea `apps/frontend/.env` si falta
+- ejecuta `npm install` cuando `node_modules` no existe o cambian `package.json` / `package-lock.json`
+- arranca Vite con host local y puerto `5173`
+- muestra accesos rápidos a `/`, `/system` y `/markets`
+
 ## Cómo levantar backend + seed demo + simulación + frontend
+
+### Opción recomendada: un solo comando
+
+```bash
+python start.py
+```
+
+Para apagar backend + frontend + infraestructura local:
+
+```bash
+python start.py down
+```
 
 ### 1. Backend Django
 
