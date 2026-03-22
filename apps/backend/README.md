@@ -72,6 +72,8 @@ Current read-only market endpoints:
    ```
 2. Adjust values if needed.
 
+If you prefer the repo launcher, `python start.py setup` or `python start.py up` will create `apps/backend/.env` automatically when it is missing, using this template.
+
 Main variables:
 - `POSTGRES_DB`
 - `POSTGRES_USER`
@@ -107,6 +109,37 @@ A clean local-first flow for this stage looks like this:
 6. Open Django admin.
 7. Inspect the read-only API.
 8. Refresh the frontend and verify the dashboard plus market pages react to changing values.
+
+## Recommended shortcut from the repo root
+
+The preferred local-first workflow for this repository is now:
+
+```bash
+python start.py
+```
+
+Or, if you only want to prepare the backend without keeping servers attached:
+
+```bash
+python start.py setup --skip-frontend
+```
+
+Backend-related launcher commands:
+
+```bash
+python start.py seed
+python start.py simulate-tick
+python start.py simulate-loop
+```
+
+What the launcher handles before running backend commands:
+
+- creates `apps/backend/.env` from `apps/backend/.env.example` if needed
+- creates `apps/backend/.venv` if it does not exist
+- installs `requirements.txt` only when the dependency hash changes
+- starts PostgreSQL and Redis unless `--skip-infra` is used
+- runs `python manage.py migrate`
+- auto-seeds the demo catalog during `up` / `setup` only when no markets exist yet
 
 ### Run migrations
 From `apps/backend`:

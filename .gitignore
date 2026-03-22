@@ -38,3 +38,6 @@ yarn-error.log*
 
 # Docker
 postgres-data/
+
+# Local launcher state
+.tmp/
