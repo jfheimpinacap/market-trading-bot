@@ -18,7 +18,7 @@ export function Topbar({ route }: TopbarProps) {
       </div>
       <div className="topbar__meta">
         <span>Local environment</span>
-        <span>Frontend scaffold · {currentYear}</span>
+        <span>Markets module ready · {currentYear}</span>
       </div>
     </header>
   );

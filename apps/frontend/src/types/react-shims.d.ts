@@ -1,6 +1,10 @@
 declare module 'react' {
-  export type ReactNode = unknown;
+  export type ReactNode = any;
   export type PropsWithChildren<P = unknown> = P & { children?: ReactNode };
+  export type ChangeEvent<T = Element> = {
+    target: T;
+    currentTarget: T;
+  };
   export type MouseEvent<T = Element> = {
     preventDefault(): void;
     defaultPrevented: boolean;
@@ -20,6 +24,7 @@ declare module 'react' {
   export function useState<S>(initialState: S): [S, Dispatch<S>];
   export function useEffect(effect: () => void | (() => void), deps?: unknown[]): void;
   export function useCallback<T extends (...args: any[]) => any>(callback: T, deps: unknown[]): T;
+  export function useMemo<T>(factory: () => T, deps: unknown[]): T;
   export function useSyncExternalStore<T>(
     subscribe: (onStoreChange: () => void) => () => void,
     getSnapshot: () => T,

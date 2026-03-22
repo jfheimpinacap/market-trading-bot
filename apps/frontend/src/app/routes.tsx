@@ -1,5 +1,6 @@
 import { AgentsPage } from '../pages/AgentsPage';
 import { DashboardPage } from '../pages/DashboardPage';
+import { MarketDetailPage } from '../pages/MarketDetailPage';
 import { MarketsPage } from '../pages/MarketsPage';
 import { PortfolioPage } from '../pages/PortfolioPage';
 import { PostMortemPage } from '../pages/PostMortemPage';
@@ -10,6 +11,7 @@ import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
   component: () => JSX.Element;
+  match?: (pathname: string) => boolean;
 };
 
 export const appRoutes: AppRoute[] = [
@@ -18,12 +20,21 @@ export const appRoutes: AppRoute[] = [
     path: '/',
     description: 'Operational overview of the local platform scaffold.',
     component: DashboardPage,
+    match: (pathname) => pathname === '/',
   },
   {
     label: 'Markets',
     path: '/markets',
-    description: 'Future market explorer, watchlists, and discovery workflows.',
+    description: 'Browse demo market data, filters, summary metrics, and focused market detail views.',
     component: MarketsPage,
+    match: (pathname) => pathname === '/markets',
+  },
+  {
+    label: 'Market detail',
+    path: '/markets/:marketId',
+    description: 'Inspect one market, including rules, recent snapshots, and operational metadata.',
+    component: MarketDetailPage,
+    match: (pathname) => /^\/markets\/[^/]+\/?$/.test(pathname),
   },
   {
     label: 'Signals',
@@ -64,5 +75,5 @@ export const appRoutes: AppRoute[] = [
 ];
 
 export function getRouteByPath(pathname: string) {
-  return appRoutes.find((route) => route.path === pathname);
+  return appRoutes.find((route) => (route.match ? route.match(pathname) : route.path === pathname));
 }
