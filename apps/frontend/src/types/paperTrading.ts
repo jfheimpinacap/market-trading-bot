@@ -82,6 +82,18 @@ export type PaperPortfolioSnapshot = {
   updated_at: string;
 };
 
+export type PaperPortfolioHistoryPoint = {
+  id: number;
+  capturedAt: string;
+  capturedAtLabel: string;
+  cashBalance: number | null;
+  equity: number | null;
+  realizedPnl: number | null;
+  unrealizedPnl: number | null;
+  totalPnl: number | null;
+  openPositionsCount: number;
+};
+
 export type PaperExposureSummary = {
   market_id: number;
   market_title: string;

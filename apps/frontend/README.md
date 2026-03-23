@@ -160,11 +160,13 @@ La ruta `/portfolio` ahora muestra:
 
 - cuenta paper activa y contexto local demo
 - summary cards para cash, equity, realized/unrealized/total PnL, open positions y total trades
+- chart histórico simple de portfolio basado en `GET /api/paper/snapshots/`, con `equity` como serie principal y overlays de `cash_balance` y `total_pnl` cuando están disponibles
+- resumen técnico corto del histórico con cantidad de snapshots, latest equity y latest total PnL
 - tabla de posiciones con side, quantity, avg entry, current mark, market value, PnL y estado
 - historial de trades recientes ordenado por `executed_at`
 - panel técnico de snapshots del portfolio
-- acción manual **Revalue portfolio** que llama `POST /api/paper/revalue/` y luego refresca los datos visibles
-- loading, error parcial, error total y empty states claros por sección
+- acción manual **Revalue portfolio** que llama `POST /api/paper/revalue/` y luego refresca account, summary, positions, trades, snapshots y el chart histórico visible
+- loading, error parcial, error total y empty states claros por sección, incluyendo casos de pocos o ningún snapshot
 
 ### Filtros usados en `/markets`
 
