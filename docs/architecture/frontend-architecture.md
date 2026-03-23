@@ -12,6 +12,7 @@ The frontend is a local-first operator workspace for `market-trading-bot`. In th
 6. provide a paper trading Portfolio page for inspecting the local demo account, positions, trades, and snapshots
 7. provide a market-detail paper trading entry flow so a user can execute a local simulated trade directly from `/markets/:marketId`
 8. surface demo signals and mock-agent output as a bridge between markets, paper trading, and future automation
+9. expose a simple trade-guard step so paper trades can be evaluated before local execution
 
 This phase intentionally excludes authentication, real trading logic, market integrations, websockets, and advanced data visualization beyond a simple snapshot-based line chart in market detail.
 
@@ -120,6 +121,17 @@ The `/markets/:marketId` route now extends the same pattern to support both a li
 - avoids websockets, global client state, exchange-style order books, and advanced order-entry concepts
 
 This keeps market detail actionable without turning the current frontend into a heavy trading terminal.
+
+### Market detail trade guard flow
+The trade panel on `/markets/:marketId` now introduces a deliberate two-step flow:
+
+- the user fills side, trade type, and quantity
+- the UI calls `POST /api/risk/assess-trade/` through `services/riskDemo.ts`
+- the returned assessment is rendered inline with a decision badge, score, confidence, summary, rationale, and warnings
+- only non-`BLOCK` assessments reveal the execution button for `POST /api/paper/trades/`
+- changing the form invalidates the previous assessment so the user has to run a fresh check
+
+This keeps the feature didactic, explainable, and ready to evolve into a stronger backend-driven guard later without introducing a wizard or complex client state.
 
 ## UI principles for this stage
 

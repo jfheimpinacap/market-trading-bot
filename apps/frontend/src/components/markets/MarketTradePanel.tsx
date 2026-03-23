@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { navigate } from '../../lib/router';
+import { assessTrade } from '../../services/riskDemo';
 import type { MarketDetail } from '../../types/markets';
 import type {
   CreatePaperTradePayload,
@@ -9,6 +10,7 @@ import type {
   PaperTrade,
   TradeExecutionState,
 } from '../../types/paperTrading';
+import type { TradeRiskAssessment } from '../../types/riskDemo';
 import { formatCompactCurrency, formatPercent, titleize } from './utils';
 import { PaperStatusBadge } from '../paper-trading/PaperStatusBadge';
 import { PnlBadge } from '../paper-trading/PnlBadge';
@@ -18,6 +20,7 @@ import {
   formatQuantity,
   formatTechnicalTimestamp,
 } from '../paper-trading/utils';
+import { TradeRiskPanel } from './TradeRiskPanel';
 
 const SIDE_OPTIONS: Array<CreatePaperTradePayload['side']> = ['YES', 'NO'];
 const TRADE_TYPE_OPTIONS: Array<CreatePaperTradePayload['trade_type']> = ['BUY', 'SELL'];
@@ -77,6 +80,10 @@ function formatTradeError(message: string) {
   return message || 'Failed to execute paper trade.';
 }
 
+function buildAssessmentKey(payload: Pick<CreatePaperTradePayload, 'trade_type' | 'side' | 'quantity'>) {
+  return `${payload.trade_type}:${payload.side}:${payload.quantity.trim()}`;
+}
+
 export function MarketTradePanel({
   market,
   account,
@@ -95,6 +102,10 @@ export function MarketTradePanel({
   const [side, setSide] = useState<CreatePaperTradePayload['side']>('YES');
   const [quantity, setQuantity] = useState('');
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [riskAssessment, setRiskAssessment] = useState<TradeRiskAssessment | null>(null);
+  const [riskError, setRiskError] = useState<string | null>(null);
+  const [isEvaluatingRisk, setIsEvaluatingRisk] = useState(false);
+  const [lastAssessmentKey, setLastAssessmentKey] = useState<string | null>(null);
 
   const isTradable = market.is_active && market.status.toLowerCase() === 'open';
   const marketPositions = useMemo(
@@ -117,15 +128,38 @@ export function MarketTradePanel({
   const estimatedGrossAmount = currentPrice !== null && Number.isFinite(numericQuantity) && numericQuantity > 0
     ? numericQuantity * currentPrice
     : null;
+  const currentAssessmentKey = useMemo(
+    () => buildAssessmentKey({ trade_type: tradeType, side, quantity }),
+    [tradeType, side, quantity],
+  );
+  const canExecuteTrade = Boolean(
+    account
+      && riskAssessment
+      && lastAssessmentKey === currentAssessmentKey
+      && riskAssessment.decision !== 'BLOCK'
+      && !isLoading
+      && !error,
+  );
 
   useEffect(() => {
     if (executionState?.status === 'success') {
       setQuantity('');
       setValidationMessage(null);
+      setRiskAssessment(null);
+      setRiskError(null);
+      setLastAssessmentKey(null);
     }
   }, [executionState?.status, executionState?.response?.trade.id]);
 
-  function validateForm() {
+  useEffect(() => {
+    setRiskAssessment(null);
+    setRiskError(null);
+    setLastAssessmentKey(null);
+  }, [market.id, tradeType, side, quantity]);
+
+  function validateForm(options?: { requireTradable?: boolean }) {
+    const requireTradable = options?.requireTradable ?? false;
+
     if (!market.id) {
       return 'The selected market is missing and the demo trade cannot be sent.';
     }
@@ -134,7 +168,7 @@ export function MarketTradePanel({
       return 'Choose a paper trade action before submitting.';
     }
 
-    if (!isTradable) {
+    if (requireTradable && !isTradable) {
       return 'This market is not currently tradable in paper mode.';
     }
 
@@ -153,12 +187,55 @@ export function MarketTradePanel({
     return null;
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  async function handleEvaluateTrade() {
     const message = validateForm();
     if (message) {
       setValidationMessage(message);
+      return;
+    }
+
+    setValidationMessage(null);
+    setRiskError(null);
+    setIsEvaluatingRisk(true);
+
+    try {
+      const response = await assessTrade({
+        market_id: market.id,
+        trade_type: tradeType,
+        side,
+        quantity: quantity.trim(),
+        requested_price: currentPrice !== null ? currentPrice.toFixed(4) : null,
+        metadata: {
+          source: 'market-detail-risk-panel',
+          market_slug: market.slug,
+        },
+      });
+      setRiskAssessment(response.assessment);
+      setLastAssessmentKey(buildAssessmentKey({ trade_type: tradeType, side, quantity }));
+    } catch (assessmentError) {
+      setRiskAssessment(null);
+      setRiskError(assessmentError instanceof Error ? assessmentError.message : 'Could not evaluate trade risk.');
+    } finally {
+      setIsEvaluatingRisk(false);
+    }
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const message = validateForm({ requireTradable: true });
+    if (message) {
+      setValidationMessage(message);
+      return;
+    }
+
+    if (!riskAssessment || lastAssessmentKey !== currentAssessmentKey) {
+      setValidationMessage('Run a fresh demo risk check before executing this trade.');
+      return;
+    }
+
+    if (riskAssessment.decision === 'BLOCK') {
+      setValidationMessage('This trade is blocked by the demo risk guard and cannot be executed from this panel.');
       return;
     }
 
@@ -171,6 +248,8 @@ export function MarketTradePanel({
       metadata: {
         source: 'market-detail-panel',
         market_slug: market.slug,
+        risk_assessment_id: riskAssessment.id,
+        risk_decision: riskAssessment.decision,
       },
     });
   }
@@ -253,7 +332,7 @@ export function MarketTradePanel({
                   type="button"
                   className={`trade-toggle-button ${tradeType === option ? 'trade-toggle-button--active' : ''}`}
                   onClick={() => setTradeType(option)}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isEvaluatingRisk}
                 >
                   {titleize(option)}
                 </button>
@@ -270,7 +349,7 @@ export function MarketTradePanel({
                   type="button"
                   className={`trade-toggle-button ${side === option ? 'trade-toggle-button--active' : ''}`}
                   onClick={() => setSide(option)}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isEvaluatingRisk}
                 >
                   {tradeType === 'BUY' ? 'Buy' : 'Sell'} {option}
                 </button>
@@ -290,7 +369,7 @@ export function MarketTradePanel({
               placeholder="e.g. 10"
               value={quantity}
               onChange={(event) => setQuantity(event.target.value)}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isEvaluatingRisk}
             />
           </label>
 
@@ -309,24 +388,42 @@ export function MarketTradePanel({
             </article>
           </div>
 
+          <TradeRiskPanel
+            assessment={riskAssessment}
+            isLoading={isEvaluatingRisk}
+            error={riskError}
+            hasPaperAccount={Boolean(account)}
+            isTradable={isTradable}
+          />
+
           {validationMessage ? <p className="market-trade-feedback market-trade-feedback--error">{validationMessage}</p> : null}
 
           <div className="market-trade-form__actions">
-            <button className="secondary-button" type="button" onClick={() => void onRetry()} disabled={isSubmitting}>
+            <button className="secondary-button" type="button" onClick={() => void onRetry()} disabled={isSubmitting || isEvaluatingRisk}>
               Refresh paper context
             </button>
             <button
-              className="primary-button"
-              type="submit"
-              disabled={isSubmitting || Boolean(error) || isLoading || !account}
+              className="secondary-button"
+              type="button"
+              onClick={() => void handleEvaluateTrade()}
+              disabled={isSubmitting || isEvaluatingRisk || Boolean(error) || isLoading || !account}
             >
-              {isSubmitting ? 'Submitting demo trade…' : `Execute ${tradeType} ${side}`}
+              {isEvaluatingRisk ? 'Evaluating trade…' : 'Evaluate trade'}
             </button>
+            {riskAssessment && lastAssessmentKey === currentAssessmentKey ? (
+              <button
+                className="primary-button"
+                type="submit"
+                disabled={isSubmitting || !canExecuteTrade}
+              >
+                {isSubmitting ? 'Submitting demo trade…' : `Execute ${tradeType} ${side}`}
+              </button>
+            ) : null}
           </div>
 
           <p className="muted-text market-trade-form__hint">
-            The estimate above comes from the current market detail response. Final simulated execution always comes from{' '}
-            <code>POST /api/paper/trades/</code>.
+            Flow for this stage: evaluate with <code>POST /api/risk/assess-trade/</code>, review the trade guard verdict,
+            then optionally execute through <code>POST /api/paper/trades/</code>.
           </p>
         </form>
 
