@@ -151,6 +151,7 @@ También puedes usar:
 ```bash
 python start.py up
 python start.py setup
+python start.py frontend
 python start.py status
 python start.py down
 ```
@@ -159,9 +160,11 @@ Qué resuelve el launcher para el frontend:
 
 - valida que `apps/frontend/package.json` exista
 - verifica que Node.js y npm estén disponibles
+- resuelve `node`/`node.exe` y `npm`/`npm.cmd` explícitamente en Windows
 - crea `apps/frontend/.env` si falta
 - ejecuta `npm install` cuando `node_modules` no existe o cambian `package.json` / `package-lock.json`
 - arranca Vite con host local y puerto `5173`
+- en Windows puede abrir el frontend en una ventana separada con `python start.py` o `python start.py frontend`
 - muestra accesos rápidos a `/`, `/system` y `/markets`
 
 ## Cómo levantar backend + seed demo + simulación + frontend

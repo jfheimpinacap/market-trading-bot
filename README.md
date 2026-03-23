@@ -78,6 +78,7 @@ What the launcher does for this monorepo:
 
 - validates the expected repo structure (`apps/backend`, `apps/frontend`, `docker-compose.yml`)
 - checks local prerequisites such as Python, Node.js, npm, and Docker Compose
+- resolves `node`/`node.exe` and `npm`/`npm.cmd` explicitly on Windows so PowerShell and VS Code terminals behave correctly
 - creates `.env` files from `.env.example` when they are missing
 - creates `apps/backend/.venv` when needed
 - installs backend requirements only when `requirements.txt` changes
@@ -85,7 +86,9 @@ What the launcher does for this monorepo:
 - starts PostgreSQL and Redis with Docker Compose
 - runs Django migrations
 - auto-seeds demo markets only when the database has no `Market` rows yet
+- validates backend and frontend preparation before launching long-lived dev processes so the system is not left half-started
 - starts the Django dev server and the Vite dev server
+- on Windows, opens backend/frontend in separate console windows and leaves the original terminal free
 - optionally starts the local simulation loop
 
 ### Main launcher commands
@@ -99,6 +102,8 @@ python start.py down
 python start.py seed
 python start.py simulate-tick
 python start.py simulate-loop
+python start.py backend
+python start.py frontend
 ```
 
 Useful optional flags:
@@ -113,13 +118,15 @@ python start.py setup --skip-install
 
 ### What each command does
 
-- `python start.py` / `python start.py up`: prepares the local environment, starts Postgres + Redis, runs migrations, seeds demo data if needed, and launches backend + frontend.
-- `python start.py setup`: prepares `.env`, `.venv`, backend/frontend dependencies, Docker services, and migrations without starting the dev servers.
-- `python start.py status`: prints a quick diagnostic of tools, env files, dependency folders, expected ports, and recommended commands.
+- `python start.py` / `python start.py up`: validates prerequisites first, prepares the local environment, starts Postgres + Redis, runs migrations, seeds demo data if needed, and only then launches backend + frontend.
+- `python start.py setup`: prepares `.env`, `.venv`, backend/frontend dependencies, Docker services, migrations, and auto-seed logic without starting the dev servers.
+- `python start.py status`: prints the current Python interpreter, backend venv python, Node/npm resolution, Docker Compose mode, env/dependency presence, ports, and URLs.
 - `python start.py down`: stops launcher-managed backend/frontend processes and runs `docker compose down` (or `docker-compose down`).
 - `python start.py seed`: runs `python manage.py seed_markets_demo`.
 - `python start.py simulate-tick`: runs one simulation tick with `python manage.py simulate_markets_tick`.
 - `python start.py simulate-loop`: runs the existing loop command `python manage.py simulate_markets_loop`.
+- `python start.py backend`: prepares and starts only the Django backend.
+- `python start.py frontend`: prepares and starts only the Vite frontend.
 
 ## Running each part manually
 
@@ -204,6 +211,8 @@ Each library currently contains only a README describing its intended future res
 python start.py
 python start.py status
 python start.py down
+python start.py backend
+python start.py frontend
 make install-frontend
 make install-backend
 make frontend-dev
