@@ -29,7 +29,7 @@ export function Sidebar({ routes, currentPath }: SidebarProps) {
       <div className="sidebar__brand">
         <p className="section-label">Prediction Markets</p>
         <h2>market-trading-bot</h2>
-        <p>Professional local workspace for research, paper trading, and future automation.</p>
+        <p>Professional local workspace for research, guided automation, and manual paper trading.</p>
       </div>
 
       <nav className="sidebar__nav" aria-label="Primary navigation">

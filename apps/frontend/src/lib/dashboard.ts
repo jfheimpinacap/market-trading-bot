@@ -15,6 +15,12 @@ export const dashboardQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Automation',
+    description: 'Use guided demo controls to move the local system forward without touching the terminal.',
+    path: '/automation',
+    availability: 'live',
+  },
+  {
     title: 'Portfolio',
     description: 'Check paper balances, positions, trade history, and which executions already have reviews.',
     path: '/portfolio',
@@ -58,6 +64,11 @@ export const dashboardModules: DashboardModuleStatus[] = [
   {
     name: 'Risk engine',
     summary: 'The demo risk guard is integrated into the trade flow before paper execution.',
+    status: 'ready',
+  },
+  {
+    name: 'Automation demo',
+    summary: 'Guided UI controls can now trigger safe local demo actions and a traceable full cycle.',
     status: 'ready',
   },
   {

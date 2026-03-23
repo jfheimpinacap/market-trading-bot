@@ -299,3 +299,25 @@ make infra-down
 ## Summary
 
 This repository is now ready to serve as the base for staged implementation. The current version is a clean, local-first scaffold designed to grow without introducing premature business logic.
+
+## Guided demo automation
+
+The repo now includes a guided demo automation layer that sits on top of the existing local workflow. It exposes explicit backend actions and a frontend `/automation` control center so an operator can move the demo forward without running every step from the terminal.
+
+Included actions:
+
+- simulation tick
+- demo signal generation
+- paper portfolio revalue
+- trade review generation
+- lightweight demo state sync
+- full demo cycle orchestration
+
+Out of scope by design:
+
+- auto-trading
+- periodic scheduling
+- real background workers
+- websockets
+- autonomous agents
+- real provider integrations

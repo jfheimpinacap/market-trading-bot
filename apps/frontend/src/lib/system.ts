@@ -9,6 +9,12 @@ export const systemQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Automation',
+    description: 'Open the demo control center to trigger safe local actions from the UI.',
+    path: '/automation',
+    availability: 'live',
+  },
+  {
     title: 'Markets',
     description: 'Inspect the seeded market catalog, filters, and per-market detail pages.',
     path: '/markets',
@@ -54,9 +60,9 @@ export const systemModuleReadiness: DashboardModuleStatus[] = [
     status: 'pending',
   },
   {
-    name: 'Signals engine',
-    summary: 'Signal generation and ranking are still pending backend scope and dedicated UI support.',
-    status: 'pending',
+    name: 'Guided automation',
+    summary: 'Automation is available as explicit user-triggered controls without background autonomy or auto-trading.',
+    status: 'ready',
   },
   {
     name: 'Paper trading',

@@ -181,3 +181,7 @@ The next reasonable frontend steps can still build on this architecture:
 - more nuanced market-to-portfolio linking if execution history becomes denser
 - optional refresh controls or lightweight polling only if manual/focus refresh becomes insufficient
 - deeper system diagnostics without changing the current app shell
+
+## Automation control center
+
+The frontend now includes an `/automation` route backed by `services/automation.ts` and `types/automation.ts`. This page acts as a guided demo control center: it calls the backend automation endpoints through the shared API client, shows loading and error states, renders recent automation runs, and surfaces step-level results for the full demo cycle. The UX is intentionally explicit and operator-driven so the broader end-to-end workflow can move faster without becoming an autonomous system.

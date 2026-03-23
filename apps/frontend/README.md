@@ -204,3 +204,22 @@ python start.py frontend
 python start.py status
 python start.py down
 ```
+
+## Automation page
+
+The frontend now includes `/automation`, a demo control center for guided local actions.
+
+From this page an operator can:
+
+- run one simulation tick
+- generate demo signals
+- revalue the paper portfolio
+- generate demo trade reviews
+- refresh the derived demo state
+- run a full demo cycle in sequence
+
+The page is intentionally manual and traceable. It disables controls while an action is running, surfaces success and failure clearly, refreshes recent runs, and keeps the existing end-to-end flow visible:
+
+`market → signal → risk → trade → portfolio → review`
+
+This page does **not** implement autonomous automation, background loops, websockets, or auto-trading.

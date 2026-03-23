@@ -494,3 +494,23 @@ This stage does **not** add:
 - websockets
 - signals or agent workflows
 - ML, forecasting, or advanced analytics dashboards
+
+## Automation demo
+
+The backend now includes `apps/automation_demo/`, a local-first orchestration layer for explicit user-triggered demo actions.
+
+### Available endpoints
+
+- `POST /api/automation/simulate-tick/`
+- `POST /api/automation/generate-signals/`
+- `POST /api/automation/revalue-portfolio/`
+- `POST /api/automation/generate-trade-reviews/`
+- `POST /api/automation/sync-demo-state/`
+- `POST /api/automation/run-demo-cycle/`
+- `GET /api/automation/runs/`
+- `GET /api/automation/runs/<id>/`
+- `GET /api/automation/summary/`
+
+### Intentional scope
+
+This layer reuses the existing simulation, signals, paper trading, and post-mortem services. It records `DemoAutomationRun` rows for traceability, but it does **not** enable auto-trading, schedulers, Celery orchestration, provider integrations, or autonomous background agents.

@@ -1,4 +1,5 @@
 import { AgentsPage } from '../pages/AgentsPage';
+import { AutomationPage } from '../pages/AutomationPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { MarketDetailPage } from '../pages/MarketDetailPage';
 import { MarketsPage } from '../pages/MarketsPage';
@@ -47,6 +48,12 @@ export const appRoutes: AppRoute[] = [
     path: '/agents',
     description: 'Agent orchestration, automation status, and run visibility.',
     component: AgentsPage,
+  },
+  {
+    label: 'Automation',
+    path: '/automation',
+    description: 'Guided demo controls for simulation, signals, portfolio revalue, and review refresh runs.',
+    component: AutomationPage,
   },
   {
     label: 'Portfolio',
