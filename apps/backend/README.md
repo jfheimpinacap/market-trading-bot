@@ -42,6 +42,7 @@ apps/backend/
 - `apps.health`: configuration-oriented health endpoint.
 - `apps.markets`: provider, event, market, market snapshot, and market rule models plus demo seeding, simulation, admin tooling, and read-only API endpoints.
 - `apps.paper_trading`: demo-only paper account, positions, trades, portfolio snapshots, valuation services, admin tooling, and basic write APIs for local investing flows.
+- `apps.signals`: demo-only signals and mock-agent layer that generates local insights from market snapshots and exposes read-only endpoints for the frontend.
 - `apps.agents`: placeholder app for future agent domain work.
 - `apps.audit`: placeholder app for future audit and post-mortem work.
 
@@ -89,6 +90,26 @@ Current paper trading endpoints:
 - `/api/paper/summary/`
 - `/api/paper/revalue/`
 - `/api/paper/snapshots/`
+
+
+## Signals app summary
+The `apps.signals` app adds the first demo-only bridge between market simulation, paper trading, and future automation architecture.
+
+Current signals models:
+- `MockAgent`
+- `MarketSignal`
+- `SignalRun`
+
+Current signals workflows:
+- idempotent mock-agent seeding via `seed_mock_agents`
+- local heuristic signal generation via `generate_demo_signals`
+- read-only signal browsing for the frontend and admin
+
+Current signals endpoints:
+- `/api/signals/`
+- `/api/signals/<id>/`
+- `/api/signals/agents/`
+- `/api/signals/summary/`
 
 ## Environment configuration
 1. Copy the backend env file:

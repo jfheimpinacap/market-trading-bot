@@ -1577,3 +1577,98 @@ button {
     justify-items: start;
   }
 }
+
+.signals-run-note {
+  margin: 18px 0 0;
+}
+
+.signal-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.signal-badge--bullish,
+.signal-badge--actionable {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.signal-badge--bearish {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.signal-badge--neutral {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.signal-badge--monitor {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.signal-badge--muted {
+  background: #eef2f8;
+  color: var(--text-soft);
+}
+
+.signals-table {
+  min-width: 1180px;
+}
+
+.signal-headline-cell {
+  display: grid;
+  gap: 6px;
+}
+
+.signal-headline-cell span,
+.signal-card__thesis {
+  color: var(--text-muted);
+}
+
+.signal-card-list {
+  display: grid;
+  gap: 14px;
+}
+
+.signal-card {
+  text-decoration: none;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: var(--bg-panel-alt);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.signal-card:hover {
+  border-color: rgba(40, 75, 206, 0.3);
+  box-shadow: 0 10px 26px rgba(24, 39, 75, 0.08);
+  transform: translateY(-1px);
+}
+
+.signal-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.signal-card__header h3,
+.signal-card__header p {
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .signal-card__header {
+    flex-direction: column;
+  }
+}

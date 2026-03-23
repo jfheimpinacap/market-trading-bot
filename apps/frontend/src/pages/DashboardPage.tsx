@@ -7,13 +7,16 @@ import { ModuleStatusList } from '../components/dashboard/ModuleStatusList';
 import { QuickLinksPanel } from '../components/dashboard/QuickLinksPanel';
 import { RecentMarketsPanel } from '../components/dashboard/RecentMarketsPanel';
 import { StatusBadge } from '../components/dashboard/StatusBadge';
+import { LatestSignalsList } from '../components/signals/LatestSignalsList';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { useSystemHealth } from '../app/SystemHealthProvider';
 import { API_BASE_URL, PROJECT_NAME } from '../lib/config';
 import { dashboardModules, dashboardQuickLinks, localEnvironmentHighlights, nextProjectSteps } from '../lib/dashboard';
 import { getMarketSystemSummary, getMarkets } from '../services/markets';
+import { getSignals, getSignalsSummary } from '../services/signals';
 import type { MarketListItem, MarketSystemSummary } from '../types/markets';
 import type { DashboardStatCard, RecentMarketItem } from '../types/dashboard';
+import type { MarketSignal, SignalSummary } from '../types/signals';
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -89,6 +92,10 @@ export function DashboardPage() {
   const [recentMarkets, setRecentMarkets] = useState<RecentMarketItem[]>([]);
   const [recentMarketsLoading, setRecentMarketsLoading] = useState(true);
   const [recentMarketsError, setRecentMarketsError] = useState<string | null>(null);
+  const [signalsSummary, setSignalsSummary] = useState<SignalSummary | null>(null);
+  const [latestSignals, setLatestSignals] = useState<MarketSignal[]>([]);
+  const [signalsLoading, setSignalsLoading] = useState(true);
+  const [signalsError, setSignalsError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -154,6 +161,46 @@ export function DashboardPage() {
     }
 
     void loadRecentMarkets();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSignalsContext() {
+      setSignalsLoading(true);
+      setSignalsError(null);
+
+      try {
+        const [summaryResponse, latestSignalsResponse] = await Promise.all([
+          getSignalsSummary(),
+          getSignals({ ordering: '-created_at' }),
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setSignalsSummary(summaryResponse);
+        setLatestSignals(latestSignalsResponse.slice(0, 3));
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setSignalsError(getErrorMessage(error, 'Could not load demo signals from the local backend.'));
+      } finally {
+        if (isMounted) {
+          setSignalsLoading(false);
+        }
+      }
+    }
+
+    void loadSignalsContext();
 
     return () => {
       isMounted = false;
@@ -287,17 +334,42 @@ export function DashboardPage() {
         </SectionCard>
 
         <SectionCard
-          eyebrow="Roadmap"
-          title="Next steps"
-          description="The current dashboard intentionally stops at visibility and navigation, but it now prepares the shell for the next practical backend integrations."
+          eyebrow="Signals bridge"
+          title="Latest demo signals"
+          description="A small operator view that connects markets, paper trading, and the new mock-agent signals layer."
+          aside={
+            <StatusBadge tone={signalsError ? 'offline' : signalsSummary && signalsSummary.actionable_signals > 0 ? 'ready' : 'loading'}>
+              {signalsSummary ? `${signalsSummary.actionable_signals} actionable` : 'Signals loading'}
+            </StatusBadge>
+          }
         >
-          <ul className="bullet-list">
-            {nextProjectSteps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ul>
+          <DataStateWrapper
+            isLoading={signalsLoading}
+            isError={Boolean(signalsError)}
+            errorMessage={signalsError ?? undefined}
+            isEmpty={!signalsLoading && !signalsError && latestSignals.length === 0}
+            loadingTitle="Loading latest signals"
+            loadingDescription="Requesting the most recent demo signals from the local backend."
+            errorTitle="Could not load latest signals"
+            emptyTitle="No signals available yet"
+            emptyDescription="Run `cd apps/backend && python manage.py generate_demo_signals` to populate the new signals workspace."
+          >
+            <LatestSignalsList signals={latestSignals} />
+          </DataStateWrapper>
         </SectionCard>
       </section>
+
+      <SectionCard
+        eyebrow="Roadmap"
+        title="Next steps"
+        description="The current dashboard intentionally stops at visibility and navigation, but it now prepares the shell for the next practical backend integrations."
+      >
+        <ul className="bullet-list">
+          {nextProjectSteps.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ul>
+      </SectionCard>
     </div>
   );
 }
