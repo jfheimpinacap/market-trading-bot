@@ -42,6 +42,7 @@ apps/backend/
 - `apps.health`: configuration-oriented health endpoint.
 - `apps.markets`: provider, event, market, market snapshot, and market rule models plus demo seeding, simulation, admin tooling, and read-only API endpoints.
 - `apps.paper_trading`: demo-only paper account, positions, trades, portfolio snapshots, valuation services, admin tooling, and basic write APIs for local investing flows.
+- `apps.risk_demo`: demo-only trade guard layer that evaluates proposed paper trades with explainable heuristics before execution.
 - `apps.signals`: demo-only signals and mock-agent layer that generates local insights from market snapshots and exposes read-only endpoints for the frontend.
 - `apps.agents`: placeholder app for future agent domain work.
 - `apps.audit`: placeholder app for future audit and post-mortem work.
@@ -91,6 +92,26 @@ Current paper trading endpoints:
 - `/api/paper/revalue/`
 - `/api/paper/snapshots/`
 
+## Risk demo app summary
+The `apps.risk_demo` app adds a first trade-guard boundary between market detail and paper trade execution without pretending to be a real risk engine.
+
+Current risk demo model:
+- `TradeRiskAssessment`
+
+Current risk demo workflow:
+- evaluate a proposed trade via `POST /api/risk/assess-trade/`
+- persist recent assessments for admin and traceability
+- reuse market status, paper account balances, open positions, liquidity, spread, activity, and demo signals as deterministic heuristics
+
+Current risk demo endpoints:
+- `/api/risk/assess-trade/`
+- `/api/risk/assessments/`
+
+Out of scope by design:
+- real risk engine logic
+- VaR / Kelly / auto-sizing
+- broker or provider integrations
+- automatic trade execution
 
 ## Signals app summary
 The `apps.signals` app adds the first demo-only bridge between market simulation, paper trading, and future automation architecture.

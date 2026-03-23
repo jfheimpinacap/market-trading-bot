@@ -50,6 +50,7 @@ El frontend incluye un módulo `Markets` funcional, conectado al backend Django 
   - resumen principal del market
   - chart histórico simple basado en `recent_snapshots` para visualizar probabilidad del market y, cuando existen, precios `YES` / `NO` a lo largo del tiempo
   - panel de **paper trading demo** integrado al detalle para ejecutar `BUY` y `SELL` de lados `YES` / `NO` contra la cuenta paper local
+  - bloque de **risk demo / trade guard mock** dentro del panel de trade para evaluar el setup antes de ejecutar
   - formulario simple con validaciones básicas de quantity, side y trade type
   - contexto útil de trading demo: cash disponible, equity, open positions, posición actual en ese market y últimas ejecuciones en ese market
   - feedback visible de éxito/error después de ejecutar un trade
@@ -141,7 +142,8 @@ La UI no genera señales desde el navegador en esta etapa. La generación princi
 - `GET /api/markets/`
 - `GET /api/markets/<id>/` para header, reglas, metadata, paper trading context local y chart histórico basado en `recent_snapshots`
 - `GET /api/signals/?market=<id>` para mostrar 1 a 3 señales demo recientes dentro del market detail
-- `POST /api/paper/trades/` desde `/markets/:marketId` para la ejecución demo del trade
+- `POST /api/risk/assess-trade/` desde `/markets/:marketId` para obtener un veredicto demo `APPROVE` / `CAUTION` / `BLOCK` con razones claras antes del envío
+- `POST /api/paper/trades/` desde `/markets/:marketId` para la ejecución demo del trade una vez revisada la evaluación
 - `GET /api/paper/account/`, `GET /api/paper/positions/`, `GET /api/paper/trades/` y `GET /api/paper/summary/` para contexto de cuenta y exposición en el panel
 - `POST /api/paper/revalue/` después de una ejecución exitosa para volver a sincronizar el portfolio visible
 

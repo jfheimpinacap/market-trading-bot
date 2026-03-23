@@ -16,6 +16,7 @@ The backend is a local-first Django service inside the monorepo. Its current res
 - `apps.health`: lightweight environment-oriented health endpoint.
 - `apps.markets`: provider-agnostic prediction-market catalog with providers, events, markets, historical snapshots, rules, demo seed data, local simulation engine, admin tooling, and read-only endpoints for local UI work.
 - `apps.paper_trading`: demo-only portfolio domain with virtual cash, positions, trades, portfolio snapshots, execution services, valuation services, admin tooling, and simple DRF endpoints.
+- `apps.risk_demo`: demo-only pre-trade assessment domain that persists trade guard verdicts and keeps heuristic evaluation logic out of views.
 - `apps.signals`: demo-only signals domain with mock agents, signal runs, heuristic generation, admin tooling, and read-only DRF endpoints.
 - `apps.agents`: reserved for later agent orchestration work.
 - `apps.audit`: reserved for later audit and post-mortem persistence.
@@ -48,6 +49,20 @@ Service split:
 
 This keeps trade logic out of views and avoids overloading model methods while staying simple enough for the current single-demo-account stage.
 
+## Risk demo domain shape
+The `apps.risk_demo` app now sits between `apps.paper_trading`, `apps.markets`, and `apps.signals` as a local-first guardrail layer.
+
+Core relationships:
+- `TradeRiskAssessment` stores one persisted evaluation of a proposed trade.
+- Each assessment links to one `Market` and optionally the active `PaperAccount`.
+- Assessments snapshot the market prices and probability used at evaluation time so the frontend can explain the verdict later.
+
+Service split:
+- `services/assessment.py`: deterministic heuristics for tradability, estimated cost, concentration, liquidity, activity, and signal alignment
+- `serializers.py`: request/response boundaries for pre-trade evaluation and recent assessments
+- `views.py`: thin API surface for `POST /api/risk/assess-trade/` and recent assessment browsing
+
+This is intentionally a mock trade guard, not a real risk engine or execution policy layer.
 
 ## Signals domain shape
 The new `apps.signals` app intentionally sits between `apps.markets` and future automation work.
