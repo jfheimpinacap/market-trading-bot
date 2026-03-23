@@ -14,7 +14,7 @@ The frontend is a local-first operator workspace for `market-trading-bot`. In th
 8. surface demo signals and mock-agent output as a bridge between markets, paper trading, and future automation
 9. expose a simple trade-guard step so paper trades can be evaluated before local execution
 
-This phase intentionally excludes authentication, real trading logic, market integrations, websockets, and advanced data visualization beyond a simple snapshot-based line chart in market detail.
+This phase intentionally excludes authentication, real trading logic, market integrations, websockets, and advanced data visualization beyond simple snapshot-based line charts in market detail and the paper-trading portfolio view.
 
 ## Structure
 
@@ -100,8 +100,10 @@ The `/portfolio` route extends the same local-first pattern without introducing 
 - uses `services/paperTrading.ts` as the single integration point for paper trading endpoints
 - keeps shared TypeScript contracts in `types/paperTrading.ts`
 - loads account, summary, positions, trades, and snapshots in parallel with section-level error isolation
-- supports manual portfolio revaluation through `POST /api/paper/revalue/` followed by a full refresh of visible sections
+- maps `GET /api/paper/snapshots/` into a typed historical dataset for a lightweight SVG chart, with `equity` as the primary series and optional `cash balance` / `total PnL` overlays
+- supports manual portfolio revaluation through `POST /api/paper/revalue/` followed by a full refresh of visible sections, including the history chart
 - reuses existing shell, `PageHeader`, `SectionCard`, `DataStateWrapper`, and table styling patterns instead of inventing a new visual system
+- keeps the chart intentionally simple: snapshot-driven X axis, currency-formatted Y axis, minimal tooltip, no zoom, no range selector, and no heavyweight chart dependency
 
 This keeps the Portfolio page useful for operators while still avoiding trading forms, streaming updates, and heavier state-management dependencies.
 

@@ -6,6 +6,7 @@ import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
 import { PaperAccountPanel } from '../../components/paper-trading/PaperAccountPanel';
 import { PaperPositionsTable } from '../../components/paper-trading/PaperPositionsTable';
+import { PortfolioHistoryChart } from '../../components/paper-trading/PortfolioHistoryChart';
 import { PaperSnapshotsPanel } from '../../components/paper-trading/PaperSnapshotsPanel';
 import { PortfolioSummaryCards } from '../../components/paper-trading/PortfolioSummaryCards';
 import { PaperTradesTable } from '../../components/paper-trading/PaperTradesTable';
@@ -249,6 +250,20 @@ export function PortfolioPage() {
             </>
           ) : null}
         </DataStateWrapper>
+      </SectionCard>
+
+      <SectionCard
+        eyebrow="Portfolio history"
+        title="Equity and balance history"
+        description="Snapshot-based chart from GET /api/paper/snapshots/ to visualize how equity, cash balance, and total PnL evolve after paper trades and manual revaluation."
+        aside={<StatusBadge tone={snapshotsError ? 'offline' : snapshotsLoading ? 'loading' : 'ready'}>{snapshotsError ? 'History unavailable' : `${snapshots.length} snapshots loaded`}</StatusBadge>}
+      >
+        <PortfolioHistoryChart
+          snapshots={snapshots}
+          currency={currency}
+          isLoading={snapshotsLoading}
+          error={snapshotsError}
+        />
       </SectionCard>
 
       <SectionCard
