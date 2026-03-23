@@ -48,13 +48,14 @@ El frontend incluye un módulo `Markets` funcional, conectado al backend Django 
 - tabla desktop-first con navegación al detalle
 - página `/markets/:marketId` con:
   - resumen principal del market
+  - chart histórico simple basado en `recent_snapshots` para visualizar probabilidad del market y, cuando existen, precios `YES` / `NO` a lo largo del tiempo
   - panel de **paper trading demo** integrado al detalle para ejecutar `BUY` y `SELL` de lados `YES` / `NO` contra la cuenta paper local
   - formulario simple con validaciones básicas de quantity, side y trade type
   - contexto útil de trading demo: cash disponible, equity, open positions, posición actual en ese market y últimas ejecuciones en ese market
   - feedback visible de éxito/error después de ejecutar un trade
   - CTA rápida hacia `/portfolio` para verificar el impacto del trade
   - reglas (`short_rules` + `rules`)
-  - snapshots recientes (`recent_snapshots`)
+  - snapshots recientes (`recent_snapshots`) usados tanto en la tabla técnica como en el chart histórico del detail
   - metadata útil para inspección
 - estados claros de loading, error y empty state
 - capa de servicios tipada en `src/services/markets.ts`
@@ -114,7 +115,7 @@ La página `/system` no agrega endpoints nuevos. Toda la evidencia de actividad 
 - `GET /api/markets/providers/`
 - `GET /api/markets/events/`
 - `GET /api/markets/`
-- `GET /api/markets/<id>/`
+- `GET /api/markets/<id>/` para header, reglas, metadata, paper trading context local y chart histórico basado en `recent_snapshots`
 - `POST /api/paper/trades/` desde `/markets/:marketId` para la ejecución demo del trade
 - `GET /api/paper/account/`, `GET /api/paper/positions/`, `GET /api/paper/trades/` y `GET /api/paper/summary/` para contexto de cuenta y exposición en el panel
 - `POST /api/paper/revalue/` después de una ejecución exitosa para volver a sincronizar el portfolio visible
@@ -306,6 +307,9 @@ POST /api/paper/trades/
 
 Notas útiles:
 
+- el chart histórico del detail reutiliza exclusivamente `recent_snapshots` devueltos por `GET /api/markets/<id>/`; no agrega un endpoint nuevo
+- la línea principal muestra `market_probability` y, cuando el snapshot los incluye, también se ven `yes_price` y `no_price` sobre la misma escala 0%–100%
+- cuando ejecutas trades demo, el frontend refresca el contexto paper del market; para ver nuevos puntos históricos en el chart necesitas que el backend cree más snapshots mediante la simulación local
 - la UI solo estima el costo usando el precio actual visible del market; el backend sigue siendo la fuente de verdad de la ejecución demo
 - no hay trading real, brokers reales, websockets ni autenticación en esta etapa
 
@@ -423,3 +427,46 @@ Esta etapa sigue siendo solo de visualización. Aún no se implementa en fronten
 - websockets o auto-refresh continuo
 - charts avanzados de equity o PnL
 - trading real, autenticación, multiusuario o risk engine
+
+## Cómo probar el chart histórico de `/markets/:marketId`
+
+1. Levanta backend y frontend, y si hace falta siembra los datos demo:
+
+```bash
+cd apps/backend
+python manage.py migrate
+python manage.py seed_markets_demo
+python manage.py seed_paper_account
+python manage.py runserver
+```
+
+2. En otra terminal, genera o sigue generando snapshots para que exista historia visible:
+
+```bash
+cd apps/backend
+python manage.py simulate_markets_tick
+```
+
+O ejecuta un loop corto para ver más puntos acumulados:
+
+```bash
+cd apps/backend
+python manage.py simulate_markets_loop --interval 5
+```
+
+3. Abre `http://localhost:5173/markets` y entra a cualquier market con snapshots.
+4. En `/markets/:marketId`, valida que el bloque **Market history**:
+   - use la respuesta existente de `GET /api/markets/<id>/`
+   - muestre la línea principal de `market_probability`
+   - muestre `YES` y `NO` solo si existen en los snapshots disponibles
+   - formatee el eje Y en porcentaje y el eje X con timestamps legibles
+   - maneje estados de pocos snapshots o ausencia total sin romper la página
+5. Ejecuta otra vez `python manage.py simulate_markets_tick` o deja corriendo `simulate_markets_loop`.
+6. Refresca `/markets/:marketId` en el navegador.
+7. Verifica que cambien uno o más de estos elementos:
+   - `Latest probability` en el bloque del chart
+   - `Snapshots` y `History window`
+   - el último punto visible de la línea
+   - la tabla **Backend market snapshots**
+
+Esto deja conectado el chart con el simulation engine local y con el panel de paper trading demo, sin introducir tiempo real ni websocket.

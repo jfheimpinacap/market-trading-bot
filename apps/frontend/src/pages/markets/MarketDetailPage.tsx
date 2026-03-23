@@ -4,6 +4,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
 import { MarketActiveBadge } from '../../components/markets/MarketActiveBadge';
 import { MarketProbabilityBadge } from '../../components/markets/MarketProbabilityBadge';
+import { MarketHistoryChart } from '../../components/markets/MarketHistoryChart';
 import { MarketRulesCard } from '../../components/markets/MarketRulesCard';
 import { MarketSnapshotsTable } from '../../components/markets/MarketSnapshotsTable';
 import { MarketStatusBadge } from '../../components/markets/MarketStatusBadge';
@@ -300,10 +301,12 @@ export function MarketDetailPage() {
               </SectionCard>
             </section>
 
+            <MarketHistoryChart snapshots={market.recent_snapshots} isLoading={isLoading} error={error} />
+
             <SectionCard
               eyebrow="Paper trading"
               title="Demo trade execution"
-              description="Execute a local simulated buy or sell directly from this market, then immediately inspect how the paper account and this market position changed."
+              description="Review the historical snapshot trend above, then execute a local simulated buy or sell and refresh the market detail to compare how later snapshots evolve."
             >
               <MarketTradePanel
                 market={market}

@@ -12,7 +12,7 @@ The frontend is a local-first operator workspace for `market-trading-bot`. In th
 6. provide a paper trading Portfolio page for inspecting the local demo account, positions, trades, and snapshots
 7. provide a market-detail paper trading entry flow so a user can execute a local simulated trade directly from `/markets/:marketId`
 
-This phase intentionally excludes authentication, real trading logic, market integrations, websockets, and advanced data visualization.
+This phase intentionally excludes authentication, real trading logic, market integrations, websockets, and advanced data visualization beyond a simple snapshot-based line chart in market detail.
 
 ## Structure
 
@@ -90,10 +90,14 @@ The `/portfolio` route extends the same local-first pattern without introducing 
 
 This keeps the Portfolio page useful for operators while still avoiding trading forms, streaming updates, and heavier state-management dependencies.
 
-### Market detail paper trading
+### Market detail paper trading and history
 
-The `/markets/:marketId` route now extends the same pattern to support the first actionable paper trading flow:
+The `/markets/:marketId` route now extends the same pattern to support both a lightweight historical view and the first actionable paper trading flow:
 
+- reuses `GET /api/markets/<id>/` as the single source for market header data, rules, metadata, recent snapshots, and the simple history chart
+- maps `recent_snapshots` into a typed frontend dataset instead of adding a dedicated chart endpoint
+- renders a sober SVG line chart with `market_probability` as the primary series and optional `yes_price` / `no_price` overlays when the snapshot payload includes them
+- keeps the chart intentionally lightweight: fixed normalized 0%–100% scale, simple tooltip, no streaming updates, no range selector, and no charting dependency
 - reuses `services/paperTrading.ts` instead of introducing a second API client
 - executes demo trades through `POST /api/paper/trades/`
 - reads `GET /api/paper/account/`, `GET /api/paper/summary/`, `GET /api/paper/positions/`, and `GET /api/paper/trades/` to render account context and current exposure for that market

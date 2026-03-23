@@ -63,6 +63,16 @@ export type MarketSnapshot = {
   updated_at: string;
 };
 
+export type MarketHistoryPoint = {
+  id: number;
+  capturedAt: string;
+  capturedAtLabel: string;
+  marketProbability: number | null;
+  yesPrice: number | null;
+  noPrice: number | null;
+  liquidity: number | null;
+};
+
 export type MarketListItem = {
   id: number;
   provider: MarketProviderSummary;
