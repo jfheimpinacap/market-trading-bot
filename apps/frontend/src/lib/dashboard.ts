@@ -4,38 +4,32 @@ import type { DashboardModuleStatus, DashboardQuickLink } from '../types/dashboa
 export const dashboardQuickLinks: DashboardQuickLink[] = [
   {
     title: 'Markets',
-    description: 'Open the live demo catalog, apply filters, and drill into market detail pages.',
+    description: 'Start in the catalog, inspect active contracts, and jump into the operational market detail flow.',
     path: '/markets',
     availability: 'live',
   },
   {
-    title: 'System',
-    description: 'Review backend connectivity, environment details, and shared health state.',
-    path: '/system',
+    title: 'Signals',
+    description: 'Review demo opportunities, then open the related market or continue toward trade evaluation.',
+    path: '/signals',
     availability: 'live',
-  },
-  {
-    title: 'Settings',
-    description: 'Keep local-first configuration notes and future environment controls in one place.',
-    path: '/settings',
-    availability: 'live',
-  },
-  {
-    title: 'Agents',
-    description: 'Reserved for orchestration summaries, schedules, and agent run visibility.',
-    path: '/agents',
-    availability: 'placeholder',
   },
   {
     title: 'Portfolio',
-    description: 'Inspect paper balances, trade history, positions, and review links for executed trades.',
+    description: 'Check paper balances, positions, trade history, and which executions already have reviews.',
     path: '/portfolio',
     availability: 'live',
   },
   {
     title: 'Post-Mortem',
-    description: 'Inspect demo trade reviews, outcome counts, and simple lessons from the local review engine.',
+    description: 'Close the loop with demo trade reviews, lessons learned, and links back to markets and portfolio.',
     path: '/postmortem',
+    availability: 'live',
+  },
+  {
+    title: 'System',
+    description: 'Verify the backend, runtime context, and local demo health before exploring the rest of the workflow.',
+    path: '/system',
     availability: 'live',
   },
 ];
@@ -52,19 +46,9 @@ export const dashboardModules: DashboardModuleStatus[] = [
     status: 'ready',
   },
   {
-    name: 'Markets detail',
-    summary: 'Rules, snapshots, metadata, and navigation from the catalog are implemented.',
+    name: 'Signals workspace',
+    summary: 'Mock-agent signals now connect directly to market detail, portfolio context, and review follow-ups.',
     status: 'ready',
-  },
-  {
-    name: 'Dashboard integration',
-    summary: 'The landing page now consumes live backend health and market summary data.',
-    status: 'ready',
-  },
-  {
-    name: 'Providers real sync',
-    summary: 'External provider ingestion is intentionally deferred until after the local demo workflow.',
-    status: 'pending',
   },
   {
     name: 'Paper trading',
@@ -78,15 +62,20 @@ export const dashboardModules: DashboardModuleStatus[] = [
   },
   {
     name: 'Post-mortem',
-    summary: 'Trade reviews, outcome summaries, and linked retrospective detail are now available for paper trades.',
+    summary: 'Trade reviews, outcome summaries, and linked retrospective detail are available for paper trades.',
     status: 'ready',
+  },
+  {
+    name: 'Providers real sync',
+    summary: 'External provider ingestion is intentionally deferred until after the local demo workflow.',
+    status: 'pending',
   },
 ];
 
 export const nextProjectSteps = [
-  'Extend the System panel with provider diagnostics, worker visibility, and richer local service checks.',
-  'Keep expanding the seeded demo catalog so the dashboard and Markets module feel realistic during development.',
-  'Expand the post-mortem heuristics with richer execution context and refresh flows once the review loop settles.',
+  'Keep improving the demo workflow links so Signals, Market detail, Portfolio, and Post-mortem read like one operator journey.',
+  'Expand the seeded demo catalog so the dashboard and market detail pages feel richer during local evaluation.',
+  'Deepen the post-mortem heuristics only after the current manual refresh and navigation loop feels stable.',
 ];
 
 export const localEnvironmentHighlights = [

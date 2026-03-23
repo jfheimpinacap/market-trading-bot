@@ -30,6 +30,7 @@ export function TradeReviewsTable({ reviews }: TradeReviewsTableProps) {
             <th>Outcome</th>
             <th>Score</th>
             <th>Price delta</th>
+            <th>Workflow</th>
             <th>Summary</th>
             <th>Recommendation</th>
           </tr>
@@ -55,6 +56,22 @@ export function TradeReviewsTable({ reviews }: TradeReviewsTableProps) {
               </td>
               <td>{formatNumber(review.score)}</td>
               <td>{review.price_delta ? formatPaperCurrency(review.price_delta, 'USD') : '—'}</td>
+              <td>
+                <div className="table-link-stack">
+                  <a href={`/postmortem/${review.id}`} className="market-link" onClick={(event) => handleNavigate(event, `/postmortem/${review.id}`)}>
+                    <strong>Open review</strong>
+                    <span>Detail, lesson, and signal context.</span>
+                  </a>
+                  <a href={`/markets/${review.market}`} className="market-link" onClick={(event) => handleNavigate(event, `/markets/${review.market}`)}>
+                    <strong>Open market</strong>
+                    <span>Return to the execution context.</span>
+                  </a>
+                  <a href="/portfolio" className="market-link" onClick={(event) => handleNavigate(event, '/portfolio')}>
+                    <strong>View portfolio</strong>
+                    <span>Compare against current equity and trades.</span>
+                  </a>
+                </div>
+              </td>
               <td>
                 <div className="postmortem-cell-copy">
                   <strong>{review.summary}</strong>

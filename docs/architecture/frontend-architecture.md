@@ -2,27 +2,37 @@
 
 ## Purpose
 
-The frontend is a local-first operator workspace for `market-trading-bot`. In the current phase it focuses on five responsibilities only:
+The frontend is a local-first operator workspace for `market-trading-bot`.
+
+In the current phase it focuses on these responsibilities:
 
 1. provide a professional application shell
-2. expose clear navigation for planned modules
-3. surface minimal technical health from the backend
+2. expose clear navigation for the existing demo modules
+3. surface technical backend health and local runtime context
 4. present a useful dashboard powered by real local demo data
-5. provide a technical System page for inspecting local runtime context and observable simulation activity
-6. provide a paper trading Portfolio page for inspecting the local demo account, positions, trades, and snapshots
-7. provide a market-detail paper trading entry flow so a user can execute a local simulated trade directly from `/markets/:marketId`
-8. surface demo signals and mock-agent output as a bridge between markets, paper trading, and future automation
-9. expose a simple trade-guard step so paper trades can be evaluated before local execution
-10. provide a post-mortem workspace where executed paper trades can be reviewed with deterministic mock heuristics
+5. connect discovery, signals, risk, paper execution, portfolio, and post-mortem into one coherent demo flow
+6. keep the architecture intentionally simple: no websockets, no global state framework, no realtime orchestration, no new heavy routing model
 
-This phase intentionally excludes authentication, real trading logic, market integrations, websockets, and advanced data visualization beyond simple snapshot-based line charts in market detail and the paper-trading portfolio view.
+## Current UX narrative
+
+The frontend now tries to tell one clear story:
+
+1. discover an opportunity
+2. inspect the market
+3. review the demo signal
+4. evaluate the trade with the risk guard
+5. execute a paper trade
+6. inspect portfolio impact
+7. review the post-mortem
+
+This is accomplished mostly with **navigation refinements, cross-module summaries, empty-state guidance, and lightweight refresh coordination**, not with a new architecture.
 
 ## Structure
 
-The frontend source tree is intentionally shallow and practical:
+The frontend source tree remains intentionally shallow and practical:
 
 - `app/`: app composition and shared providers
-- `components/`: reusable presentation building blocks, including dedicated dashboard, markets, and system UI
+- `components/`: reusable presentation building blocks, including dedicated dashboard, markets, paper trading, signals, postmortem, and flow UI
 - `hooks/`: page-agnostic frontend behavior
 - `layouts/`: app shell and persistent navigation structure
 - `lib/`: static config and lightweight helpers
@@ -34,143 +44,140 @@ The frontend source tree is intentionally shallow and practical:
 
 ## Routing approach
 
-The current frontend uses a lightweight browser-history router implemented in-app to keep dependencies minimal at this scaffold stage.
+The frontend still uses a lightweight in-app browser-history router.
 
-It supports:
+That remains a deliberate choice because this stage required better **continuity** between routes, not a routing rewrite.
 
-- persistent layout shell
+The current router is enough for:
+
+- persistent shell layout
 - sidebar navigation
-- browser back/forward navigation
-- route-specific topbar context
-- simple not-found fallback
-
-If the application later needs nested routing, URL params, or more advanced route guards, this can be upgraded to React Router without changing the page and layout boundaries introduced in this phase.
-
-## Shared system health state
-
-The frontend fetches `GET /api/health/` through a small service layer and shares the result through a provider in `src/app/`.
-
-Why this approach:
-
-- avoids duplicated fetch logic between Dashboard and System
-- keeps the service boundary explicit
-- avoids introducing a heavier client-state library too early
-- preserves a clean place for future refresh policies or polling
+- browser back/forward support
+- route-specific context
+- linked review detail routes
+- contextual navigation between modules
 
 ## Data integration strategy
 
-The current UI deliberately reuses a small set of fetch primitives instead of introducing route-specific data infrastructure.
+The frontend still avoids a heavy client-state layer.
+
+Instead, each page coordinates a small set of explicit service calls.
+
+### Service boundaries
+
+- `services/markets.ts` for catalog and detail views
+- `services/signals.ts` for signals summary, list, and agents
+- `services/paperTrading.ts` for account, positions, trades, snapshots, summary, and revalue
+- `services/reviews.ts` for review summary, list, and detail
+- `services/riskDemo.ts` for pre-trade assessment
+
+This keeps data dependencies understandable and prevents the current demo phase from turning into a client-state rewrite.
+
+## Lightweight cross-page refresh strategy
+
+One of the most important refinements in this phase was improving consistency after actions.
+
+The chosen approach is intentionally small:
+
+- key pages reload their local data on focus / visibility regain
+- the frontend publishes a lightweight custom refresh event after:
+  - paper trade execution
+  - portfolio revalue
+- Dashboard, Signals, Portfolio, Post-mortem, and Market detail listen for that event and refetch their own page-local context
+
+Why this approach:
+
+- avoids introducing websocket or polling infrastructure
+- avoids adding a global state library too early
+- keeps page ownership explicit
+- improves consistency after meaningful workflow actions
+- matches the local-first, demo-only scope
+
+## Cross-module UX components added in this phase
+
+A few small reusable UI primitives now help the app feel integrated without overengineering:
+
+- `WorkflowStatusPanel`
+- `ContextLinksPanel`
+- refined workflow-aware table links in Signals, Portfolio, and Post-mortem
+
+These components do not introduce a new design system. They reuse existing page patterns and only add enough structure to make the narrative visible.
+
+## Route responsibilities
 
 ### Dashboard
 
-The home route composes three existing frontend primitives:
+The home route now acts as a true entry point for the demo flow:
 
-- `useSystemHealth` for shared health visibility
-- `services/markets.ts` for catalog summary and recent market requests
-- `DataStateWrapper` for section-level loading, error, and empty states
+- quick links aligned to the real workflow
+- current demo flow summary
+- small cross-module indicators for markets, signals, positions, and reviews
+- lightweight recent markets and recent signals context
 
-### System page
+### Signals
 
-The `/system` route follows the same rule set:
+The `/signals` route remains intentionally simple, but now works as a bridge instead of a dead-end table:
 
-- reuses `useSystemHealth` for backend status
-- reuses `getMarketSystemSummary()` for catalog totals
-- reuses `getMarkets()` for activity inference
-- compares current and previous successful responses in-page to infer local simulation movement
-- avoids new endpoints, polling infrastructure, websocket wiring, or operational controls
+- signal rows link into market detail
+- workflow context can expose related positions and reviews
+- page-level context blocks explain when to continue into Markets, Portfolio, or Post-mortem
 
-This keeps the System page technical and useful while preserving the local-first architecture.
+### Market detail
 
+The `/markets/:marketId` route is now the operational hub of the demo:
 
-### Signals page and integrations
+- market context
+- recent signals
+- risk assessment
+- paper trade execution
+- position / latest trade / latest review summary
+- direct next-step links into Portfolio and Post-mortem
 
-The `/signals` route now follows the same local-first strategy:
+### Portfolio
 
-- uses `services/signals.ts` as the single integration point for the signals API
-- keeps contracts in `types/signals.ts`
-- loads summary, agent registry, and filtered signal rows without introducing a parallel client or global state library
-- reuses existing `PageHeader`, `SectionCard`, `DashboardStatGrid`, `DataStateWrapper`, and table styling patterns
-- exposes a compact latest-signals block on the dashboard and a market-scoped signals section inside `/markets/:marketId`
+The `/portfolio` route is now more clearly positioned as the impact view:
 
-This keeps signals understandable as a demo insight queue instead of prematurely building a complex analyst workstation.
+- positions link back to market detail
+- trade rows link to reviews when available
+- review summary block surfaces recent retrospective context
+- empty states suggest the next useful step instead of only showing missing data
 
-### Portfolio page
+### Post-mortem
 
-The `/portfolio` route extends the same local-first pattern without introducing new client infrastructure:
+The `/postmortem` route now closes the loop more clearly:
 
-- uses `services/paperTrading.ts` as the single integration point for paper trading endpoints
-- keeps shared TypeScript contracts in `types/paperTrading.ts`
-- loads account, summary, positions, trades, and snapshots in parallel with section-level error isolation
-- maps `GET /api/paper/snapshots/` into a typed historical dataset for a lightweight SVG chart, with `equity` as the primary series and optional `cash balance` / `total PnL` overlays
-- supports manual portfolio revaluation through `POST /api/paper/revalue/` followed by a full refresh of visible sections, including the history chart
-- reuses existing shell, `PageHeader`, `SectionCard`, `DataStateWrapper`, and table styling patterns instead of inventing a new visual system
-- keeps the chart intentionally simple: snapshot-driven X axis, currency-formatted Y axis, minimal tooltip, no zoom, no range selector, and no heavyweight chart dependency
-
-This keeps the Portfolio page useful for operators while still avoiding trading forms, streaming updates, and heavier state-management dependencies.
-
-### Market detail paper trading and history
-
-The `/markets/:marketId` route now extends the same pattern to support both a lightweight historical view and the first actionable paper trading flow:
-
-- reuses `GET /api/markets/<id>/` as the single source for market header data, rules, metadata, recent snapshots, and the simple history chart
-- maps `recent_snapshots` into a typed frontend dataset instead of adding a dedicated chart endpoint
-- renders a sober SVG line chart with `market_probability` as the primary series and optional `yes_price` / `no_price` overlays when the snapshot payload includes them
-- keeps the chart intentionally lightweight: fixed normalized 0%–100% scale, simple tooltip, no streaming updates, no range selector, and no charting dependency
-- reuses `services/paperTrading.ts` instead of introducing a second API client
-- executes demo trades through `POST /api/paper/trades/`
-- reads `GET /api/paper/account/`, `GET /api/paper/summary/`, `GET /api/paper/positions/`, and `GET /api/paper/trades/` to render account context and current exposure for that market
-- triggers `POST /api/paper/revalue/` after a successful execution and then refreshes the market-local paper context
-- keeps the UX intentionally simple: trade type, side, quantity, estimated cost, visible result state, and a link to `/portfolio`
-- avoids websockets, global client state, exchange-style order books, and advanced order-entry concepts
-
-This keeps market detail actionable without turning the current frontend into a heavy trading terminal.
-
-### Market detail trade guard flow
-The trade panel on `/markets/:marketId` now introduces a deliberate two-step flow:
-
-- the user fills side, trade type, and quantity
-- the UI calls `POST /api/risk/assess-trade/` through `services/riskDemo.ts`
-- the returned assessment is rendered inline with a decision badge, score, confidence, summary, rationale, and warnings
-- only non-`BLOCK` assessments reveal the execution button for `POST /api/paper/trades/`
-- changing the form invalidates the previous assessment so the user has to run a fresh check
-
-This keeps the feature didactic, explainable, and ready to evolve into a stronger backend-driven guard later without introducing a wizard or complex client state.
-
-
-### Post-mortem page
-
-The `/postmortem` and `/postmortem/:reviewId` routes follow the same local-first pattern:
-
-- use `services/reviews.ts` as the single integration point for the review API
-- keep contracts in `types/reviews.ts`
-- load list, summary, and optional detail independently so partial failures stay isolated
-- reuse existing `PageHeader`, `SectionCard`, `DataStateWrapper`, table styling, and link patterns
-- connect back to `/markets/:marketId` and `/portfolio` instead of creating a separate navigation model
-- stay explicitly demo-only: the UI explains reviews as heuristics, not as real analytics or professional advice
-
-This keeps the new module coherent with the rest of the frontend and prepares a clean boundary for a more capable review engine later.
+- review queue with explicit workflow links
+- detail view with clearer trade, signal, and risk context
+- contextual links back to Market detail and Portfolio
 
 ## UI principles for this stage
 
 - sober, readable visual design
-- consistent panels and typography
-- responsive layout without overengineering
-- placeholders that explain purpose instead of empty screens
-- local-first configuration visibility
-- real data in the dashboard and system panel before introducing advanced analytics
-- section-level failure isolation so one broken endpoint does not collapse the entire page
-- market-local actionability: when a route becomes interactive, keep the control surface near the read context it depends on
-- signals should read as explicit demo heuristics, not as implied real financial intelligence or autonomous advice
+- incremental evolution over redesign
+- section-level failure isolation
+- contextual navigation instead of long onboarding
+- better empty states instead of cold "no data" messages
+- consistent labels for actionability, risk decision, trade status, and review outcome
+- no unnecessary client complexity
+
+## Explicitly not introduced yet
+
+This phase intentionally does **not** introduce:
+
+- realtime updates
+- websocket architecture
+- advanced global client state
+- interactive tutorial flows
+- redesign of routing boundaries
+- real provider integrations
+- real signals / ML / autonomous trading
+- complex orchestration infrastructure
 
 ## Planned evolution
 
-Near-term frontend evolution can proceed without reworking the shell:
+The next reasonable frontend steps can still build on this architecture:
 
-- expand technical system panels when backend diagnostics grow
-- expose richer provider and worker diagnostics
-- connect backend modules beyond healthcheck and market summary
-- add local settings forms
-- introduce richer routing only when it provides clear value
-- expand the Portfolio page from read-only visibility into controlled paper trade entry flows once UX requirements are clear
-- deepen the post-mortem module with richer trade context, filters, and refresh actions once the backend heuristics evolve
-- consider optional lightweight auto-refresh for local simulation monitoring if manual refresh becomes limiting
+- richer review context if backend heuristics expand
+- more nuanced market-to-portfolio linking if execution history becomes denser
+- optional refresh controls or lightweight polling only if manual/focus refresh becomes insufficient
+- deeper system diagnostics without changing the current app shell
