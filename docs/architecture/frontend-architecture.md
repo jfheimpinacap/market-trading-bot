@@ -9,6 +9,7 @@ The frontend is a local-first operator workspace for `market-trading-bot`. In th
 3. surface minimal technical health from the backend
 4. present a useful dashboard powered by real local demo data
 5. provide a technical System page for inspecting local runtime context and observable simulation activity
+6. provide a paper trading Portfolio page for inspecting the local demo account, positions, trades, and snapshots
 
 This phase intentionally excludes authentication, real trading logic, market integrations, websockets, and advanced data visualization.
 
@@ -76,6 +77,18 @@ The `/system` route follows the same rule set:
 
 This keeps the System page technical and useful while preserving the local-first architecture.
 
+### Portfolio page
+
+The `/portfolio` route extends the same local-first pattern without introducing new client infrastructure:
+
+- uses `services/paperTrading.ts` as the single integration point for paper trading endpoints
+- keeps shared TypeScript contracts in `types/paperTrading.ts`
+- loads account, summary, positions, trades, and snapshots in parallel with section-level error isolation
+- supports manual portfolio revaluation through `POST /api/paper/revalue/` followed by a full refresh of visible sections
+- reuses existing shell, `PageHeader`, `SectionCard`, `DataStateWrapper`, and table styling patterns instead of inventing a new visual system
+
+This keeps the Portfolio page useful for operators while still avoiding trading forms, streaming updates, and heavier state-management dependencies.
+
 ## UI principles for this stage
 
 - sober, readable visual design
@@ -95,5 +108,6 @@ Near-term frontend evolution can proceed without reworking the shell:
 - connect backend modules beyond healthcheck and market summary
 - add local settings forms
 - introduce richer routing only when it provides clear value
-- prepare lightweight summaries for Portfolio, Agents, and Post-Mortem once backend endpoints exist
+- expand the Portfolio page from read-only visibility into controlled paper trade entry flows once UX requirements are clear
+- prepare lightweight summaries for Agents and Post-Mortem once backend endpoints exist
 - consider optional lightweight auto-refresh for local simulation monitoring if manual refresh becomes limiting
