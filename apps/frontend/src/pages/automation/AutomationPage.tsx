@@ -6,6 +6,7 @@ import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
 import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { useDemoFlowRefresh } from '../../hooks/useDemoFlowRefresh';
 import { publishDemoFlowRefresh } from '../../lib/demoFlow';
+import { getPolicySummary } from '../../services/policy';
 import { navigate } from '../../lib/router';
 import {
   getAutomationRuns,
@@ -130,15 +131,17 @@ export function AutomationPage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [latestActionRun, setLatestActionRun] = useState<DemoAutomationRun | null>(null);
+  const [policySummary, setPolicySummary] = useState<Awaited<ReturnType<typeof getPolicySummary>> | null>(null);
 
   const loadAutomationState = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const [runsResponse, summaryResponse] = await Promise.all([getAutomationRuns(12), getAutomationSummary()]);
+      const [runsResponse, summaryResponse, policySummaryResponse] = await Promise.all([getAutomationRuns(12), getAutomationSummary(), getPolicySummary()]);
       setRuns(runsResponse);
       setSummary(summaryResponse);
+      setPolicySummary(policySummaryResponse);
       if (!latestActionRun && summaryResponse.latest_run) {
         setLatestActionRun(summaryResponse.latest_run);
       }
@@ -299,6 +302,38 @@ export function AutomationPage() {
               <button type="button" className="secondary-button" onClick={() => navigate('/postmortem')}>
                 Open post-mortem
               </button>
+            </div>
+          </SectionCard>
+        </div>
+
+        <div className="content-grid content-grid--two-columns">
+          <SectionCard
+            eyebrow="Policy engine"
+            title="Automation stays approval-aware"
+            description="Automation controls prepare and refresh demo state, but they do not auto-trade. Future automated trade proposals should pass through the policy engine first."
+          >
+            <div className="automation-policy-card">
+              <p>
+                In this stage, automation only advances market simulation, signals, portfolio revalue, and post-mortem generation.
+                Any future automated trade suggestion must still be evaluated by the policy engine before execution.
+              </p>
+              <dl className="automation-run-meta">
+                <div>
+                  <dt>Auto-approved</dt>
+                  <dd>{policySummary?.auto_approve_count ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt>Manual approval</dt>
+                  <dd>{policySummary?.approval_required_count ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt>Hard blocked</dt>
+                  <dd>{policySummary?.hard_block_count ?? '—'}</dd>
+                </div>
+              </dl>
+              <p className="muted-text">
+                Current model: automation can prepare context, but execution remains human-triggered and policy-governed.
+              </p>
             </div>
           </SectionCard>
         </div>

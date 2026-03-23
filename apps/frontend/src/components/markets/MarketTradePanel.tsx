@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { navigate } from '../../lib/router';
+import { evaluateTradePolicy } from '../../services/policy';
 import { assessTrade } from '../../services/riskDemo';
 import type { MarketDetail } from '../../types/markets';
+import type { TradePolicyEvaluation } from '../../types/policy';
 import type {
   CreatePaperTradePayload,
   PaperAccount,
@@ -20,6 +22,7 @@ import {
   formatQuantity,
   formatTechnicalTimestamp,
 } from '../paper-trading/utils';
+import { PolicyDecisionPanel } from '../policy/PolicyDecisionPanel';
 import { TradeRiskPanel } from './TradeRiskPanel';
 
 const SIDE_OPTIONS: Array<CreatePaperTradePayload['side']> = ['YES', 'NO'];
@@ -105,6 +108,9 @@ export function MarketTradePanel({
   const [riskAssessment, setRiskAssessment] = useState<TradeRiskAssessment | null>(null);
   const [riskError, setRiskError] = useState<string | null>(null);
   const [isEvaluatingRisk, setIsEvaluatingRisk] = useState(false);
+  const [policyEvaluation, setPolicyEvaluation] = useState<TradePolicyEvaluation | null>(null);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const [isEvaluatingPolicy, setIsEvaluatingPolicy] = useState(false);
   const [lastAssessmentKey, setLastAssessmentKey] = useState<string | null>(null);
 
   const isTradable = market.is_active && market.status.toLowerCase() === 'open';
@@ -132,14 +138,15 @@ export function MarketTradePanel({
     () => buildAssessmentKey({ trade_type: tradeType, side, quantity }),
     [tradeType, side, quantity],
   );
+  const hasFreshPolicyEvaluation = policyEvaluation && lastAssessmentKey === currentAssessmentKey;
   const canExecuteTrade = Boolean(
     account
-      && riskAssessment
-      && lastAssessmentKey === currentAssessmentKey
-      && riskAssessment.decision !== 'BLOCK'
+      && hasFreshPolicyEvaluation
+      && policyEvaluation.decision !== 'HARD_BLOCK'
       && !isLoading
       && !error,
   );
+  const requiresManualApproval = policyEvaluation?.decision === 'APPROVAL_REQUIRED';
 
   useEffect(() => {
     if (executionState?.status === 'success') {
@@ -147,6 +154,8 @@ export function MarketTradePanel({
       setValidationMessage(null);
       setRiskAssessment(null);
       setRiskError(null);
+      setPolicyEvaluation(null);
+      setPolicyError(null);
       setLastAssessmentKey(null);
     }
   }, [executionState?.status, executionState?.response?.trade.id]);
@@ -154,6 +163,8 @@ export function MarketTradePanel({
   useEffect(() => {
     setRiskAssessment(null);
     setRiskError(null);
+    setPolicyEvaluation(null);
+    setPolicyError(null);
     setLastAssessmentKey(null);
   }, [market.id, tradeType, side, quantity]);
 
@@ -211,12 +222,51 @@ export function MarketTradePanel({
         },
       });
       setRiskAssessment(response.assessment);
+      setPolicyEvaluation(null);
+      setPolicyError(null);
       setLastAssessmentKey(buildAssessmentKey({ trade_type: tradeType, side, quantity }));
     } catch (assessmentError) {
       setRiskAssessment(null);
+      setPolicyEvaluation(null);
       setRiskError(assessmentError instanceof Error ? assessmentError.message : 'Could not evaluate trade risk.');
     } finally {
       setIsEvaluatingRisk(false);
+    }
+  }
+
+  async function handleEvaluatePolicy() {
+    const message = validateForm();
+    if (message) {
+      setValidationMessage(message);
+      return;
+    }
+
+    setValidationMessage(null);
+    setPolicyError(null);
+    setIsEvaluatingPolicy(true);
+
+    try {
+      const evaluation = await evaluateTradePolicy({
+        market_id: market.id,
+        trade_type: tradeType,
+        side,
+        quantity: quantity.trim(),
+        requested_price: currentPrice !== null ? currentPrice.toFixed(4) : null,
+        triggered_from: 'market_detail',
+        requested_by: 'user',
+        risk_assessment_id: riskAssessment?.id ?? null,
+        metadata: {
+          source: 'market-detail-policy-panel',
+          market_slug: market.slug,
+        },
+      });
+      setPolicyEvaluation(evaluation);
+      setLastAssessmentKey(buildAssessmentKey({ trade_type: tradeType, side, quantity }));
+    } catch (evaluationError) {
+      setPolicyEvaluation(null);
+      setPolicyError(evaluationError instanceof Error ? evaluationError.message : 'Could not evaluate trade policy.');
+    } finally {
+      setIsEvaluatingPolicy(false);
     }
   }
 
@@ -229,13 +279,13 @@ export function MarketTradePanel({
       return;
     }
 
-    if (!riskAssessment || lastAssessmentKey !== currentAssessmentKey) {
-      setValidationMessage('Run a fresh demo risk check before executing this trade.');
+    if (!hasFreshPolicyEvaluation) {
+      setValidationMessage('Run a fresh policy evaluation before executing this trade.');
       return;
     }
 
-    if (riskAssessment.decision === 'BLOCK') {
-      setValidationMessage('This trade is blocked by the demo risk guard and cannot be executed from this panel.');
+    if (policyEvaluation.decision === 'HARD_BLOCK') {
+      setValidationMessage('This trade is hard blocked by policy and cannot be executed from this panel.');
       return;
     }
 
@@ -248,8 +298,12 @@ export function MarketTradePanel({
       metadata: {
         source: 'market-detail-panel',
         market_slug: market.slug,
-        risk_assessment_id: riskAssessment.id,
-        risk_decision: riskAssessment.decision,
+        risk_assessment_id: riskAssessment?.id ?? null,
+        risk_decision: riskAssessment?.decision ?? null,
+        policy_decision_id: policyEvaluation.id,
+        policy_decision: policyEvaluation.decision,
+        policy_summary: policyEvaluation.summary,
+        policy_triggered_from: policyEvaluation.triggered_from,
       },
     });
   }
@@ -332,7 +386,7 @@ export function MarketTradePanel({
                   type="button"
                   className={`trade-toggle-button ${tradeType === option ? 'trade-toggle-button--active' : ''}`}
                   onClick={() => setTradeType(option)}
-                  disabled={isSubmitting || isEvaluatingRisk}
+                  disabled={isSubmitting || isEvaluatingRisk || isEvaluatingPolicy}
                 >
                   {titleize(option)}
                 </button>
@@ -349,7 +403,7 @@ export function MarketTradePanel({
                   type="button"
                   className={`trade-toggle-button ${side === option ? 'trade-toggle-button--active' : ''}`}
                   onClick={() => setSide(option)}
-                  disabled={isSubmitting || isEvaluatingRisk}
+                  disabled={isSubmitting || isEvaluatingRisk || isEvaluatingPolicy}
                 >
                   {tradeType === 'BUY' ? 'Buy' : 'Sell'} {option}
                 </button>
@@ -369,7 +423,7 @@ export function MarketTradePanel({
               placeholder="e.g. 10"
               value={quantity}
               onChange={(event) => setQuantity(event.target.value)}
-              disabled={isSubmitting || isEvaluatingRisk}
+              disabled={isSubmitting || isEvaluatingRisk || isEvaluatingPolicy}
             />
           </label>
 
@@ -388,6 +442,32 @@ export function MarketTradePanel({
             </article>
           </div>
 
+          <div className="market-trade-flow-card">
+            <div className="market-trade-flow-card__header">
+              <div>
+                <p className="section-label">Approval flow</p>
+                <h4>Risk analysis → policy governance → execution</h4>
+              </div>
+              <span className="muted-text">Didactic local-first flow</span>
+            </div>
+            <ol className="market-trade-flow-list">
+              <li>
+                <strong>Evaluate risk</strong>
+                <span>Run the analytical trade guard and capture the current demo risk posture.</span>
+              </li>
+              <li>
+                <strong>Evaluate policy</strong>
+                <span>Translate risk plus market, account, and signal context into an operational approval decision.</span>
+              </li>
+              <li>
+                <strong>Execute paper trade</strong>
+                <span>
+                  Auto-approve enables direct execution, approval-required needs explicit confirmation, and hard block keeps execution disabled.
+                </span>
+              </li>
+            </ol>
+          </div>
+
           <TradeRiskPanel
             assessment={riskAssessment}
             isLoading={isEvaluatingRisk}
@@ -396,34 +476,55 @@ export function MarketTradePanel({
             isTradable={isTradable}
           />
 
+          <PolicyDecisionPanel
+            evaluation={policyEvaluation}
+            riskAssessment={riskAssessment}
+            isLoading={isEvaluatingPolicy}
+            error={policyError}
+            hasPaperAccount={Boolean(account)}
+            isTradable={isTradable}
+          />
+
           {validationMessage ? <p className="market-trade-feedback market-trade-feedback--error">{validationMessage}</p> : null}
 
           <div className="market-trade-form__actions">
-            <button className="secondary-button" type="button" onClick={() => void onRetry()} disabled={isSubmitting || isEvaluatingRisk}>
+            <button className="secondary-button" type="button" onClick={() => void onRetry()} disabled={isSubmitting || isEvaluatingRisk || isEvaluatingPolicy}>
               Refresh paper context
             </button>
             <button
               className="secondary-button"
               type="button"
               onClick={() => void handleEvaluateTrade()}
-              disabled={isSubmitting || isEvaluatingRisk || Boolean(error) || isLoading || !account}
+              disabled={isSubmitting || isEvaluatingRisk || isEvaluatingPolicy || Boolean(error) || isLoading || !account}
             >
-              {isEvaluatingRisk ? 'Evaluating trade…' : 'Evaluate trade'}
+              {isEvaluatingRisk ? 'Evaluating risk…' : 'Evaluate risk'}
             </button>
-            {riskAssessment && lastAssessmentKey === currentAssessmentKey ? (
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => void handleEvaluatePolicy()}
+              disabled={isSubmitting || isEvaluatingRisk || isEvaluatingPolicy || Boolean(error) || isLoading || !account}
+            >
+              {isEvaluatingPolicy ? 'Evaluating policy…' : 'Evaluate policy'}
+            </button>
+            {hasFreshPolicyEvaluation ? (
               <button
-                className="primary-button"
+                className={requiresManualApproval ? 'primary-button' : 'primary-button'}
                 type="submit"
                 disabled={isSubmitting || !canExecuteTrade}
               >
-                {isSubmitting ? 'Submitting demo trade…' : `Execute ${tradeType} ${side}`}
+                {isSubmitting
+                  ? 'Submitting demo trade…'
+                  : requiresManualApproval
+                    ? `Confirm and execute ${tradeType} ${side}`
+                    : `Execute ${tradeType} ${side}`}
               </button>
             ) : null}
           </div>
 
           <p className="muted-text market-trade-form__hint">
-            Flow for this stage: evaluate with <code>POST /api/risk/assess-trade/</code>, review the trade guard verdict,
-            then optionally execute through <code>POST /api/paper/trades/</code>.
+            Flow for this stage: evaluate with <code>POST /api/risk/assess-trade/</code>, convert to governance with{' '}
+            <code>POST /api/policy/evaluate-trade/</code>, then execute through <code>POST /api/paper/trades/</code> when allowed.
           </p>
         </form>
 

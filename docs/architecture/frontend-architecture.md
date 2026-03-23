@@ -21,9 +21,10 @@ The frontend now tries to tell one clear story:
 2. inspect the market
 3. review the demo signal
 4. evaluate the trade with the risk guard
-5. execute a paper trade
-6. inspect portfolio impact
-7. review the post-mortem
+5. evaluate the operational approval decision with the policy engine
+6. execute a paper trade only when the policy result allows it
+7. inspect portfolio impact
+8. review the post-mortem
 
 This is accomplished mostly with **navigation refinements, cross-module summaries, empty-state guidance, and lightweight refresh coordination**, not with a new architecture.
 
@@ -70,6 +71,7 @@ Instead, each page coordinates a small set of explicit service calls.
 - `services/paperTrading.ts` for account, positions, trades, snapshots, summary, and revalue
 - `services/reviews.ts` for review summary, list, and detail
 - `services/riskDemo.ts` for pre-trade assessment
+- `services/policy.ts` for trade approval evaluation and policy decision summaries
 
 This keeps data dependencies understandable and prevents the current demo phase from turning into a client-state rewrite.
 
@@ -129,6 +131,7 @@ The `/markets/:marketId` route is now the operational hub of the demo:
 - market context
 - recent signals
 - risk assessment
+- policy approval decision
 - paper trade execution
 - position / latest trade / latest review summary
 - direct next-step links into Portfolio and Post-mortem
@@ -185,3 +188,19 @@ The next reasonable frontend steps can still build on this architecture:
 ## Automation control center
 
 The frontend now includes an `/automation` route backed by `services/automation.ts` and `types/automation.ts`. This page acts as a guided demo control center: it calls the backend automation endpoints through the shared API client, shows loading and error states, renders recent automation runs, and surfaces step-level results for the full demo cycle. The UX is intentionally explicit and operator-driven so the broader end-to-end workflow can move faster without becoming an autonomous system.
+
+## Policy approval UX boundary
+
+The market detail route now makes an explicit distinction between analysis and governance:
+
+- `TradeRiskPanel` explains the analytical trade guard result.
+- `PolicyDecisionPanel` explains the operational approval result.
+
+That distinction is important because the product goal has shifted from a set of disconnected demo modules toward a semi-structured decision platform.
+
+Current UX behavior:
+- `AUTO_APPROVE` -> execute button is enabled directly after policy evaluation
+- `APPROVAL_REQUIRED` -> the panel shows a stronger manual-approval notice and the CTA changes to an explicit confirmation action
+- `HARD_BLOCK` -> the CTA stays disabled and the panel suggests concrete fixes
+
+The `/automation` page also reinforces that automation remains operator-driven and that future automated proposals should still pass through the policy layer before any execution step.

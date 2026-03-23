@@ -9,7 +9,7 @@ El frontend ya no se siente como un conjunto de módulos separados. La UX ahora 
 1. **Dashboard** para entender el estado general del sistema demo.
 2. **Markets** para descubrir contratos activos.
 3. **Signals** para detectar oportunidades demo y saltar al market correcto.
-4. **Market detail** para revisar señal, evaluar riesgo y ejecutar paper trade.
+4. **Market detail** para revisar señal, evaluar riesgo, evaluar policy engine y ejecutar paper trade sólo cuando la gobernanza demo lo permite.
 5. **Portfolio** para ver impacto en equity, posiciones y trades.
 6. **Post-mortem** para revisar outcome, lecciones y volver al market o portfolio.
 
@@ -118,6 +118,7 @@ python start.py simulate-loop
 - `GET /api/signals/?market=<id>`
 - `GET /api/reviews/?market=<id>`
 - `POST /api/risk/assess-trade/`
+- `POST /api/policy/evaluate-trade/`
 - `POST /api/paper/trades/`
 - `GET /api/paper/account/`
 - `GET /api/paper/positions/`
@@ -164,7 +165,7 @@ Con esto la experiencia queda más consistente sin introducir websockets, pollin
 
 - `/` — Dashboard operativo local
 - `/markets` — Markets explorer
-- `/markets/:marketId` — Market detail + risk + paper trade
+- `/markets/:marketId` — Market detail + risk + policy engine + paper trade
 - `/signals` — Demo signals workspace
 - `/agents` — Agents placeholder
 - `/portfolio` — Paper trading portfolio summary
@@ -223,3 +224,22 @@ The page is intentionally manual and traceable. It disables controls while an ac
 `market → signal → risk → trade → portfolio → review`
 
 This page does **not** implement autonomous automation, background loops, websockets, or auto-trading.
+
+## Policy engine / approval rules demo
+
+El frontend ahora separa explícitamente dos capas en `/markets/:marketId`:
+
+- **Risk demo**: análisis heurístico del trade.
+- **Policy engine**: decisión operativa sobre si el trade demo puede ejecutarse directo, requiere confirmación manual o queda bloqueado.
+
+Flujo UI actual:
+
+1. completar el trade form
+2. ejecutar **Evaluate risk**
+3. ejecutar **Evaluate policy**
+4. según la respuesta:
+   - `AUTO_APPROVE` -> habilita ejecución directa
+   - `APPROVAL_REQUIRED` -> muestra aviso claro y cambia el CTA a confirmación explícita
+   - `HARD_BLOCK` -> mantiene ejecución deshabilitada y sugiere correcciones
+
+La página `/automation` también deja explícito que la automatización demo no opera trades por sí sola y que futuras propuestas automáticas deberían pasar por policy engine primero.

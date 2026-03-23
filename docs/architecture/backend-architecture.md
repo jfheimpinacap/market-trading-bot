@@ -21,6 +21,7 @@ The backend is a local-first Django service inside the monorepo. Its current res
 - `apps.postmortem_demo`: demo-only trade review domain that evaluates executed paper trades after the fact and exposes read-only review endpoints.
 - `apps.agents`: reserved for later agent orchestration work.
 - `apps.audit`: reserved for later audit and post-mortem persistence.
+- `apps.policy_engine`: demo-only governance boundary that converts trade proposals into explicit approval outcomes.
 
 ## Market domain shape
 The current `apps.markets` app is intentionally provider-agnostic.
@@ -64,6 +65,25 @@ Service split:
 - `views.py`: thin API surface for `POST /api/risk/assess-trade/` and recent assessment browsing
 
 This is intentionally a mock trade guard, not a real risk engine or execution policy layer.
+
+## Policy engine domain shape
+The `apps.policy_engine` app now sits after `apps.risk_demo` and before paper execution as the operational governance boundary.
+
+Core relationships:
+- `ApprovalDecision` stores one persisted policy result for one proposed trade.
+- Each decision links back to a `Market`, the active `PaperAccount`, and optionally a `TradeRiskAssessment` plus the latest relevant `MarketSignal`.
+- Decisions also snapshot matched rules, recommendation text, severity, and confidence so the frontend or admin can explain why a proposal was auto-approved, escalated, or blocked.
+
+Service split:
+- `services/evaluation.py`: build the combined market/account/risk/signal context, evaluate deterministic rules, and persist the decision
+- `services/rules.py`: tiny explicit rule-match primitives used by the evaluator
+- `serializers.py` and `views.py`: thin DRF boundary for evaluate/list/summary endpoints
+
+Current architectural intent:
+- reuse `risk_demo` output instead of duplicating analytical logic
+- add governance rules such as market operability, cash sizing, exposure concentration, and automation thresholds
+- keep all approval outcomes local-first, readable, and auditable
+- prepare the system for future approval queues without implementing them yet
 
 ## Signals domain shape
 The new `apps.signals` app intentionally sits between `apps.markets` and future automation work.
