@@ -82,7 +82,7 @@ apps/frontend/src/
 - `/markets/:marketId` — Market detail
 - `/signals` — Signals placeholder
 - `/agents` — Agents placeholder
-- `/portfolio` — Portfolio placeholder
+- `/portfolio` — Paper trading portfolio summary
 - `/postmortem` — Post-Mortem placeholder
 - `/settings` — Settings placeholder
 - `/system` — System technical panel
@@ -110,6 +110,25 @@ La página `/system` no agrega endpoints nuevos. Toda la evidencia de actividad 
 - `GET /api/markets/events/`
 - `GET /api/markets/`
 - `GET /api/markets/<id>/`
+
+### Portfolio / paper trading
+
+- `GET /api/paper/account/`
+- `GET /api/paper/positions/`
+- `GET /api/paper/trades/`
+- `GET /api/paper/summary/`
+- `POST /api/paper/revalue/`
+- `GET /api/paper/snapshots/`
+
+La ruta `/portfolio` ahora muestra:
+
+- cuenta paper activa y contexto local demo
+- summary cards para cash, equity, realized/unrealized/total PnL, open positions y total trades
+- tabla de posiciones con side, quantity, avg entry, current mark, market value, PnL y estado
+- historial de trades recientes ordenado por `executed_at`
+- panel técnico de snapshots del portfolio
+- acción manual **Revalue portfolio** que llama `POST /api/paper/revalue/` y luego refresca los datos visibles
+- loading, error parcial, error total y empty states claros por sección
 
 ### Filtros usados en `/markets`
 
@@ -200,6 +219,7 @@ python start.py down
 cd apps/backend
 python manage.py migrate
 python manage.py seed_markets_demo
+python manage.py seed_paper_account
 python manage.py runserver
 ```
 
@@ -287,11 +307,10 @@ Todavía siguen como placeholder o reservadas para roadmap:
 
 - Signals
 - Agents
-- Portfolio
 - Post-Mortem
 - Settings avanzados
 - sincronización real con providers
-- señales operativas, paper trading y risk engine
+- señales operativas avanzadas y risk engine
 
 ## Qué sigue después
 
@@ -299,7 +318,8 @@ Siguientes pasos razonables después de esta iteración:
 
 - añadir auto-refresh opcional muy ligero si realmente aporta durante desarrollo local
 - exponer más diagnósticos del backend cuando existan endpoints específicos
-- conectar resúmenes reales para Portfolio o Agents cuando existan endpoints
+- conectar resúmenes reales para Agents cuando existan endpoints
+- evolucionar `/portfolio` desde visibilidad read-only hacia ejecución controlada de paper trades cuando esa UX entre en alcance
 - preparar una capa de señales o telemetry local sin caer aún en observabilidad compleja
 
 ## Qué NO se implementó todavía
@@ -329,3 +349,28 @@ Sigue fuera de alcance en esta etapa:
 - La evidencia de simulación en `/system` es deliberadamente inferida; no pretende inventar precisión que el backend aún no expone directamente.
 - El diseño sigue siendo sobrio, desktop-first y orientado a entorno local.
 - Si el backend no está activo, la UI muestra errores claros y no rompe la navegación general.
+
+## Cómo probar `/portfolio`
+
+1. Asegúrate de que el backend esté corriendo en `http://localhost:8000` y que `apps/frontend/.env` tenga `VITE_API_BASE_URL=http://localhost:8000`.
+2. Inicializa la cuenta demo con:
+
+```bash
+cd apps/backend
+python manage.py seed_paper_account
+```
+
+3. Si quieres actividad visible, registra trades demo desde backend o script y luego entra a `http://localhost:5173/portfolio`.
+4. Verifica que las secciones **Account metrics**, **Positions**, **Trades** y **Snapshots** carguen desde los endpoints paper existentes.
+5. Pulsa **Revalue portfolio** para disparar `POST /api/paper/revalue/`.
+6. Confirma que cambian `updated_at`, snapshots y los valores de equity / unrealized PnL cuando el backend recalcula el portfolio.
+
+## Qué falta todavía para paper trading completo
+
+Esta etapa sigue siendo solo de visualización. Aún no se implementa en frontend:
+
+- ejecución de compras/ventas desde la UI
+- formularios de trading o tickets de orden
+- websockets o auto-refresh continuo
+- charts avanzados de equity o PnL
+- trading real, autenticación, multiusuario o risk engine

@@ -51,7 +51,7 @@ export const appRoutes: AppRoute[] = [
   {
     label: 'Portfolio',
     path: '/portfolio',
-    description: 'Paper positions, exposure monitoring, and PnL placeholders.',
+    description: 'Paper trading portfolio summary with account metrics, positions, trades, snapshots, and manual revaluation.',
     component: PortfolioPage,
   },
   {
