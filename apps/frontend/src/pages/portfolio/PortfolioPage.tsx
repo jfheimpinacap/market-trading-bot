@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '../../components/EmptyState';
+import { ContextLinksPanel } from '../../components/flow/ContextLinksPanel';
+import { WorkflowStatusPanel } from '../../components/flow/WorkflowStatusPanel';
 import { PageHeader } from '../../components/PageHeader';
 import { SectionCard } from '../../components/SectionCard';
 import { StatusBadge } from '../../components/dashboard/StatusBadge';
@@ -12,6 +14,9 @@ import { PortfolioSummaryCards } from '../../components/paper-trading/PortfolioS
 import { PaperTradesTable } from '../../components/paper-trading/PaperTradesTable';
 import { RevalueToolbar } from '../../components/paper-trading/RevalueToolbar';
 import { formatTechnicalTimestamp } from '../../components/paper-trading/utils';
+import { useDemoFlowRefresh } from '../../hooks/useDemoFlowRefresh';
+import { buildReviewLookupByTradeId, publishDemoFlowRefresh } from '../../lib/demoFlow';
+import { navigate } from '../../lib/router';
 import { API_BASE_URL } from '../../lib/config';
 import { getTradeReviews } from '../../services/reviews';
 import {
@@ -22,6 +27,7 @@ import {
   getPaperTrades,
   revaluePaperPortfolio,
 } from '../../services/paperTrading';
+import type { ContextLinkItem, WorkflowStatusItem } from '../../types/demoFlow';
 import type {
   PaperAccount,
   PaperPortfolioSnapshot,
@@ -146,6 +152,8 @@ export function PortfolioPage() {
     void loadPortfolio();
   }, [loadPortfolio]);
 
+  useDemoFlowRefresh(loadPortfolio);
+
   const handleRevalue = useCallback(async () => {
     setIsRevaluing(true);
     setRevalueMessage(null);
@@ -156,6 +164,7 @@ export function PortfolioPage() {
       setAccount(updatedAccount);
       await loadPortfolio();
       setRevalueMessage(`Portfolio revalued successfully. Last backend update: ${formatTechnicalTimestamp(updatedAccount.updated_at)}.`);
+      publishDemoFlowRefresh('portfolio-revalued');
     } catch (error) {
       setRevalueError(getErrorMessage(error, 'Could not revalue the demo portfolio.'));
     } finally {
@@ -183,14 +192,70 @@ export function PortfolioPage() {
     () => positions.filter((position) => position.status === 'OPEN' && Number(position.quantity) > 0),
     [positions],
   );
-  const reviewLookup = useMemo(() => Object.fromEntries(reviews.map((review) => [review.trade_id, review])), [reviews]);
+  const reviewLookup = useMemo(() => buildReviewLookupByTradeId(reviews), [reviews]);
+  const recentReviews = useMemo(() => reviews.slice(0, 3), [reviews]);
+
+  const workflowItems = useMemo<WorkflowStatusItem[]>(() => [
+    {
+      label: 'Active exposure',
+      value: `${openPositions.length} open positions`,
+      helperText: openPositions.length > 0 ? 'Use the linked market detail pages to inspect why each position exists.' : 'No active exposure yet. Start from Markets or Signals to place a first paper trade.',
+      tone: openPositions.length > 0 ? 'ready' : 'neutral',
+      href: '/markets',
+      linkLabel: 'Explore markets',
+    },
+    {
+      label: 'Trade history',
+      value: `${trades.length} trades`,
+      helperText: trades.length > 0 ? 'Each trade row can now take you back to market detail and forward into review.' : 'No executed trades yet. Open a market and use the trade panel to populate this history.',
+      tone: trades.length > 0 ? 'ready' : 'warning',
+    },
+    {
+      label: 'Review coverage',
+      value: `${reviews.length} reviews`,
+      helperText: reviews.length > 0 ? 'Recent reviews are surfaced below so portfolio changes stay tied to post-mortem outcomes.' : 'Generate trade reviews after a few demo trades to close the learning loop.',
+      tone: reviews.length > 0 ? 'ready' : 'neutral',
+      href: '/postmortem',
+      linkLabel: 'Open post-mortem',
+    },
+    {
+      label: 'Snapshot history',
+      value: `${snapshots.length} snapshots`,
+      helperText: snapshots.length > 1 ? 'The equity chart below should now reflect revalue runs and recent portfolio changes.' : 'Run revalue or simulation steps to build more history for the equity chart.',
+      tone: snapshots.length > 1 ? 'ready' : 'neutral',
+    },
+  ], [openPositions.length, reviews.length, snapshots.length, trades.length]);
+
+  const contextLinks = useMemo<ContextLinkItem[]>(() => [
+    {
+      title: 'Explore more markets',
+      description: 'Jump back into the catalog when you want to add or compare exposure from another market.',
+      href: '/markets',
+      actionLabel: 'Open markets',
+      tone: 'primary',
+    },
+    {
+      title: 'Review signals before trading again',
+      description: 'Signals helps identify the next demo opportunity before you commit another paper trade.',
+      href: '/signals',
+      actionLabel: 'Open signals',
+      tone: 'secondary',
+    },
+    {
+      title: 'Close the loop in post-mortem',
+      description: 'Open review detail to understand what happened after execution and what the demo system learned.',
+      href: '/postmortem',
+      actionLabel: 'Open reviews',
+      tone: 'neutral',
+    },
+  ], []);
 
   return (
     <div className="page-stack">
       <PageHeader
         eyebrow="Paper trading"
         title="Portfolio"
-        description="Live local demo portfolio view for paper account balances, open positions, execution history, and backend-triggered manual revaluation."
+        description="Live local demo portfolio view for balances, open positions, execution history, and the retrospective links that connect portfolio changes back to markets and post-mortem."
         actions={
           <RevalueToolbar
             onRevalue={handleRevalue}
@@ -200,6 +265,18 @@ export function PortfolioPage() {
             lastUpdatedLabel={lastUpdatedLabel}
           />
         }
+      />
+
+      <WorkflowStatusPanel
+        title="Portfolio in the end-to-end flow"
+        description="This page should now feel like the bridge between market execution and post-mortem: inspect the impact, follow the trade, then open the related review."
+        items={workflowItems}
+      />
+
+      <ContextLinksPanel
+        title="Continue from portfolio"
+        description="Use these links when the portfolio tells you enough and you want to return to discovery, signals, or the learning loop."
+        links={contextLinks}
       />
 
       {totalFailure ? (
@@ -231,6 +308,11 @@ export function PortfolioPage() {
           errorTitle="Could not load paper account"
           emptyTitle="No paper account available"
           emptyDescription="Run `cd apps/backend && python manage.py seed_paper_account` and refresh this page to populate the demo portfolio."
+          action={
+            <button className="secondary-button" type="button" onClick={() => void loadPortfolio()}>
+              Retry account sync
+            </button>
+          }
         >
           {account ? (
             <>
@@ -245,30 +327,68 @@ export function PortfolioPage() {
         </DataStateWrapper>
       </SectionCard>
 
-      <SectionCard
-        eyebrow="Account overview"
-        title="Paper account details"
-        description="Technical account metadata and summary diagnostics for the active demo portfolio."
-      >
-        <DataStateWrapper
-          isLoading={accountLoading || summaryLoading}
-          isError={Boolean(accountError)}
-          errorMessage={accountError ?? summaryError ?? undefined}
-          isEmpty={!accountLoading && !accountError && !account}
-          loadingTitle="Loading account details"
-          loadingDescription="Waiting for the account and summary endpoints to respond."
-          errorTitle="Could not load account details"
-          emptyTitle="Paper account missing"
-          emptyDescription="Seed the demo account from the backend and refresh the page to unlock this section."
+      <section className="content-grid content-grid--two-columns">
+        <SectionCard
+          eyebrow="Account overview"
+          title="Paper account details"
+          description="Technical account metadata and summary diagnostics for the active demo portfolio."
         >
-          {account ? (
-            <>
-              {summaryError ? <p className="paper-inline-notice">Summary endpoint unavailable: {summaryError}</p> : null}
-              <PaperAccountPanel account={account} summary={summary} />
-            </>
-          ) : null}
-        </DataStateWrapper>
-      </SectionCard>
+          <DataStateWrapper
+            isLoading={accountLoading || summaryLoading}
+            isError={Boolean(accountError)}
+            errorMessage={accountError ?? summaryError ?? undefined}
+            isEmpty={!accountLoading && !accountError && !account}
+            loadingTitle="Loading account details"
+            loadingDescription="Waiting for the account and summary endpoints to respond."
+            errorTitle="Could not load account details"
+            emptyTitle="Paper account missing"
+            emptyDescription="Seed the demo account from the backend and refresh the page to unlock this section."
+          >
+            {account ? (
+              <>
+                {summaryError ? <p className="paper-inline-notice">Summary endpoint unavailable: {summaryError}</p> : null}
+                <PaperAccountPanel account={account} summary={summary} />
+              </>
+            ) : null}
+          </DataStateWrapper>
+        </SectionCard>
+
+        <SectionCard
+          eyebrow="Review bridge"
+          title="Recent reviews summary"
+          description="A compact retrospective block so portfolio changes stay connected to trade outcomes and follow-up recommendations."
+          aside={<StatusBadge tone={reviewsError ? 'offline' : reviewsLoading ? 'loading' : 'ready'}>{reviewsLoading ? 'Loading reviews' : `${reviews.length} reviews`}</StatusBadge>}
+        >
+          <DataStateWrapper
+            isLoading={reviewsLoading}
+            isError={Boolean(reviewsError)}
+            errorMessage={reviewsError ?? undefined}
+            isEmpty={!reviewsLoading && !reviewsError && recentReviews.length === 0}
+            loadingTitle="Loading review context"
+            loadingDescription="Requesting recent trade reviews for the portfolio workspace."
+            errorTitle="Could not load review context"
+            emptyTitle="No reviews linked yet"
+            emptyDescription="Generate trade reviews after a few paper trades so this page can point directly into the post-mortem loop."
+            action={
+              <button className="secondary-button" type="button" onClick={() => navigate('/postmortem')}>
+                Open post-mortem
+              </button>
+            }
+          >
+            <div className="table-link-stack">
+              {recentReviews.map((review) => (
+                <a key={review.id} href={`/postmortem/${review.id}`} className="market-link" onClick={(event) => {
+                  event.preventDefault();
+                  navigate(`/postmortem/${review.id}`);
+                }}>
+                  <strong>{review.market_title}</strong>
+                  <span>Trade #{review.trade_id} · {review.recommendation || review.summary}</span>
+                </a>
+              ))}
+            </div>
+          </DataStateWrapper>
+        </SectionCard>
+      </section>
 
       <SectionCard
         eyebrow="Portfolio history"
@@ -287,7 +407,7 @@ export function PortfolioPage() {
       <SectionCard
         eyebrow="Open and closed positions"
         title="Positions"
-        description="Desktop-first table of positions returned by GET /api/paper/positions/, including current marks, realized/unrealized PnL, and direct links back to Markets."
+        description="Desktop-first table of positions returned by GET /api/paper/positions/, including current marks, realized/unrealized PnL, and direct links back to Market detail."
         aside={<StatusBadge tone={positionsError ? 'offline' : positionsLoading ? 'loading' : 'ready'}>{positionsError ? 'Positions unavailable' : `${openPositions.length} open positions`}</StatusBadge>}
       >
         <DataStateWrapper
@@ -299,7 +419,17 @@ export function PortfolioPage() {
           loadingDescription="Requesting position rows from the backend demo account."
           errorTitle="Could not load paper positions"
           emptyTitle="No positions yet"
-          emptyDescription="The demo account exists, but there are no paper positions yet. Execute a few backend paper trades and revalue the portfolio to populate this table."
+          emptyDescription="Open a market and place a paper trade to create the first position, or review signals first if you want a guided next step."
+          action={
+            <div className="empty-state__action-row">
+              <button className="secondary-button" type="button" onClick={() => navigate('/markets')}>
+                Explore markets
+              </button>
+              <button className="secondary-button" type="button" onClick={() => navigate('/signals')}>
+                Review signals
+              </button>
+            </div>
+          }
         >
           <PaperPositionsTable positions={positions} currency={currency} />
         </DataStateWrapper>
@@ -320,7 +450,12 @@ export function PortfolioPage() {
           loadingDescription="Requesting recent demo trades from the backend."
           errorTitle="Could not load trade history"
           emptyTitle="No trades recorded yet"
-          emptyDescription="The paper account has not executed demo trades yet. Use the backend paper trading flows first, then return here to inspect the history."
+          emptyDescription="Open a market and execute a paper trade first, then return here to inspect history, review links, and portfolio impact."
+          action={
+            <button className="secondary-button" type="button" onClick={() => navigate('/markets')}>
+              Open market detail flow
+            </button>
+          }
         >
           {reviewsError ? <p className="paper-inline-notice">Review links unavailable: {reviewsError}</p> : null}
           <PaperTradesTable trades={trades} currency={currency} reviewLookup={reviewLookup} />
@@ -342,7 +477,12 @@ export function PortfolioPage() {
           loadingDescription="Requesting portfolio snapshots captured by the paper trading backend."
           errorTitle="Could not load portfolio snapshots"
           emptyTitle="No snapshots captured yet"
-          emptyDescription="Snapshots are created when the portfolio is revalued with snapshot creation enabled. Use the Revalue portfolio action to generate the first snapshot from the UI."
+          emptyDescription="Run simulation or revalue the portfolio to create enough snapshots for the chart and technical history panels."
+          action={
+            <button className="secondary-button" type="button" onClick={() => void handleRevalue()}>
+              Revalue portfolio
+            </button>
+          }
         >
           <PaperSnapshotsPanel snapshots={snapshots} currency={currency} />
         </DataStateWrapper>

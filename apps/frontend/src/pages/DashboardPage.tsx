@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { SectionCard } from '../components/SectionCard';
 import { StatusCard } from '../components/StatusCard';
@@ -7,18 +7,23 @@ import { ModuleStatusList } from '../components/dashboard/ModuleStatusList';
 import { QuickLinksPanel } from '../components/dashboard/QuickLinksPanel';
 import { RecentMarketsPanel } from '../components/dashboard/RecentMarketsPanel';
 import { StatusBadge } from '../components/dashboard/StatusBadge';
+import { WorkflowStatusPanel } from '../components/flow/WorkflowStatusPanel';
 import { LatestSignalsList } from '../components/signals/LatestSignalsList';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { useSystemHealth } from '../app/SystemHealthProvider';
 import { API_BASE_URL, PROJECT_NAME } from '../lib/config';
 import { dashboardModules, dashboardQuickLinks, localEnvironmentHighlights, nextProjectSteps } from '../lib/dashboard';
+import { useDemoFlowRefresh } from '../hooks/useDemoFlowRefresh';
 import { getMarketSystemSummary, getMarkets } from '../services/markets';
-import { getSignals, getSignalsSummary } from '../services/signals';
+import { getPaperSummary } from '../services/paperTrading';
 import { getReviewsSummary } from '../services/reviews';
+import { getSignals, getSignalsSummary } from '../services/signals';
 import type { MarketListItem, MarketSystemSummary } from '../types/markets';
 import type { DashboardStatCard, RecentMarketItem } from '../types/dashboard';
-import type { MarketSignal, SignalSummary } from '../types/signals';
+import type { PaperPortfolioSummary } from '../types/paperTrading';
 import type { TradeReviewSummary } from '../types/reviews';
+import type { MarketSignal, SignalSummary } from '../types/signals';
+import type { WorkflowStatusItem } from '../types/demoFlow';
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -101,116 +106,100 @@ export function DashboardPage() {
   const [reviewsSummary, setReviewsSummary] = useState<TradeReviewSummary | null>(null);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [reviewsError, setReviewsError] = useState<string | null>(null);
+  const [paperSummary, setPaperSummary] = useState<PaperPortfolioSummary | null>(null);
+  const [paperSummaryLoading, setPaperSummaryLoading] = useState(true);
+  const [paperSummaryError, setPaperSummaryError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadSummary = useCallback(async () => {
+    setSummaryLoading(true);
+    setSummaryError(null);
 
-    async function loadSummary() {
-      setSummaryLoading(true);
-      setSummaryError(null);
-
-      try {
-        const response = await getMarketSystemSummary();
-
-        if (!isMounted) {
-          return;
-        }
-
-        setSummary(response);
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        setSummaryError(getErrorMessage(error, 'Could not load market system summary.'));
-      } finally {
-        if (isMounted) {
-          setSummaryLoading(false);
-        }
-      }
+    try {
+      const response = await getMarketSystemSummary();
+      setSummary(response);
+    } catch (error) {
+      setSummaryError(getErrorMessage(error, 'Could not load market system summary.'));
+    } finally {
+      setSummaryLoading(false);
     }
-
-    void loadSummary();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadRecentMarkets = useCallback(async () => {
+    setRecentMarketsLoading(true);
+    setRecentMarketsError(null);
 
-    async function loadRecentMarkets() {
-      setRecentMarketsLoading(true);
-      setRecentMarketsError(null);
-
-      try {
-        const response = await getMarkets();
-
-        if (!isMounted) {
-          return;
-        }
-
-        setRecentMarkets(mapRecentMarkets(response));
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        setRecentMarketsError(getErrorMessage(error, 'Could not load recent markets from the local catalog.'));
-      } finally {
-        if (isMounted) {
-          setRecentMarketsLoading(false);
-        }
-      }
+    try {
+      const response = await getMarkets();
+      setRecentMarkets(mapRecentMarkets(response));
+    } catch (error) {
+      setRecentMarketsError(getErrorMessage(error, 'Could not load recent markets from the local catalog.'));
+    } finally {
+      setRecentMarketsLoading(false);
     }
-
-    void loadRecentMarkets();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
+  const loadSignalsContext = useCallback(async () => {
+    setSignalsLoading(true);
+    setSignalsError(null);
+
+    try {
+      const [summaryResponse, latestSignalsResponse] = await Promise.all([
+        getSignalsSummary(),
+        getSignals({ ordering: '-created_at' }),
+      ]);
+      setSignalsSummary(summaryResponse);
+      setLatestSignals(latestSignalsResponse.slice(0, 3));
+    } catch (error) {
+      setSignalsError(getErrorMessage(error, 'Could not load demo signals from the local backend.'));
+    } finally {
+      setSignalsLoading(false);
+    }
+  }, []);
+
+  const loadReviewsSummary = useCallback(async () => {
+    setReviewsLoading(true);
+    setReviewsError(null);
+
+    try {
+      const response = await getReviewsSummary();
+      setReviewsSummary(response);
+    } catch (error) {
+      setReviewsError(getErrorMessage(error, 'Could not load demo trade reviews summary.'));
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, []);
+
+  const loadPaperSummary = useCallback(async () => {
+    setPaperSummaryLoading(true);
+    setPaperSummaryError(null);
+
+    try {
+      const response = await getPaperSummary();
+      setPaperSummary(response);
+    } catch (error) {
+      setPaperSummary(null);
+      setPaperSummaryError(getErrorMessage(error, 'Could not load the paper portfolio summary.'));
+    } finally {
+      setPaperSummaryLoading(false);
+    }
+  }, []);
+
+  const refreshDashboard = useCallback(async () => {
+    await Promise.all([
+      loadSummary(),
+      loadRecentMarkets(),
+      loadSignalsContext(),
+      loadReviewsSummary(),
+      loadPaperSummary(),
+    ]);
+  }, [loadPaperSummary, loadRecentMarkets, loadReviewsSummary, loadSignalsContext, loadSummary]);
 
   useEffect(() => {
-    let isMounted = true;
+    void refreshDashboard();
+  }, [refreshDashboard]);
 
-    async function loadSignalsContext() {
-      setSignalsLoading(true);
-      setSignalsError(null);
-
-      try {
-        const [summaryResponse, latestSignalsResponse] = await Promise.all([
-          getSignalsSummary(),
-          getSignals({ ordering: '-created_at' }),
-        ]);
-
-        if (!isMounted) {
-          return;
-        }
-
-        setSignalsSummary(summaryResponse);
-        setLatestSignals(latestSignalsResponse.slice(0, 3));
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        setSignalsError(getErrorMessage(error, 'Could not load demo signals from the local backend.'));
-      } finally {
-        if (isMounted) {
-          setSignalsLoading(false);
-        }
-      }
-    }
-
-    void loadSignalsContext();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  useDemoFlowRefresh(refreshDashboard);
 
   const backendDescription = health.isLoading
     ? 'Checking the local Django health endpoint.'
@@ -226,48 +215,54 @@ export function DashboardPage() {
       : 'Local environment ready';
 
   const marketStats = useMemo(() => (summary ? buildStats(summary) : []), [summary]);
+  const workflowItems = useMemo<WorkflowStatusItem[]>(() => {
+    const openPositions = paperSummary?.open_positions_count ?? 0;
+    const recentReviews = reviewsSummary?.total_reviews ?? 0;
+    const actionableSignals = signalsSummary?.actionable_signals ?? 0;
+    const activeMarkets = summary?.active_markets ?? 0;
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadReviewsSummary() {
-      setReviewsLoading(true);
-      setReviewsError(null);
-
-      try {
-        const response = await getReviewsSummary();
-
-        if (!isMounted) {
-          return;
-        }
-
-        setReviewsSummary(response);
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        setReviewsError(getErrorMessage(error, 'Could not load demo trade reviews summary.'));
-      } finally {
-        if (isMounted) {
-          setReviewsLoading(false);
-        }
-      }
-    }
-
-    void loadReviewsSummary();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    return [
+      {
+        label: '1. Discover',
+        value: `${activeMarkets} active markets`,
+        helperText: 'Start in Markets to inspect the demo catalog and find contracts that deserve attention.',
+        tone: activeMarkets > 0 ? 'ready' : 'warning',
+        href: '/markets',
+        linkLabel: 'Explore markets',
+      },
+      {
+        label: '2. Validate',
+        value: `${actionableSignals} actionable signals`,
+        helperText: 'Signals gives the quickest view of demo opportunities that can be escalated into market detail.',
+        tone: actionableSignals > 0 ? 'ready' : 'neutral',
+        href: '/signals',
+        linkLabel: 'Review signals',
+      },
+      {
+        label: '3. Execute',
+        value: `${openPositions} open positions`,
+        helperText: 'Paper execution happens from market detail after the risk check approves or cautions the trade.',
+        tone: openPositions > 0 ? 'ready' : 'neutral',
+        href: '/portfolio',
+        linkLabel: 'Inspect portfolio',
+      },
+      {
+        label: '4. Review',
+        value: `${recentReviews} recent reviews`,
+        helperText: 'Post-mortem closes the loop with outcomes, lessons, and links back to the trade context.',
+        tone: recentReviews > 0 ? 'ready' : 'neutral',
+        href: '/postmortem',
+        linkLabel: 'Open post-mortem',
+      },
+    ];
+  }, [paperSummary?.open_positions_count, reviewsSummary?.total_reviews, signalsSummary?.actionable_signals, summary?.active_markets]);
 
   return (
     <div className="page-stack">
       <PageHeader
         eyebrow="Control center"
         title={PROJECT_NAME}
-        description="Local-first dashboard connected to the Django backend so you can inspect system health, demo market coverage, and the current project roadmap from one place."
+        description="Local-first dashboard connected to the Django backend so you can move through the full demo workflow from market discovery to review without feeling like each module is isolated."
         actions={<StatusBadge tone={overallEnvironmentTone}>{overallEnvironmentLabel}</StatusBadge>}
       />
 
@@ -287,7 +282,7 @@ export function DashboardPage() {
         <SectionCard
           eyebrow="Local environment"
           title="Development context"
-          description="This app is optimized for local development with a demo dataset and explicit backend visibility."
+          description="This app is optimized for local development with a demo dataset, explicit backend visibility, and manual control over seed / signal / review generation."
           aside={
             <StatusBadge tone={summaryError ? 'offline' : summary && summary.total_markets > 0 ? 'ready' : 'loading'}>
               {summaryError ? 'Summary unavailable' : formatCatalogSeeded(summary)}
@@ -313,6 +308,12 @@ export function DashboardPage() {
         </SectionCard>
       </section>
 
+      <WorkflowStatusPanel
+        title="Current demo flow"
+        description="Recommended narrative: discover a market, validate the signal, evaluate risk in market detail, execute a paper trade, check portfolio impact, and finish in post-mortem."
+        items={workflowItems}
+      />
+
       <SectionCard
         eyebrow="Catalog summary"
         title="Market system overview"
@@ -337,7 +338,7 @@ export function DashboardPage() {
         <SectionCard
           eyebrow="Navigation"
           title="Quick links"
-          description="Jump directly into the modules that already exist, while keeping placeholders visible as the roadmap entry points."
+          description="These links intentionally mirror the recommended end-to-end workflow so the landing page reads like a guided operator console."
         >
           <QuickLinksPanel links={dashboardQuickLinks} />
         </SectionCard>
@@ -353,9 +354,26 @@ export function DashboardPage() {
 
       <section className="content-grid content-grid--two-columns">
         <SectionCard
+          eyebrow="Pipeline summary"
+          title="Cross-module indicators"
+          description="Small, current indicators that help explain where the demo flow already has data and where you may need to seed or generate more context."
+          aside={<StatusBadge tone={paperSummaryError ? 'offline' : paperSummaryLoading ? 'loading' : 'ready'}>{paperSummaryLoading ? 'Syncing flow' : 'Flow synced'}</StatusBadge>}
+        >
+          <dl className="dashboard-key-value-list">
+            <div><dt>Active markets</dt><dd>{summary?.active_markets ?? '—'}</dd></div>
+            <div><dt>Actionable signals</dt><dd>{signalsSummary?.actionable_signals ?? '—'}</dd></div>
+            <div><dt>Open positions</dt><dd>{paperSummary?.open_positions_count ?? '—'}</dd></div>
+            <div><dt>Recent reviews</dt><dd>{reviewsSummary?.total_reviews ?? '—'}</dd></div>
+            <div><dt>Recent trades</dt><dd>{paperSummary?.recent_trades.length ?? '—'}</dd></div>
+            <div><dt>Next best step</dt><dd>{signalsSummary && signalsSummary.actionable_signals > 0 ? 'Open Signals or a market detail page.' : 'Generate signals or inspect active markets.'}</dd></div>
+          </dl>
+          {paperSummaryError ? <p className="paper-inline-notice">Portfolio summary unavailable: {paperSummaryError}</p> : null}
+        </SectionCard>
+
+        <SectionCard
           eyebrow="Post-mortem bridge"
           title="Trade reviews at a glance"
-          description="Small summary from GET /api/reviews/summary/ so the dashboard can point operators toward the new post-mortem workflow without redesigning the landing page."
+          description="Small summary from GET /api/reviews/summary/ so the dashboard can point operators toward the retrospective workflow without redesigning the landing page."
           aside={
             <StatusBadge tone={reviewsError ? 'offline' : reviewsSummary && reviewsSummary.unfavorable_reviews > 0 ? 'neutral' : reviewsLoading ? 'loading' : 'ready'}>
               {reviewsSummary ? `${reviewsSummary.total_reviews} reviews` : reviewsLoading ? 'Reviews loading' : 'No reviews'}
@@ -371,7 +389,7 @@ export function DashboardPage() {
             loadingDescription="Requesting post-mortem summary counters from the backend."
             errorTitle="Could not load review summary"
             emptyTitle="No reviews summary available"
-            emptyDescription="Run `cd apps/backend && python manage.py generate_trade_reviews` to generate demo trade reviews for the new retrospective module."
+            emptyDescription="Run `cd apps/backend && python manage.py generate_trade_reviews` to generate demo trade reviews for the retrospective module."
           >
             {reviewsSummary ? (
               <dl className="dashboard-key-value-list">
@@ -410,7 +428,7 @@ export function DashboardPage() {
         <SectionCard
           eyebrow="Signals bridge"
           title="Latest demo signals"
-          description="A small operator view that connects markets, paper trading, and the new mock-agent signals layer."
+          description="A small operator view that connects market discovery, evaluation, and eventual paper execution."
           aside={
             <StatusBadge tone={signalsError ? 'offline' : signalsSummary && signalsSummary.actionable_signals > 0 ? 'ready' : 'loading'}>
               {signalsSummary ? `${signalsSummary.actionable_signals} actionable` : 'Signals loading'}
@@ -426,7 +444,7 @@ export function DashboardPage() {
             loadingDescription="Requesting the most recent demo signals from the local backend."
             errorTitle="Could not load latest signals"
             emptyTitle="No signals available yet"
-            emptyDescription="Run `cd apps/backend && python manage.py generate_demo_signals` to populate the new signals workspace."
+            emptyDescription="Run `cd apps/backend && python manage.py generate_demo_signals` to populate the signals workspace."
           >
             <LatestSignalsList signals={latestSignals} />
           </DataStateWrapper>
@@ -436,7 +454,7 @@ export function DashboardPage() {
       <SectionCard
         eyebrow="Roadmap"
         title="Next steps"
-        description="The current dashboard intentionally stops at visibility and navigation, but it now prepares the shell for the next practical backend integrations."
+        description="The dashboard still stays sober and technical, but now it also clarifies what remains manual in the demo flow."
       >
         <ul className="bullet-list">
           {nextProjectSteps.map((step) => (

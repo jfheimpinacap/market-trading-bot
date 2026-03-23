@@ -2083,3 +2083,98 @@ button {
 .postmortem-detail-list li span {
   display: block;
 }
+
+.empty-state__action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.workflow-status-panel,
+.context-links-panel {
+  display: grid;
+  gap: 20px;
+}
+
+.workflow-status-panel__header,
+.context-links-panel > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.workflow-status-grid,
+.context-links-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.workflow-status-card,
+.context-link-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: var(--bg-panel-alt);
+  padding: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.workflow-status-card span,
+.context-link-card span {
+  color: var(--text-soft);
+}
+
+.workflow-status-card strong,
+.context-link-card strong {
+  font-size: 1.15rem;
+}
+
+.workflow-status-card p,
+.context-link-card em {
+  margin: 0;
+}
+
+.workflow-status-card__link,
+.context-link-card {
+  text-decoration: none;
+}
+
+.workflow-status-card__link {
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.context-link-card em {
+  color: var(--brand);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.workflow-status-card--ready {
+  border-color: rgba(15, 159, 110, 0.18);
+  background: linear-gradient(180deg, #ffffff 0%, #f1fbf6 100%);
+}
+
+.workflow-status-card--warning {
+  border-color: rgba(183, 121, 31, 0.2);
+  background: linear-gradient(180deg, #ffffff 0%, #fff8ea 100%);
+}
+
+.workflow-status-card--neutral,
+.workflow-status-card--muted,
+.context-link-card--neutral {
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+}
+
+.context-link-card--primary {
+  border-color: rgba(40, 75, 206, 0.2);
+}
+
+.context-link-card--secondary {
+  border-color: rgba(15, 159, 110, 0.16);
+}
+
+.table-link-stack {
+  display: grid;
+  gap: 10px;
+}

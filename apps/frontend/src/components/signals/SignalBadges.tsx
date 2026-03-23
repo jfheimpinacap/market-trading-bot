@@ -34,7 +34,14 @@ function getClassName(kind: BadgeProps['kind'], value: string) {
   return 'signal-badge signal-badge--neutral';
 }
 
+function getLabel(kind: BadgeProps['kind'], value: string) {
+  if (kind === 'actionable') {
+    return value;
+  }
+
+  return titleize(value);
+}
+
 export function SignalBadge({ value, kind }: BadgeProps) {
-  const label = kind === 'actionable' ? value : titleize(value);
-  return <span className={getClassName(kind, value)}>{label}</span>;
+  return <span className={getClassName(kind, value)}>{getLabel(kind, value)}</span>;
 }

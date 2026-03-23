@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ContextLinksPanel } from '../../components/flow/ContextLinksPanel';
+import { WorkflowStatusPanel } from '../../components/flow/WorkflowStatusPanel';
 import { MarketTradePanel } from '../../components/markets/MarketTradePanel';
 import { PageHeader } from '../../components/PageHeader';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
@@ -9,11 +11,13 @@ import { MarketRulesCard } from '../../components/markets/MarketRulesCard';
 import { MarketSnapshotsTable } from '../../components/markets/MarketSnapshotsTable';
 import { MarketStatusBadge } from '../../components/markets/MarketStatusBadge';
 import { formatCompactCurrency, formatDateTime, formatNumber, titleize } from '../../components/markets/utils';
+import { ReviewOutcomeBadge } from '../../components/postmortem/ReviewOutcomeBadge';
 import { SectionCard } from '../../components/SectionCard';
 import { LatestSignalsList } from '../../components/signals/LatestSignalsList';
+import { useDemoFlowRefresh } from '../../hooks/useDemoFlowRefresh';
+import { formatDecisionLabel, getLatestReviewForMarket, getLatestTradeForMarket, getOpenPositionsForMarket, publishDemoFlowRefresh } from '../../lib/demoFlow';
 import { navigate, usePathname } from '../../lib/router';
 import { getMarketDetail } from '../../services/markets';
-import { getSignals } from '../../services/signals';
 import {
   createPaperTrade,
   getPaperAccount,
@@ -22,16 +26,13 @@ import {
   getPaperTrades,
   revaluePaperPortfolio,
 } from '../../services/paperTrading';
+import { getTradeReviews } from '../../services/reviews';
+import { getSignals } from '../../services/signals';
+import type { ContextLinkItem, WorkflowStatusItem } from '../../types/demoFlow';
 import type { MarketDetail } from '../../types/markets';
+import type { CreatePaperTradePayload, PaperAccount, PaperPortfolioSummary, PaperPosition, PaperTrade, TradeExecutionState } from '../../types/paperTrading';
+import type { TradeReview } from '../../types/reviews';
 import type { MarketSignal } from '../../types/signals';
-import type {
-  CreatePaperTradePayload,
-  PaperAccount,
-  PaperPortfolioSummary,
-  PaperPosition,
-  PaperTrade,
-  TradeExecutionState,
-} from '../../types/paperTrading';
 
 function getMarketIdFromPath(pathname: string) {
   const segments = pathname.split('/').filter(Boolean);
@@ -58,6 +59,9 @@ export function MarketDetailPage() {
   const [paperSummary, setPaperSummary] = useState<PaperPortfolioSummary | null>(null);
   const [paperPositions, setPaperPositions] = useState<PaperPosition[]>([]);
   const [paperTrades, setPaperTrades] = useState<PaperTrade[]>([]);
+  const [marketReviews, setMarketReviews] = useState<TradeReview[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [reviewsError, setReviewsError] = useState<string | null>(null);
   const [paperLoading, setPaperLoading] = useState(true);
   const [paperError, setPaperError] = useState<string | null>(null);
   const [paperWarning, setPaperWarning] = useState<string | null>(null);
@@ -84,7 +88,6 @@ export function MarketDetailPage() {
     }
   }, [marketId]);
 
-
   const loadMarketSignals = useCallback(async () => {
     if (!marketId) {
       setSignalsError('The market identifier is missing from the URL.');
@@ -103,6 +106,27 @@ export function MarketDetailPage() {
       setSignalsError(getErrorMessage(loadError, 'Could not load demo signals for this market.'));
     } finally {
       setSignalsLoading(false);
+    }
+  }, [marketId]);
+
+  const loadMarketReviews = useCallback(async () => {
+    if (!marketId) {
+      setReviewsError('The market identifier is missing from the URL.');
+      setReviewsLoading(false);
+      return;
+    }
+
+    setReviewsLoading(true);
+    setReviewsError(null);
+
+    try {
+      const response = await getTradeReviews({ market: marketId, ordering: '-reviewed_at' });
+      setMarketReviews(response);
+    } catch (loadError) {
+      setMarketReviews([]);
+      setReviewsError(getErrorMessage(loadError, 'Could not load trade reviews for this market.'));
+    } finally {
+      setReviewsLoading(false);
     }
   }, [marketId]);
 
@@ -157,47 +181,28 @@ export function MarketDetailPage() {
     setPaperLoading(false);
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadPage() {
-      if (!marketId) {
-        setError('The market identifier is missing from the URL.');
-        setIsLoading(false);
-        setPaperLoading(false);
-        return;
-      }
-
-      setTradeExecutionState(null);
-
-      await Promise.all([
-        (async () => {
-          if (!isMounted) {
-            return;
-          }
-          await loadMarketDetail();
-        })(),
-        (async () => {
-          if (!isMounted) {
-            return;
-          }
-          await loadPaperContext();
-        })(),
-        (async () => {
-          if (!isMounted) {
-            return;
-          }
-          await loadMarketSignals();
-        })(),
-      ]);
+  const refreshPage = useCallback(async () => {
+    if (!marketId) {
+      setError('The market identifier is missing from the URL.');
+      setIsLoading(false);
+      setPaperLoading(false);
+      return;
     }
 
-    void loadPage();
+    await Promise.all([
+      loadMarketDetail(),
+      loadMarketSignals(),
+      loadPaperContext(),
+      loadMarketReviews(),
+    ]);
+  }, [loadMarketDetail, loadMarketReviews, loadMarketSignals, loadPaperContext, marketId]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [loadMarketDetail, loadMarketSignals, loadPaperContext, marketId]);
+  useEffect(() => {
+    setTradeExecutionState(null);
+    void refreshPage();
+  }, [refreshPage]);
+
+  useDemoFlowRefresh(refreshPage, Boolean(marketId));
 
   const handleTradeSubmit = useCallback(async (payload: CreatePaperTradePayload) => {
     setIsSubmittingTrade(true);
@@ -212,7 +217,8 @@ export function MarketDetailPage() {
       });
       setPaperAccount(response.account);
       await revaluePaperPortfolio();
-      await loadPaperContext();
+      await Promise.all([loadPaperContext(), loadMarketReviews()]);
+      publishDemoFlowRefresh('paper-trade-executed');
     } catch (submitError) {
       setTradeExecutionState({
         status: 'error',
@@ -222,14 +228,90 @@ export function MarketDetailPage() {
     } finally {
       setIsSubmittingTrade(false);
     }
-  }, [loadPaperContext]);
+  }, [loadMarketReviews, loadPaperContext]);
+
+  const openPositions = useMemo(() => (market ? getOpenPositionsForMarket(paperPositions, market.id) : []), [market, paperPositions]);
+  const latestTrade = useMemo(() => (market ? getLatestTradeForMarket(paperTrades, market.id) : null), [market, paperTrades]);
+  const latestReview = useMemo(() => (market ? getLatestReviewForMarket(marketReviews, market.id) : null), [market, marketReviews]);
+  const latestDecision = useMemo(() => {
+    const executionDecision = tradeExecutionState?.response?.trade.metadata?.risk_decision;
+    if (typeof executionDecision === 'string') {
+      return executionDecision;
+    }
+
+    return latestReview?.risk_decision_at_trade ?? null;
+  }, [latestReview?.risk_decision_at_trade, tradeExecutionState?.response?.trade.metadata]);
+
+  const workflowItems = useMemo<WorkflowStatusItem[]>(() => [
+    {
+      label: 'Signal status',
+      value: marketSignals.length > 0 ? `${marketSignals.length} signal${marketSignals.length === 1 ? '' : 's'}` : 'No signals yet',
+      helperText: marketSignals.length > 0 ? 'Recent demo signals are available directly above the trade panel.' : 'Generate demo signals to add more opportunity context to this market.',
+      tone: marketSignals.some((signal) => signal.is_actionable) ? 'ready' : 'neutral',
+      href: '/signals',
+      linkLabel: 'Open signals board',
+    },
+    {
+      label: 'Risk decision',
+      value: formatDecisionLabel(latestDecision),
+      helperText: latestDecision ? 'Latest captured risk posture for this market in the current demo flow.' : 'Run the risk check in the trade panel before executing a new paper trade.',
+      tone: latestDecision === 'APPROVE' ? 'ready' : latestDecision === 'BLOCK' ? 'warning' : 'neutral',
+    },
+    {
+      label: 'Open position',
+      value: openPositions.length > 0 ? `${openPositions.length} active lot${openPositions.length === 1 ? '' : 's'}` : 'No open position',
+      helperText: openPositions.length > 0 ? 'This market already affects the paper portfolio.' : 'A successful trade here will show up in Portfolio after execution and revalue.',
+      tone: openPositions.length > 0 ? 'ready' : 'neutral',
+      href: '/portfolio',
+      linkLabel: 'Open portfolio',
+    },
+    {
+      label: 'Latest review',
+      value: latestReview ? titleize(latestReview.outcome) : 'No review yet',
+      helperText: latestReview ? 'A post-mortem review already exists for a recent trade in this market.' : 'Generate trade reviews after executing trades to close the loop for this market.',
+      tone: latestReview ? 'ready' : 'neutral',
+      href: latestReview ? `/postmortem/${latestReview.id}` : '/postmortem',
+      linkLabel: latestReview ? 'Open latest review' : 'Open review queue',
+    },
+  ], [latestDecision, latestReview, marketSignals, openPositions.length]);
+
+  const contextLinks = useMemo<ContextLinkItem[]>(() => {
+    const links: ContextLinkItem[] = [
+      {
+        title: 'Review portfolio impact',
+        description: latestTrade ? `Latest trade #${latestTrade.id} already updated the portfolio context for this market.` : 'After executing a paper trade here, open Portfolio to inspect equity, PnL, and linked reviews.',
+        href: '/portfolio',
+        actionLabel: 'Go to portfolio',
+        tone: 'primary',
+      },
+      {
+        title: 'Inspect related signals',
+        description: marketSignals.length > 0 ? 'Open the broader signals board to compare this market against the rest of the demo queue.' : 'Signals for this market are empty right now, so you may want to generate more demo signals first.',
+        href: '/signals',
+        actionLabel: 'Open signals',
+        tone: 'secondary',
+      },
+    ];
+
+    if (latestReview) {
+      links.push({
+        title: 'Open latest post-mortem',
+        description: `Review #${latestReview.id} summarizes what happened after the most recent trade in this market.`,
+        href: `/postmortem/${latestReview.id}`,
+        actionLabel: 'View review',
+        tone: 'neutral',
+      });
+    }
+
+    return links;
+  }, [latestReview, latestTrade, marketSignals.length]);
 
   return (
     <div className="page-stack">
       <PageHeader
         eyebrow="Market detail"
         title={market?.title ?? 'Market detail'}
-        description="Inspect current market state, execute demo paper trades, review account exposure, and verify recent backend snapshots from the local API."
+        description="Inspect current market state, verify recent signals, evaluate the demo risk decision, execute a paper trade, and continue into portfolio or post-mortem from one coherent workspace."
         actions={
           <button className="secondary-button" type="button" onClick={() => navigate('/markets')}>
             Back to markets
@@ -255,6 +337,12 @@ export function MarketDetailPage() {
       >
         {market ? (
           <>
+            <WorkflowStatusPanel
+              title="Current demo workflow status"
+              description="This compact summary keeps the operational story visible: opportunity, risk posture, position state, and whether a review already exists."
+              items={workflowItems}
+            />
+
             <section className="content-grid content-grid--two-columns">
               <SectionCard
                 eyebrow="Overview"
@@ -336,12 +424,20 @@ export function MarketDetailPage() {
               </SectionCard>
             </section>
 
+            <ContextLinksPanel
+              eyebrow="Next actions"
+              title="Continue the workflow from here"
+              description="Market detail is now the operational hub of the demo flow, so these links keep the next module one click away."
+              links={contextLinks}
+            />
+
             <MarketHistoryChart snapshots={market.recent_snapshots} isLoading={isLoading} error={error} />
 
             <SectionCard
               eyebrow="Signals"
               title="Demo signals for this market"
               description="Recent local signals connect the market snapshot history above with the mock-agent opportunity layer and paper trading panel below."
+              aside={<span className="muted-text">{marketSignals.filter((signal) => signal.is_actionable).length} actionable</span>}
             >
               <DataStateWrapper
                 isLoading={signalsLoading}
@@ -352,7 +448,12 @@ export function MarketDetailPage() {
                 loadingDescription="Requesting the latest demo signals attached to this market."
                 errorTitle="Could not load market signals"
                 emptyTitle="No signals for this market yet"
-                emptyDescription="Generate demo signals with `cd apps/backend && python manage.py generate_demo_signals` to populate this section."
+                emptyDescription="Generate demo signals with `cd apps/backend && python manage.py generate_demo_signals`, then return here or open the broader Signals page."
+                action={
+                  <button className="secondary-button" type="button" onClick={() => navigate('/signals')}>
+                    Open signals workspace
+                  </button>
+                }
               >
                 <LatestSignalsList signals={marketSignals} emptyMessage="No recent demo signals for this market yet." />
               </DataStateWrapper>
@@ -361,7 +462,7 @@ export function MarketDetailPage() {
             <SectionCard
               eyebrow="Paper trading"
               title="Demo trade execution"
-              description="Review the historical snapshot trend above, then execute a local simulated buy or sell and refresh the market detail to compare how later snapshots evolve."
+              description="Review the market context above, run the risk check, execute a local simulated trade, and then continue into portfolio or post-mortem with clear next steps."
             >
               <MarketTradePanel
                 market={market}
@@ -380,8 +481,24 @@ export function MarketDetailPage() {
             </SectionCard>
 
             <section className="content-grid content-grid--two-columns">
-              <MarketRulesCard shortRules={market.short_rules} rules={market.rules} />
+              <SectionCard
+                eyebrow="Workflow outcome"
+                title="Position and review context"
+                description="Small cross-module summary so the user can immediately understand what this market already changed in the portfolio and review loop."
+              >
+                <dl className="dashboard-key-value-list">
+                  <div><dt>Open position status</dt><dd>{openPositions.length > 0 ? `${openPositions.length} open lot${openPositions.length === 1 ? '' : 's'}` : 'No open position'}</dd></div>
+                  <div><dt>Latest trade</dt><dd>{latestTrade ? `Trade #${latestTrade.id} · ${titleize(latestTrade.trade_type)} ${latestTrade.side}` : 'No trade executed yet'}</dd></div>
+                  <div><dt>Latest review</dt><dd>{latestReview ? <ReviewOutcomeBadge outcome={latestReview.outcome} status={latestReview.review_status} /> : 'No review yet'}</dd></div>
+                  <div><dt>Review queue</dt><dd>{reviewsLoading ? 'Loading reviews…' : `${marketReviews.length} review${marketReviews.length === 1 ? '' : 's'} for this market`}</dd></div>
+                </dl>
+                {reviewsError ? <p className="paper-inline-notice">Review context unavailable: {reviewsError}</p> : null}
+              </SectionCard>
 
+              <MarketRulesCard shortRules={market.short_rules} rules={market.rules} />
+            </section>
+
+            <section className="content-grid content-grid--two-columns">
               <SectionCard eyebrow="Metadata" title="Useful backend metadata" description="Operational fields that help inspect provenance and resolution details.">
                 <dl className="market-detail-list">
                   <div>
@@ -417,6 +534,41 @@ export function MarketDetailPage() {
                     <dd className="market-json-preview">{JSON.stringify(market.metadata ?? {}, null, 2)}</dd>
                   </div>
                 </dl>
+              </SectionCard>
+
+              <SectionCard
+                eyebrow="Related reviews"
+                title="Post-mortem links"
+                description="If reviews already exist for this market, use them to understand what happened after recent trades and what the demo engine learned."
+              >
+                <DataStateWrapper
+                  isLoading={reviewsLoading}
+                  isError={Boolean(reviewsError)}
+                  errorMessage={reviewsError ?? undefined}
+                  isEmpty={!reviewsLoading && !reviewsError && marketReviews.length === 0}
+                  loadingTitle="Loading market reviews"
+                  loadingDescription="Requesting related trade reviews for this market."
+                  errorTitle="Could not load market reviews"
+                  emptyTitle="No reviews linked yet"
+                  emptyDescription="Execute a paper trade, generate reviews with `cd apps/backend && python manage.py generate_trade_reviews`, and return here to close the loop."
+                  action={
+                    <button className="secondary-button" type="button" onClick={() => navigate('/postmortem')}>
+                      Open review queue
+                    </button>
+                  }
+                >
+                  <div className="table-link-stack">
+                    {marketReviews.slice(0, 3).map((review) => (
+                      <a key={review.id} href={`/postmortem/${review.id}`} className="market-link" onClick={(event) => {
+                        event.preventDefault();
+                        navigate(`/postmortem/${review.id}`);
+                      }}>
+                        <strong><ReviewOutcomeBadge outcome={review.outcome} status={review.review_status} /></strong>
+                        <span>Trade #{review.trade_id} · {review.recommendation || review.summary}</span>
+                      </a>
+                    ))}
+                  </div>
+                </DataStateWrapper>
               </SectionCard>
             </section>
 

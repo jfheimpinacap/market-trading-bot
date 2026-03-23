@@ -251,6 +251,24 @@ Each library currently contains only a README describing its intended future res
 - `docs/prompts-codex/README.md`: guidelines for future Codex-assisted tasks.
 - `docs/api/README.md`: placeholder for future API reference material.
 
+## Demo flow guide
+
+The current local demo is intended to be exercised in this order:
+
+1. open `/` to verify environment health and cross-module indicators
+2. review `/signals` or `/markets` to find a market worth inspecting
+3. open `/markets/:marketId` to review the market, run the demo risk check, and execute a paper trade
+4. open `/portfolio` to inspect the new position, trade history, equity impact, and snapshot changes
+5. open `/postmortem` to review the trade outcome and jump back to the related market or portfolio context
+
+If the local environment is empty, you may still need to run some backend demo commands first:
+
+```bash
+cd apps/backend && python manage.py seed_paper_account
+cd apps/backend && python manage.py generate_demo_signals
+cd apps/backend && python manage.py generate_trade_reviews
+```
+
 ## Helpful commands
 
 ```bash
