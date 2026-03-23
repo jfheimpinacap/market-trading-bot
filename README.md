@@ -4,8 +4,8 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 
 ## Current scope
 
-- **Frontend:** React + Vite + TypeScript application shell with dashboard, navigation, and local backend health visibility.
-- **Backend:** Django + Django REST Framework scaffold with `GET /api/health/`.
+- **Frontend:** React + Vite + TypeScript local-first operator workspace with dashboard, markets, signals, risk, policy approval flow, paper trading, portfolio, post-mortem, automation, and system views.
+- **Backend:** Django + Django REST Framework modular API with markets demo, signals demo, risk demo, policy engine demo, paper trading, post-mortem, automation, and health endpoints.
 - **Infrastructure:** Docker Compose services for PostgreSQL and Redis.
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
 
@@ -13,7 +13,7 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 
 - Real market provider integrations.
 - Authentication or user management.
-- Trading or execution logic.
+- Real trading or provider execution logic.
 - ML, forecasting models, or agent orchestration.
 - Production deployment configuration.
 
@@ -321,3 +321,17 @@ Out of scope by design:
 - websockets
 - autonomous agents
 - real provider integrations
+
+## Current end-to-end demo flow
+
+The monorepo now supports a local-first demo workflow that looks like this:
+
+`market -> signal -> risk -> policy -> trade -> portfolio -> review -> automation`
+
+A new policy engine / approval rules layer now governs proposed demo trades before execution. It returns one of three explicit outcomes:
+
+- `AUTO_APPROVE`
+- `APPROVAL_REQUIRED`
+- `HARD_BLOCK`
+
+This layer is intentionally deterministic and auditable. It does **not** use ML, real providers, autonomous agents, or live auto-trading.

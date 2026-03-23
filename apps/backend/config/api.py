@@ -10,4 +10,5 @@ urlpatterns = [
     path('agents/', include(('apps.agents.urls', 'agents'), namespace='agents')),
     path('audit/', include(('apps.audit.urls', 'audit'), namespace='audit')),
     path('automation/', include(('apps.automation_demo.urls', 'automation_demo'), namespace='automation_demo')),
+    path('policy/', include(('apps.policy_engine.urls', 'policy_engine'), namespace='policy_engine')),
 ]

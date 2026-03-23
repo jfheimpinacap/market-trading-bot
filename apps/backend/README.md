@@ -47,6 +47,7 @@ apps/backend/
 - `apps.postmortem_demo`: demo-only trade review layer that generates post-trade reviews for executed paper trades using deterministic heuristics.
 - `apps.agents`: placeholder app for future agent domain work.
 - `apps.audit`: placeholder app for future audit and post-mortem work.
+- `apps.policy_engine`: demo-only operational approval layer that translates trade context into `AUTO_APPROVE`, `APPROVAL_REQUIRED`, or `HARD_BLOCK`.
 
 ## Markets app summary
 The `apps.markets` app now provides a practical local catalog for prediction-market development without adding trading workflows or provider integrations.
@@ -113,6 +114,34 @@ Out of scope by design:
 - VaR / Kelly / auto-sizing
 - broker or provider integrations
 - automatic trade execution
+
+## Policy engine demo app summary
+The `apps.policy_engine` app adds the missing governance layer between analytical risk and paper trade execution.
+
+Current policy engine model:
+- `ApprovalDecision`
+
+Current policy engine workflow:
+- evaluate a proposed trade via `POST /api/policy/evaluate-trade/`
+- persist the approval decision together with matched rules, rationale, recommendation, and linked risk/signal context
+- translate `risk_demo` output into an operational decision instead of duplicating risk logic
+- reuse paper account exposure, market operability, and automation thresholds as deterministic governance rules
+
+Current policy engine endpoints:
+- `/api/policy/evaluate-trade/`
+- `/api/policy/decisions/`
+- `/api/policy/summary/`
+
+Operational decisions returned today:
+- `AUTO_APPROVE`
+- `APPROVAL_REQUIRED`
+- `HARD_BLOCK`
+
+Out of scope by design:
+- multi-user approval queues
+- autonomous execution
+- ML-based policy scoring
+- push notifications or realtime approval routing
 
 ## Signals app summary
 The `apps.signals` app adds the first demo-only bridge between market simulation, paper trading, and future automation architecture.
