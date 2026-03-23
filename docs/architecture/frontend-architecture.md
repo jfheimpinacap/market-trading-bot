@@ -10,6 +10,7 @@ The frontend is a local-first operator workspace for `market-trading-bot`. In th
 4. present a useful dashboard powered by real local demo data
 5. provide a technical System page for inspecting local runtime context and observable simulation activity
 6. provide a paper trading Portfolio page for inspecting the local demo account, positions, trades, and snapshots
+7. provide a market-detail paper trading entry flow so a user can execute a local simulated trade directly from `/markets/:marketId`
 
 This phase intentionally excludes authentication, real trading logic, market integrations, websockets, and advanced data visualization.
 
@@ -89,6 +90,19 @@ The `/portfolio` route extends the same local-first pattern without introducing 
 
 This keeps the Portfolio page useful for operators while still avoiding trading forms, streaming updates, and heavier state-management dependencies.
 
+### Market detail paper trading
+
+The `/markets/:marketId` route now extends the same pattern to support the first actionable paper trading flow:
+
+- reuses `services/paperTrading.ts` instead of introducing a second API client
+- executes demo trades through `POST /api/paper/trades/`
+- reads `GET /api/paper/account/`, `GET /api/paper/summary/`, `GET /api/paper/positions/`, and `GET /api/paper/trades/` to render account context and current exposure for that market
+- triggers `POST /api/paper/revalue/` after a successful execution and then refreshes the market-local paper context
+- keeps the UX intentionally simple: trade type, side, quantity, estimated cost, visible result state, and a link to `/portfolio`
+- avoids websockets, global client state, exchange-style order books, and advanced order-entry concepts
+
+This keeps market detail actionable without turning the current frontend into a heavy trading terminal.
+
 ## UI principles for this stage
 
 - sober, readable visual design
@@ -98,6 +112,7 @@ This keeps the Portfolio page useful for operators while still avoiding trading 
 - local-first configuration visibility
 - real data in the dashboard and system panel before introducing advanced analytics
 - section-level failure isolation so one broken endpoint does not collapse the entire page
+- market-local actionability: when a route becomes interactive, keep the control surface near the read context it depends on
 
 ## Planned evolution
 

@@ -48,6 +48,11 @@ El frontend incluye un módulo `Markets` funcional, conectado al backend Django 
 - tabla desktop-first con navegación al detalle
 - página `/markets/:marketId` con:
   - resumen principal del market
+  - panel de **paper trading demo** integrado al detalle para ejecutar `BUY` y `SELL` de lados `YES` / `NO` contra la cuenta paper local
+  - formulario simple con validaciones básicas de quantity, side y trade type
+  - contexto útil de trading demo: cash disponible, equity, open positions, posición actual en ese market y últimas ejecuciones en ese market
+  - feedback visible de éxito/error después de ejecutar un trade
+  - CTA rápida hacia `/portfolio` para verificar el impacto del trade
   - reglas (`short_rules` + `rules`)
   - snapshots recientes (`recent_snapshots`)
   - metadata útil para inspección
@@ -110,6 +115,9 @@ La página `/system` no agrega endpoints nuevos. Toda la evidencia de actividad 
 - `GET /api/markets/events/`
 - `GET /api/markets/`
 - `GET /api/markets/<id>/`
+- `POST /api/paper/trades/` desde `/markets/:marketId` para la ejecución demo del trade
+- `GET /api/paper/account/`, `GET /api/paper/positions/`, `GET /api/paper/trades/` y `GET /api/paper/summary/` para contexto de cuenta y exposición en el panel
+- `POST /api/paper/revalue/` después de una ejecución exitosa para volver a sincronizar el portfolio visible
 
 ### Portfolio / paper trading
 
@@ -259,6 +267,47 @@ La app normalmente quedará disponible en la URL que imprima Vite, por ejemplo:
 ```text
 http://localhost:5173
 ```
+
+## Cómo probar el flujo de paper trading desde market detail
+
+1. Levanta backend y frontend con cualquiera de los flujos anteriores.
+2. Asegúrate de haber sembrado markets y la cuenta demo:
+
+```bash
+cd apps/backend
+python manage.py migrate
+python manage.py seed_markets_demo
+python manage.py seed_paper_account
+python manage.py runserver
+```
+
+3. Abre el frontend y entra en `/markets`.
+4. Selecciona cualquier market abierto y navega a `/markets/:marketId`.
+5. En el panel **Demo trade execution**:
+   - elige `BUY` o `SELL`
+   - elige `YES` o `NO`
+   - ingresa una cantidad mayor que `0`
+   - ejecuta el trade demo
+6. El panel enviará el trade a:
+
+```text
+POST /api/paper/trades/
+```
+
+7. Después del éxito, el frontend refresca el contexto paper del market detail y muestra:
+   - mensaje de resultado
+   - cash/equity actualizados
+   - posición actual en ese market
+   - últimas ejecuciones de ese market
+8. Luego entra en `/portfolio` para confirmar el impacto en:
+   - account summary
+   - open positions
+   - trade history
+
+Notas útiles:
+
+- la UI solo estima el costo usando el precio actual visible del market; el backend sigue siendo la fuente de verdad de la ejecución demo
+- no hay trading real, brokers reales, websockets ni autenticación en esta etapa
 
 ## Cómo verificar visualmente que `/system` funciona
 

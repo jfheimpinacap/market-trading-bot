@@ -1,5 +1,7 @@
 import { requestJson } from './api/client';
 import type {
+  CreatePaperTradePayload,
+  CreatePaperTradeResponse,
   PaperAccount,
   PaperPortfolioSnapshot,
   PaperPortfolioSummary,
@@ -17,6 +19,13 @@ export function getPaperPositions() {
 
 export function getPaperTrades() {
   return requestJson<PaperTrade[]>('/api/paper/trades/');
+}
+
+export function createPaperTrade(payload: CreatePaperTradePayload) {
+  return requestJson<CreatePaperTradeResponse>('/api/paper/trades/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export function getPaperSummary() {
