@@ -10,8 +10,10 @@ import { MarketSnapshotsTable } from '../../components/markets/MarketSnapshotsTa
 import { MarketStatusBadge } from '../../components/markets/MarketStatusBadge';
 import { formatCompactCurrency, formatDateTime, formatNumber, titleize } from '../../components/markets/utils';
 import { SectionCard } from '../../components/SectionCard';
+import { LatestSignalsList } from '../../components/signals/LatestSignalsList';
 import { navigate, usePathname } from '../../lib/router';
 import { getMarketDetail } from '../../services/markets';
+import { getSignals } from '../../services/signals';
 import {
   createPaperTrade,
   getPaperAccount,
@@ -21,6 +23,7 @@ import {
   revaluePaperPortfolio,
 } from '../../services/paperTrading';
 import type { MarketDetail } from '../../types/markets';
+import type { MarketSignal } from '../../types/signals';
 import type {
   CreatePaperTradePayload,
   PaperAccount,
@@ -46,6 +49,10 @@ export function MarketDetailPage() {
   const [market, setMarket] = useState<MarketDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [marketSignals, setMarketSignals] = useState<MarketSignal[]>([]);
+  const [signalsLoading, setSignalsLoading] = useState(true);
+  const [signalsError, setSignalsError] = useState<string | null>(null);
 
   const [paperAccount, setPaperAccount] = useState<PaperAccount | null>(null);
   const [paperSummary, setPaperSummary] = useState<PaperPortfolioSummary | null>(null);
@@ -74,6 +81,28 @@ export function MarketDetailPage() {
       setError(getErrorMessage(loadError, 'Could not load market detail.'));
     } finally {
       setIsLoading(false);
+    }
+  }, [marketId]);
+
+
+  const loadMarketSignals = useCallback(async () => {
+    if (!marketId) {
+      setSignalsError('The market identifier is missing from the URL.');
+      setSignalsLoading(false);
+      return;
+    }
+
+    setSignalsLoading(true);
+    setSignalsError(null);
+
+    try {
+      const response = await getSignals({ market: marketId, ordering: '-created_at' });
+      setMarketSignals(response.slice(0, 3));
+    } catch (loadError) {
+      setMarketSignals([]);
+      setSignalsError(getErrorMessage(loadError, 'Could not load demo signals for this market.'));
+    } finally {
+      setSignalsLoading(false);
     }
   }, [marketId]);
 
@@ -154,6 +183,12 @@ export function MarketDetailPage() {
           }
           await loadPaperContext();
         })(),
+        (async () => {
+          if (!isMounted) {
+            return;
+          }
+          await loadMarketSignals();
+        })(),
       ]);
     }
 
@@ -162,7 +197,7 @@ export function MarketDetailPage() {
     return () => {
       isMounted = false;
     };
-  }, [loadMarketDetail, loadPaperContext, marketId]);
+  }, [loadMarketDetail, loadMarketSignals, loadPaperContext, marketId]);
 
   const handleTradeSubmit = useCallback(async (payload: CreatePaperTradePayload) => {
     setIsSubmittingTrade(true);
@@ -302,6 +337,26 @@ export function MarketDetailPage() {
             </section>
 
             <MarketHistoryChart snapshots={market.recent_snapshots} isLoading={isLoading} error={error} />
+
+            <SectionCard
+              eyebrow="Signals"
+              title="Demo signals for this market"
+              description="Recent local signals connect the market snapshot history above with the mock-agent opportunity layer and paper trading panel below."
+            >
+              <DataStateWrapper
+                isLoading={signalsLoading}
+                isError={Boolean(signalsError)}
+                errorMessage={signalsError ?? undefined}
+                isEmpty={!signalsLoading && !signalsError && marketSignals.length === 0}
+                loadingTitle="Loading market signals"
+                loadingDescription="Requesting the latest demo signals attached to this market."
+                errorTitle="Could not load market signals"
+                emptyTitle="No signals for this market yet"
+                emptyDescription="Generate demo signals with `cd apps/backend && python manage.py generate_demo_signals` to populate this section."
+              >
+                <LatestSignalsList signals={marketSignals} emptyMessage="No recent demo signals for this market yet." />
+              </DataStateWrapper>
+            </SectionCard>
 
             <SectionCard
               eyebrow="Paper trading"

@@ -16,6 +16,7 @@ The backend is a local-first Django service inside the monorepo. Its current res
 - `apps.health`: lightweight environment-oriented health endpoint.
 - `apps.markets`: provider-agnostic prediction-market catalog with providers, events, markets, historical snapshots, rules, demo seed data, local simulation engine, admin tooling, and read-only endpoints for local UI work.
 - `apps.paper_trading`: demo-only portfolio domain with virtual cash, positions, trades, portfolio snapshots, execution services, valuation services, admin tooling, and simple DRF endpoints.
+- `apps.signals`: demo-only signals domain with mock agents, signal runs, heuristic generation, admin tooling, and read-only DRF endpoints.
 - `apps.agents`: reserved for later agent orchestration work.
 - `apps.audit`: reserved for later audit and post-mortem persistence.
 
@@ -46,6 +47,23 @@ Service split:
 - `services/portfolio.py`: ensure the demo account exists, assemble summary payloads, and persist snapshots
 
 This keeps trade logic out of views and avoids overloading model methods while staying simple enough for the current single-demo-account stage.
+
+
+## Signals domain shape
+The new `apps.signals` app intentionally sits between `apps.markets` and future automation work.
+
+Core relationships:
+- `MockAgent` represents a demo analysis role such as scan, prediction, research, or risk.
+- `MarketSignal` attaches an explainable demo signal to one `Market` and optionally one `MockAgent`.
+- `SignalRun` records each local generation pass so later system pages or admin tooling can inspect run history.
+
+Current heuristics:
+- compare current market probability against a simple baseline from recent snapshots
+- detect fast local moves and extreme probabilities
+- reduce actionability when spread is wide, activity is thin, or the market is paused/terminal
+- keep score and confidence deterministic so local behavior is reproducible
+
+This is intentionally not a real prediction engine, risk engine, or autonomous agent system. It is a local-first demo layer that prepares stable boundaries for later evolution.
 
 ## Local demo-data strategy
 The current stage is designed to make the system feel alive locally without real external integrations.
@@ -94,6 +112,7 @@ The simulation layer is deliberately small and service-oriented:
 - Market endpoints are read-only and currently optimized for local catalog browsing.
 - Paper trading endpoints are intentionally simple and assume a single active demo account by default.
 - Market list and detail serializers intentionally differ so that lists stay lightweight while detail views include rules and recent snapshots.
+- Signals endpoints are read-only and intentionally simple, with manual filtering and ordering instead of heavier query infrastructure.
 
 ## Admin strategy
 The admin is being treated as a practical local operations console.

@@ -11,6 +11,7 @@ The frontend is a local-first operator workspace for `market-trading-bot`. In th
 5. provide a technical System page for inspecting local runtime context and observable simulation activity
 6. provide a paper trading Portfolio page for inspecting the local demo account, positions, trades, and snapshots
 7. provide a market-detail paper trading entry flow so a user can execute a local simulated trade directly from `/markets/:marketId`
+8. surface demo signals and mock-agent output as a bridge between markets, paper trading, and future automation
 
 This phase intentionally excludes authentication, real trading logic, market integrations, websockets, and advanced data visualization beyond a simple snapshot-based line chart in market detail.
 
@@ -78,6 +79,19 @@ The `/system` route follows the same rule set:
 
 This keeps the System page technical and useful while preserving the local-first architecture.
 
+
+### Signals page and integrations
+
+The `/signals` route now follows the same local-first strategy:
+
+- uses `services/signals.ts` as the single integration point for the signals API
+- keeps contracts in `types/signals.ts`
+- loads summary, agent registry, and filtered signal rows without introducing a parallel client or global state library
+- reuses existing `PageHeader`, `SectionCard`, `DashboardStatGrid`, `DataStateWrapper`, and table styling patterns
+- exposes a compact latest-signals block on the dashboard and a market-scoped signals section inside `/markets/:marketId`
+
+This keeps signals understandable as a demo insight queue instead of prematurely building a complex analyst workstation.
+
 ### Portfolio page
 
 The `/portfolio` route extends the same local-first pattern without introducing new client infrastructure:
@@ -117,6 +131,7 @@ This keeps market detail actionable without turning the current frontend into a 
 - real data in the dashboard and system panel before introducing advanced analytics
 - section-level failure isolation so one broken endpoint does not collapse the entire page
 - market-local actionability: when a route becomes interactive, keep the control surface near the read context it depends on
+- signals should read as explicit demo heuristics, not as implied real financial intelligence or autonomous advice
 
 ## Planned evolution
 

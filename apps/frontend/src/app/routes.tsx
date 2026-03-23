@@ -39,7 +39,7 @@ export const appRoutes: AppRoute[] = [
   {
     label: 'Signals',
     path: '/signals',
-    description: 'Signal generation workspace for future decision support.',
+    description: 'Demo signals workspace for mock-agent insights, scored opportunities, and local heuristics.',
     component: SignalsPage,
   },
   {

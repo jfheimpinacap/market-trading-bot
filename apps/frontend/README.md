@@ -61,6 +61,20 @@ El frontend incluye un módulo `Markets` funcional, conectado al backend Django 
 - capa de servicios tipada en `src/services/markets.ts`
 - tipos compartidos en `src/types/markets.ts`
 
+
+## Qué hace ahora la página `/signals`
+
+La ruta `/signals` ya es una vista real para explorar señales demo generadas localmente con mock agents.
+
+### Implementado en `/signals`
+
+- summary cards usando `GET /api/signals/summary/`
+- filtros simples por market, agent, signal type, status, direction y actionability
+- tabla desktop-first con headline, market, agent, direction, status, score, confidence y edge
+- empty state que sugiere ejecutar `python manage.py generate_demo_signals`
+- integración ligera con Dashboard y con `/markets/:marketId` para mostrar señales recientes por market
+- manejo de loading, error total y empty state
+
 ## Estructura interna
 
 ```text
@@ -86,7 +100,7 @@ apps/frontend/src/
 - `/` — Dashboard operativo local
 - `/markets` — Markets explorer
 - `/markets/:marketId` — Market detail
-- `/signals` — Signals placeholder
+- `/signals` — Demo signals workspace
 - `/agents` — Agents placeholder
 - `/portfolio` — Paper trading portfolio summary
 - `/postmortem` — Post-Mortem placeholder
@@ -100,6 +114,7 @@ apps/frontend/src/
 - `GET /api/health/`
 - `GET /api/markets/system-summary/`
 - `GET /api/markets/` (solo para una muestra liviana de markets recientes)
+- `GET /api/signals/summary/` y `GET /api/signals/` para el bloque corto de señales recientes
 
 ### System page
 
@@ -109,6 +124,15 @@ apps/frontend/src/
 
 La página `/system` no agrega endpoints nuevos. Toda la evidencia de actividad se infiere comparando respuestas reales ya disponibles.
 
+### Signals module
+
+- `GET /api/signals/summary/`
+- `GET /api/signals/agents/`
+- `GET /api/signals/`
+- `GET /api/signals/<id>/`
+
+La UI no genera señales desde el navegador en esta etapa. La generación principal sigue en management commands del backend.
+
 ### Markets module
 
 - `GET /api/markets/system-summary/`
@@ -116,6 +140,7 @@ La página `/system` no agrega endpoints nuevos. Toda la evidencia de actividad 
 - `GET /api/markets/events/`
 - `GET /api/markets/`
 - `GET /api/markets/<id>/` para header, reglas, metadata, paper trading context local y chart histórico basado en `recent_snapshots`
+- `GET /api/signals/?market=<id>` para mostrar 1 a 3 señales demo recientes dentro del market detail
 - `POST /api/paper/trades/` desde `/markets/:marketId` para la ejecución demo del trade
 - `GET /api/paper/account/`, `GET /api/paper/positions/`, `GET /api/paper/trades/` y `GET /api/paper/summary/` para contexto de cuenta y exposición en el panel
 - `POST /api/paper/revalue/` después de una ejecución exitosa para volver a sincronizar el portfolio visible
