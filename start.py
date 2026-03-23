@@ -10,6 +10,9 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
+import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -77,6 +80,15 @@ DEFAULT_PORTS = {
     'postgres': 5432,
     'redis': 6379,
 }
+STARTUP_TIMEOUTS = {
+    'backend_http': 60.0,
+    'frontend_http': 60.0,
+    'postgres_port': 45.0,
+    'redis_port': 30.0,
+}
+DEFAULT_BROWSER_OPEN = True
+DEFAULT_STARTUP_MODE = 'single-console'
+DEFAULT_BROWSER_URL = f"http://localhost:{DEFAULT_PORTS['frontend']}/system"
 
 
 def info(message: str) -> None:
@@ -535,6 +547,90 @@ def wait_for_port(host: str, port: int, *, timeout: float, label: str) -> None:
     fail(f'Timed out waiting for {label} on {host}:{port}.')
 
 
+def http_ready(url: str, *, timeout: float = 2.0) -> bool:
+    request = urllib.request.Request(url, method='GET')
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return 200 <= response.status < 500
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError):
+        return False
+
+
+def wait_for_http(url: str, *, timeout: float, label: str) -> None:
+    info(f'Waiting for {label} at {url}...')
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if http_ready(url):
+            ok(f'{label} is responding at {url}.')
+            return
+        time.sleep(1)
+    fail(
+        f'Timed out waiting for {label} at {url}. '
+        f'Check the launcher logs under {launcher_log_dir()} and run `python start.py status` for more details.'
+    )
+
+
+def open_browser(url: str, *, enabled: bool) -> bool:
+    if not enabled:
+        info('Browser auto-open is disabled by flag.')
+        return False
+
+    try:
+        opened = webbrowser.open(url, new=2)
+    except webbrowser.Error as exc:
+        warn(f'Could not open the browser automatically: {exc}')
+        return False
+
+    if opened:
+        ok(f'Browser opened: {url}')
+    else:
+        warn(f'Browser could not be opened automatically. Open this URL manually: {url}')
+    return opened
+
+
+def print_launcher_summary(
+    *,
+    backend_started: bool,
+    frontend_started: bool,
+    browser_url: str,
+    browser_opened: bool,
+    root_env: dict[str, str] | None = None,
+) -> None:
+    if root_env is None:
+        root_env = parse_env_file(PATHS.root_env)
+
+    frontend_port = DEFAULT_PORTS['frontend']
+    backend_port = DEFAULT_PORTS['backend']
+
+    print('\n=== Launcher summary ===')
+    print(f"Backend ready:   {'yes' if backend_started else 'skipped'}")
+    print(f"Frontend ready:  {'yes' if frontend_started else 'skipped'}")
+    print(f"Browser opened:  {'yes' if browser_opened else 'no'}")
+    print('System available at:')
+    if frontend_started:
+        print(f'  - http://localhost:{frontend_port}/')
+        print(f'  - http://localhost:{frontend_port}/system')
+        print(f'  - http://localhost:{frontend_port}/markets')
+    if backend_started:
+        print(f'  - http://localhost:{backend_port}/api/health/')
+        print(f'  - http://localhost:{backend_port}/admin/')
+    print('Stop with:')
+    if os.name == 'nt':
+        print('  - py start.py down')
+    else:
+        print('  - python start.py down')
+
+    if not browser_opened and frontend_started:
+        print(f'Browser target:  {browser_url}')
+
+    postgres_port = int(root_env.get('POSTGRES_PORT', DEFAULT_PORTS['postgres']))
+    redis_port = int(root_env.get('REDIS_PORT', DEFAULT_PORTS['redis']))
+    print('')
+    print('Infra ports:')
+    print(f'  - PostgreSQL: {postgres_port}')
+    print(f'  - Redis:      {redis_port}')
+
+
 def start_infrastructure(paths: ProjectPaths, compose_command: Sequence[str]) -> None:
     root_env = parse_env_file(paths.root_env)
     postgres_port = int(root_env.get('POSTGRES_PORT', DEFAULT_PORTS['postgres']))
@@ -542,8 +638,8 @@ def start_infrastructure(paths: ProjectPaths, compose_command: Sequence[str]) ->
 
     info('Starting PostgreSQL and Redis with Docker Compose...')
     run_command([*compose_command, 'up', '-d', 'postgres', 'redis'], cwd=paths.root)
-    wait_for_port('127.0.0.1', postgres_port, timeout=45, label='PostgreSQL')
-    wait_for_port('127.0.0.1', redis_port, timeout=30, label='Redis')
+    wait_for_port('127.0.0.1', postgres_port, timeout=STARTUP_TIMEOUTS['postgres_port'], label='PostgreSQL')
+    wait_for_port('127.0.0.1', redis_port, timeout=STARTUP_TIMEOUTS['redis_port'], label='Redis')
 
 
 def stop_infrastructure(paths: ProjectPaths, compose_command: Sequence[str] | None) -> None:
@@ -631,14 +727,117 @@ def process_kwargs(new_console: bool = False) -> dict[str, Any]:
     return kwargs
 
 
-def write_state_file(processes: list[dict[str, Any]]) -> None:
+def launcher_log_dir() -> Path:
+    return PATHS.state_dir / 'logs'
+
+
+def load_state_file() -> dict[str, Any]:
+    if not PATHS.state_file.exists():
+        return {}
+    try:
+        return json.loads(PATHS.state_file.read_text(encoding='utf-8'))
+    except json.JSONDecodeError:
+        warn(f'Launcher state file is invalid JSON and will be ignored: {PATHS.state_file}')
+        return {}
+
+
+def process_running(pid: int | None) -> bool:
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def running_process_entries(processes: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [process for process in processes if process_running(process.get('pid'))]
+
+
+def cleanup_state_file() -> dict[str, Any]:
+    state = load_state_file()
+    if not state:
+        return {}
+
+    processes = state.get('processes', [])
+    running = running_process_entries(processes)
+    if running:
+        if len(running) != len(processes):
+            state['processes'] = running
+            write_state_file(
+                running,
+                startup_mode=state.get('startup_mode', DEFAULT_STARTUP_MODE),
+                browser_auto_open=state.get('browser_auto_open', DEFAULT_BROWSER_OPEN),
+                browser_url=state.get('browser_url', DEFAULT_BROWSER_URL),
+                metadata=state.get('metadata'),
+            )
+        return state
+
+    remove_state_file()
+    return {}
+
+
+def write_state_file(
+    processes: list[dict[str, Any]],
+    *,
+    startup_mode: str,
+    browser_auto_open: bool,
+    browser_url: str,
+    metadata: dict[str, Any] | None = None,
+) -> None:
     PATHS.state_dir.mkdir(parents=True, exist_ok=True)
-    PATHS.state_file.write_text(json.dumps({'processes': processes}, indent=2), encoding='utf-8')
+    state = {
+        'processes': processes,
+        'startup_mode': startup_mode,
+        'browser_auto_open': browser_auto_open,
+        'browser_url': browser_url,
+        'metadata': metadata or {},
+    }
+    PATHS.state_file.write_text(json.dumps(state, indent=2), encoding='utf-8')
 
 
 def remove_state_file() -> None:
     if PATHS.state_file.exists():
         PATHS.state_file.unlink()
+
+
+def ensure_no_running_launcher_processes() -> None:
+    state = cleanup_state_file()
+    running = running_process_entries(state.get('processes', []))
+    if not running:
+        return
+
+    labels = ', '.join(process.get('label', 'process') for process in running)
+    fail(
+        'Launcher-managed services are already running '
+        f'({labels}). Stop them first with `python start.py down`, '
+        'or use `python start.py status` to inspect the current state.'
+    )
+
+
+def detached_process_kwargs(log_file: Path) -> dict[str, Any]:
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    stream = open(log_file, 'a', encoding='utf-8')
+    kwargs: dict[str, Any] = {
+        'text': True,
+        'stdout': stream,
+        'stderr': subprocess.STDOUT,
+        'stdin': subprocess.DEVNULL,
+    }
+    if os.name == 'nt':
+        kwargs['creationflags'] = (
+            subprocess.CREATE_NEW_PROCESS_GROUP
+            | subprocess.DETACHED_PROCESS
+            | subprocess.CREATE_NO_WINDOW
+        )
+    else:
+        kwargs['start_new_session'] = True
+    return kwargs
 
 
 def spawn_process(label: str, command: Sequence[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.Popen[str]:
@@ -649,6 +848,30 @@ def spawn_process(label: str, command: Sequence[str], cwd: Path, env: dict[str, 
         env=subprocess_env(env),
         **process_kwargs(),
     )
+
+
+def spawn_detached_process(
+    label: str,
+    command: Sequence[str],
+    cwd: Path,
+    *,
+    env: dict[str, str] | None = None,
+    log_name: str | None = None,
+) -> tuple[subprocess.Popen[str], Path]:
+    log_path = launcher_log_dir() / (log_name or f'{label.replace(" ", "-")}.log')
+    kwargs = detached_process_kwargs(log_path)
+    stdout_stream = kwargs['stdout']
+    info(f"Starting {label} in detached mode: {' '.join(str(part) for part in command)}")
+    try:
+        process = subprocess.Popen(
+            [str(part) for part in command],
+            cwd=cwd,
+            env=subprocess_env(env),
+            **kwargs,
+        )
+    finally:
+        stdout_stream.close()
+    return process, log_path
 
 
 def open_new_console_windows(process_specs: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -679,12 +902,17 @@ def open_new_console_windows(process_specs: Sequence[dict[str, Any]]) -> list[di
 
 
 def stop_managed_processes() -> None:
-    if not PATHS.state_file.exists():
+    state = load_state_file()
+    if not state:
         warn('No launcher-managed process state file was found.')
         return
 
-    state = json.loads(PATHS.state_file.read_text(encoding='utf-8'))
-    for process in state.get('processes', []):
+    stop_process_entries(state.get('processes', []))
+    remove_state_file()
+
+
+def stop_process_entries(processes: Sequence[dict[str, Any]]) -> None:
+    for process in processes:
         pid = process.get('pid')
         label = process.get('label', 'process')
         if not pid:
@@ -705,7 +933,6 @@ def stop_managed_processes() -> None:
             warn(f'{label} (pid {pid}) was already stopped.')
         except PermissionError:
             warn(f'Permission denied while stopping {label} (pid {pid}).')
-    remove_state_file()
 
 
 def print_urls(root_env: dict[str, str] | None = None) -> None:
@@ -728,6 +955,38 @@ def print_urls(root_env: dict[str, str] | None = None) -> None:
     print(f'Frontend: {frontend_port}')
     print(f'Postgres: {postgres_port}')
     print(f'Redis:    {redis_port}')
+
+
+def service_urls() -> dict[str, str]:
+    return {
+        'backend_health': f"http://localhost:{DEFAULT_PORTS['backend']}/api/health/",
+        'frontend_root': f"http://localhost:{DEFAULT_PORTS['frontend']}/",
+        'frontend_system': DEFAULT_BROWSER_URL,
+        'frontend_markets': f"http://localhost:{DEFAULT_PORTS['frontend']}/markets",
+    }
+
+
+def launcher_status_snapshot(paths: ProjectPaths) -> dict[str, Any]:
+    state = cleanup_state_file()
+    processes = state.get('processes', [])
+    labels = {process.get('label'): process for process in processes}
+    root_env_values = parse_env_file(paths.root_env)
+    postgres_port = int(root_env_values.get('POSTGRES_PORT', DEFAULT_PORTS['postgres']))
+    redis_port = int(root_env_values.get('REDIS_PORT', DEFAULT_PORTS['redis']))
+    urls = service_urls()
+
+    return {
+        'state': state,
+        'backend_process_running': process_running(labels.get('backend', {}).get('pid')),
+        'frontend_process_running': process_running(labels.get('frontend', {}).get('pid')),
+        'sim_loop_running': process_running(labels.get('simulation loop', {}).get('pid')),
+        'infra_running': port_open('127.0.0.1', postgres_port) and port_open('127.0.0.1', redis_port),
+        'backend_health_ready': http_ready(urls['backend_health']),
+        'frontend_ready': http_ready(urls['frontend_root']),
+        'postgres_port': postgres_port,
+        'redis_port': redis_port,
+        'urls': urls,
+    }
 
 
 def backend_run_command(paths: ProjectPaths) -> list[str]:
@@ -779,36 +1038,65 @@ def build_dev_process_specs(
     return process_specs
 
 
-def start_dev_servers(process_specs: Sequence[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[tuple[str, subprocess.Popen[str]]]]:
-    if os.name == 'nt':
+def start_dev_servers(
+    process_specs: Sequence[dict[str, Any]],
+    *,
+    startup_mode: str,
+    browser_auto_open: bool,
+    browser_url: str,
+) -> list[dict[str, Any]]:
+    if startup_mode == 'separate-windows':
         launched = open_new_console_windows(process_specs)
-        write_state_file(launched)
-        return launched, []
-
-    processes: list[dict[str, Any]] = []
-    live_processes: list[tuple[str, subprocess.Popen[str]]] = []
-    for spec in process_specs:
-        process = spawn_process(spec['label'], spec['command'], spec['cwd'], env=spec.get('env'))
-        live_processes.append((spec['label'], process))
-        processes.append(
-            {
-                'label': spec['label'],
-                'pid': process.pid,
-                'command': ' '.join(str(part) for part in spec['command']),
-                'cwd': str(spec['cwd']),
-                'mode': 'background-process',
-            }
+        write_state_file(
+            launched,
+            startup_mode=startup_mode,
+            browser_auto_open=browser_auto_open,
+            browser_url=browser_url,
         )
-    write_state_file(processes)
-    return processes, live_processes
+        return launched
+
+    launched: list[dict[str, Any]] = []
+    try:
+        for spec in process_specs:
+            process, log_path = spawn_detached_process(
+                spec['label'],
+                spec['command'],
+                spec['cwd'],
+                env=spec.get('env'),
+                log_name=spec.get('log_name'),
+            )
+            launched.append(
+                {
+                    'label': spec['label'],
+                    'pid': process.pid,
+                    'command': ' '.join(str(part) for part in spec['command']),
+                    'cwd': str(spec['cwd']),
+                    'mode': 'detached-process',
+                    'log_file': str(log_path),
+                }
+            )
+    except Exception:
+        stop_process_entries(launched)
+        raise
+    write_state_file(
+        launched,
+        startup_mode=startup_mode,
+        browser_auto_open=browser_auto_open,
+        browser_url=browser_url,
+    )
+    return launched
 
 
 def command_up(args: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
-    prereqs = verify_prerequisites(require_node=not args.skip_frontend, require_docker=True)
+    ensure_no_running_launcher_processes()
+    prereqs = verify_prerequisites(require_node=not args.skip_frontend, require_docker=not args.skip_infra)
     ensure_env_files()
-    start_infrastructure(paths, prereqs['docker_compose'])
+    if not args.skip_infra:
+        start_infrastructure(paths, prereqs['docker_compose'])
+    else:
+        warn('Skipping infrastructure startup because --skip-infra was used.')
 
     try:
         prepare_dev_environment(
@@ -830,33 +1118,56 @@ def command_up(args: argparse.Namespace) -> int:
             with_sim_loop=args.with_sim_loop and include_backend,
         )
 
+        startup_mode = 'separate-windows' if args.separate_windows else DEFAULT_STARTUP_MODE
+        browser_url = DEFAULT_BROWSER_URL
         started_processes: list[dict[str, Any]] = []
-        live_processes: list[tuple[str, subprocess.Popen[str]]] = []
         if process_specs:
-            started_processes, live_processes = start_dev_servers(process_specs)
+            started_processes = start_dev_servers(
+                process_specs,
+                startup_mode=startup_mode,
+                browser_auto_open=not args.no_browser,
+                browser_url=browser_url,
+            )
         else:
             warn('Both backend and frontend startup were skipped; nothing was started.')
 
-        print_urls()
-        if os.name == 'nt' and started_processes:
-            ok('Windows mode: backend/frontend were launched in separate console windows.')
-            info('Use `python start.py down` from the repo root to stop launcher-managed processes and Docker services.')
-            return 0
-
+        urls = service_urls()
+        if include_backend:
+            wait_for_http(
+                urls['backend_health'],
+                timeout=STARTUP_TIMEOUTS['backend_http'],
+                label='Backend healthcheck',
+            )
+        if include_frontend:
+            wait_for_http(
+                urls['frontend_root'],
+                timeout=STARTUP_TIMEOUTS['frontend_http'],
+                label='Frontend dev server',
+            )
+        browser_opened = open_browser(browser_url, enabled=include_frontend and not args.no_browser)
+        print_launcher_summary(
+            backend_started=include_backend,
+            frontend_started=include_frontend,
+            browser_url=browser_url,
+            browser_opened=browser_opened,
+        )
         if started_processes:
-            info('Launcher is running. Press Ctrl+C to stop backend/frontend child processes.')
-            while True:
-                for label, process in live_processes:
-                    code = process.poll()
-                    if code is not None:
-                        fail(f'{label} exited unexpectedly with code {code}.')
-                time.sleep(1)
+            ok(
+                'Launcher finished successfully in '
+                f'{startup_mode} mode. Use `{"py" if os.name == "nt" else "python"} start.py down` when you want to stop everything.'
+            )
         return 0
     except KeyboardInterrupt:
-        warn('Received Ctrl+C. Stopping launcher-managed processes...')
-    finally:
-        if os.name != 'nt':
-            stop_managed_processes()
+        warn('Startup interrupted. Stopping launcher-managed processes...')
+        stop_managed_processes()
+        if not args.skip_infra:
+            stop_infrastructure(paths, prereqs['docker_compose'])
+        return 0
+    except LauncherError:
+        stop_managed_processes()
+        if not args.skip_infra:
+            stop_infrastructure(paths, prereqs['docker_compose'])
+        raise
     return 0
 
 
@@ -885,6 +1196,8 @@ def command_status(_: argparse.Namespace) -> int:
     python = resolve_python_interpreter()
     node_tooling = inspect_node_tooling()
     compose_command, compose_mode = detect_docker_compose()
+    status = launcher_status_snapshot(paths)
+    state = status['state']
     root_env_values = parse_env_file(paths.root_env)
     backend_venv_python = get_backend_venv_python(paths)
     docker_found = shutil.which('docker') is not None
@@ -923,8 +1236,18 @@ def command_status(_: argparse.Namespace) -> int:
     print('Ports:')
     print(f"  backend:               {DEFAULT_PORTS['backend']}")
     print(f"  frontend:              {DEFAULT_PORTS['frontend']}")
-    print(f"  postgres:              {root_env_values.get('POSTGRES_PORT', str(DEFAULT_PORTS['postgres']))}")
-    print(f"  redis:                 {root_env_values.get('REDIS_PORT', str(DEFAULT_PORTS['redis']))}")
+    print(f"  postgres:              {status['postgres_port']}")
+    print(f"  redis:                 {status['redis_port']}")
+    print('')
+    print('Launcher runtime:')
+    print(f"  backend process running: {'yes' if status['backend_process_running'] else 'no'}")
+    print(f"  frontend process running: {'yes' if status['frontend_process_running'] else 'no'}")
+    print(f"  simulation loop running: {'yes' if status['sim_loop_running'] else 'no'}")
+    print(f"  infra running:          {'yes' if status['infra_running'] else 'no'}")
+    print(f"  backend ready:          {'yes' if status['backend_health_ready'] else 'no'}")
+    print(f"  frontend ready:         {'yes' if status['frontend_ready'] else 'no'}")
+    print(f"  browser auto-open default: {'yes' if state.get('browser_auto_open', DEFAULT_BROWSER_OPEN) else 'no'}")
+    print(f"  startup mode:           {state.get('startup_mode', DEFAULT_STARTUP_MODE)}")
     print_urls(root_env_values)
     print('')
     print('Recommended commands:')
@@ -938,6 +1261,12 @@ def command_status(_: argparse.Namespace) -> int:
     print('')
     if PATHS.state_file.exists():
         print(f'Launcher state file:     present at {PATHS.state_file}')
+        for process in state.get('processes', []):
+            log_file = process.get('log_file', 'n/a')
+            print(
+                f"  - {process.get('label', 'process')}: pid {process.get('pid', 'n/a')}, "
+                f"mode {process.get('mode', 'unknown')}, log {log_file}"
+            )
     else:
         print('Launcher state file:     not present')
     return 0
@@ -992,6 +1321,7 @@ def command_simulate_loop(args: argparse.Namespace) -> int:
 def command_backend(args: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
+    ensure_no_running_launcher_processes()
     prereqs = verify_prerequisites(require_node=False, require_docker=not args.skip_infra)
     ensure_env_files()
     if not args.skip_infra:
@@ -1001,112 +1331,124 @@ def command_backend(args: argparse.Namespace) -> int:
         warn('Skipping automatic seed for backend-only startup because --no-seed was used.')
     else:
         maybe_seed(paths, no_seed=False)
-    if os.name == 'nt':
-        launched = open_new_console_windows(
-            [
-                {
-                    'label': 'backend',
-                    'title': 'market-trading-bot backend',
-                    'command': backend_run_command(paths),
-                    'cwd': paths.backend,
-                    'env': backend_command_env(paths),
-                }
-            ]
-        )
-        write_state_file(launched)
-        print_urls()
-        ok('Windows mode: backend launched in a separate console window.')
-        return 0
-
-    process = spawn_process('backend', backend_run_command(paths), paths.backend, env=backend_command_env(paths))
-    write_state_file([
+    process_specs = [
         {
             'label': 'backend',
-            'pid': process.pid,
-            'command': ' '.join(backend_run_command(paths)),
-            'cwd': str(paths.backend),
-            'mode': 'background-process',
+            'title': 'market-trading-bot backend',
+            'command': backend_run_command(paths),
+            'cwd': paths.backend,
+            'env': backend_command_env(paths),
         }
-    ])
-    info('Backend is running. Press Ctrl+C to stop it.')
+    ]
+    startup_mode = 'separate-windows' if args.separate_windows else DEFAULT_STARTUP_MODE
     try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        warn('Received Ctrl+C. Stopping backend...')
-    finally:
+        start_dev_servers(
+            process_specs,
+            startup_mode=startup_mode,
+            browser_auto_open=False,
+            browser_url=service_urls()['backend_health'],
+        )
+        wait_for_http(
+            service_urls()['backend_health'],
+            timeout=STARTUP_TIMEOUTS['backend_http'],
+            label='Backend healthcheck',
+        )
+        print_launcher_summary(
+            backend_started=True,
+            frontend_started=False,
+            browser_url=service_urls()['backend_health'],
+            browser_opened=False,
+        )
+        ok(
+            'Backend launched successfully in '
+            f'{startup_mode} mode. Use `{"py" if os.name == "nt" else "python"} start.py down` to stop it.'
+        )
+        return 0
+    except LauncherError:
         stop_managed_processes()
-    return 0
+        raise
 
 
 def command_frontend(args: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
+    ensure_no_running_launcher_processes()
     verify_prerequisites(require_node=True, require_docker=False)
     ensure_env_files()
     prepare_frontend(paths, skip_install=args.skip_install)
-    if os.name == 'nt':
-        launched = open_new_console_windows(
-            [
-                {
-                    'label': 'frontend',
-                    'title': 'market-trading-bot frontend',
-                    'command': frontend_run_command(),
-                    'cwd': paths.frontend,
-                    'env': frontend_command_env(),
-                }
-            ]
-        )
-        write_state_file(launched)
-        print_urls()
-        ok('Windows mode: frontend launched in a separate console window.')
-        return 0
-
-    process = spawn_process('frontend', frontend_run_command(), paths.frontend, env=frontend_command_env())
-    write_state_file([
+    process_specs = [
         {
             'label': 'frontend',
-            'pid': process.pid,
-            'command': ' '.join(frontend_run_command()),
-            'cwd': str(paths.frontend),
-            'mode': 'background-process',
+            'title': 'market-trading-bot frontend',
+            'command': frontend_run_command(),
+            'cwd': paths.frontend,
+            'env': frontend_command_env(),
         }
-    ])
-    info('Frontend is running. Press Ctrl+C to stop it.')
+    ]
+    startup_mode = 'separate-windows' if args.separate_windows else DEFAULT_STARTUP_MODE
     try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        warn('Received Ctrl+C. Stopping frontend...')
-    finally:
+        start_dev_servers(
+            process_specs,
+            startup_mode=startup_mode,
+            browser_auto_open=not args.no_browser,
+            browser_url=service_urls()['frontend_system'],
+        )
+        wait_for_http(
+            service_urls()['frontend_root'],
+            timeout=STARTUP_TIMEOUTS['frontend_http'],
+            label='Frontend dev server',
+        )
+        browser_opened = open_browser(service_urls()['frontend_system'], enabled=not args.no_browser)
+        print_launcher_summary(
+            backend_started=False,
+            frontend_started=True,
+            browser_url=service_urls()['frontend_system'],
+            browser_opened=browser_opened,
+        )
+        ok(
+            'Frontend launched successfully in '
+            f'{startup_mode} mode. Use `{"py" if os.name == "nt" else "python"} start.py down` to stop it.'
+        )
+        return 0
+    except LauncherError:
         stop_managed_processes()
-    return 0
+        raise
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='Local-first launcher for the market-trading-bot monorepo.')
+    parser.add_argument('--no-browser', action='store_true', help='Do not open the browser automatically after startup.')
+    parser.add_argument('--separate-windows', action='store_true', help='Open backend/frontend in separate console windows instead of detached mode.')
+    parser.add_argument('--with-sim-loop', action='store_true', help='Start simulate_markets_loop alongside backend startup.')
+    parser.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup for postgres/redis.')
+    parser.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed.')
     subparsers = parser.add_subparsers(dest='command')
 
     common_setup = argparse.ArgumentParser(add_help=False)
     common_setup.add_argument('--skip-install', action='store_true', help='Skip pip/npm install steps.')
     common_setup.add_argument('--skip-backend', action='store_true', help='Skip backend preparation/startup.')
     common_setup.add_argument('--skip-frontend', action='store_true', help='Skip frontend preparation/startup.')
-    common_setup.add_argument('--no-seed', action='store_true', help='Do not auto-run the demo seed.')
+    common_setup.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup for postgres/redis.')
+    common_setup.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed.')
 
     backend_only = argparse.ArgumentParser(add_help=False)
     backend_only.add_argument('--skip-install', action='store_true', help='Skip pip install before running the command.')
     backend_only.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup before running the command.')
-    backend_only.add_argument('--no-seed', action='store_true', help='Do not auto-run the demo seed before backend startup.')
+    backend_only.add_argument('--separate-windows', action='store_true', help='Open the backend in a separate console window instead of detached mode.')
+    backend_only.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed before backend startup.')
 
     frontend_only = argparse.ArgumentParser(add_help=False)
     frontend_only.add_argument('--skip-install', action='store_true', help='Skip npm install before running the command.')
+    frontend_only.add_argument('--no-browser', action='store_true', help='Do not open the browser automatically after startup.')
+    frontend_only.add_argument('--separate-windows', action='store_true', help='Open the frontend in a separate console window instead of detached mode.')
 
     up_parser = subparsers.add_parser('up', parents=[common_setup], help='Prepare the project and start backend + frontend.')
     up_parser.add_argument('--with-sim-loop', action='store_true', help='Start simulate_markets_loop alongside the backend.')
+    up_parser.add_argument('--no-browser', action='store_true', help='Do not open the browser automatically after startup.')
+    up_parser.add_argument('--separate-windows', action='store_true', help='Open backend/frontend in separate console windows instead of detached mode.')
     up_parser.set_defaults(func=command_up)
 
     setup_parser = subparsers.add_parser('setup', parents=[common_setup], help='Prepare local dependencies without starting the servers.')
-    setup_parser.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup for postgres/redis.')
     setup_parser.set_defaults(func=command_setup)
 
     status_parser = subparsers.add_parser('status', help='Show a local environment summary for this repo.')
@@ -1138,6 +1480,9 @@ def build_parser() -> argparse.ArgumentParser:
         skip_frontend=False,
         no_seed=False,
         with_sim_loop=False,
+        no_browser=False,
+        separate_windows=False,
+        skip_infra=False,
     )
     return parser
 

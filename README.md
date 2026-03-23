@@ -87,8 +87,11 @@ What the launcher does for this monorepo:
 - runs Django migrations
 - auto-seeds demo markets only when the database has no `Market` rows yet
 - validates backend and frontend preparation before launching long-lived dev processes so the system is not left half-started
-- starts the Django dev server and the Vite dev server
-- on Windows, opens backend/frontend in separate console windows and leaves the original terminal free
+- starts the Django dev server and the Vite dev server in detached background mode by default
+- waits for `http://localhost:8000/api/health/` and `http://localhost:5173/` to respond before declaring success
+- opens the browser automatically to `http://localhost:5173/system` unless you disable it
+- keeps a launcher state file in `.tmp/start-state.json` so `python start.py down` can stop launcher-managed processes later
+- keeps the default workflow in a single console on Windows instead of opening two extra terminal windows
 - optionally starts the local simulation loop
 
 ### Main launcher commands
@@ -109,7 +112,11 @@ python start.py frontend
 Useful optional flags:
 
 ```bash
+python start.py --no-browser
+python start.py --separate-windows
 python start.py up --no-seed
+python start.py up --skip-seed
+python start.py up --skip-infra
 python start.py up --with-sim-loop
 python start.py setup --skip-frontend
 python start.py setup --skip-backend
@@ -118,9 +125,9 @@ python start.py setup --skip-install
 
 ### What each command does
 
-- `python start.py` / `python start.py up`: validates prerequisites first, prepares the local environment, starts Postgres + Redis, runs migrations, seeds demo data if needed, and only then launches backend + frontend.
+- `python start.py` / `python start.py up`: validates prerequisites first, prepares the local environment, starts Postgres + Redis, runs migrations, seeds demo data if needed, launches backend + frontend in detached mode, waits for both services to respond, opens the browser by default, and then returns control to the same console.
 - `python start.py setup`: prepares `.env`, `.venv`, backend/frontend dependencies, Docker services, migrations, and auto-seed logic without starting the dev servers.
-- `python start.py status`: prints the current Python interpreter, backend venv python, Node/npm resolution, Docker Compose mode, env/dependency presence, ports, and URLs.
+- `python start.py status`: prints the current Python interpreter, backend venv python, Node/npm resolution, Docker Compose mode, env/dependency presence, process/runtime readiness, startup mode, and URLs.
 - `python start.py down`: stops launcher-managed backend/frontend processes and runs `docker compose down` (or `docker-compose down`).
 - `python start.py seed`: runs `python manage.py seed_markets_demo`.
 - `python start.py simulate-tick`: runs one simulation tick with `python manage.py simulate_markets_tick`.
@@ -129,6 +136,45 @@ python start.py setup --skip-install
 - `python start.py frontend`: prepares and starts only the Vite frontend.
 
 ## Running each part manually
+
+## Recommended launcher UX
+
+The daily local-first workflow is now:
+
+```bash
+python start.py
+```
+
+That single command now:
+
+1. validates prerequisites
+2. prepares `.env`, backend, frontend, and local infra
+3. runs migrations
+4. auto-seeds demo data when needed
+5. starts backend and frontend in background/detached mode
+6. waits until backend and frontend really answer HTTP requests
+7. opens `http://localhost:5173/system` automatically
+8. prints a final “system ready” summary in the original console
+
+If you want the older debug-style behavior with separate Windows terminals:
+
+```bash
+python start.py --separate-windows
+python start.py up --separate-windows
+```
+
+If you do not want the browser to open automatically:
+
+```bash
+python start.py --no-browser
+python start.py up --no-browser
+```
+
+To stop everything that the launcher started:
+
+```bash
+python start.py down
+```
 
 You can still use the existing manual commands if you want finer control.
 

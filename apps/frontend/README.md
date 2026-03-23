@@ -164,8 +164,21 @@ Qué resuelve el launcher para el frontend:
 - crea `apps/frontend/.env` si falta
 - ejecuta `npm install` cuando `node_modules` no existe o cambian `package.json` / `package-lock.json`
 - arranca Vite con host local y puerto `5173`
-- en Windows puede abrir el frontend en una ventana separada con `python start.py` o `python start.py frontend`
+- en el flujo principal usa modo detached/single-console por defecto, sin abrir varias ventanas extra
+- espera a que `http://localhost:5173/` responda antes de mostrar que el sistema está listo
+- abre automáticamente `http://localhost:5173/system` salvo que uses `--no-browser`
+- mantiene `--separate-windows` como opción de debug para volver al modo de ventanas separadas
 - muestra accesos rápidos a `/`, `/system` y `/markets`
+
+Atajos útiles:
+
+```bash
+python start.py
+python start.py --no-browser
+python start.py --separate-windows
+python start.py frontend
+python start.py frontend --no-browser
+```
 
 ## Cómo levantar backend + seed demo + simulación + frontend
 

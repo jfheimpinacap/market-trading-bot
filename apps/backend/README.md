@@ -142,7 +142,18 @@ What the launcher handles before running backend commands:
 - starts PostgreSQL and Redis unless `--skip-infra` is used
 - runs `python manage.py migrate`
 - auto-seeds the demo catalog during `up`, `setup`, and `backend` only when no markets exist yet
-- on Windows, `python start.py backend` opens the Django server in a dedicated console window
+- starts the Django dev server in detached mode by default so the main launcher can return without opening extra consoles
+- waits for `http://localhost:8000/api/health/` before reporting backend startup success
+- stores launcher state so `python start.py down` can stop the backend later
+
+Useful backend launcher variants:
+
+```bash
+python start.py backend
+python start.py backend --separate-windows
+python start.py backend --skip-infra
+python start.py backend --skip-seed
+```
 
 ### Run migrations
 From `apps/backend`:
