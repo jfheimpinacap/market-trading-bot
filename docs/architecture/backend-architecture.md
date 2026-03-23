@@ -18,6 +18,7 @@ The backend is a local-first Django service inside the monorepo. Its current res
 - `apps.paper_trading`: demo-only portfolio domain with virtual cash, positions, trades, portfolio snapshots, execution services, valuation services, admin tooling, and simple DRF endpoints.
 - `apps.risk_demo`: demo-only pre-trade assessment domain that persists trade guard verdicts and keeps heuristic evaluation logic out of views.
 - `apps.signals`: demo-only signals domain with mock agents, signal runs, heuristic generation, admin tooling, and read-only DRF endpoints.
+- `apps.postmortem_demo`: demo-only trade review domain that evaluates executed paper trades after the fact and exposes read-only review endpoints.
 - `apps.agents`: reserved for later agent orchestration work.
 - `apps.audit`: reserved for later audit and post-mortem persistence.
 
@@ -80,6 +81,22 @@ Current heuristics:
 
 This is intentionally not a real prediction engine, risk engine, or autonomous agent system. It is a local-first demo layer that prepares stable boundaries for later evolution.
 
+
+## Post-mortem demo domain shape
+The `apps.postmortem_demo` app sits after execution and reuses existing paper trading, markets, signals, and risk-demo context without introducing a complex analytics engine.
+
+Core relationships:
+- `TradeReview` stores one persisted review for one `PaperTrade`.
+- Each review also links directly to the related `PaperAccount` and `Market` for simpler API consumption and admin filtering.
+- Reviews optionally capture the latest relevant signal context and risk verdict at trade time.
+
+Service split:
+- `services/review.py`: deterministic post-trade heuristics, outcome classification, summary/rationale generation, and persistence
+- `management/commands/generate_trade_reviews.py`: thin CLI boundary for local generation or refresh
+- `serializers.py` and `views.py`: read-only DRF boundary for list, detail, and summary responses
+
+This remains intentionally mock and heuristic. It does not attempt ML, statistical attribution, or real-world causal analysis.
+
 ## Local demo-data strategy
 The current stage is designed to make the system feel alive locally without real external integrations.
 
@@ -128,6 +145,7 @@ The simulation layer is deliberately small and service-oriented:
 - Paper trading endpoints are intentionally simple and assume a single active demo account by default.
 - Market list and detail serializers intentionally differ so that lists stay lightweight while detail views include rules and recent snapshots.
 - Signals endpoints are read-only and intentionally simple, with manual filtering and ordering instead of heavier query infrastructure.
+- Post-mortem endpoints are also read-only and intentionally lightweight, with only list/detail/summary plus basic filters and ordering.
 
 ## Admin strategy
 The admin is being treated as a practical local operations console.

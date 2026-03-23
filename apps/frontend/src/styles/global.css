@@ -1968,3 +1968,118 @@ button {
     flex-direction: column;
   }
 }
+
+.paper-inline-muted {
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.review-outcome-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.review-outcome-badge--favorable {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.review-outcome-badge--neutral {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.review-outcome-badge--unfavorable {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.postmortem-stat-card {
+  display: grid;
+  gap: 8px;
+  min-height: 168px;
+}
+
+.postmortem-stat-card span,
+.postmortem-detail-metric span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.postmortem-stat-card strong,
+.postmortem-detail-metric strong {
+  font-size: 1.6rem;
+}
+
+.postmortem-table td:last-child {
+  min-width: 240px;
+}
+
+.postmortem-cell-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.postmortem-cell-copy span {
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+.postmortem-filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.postmortem-filters label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-soft);
+  font-size: 0.86rem;
+}
+
+.postmortem-filters select {
+  min-width: 140px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-panel);
+  padding: 10px 12px;
+  color: var(--text-main);
+}
+
+.postmortem-detail-panel,
+.postmortem-detail-metric {
+  box-shadow: none;
+}
+
+.postmortem-detail-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.postmortem-detail-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.postmortem-detail-list li {
+  color: var(--text-muted);
+}
+
+.postmortem-detail-list li strong,
+.postmortem-detail-list li span {
+  display: block;
+}

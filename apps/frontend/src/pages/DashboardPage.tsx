@@ -14,9 +14,11 @@ import { API_BASE_URL, PROJECT_NAME } from '../lib/config';
 import { dashboardModules, dashboardQuickLinks, localEnvironmentHighlights, nextProjectSteps } from '../lib/dashboard';
 import { getMarketSystemSummary, getMarkets } from '../services/markets';
 import { getSignals, getSignalsSummary } from '../services/signals';
+import { getReviewsSummary } from '../services/reviews';
 import type { MarketListItem, MarketSystemSummary } from '../types/markets';
 import type { DashboardStatCard, RecentMarketItem } from '../types/dashboard';
 import type { MarketSignal, SignalSummary } from '../types/signals';
+import type { TradeReviewSummary } from '../types/reviews';
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -96,6 +98,9 @@ export function DashboardPage() {
   const [latestSignals, setLatestSignals] = useState<MarketSignal[]>([]);
   const [signalsLoading, setSignalsLoading] = useState(true);
   const [signalsError, setSignalsError] = useState<string | null>(null);
+  const [reviewsSummary, setReviewsSummary] = useState<TradeReviewSummary | null>(null);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [reviewsError, setReviewsError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -222,6 +227,41 @@ export function DashboardPage() {
 
   const marketStats = useMemo(() => (summary ? buildStats(summary) : []), [summary]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadReviewsSummary() {
+      setReviewsLoading(true);
+      setReviewsError(null);
+
+      try {
+        const response = await getReviewsSummary();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setReviewsSummary(response);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setReviewsError(getErrorMessage(error, 'Could not load demo trade reviews summary.'));
+      } finally {
+        if (isMounted) {
+          setReviewsLoading(false);
+        }
+      }
+    }
+
+    void loadReviewsSummary();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <div className="page-stack">
       <PageHeader
@@ -312,6 +352,40 @@ export function DashboardPage() {
       </section>
 
       <section className="content-grid content-grid--two-columns">
+        <SectionCard
+          eyebrow="Post-mortem bridge"
+          title="Trade reviews at a glance"
+          description="Small summary from GET /api/reviews/summary/ so the dashboard can point operators toward the new post-mortem workflow without redesigning the landing page."
+          aside={
+            <StatusBadge tone={reviewsError ? 'offline' : reviewsSummary && reviewsSummary.unfavorable_reviews > 0 ? 'neutral' : reviewsLoading ? 'loading' : 'ready'}>
+              {reviewsSummary ? `${reviewsSummary.total_reviews} reviews` : reviewsLoading ? 'Reviews loading' : 'No reviews'}
+            </StatusBadge>
+          }
+        >
+          <DataStateWrapper
+            isLoading={reviewsLoading}
+            isError={Boolean(reviewsError)}
+            errorMessage={reviewsError ?? undefined}
+            isEmpty={!reviewsLoading && !reviewsError && !reviewsSummary}
+            loadingTitle="Loading review summary"
+            loadingDescription="Requesting post-mortem summary counters from the backend."
+            errorTitle="Could not load review summary"
+            emptyTitle="No reviews summary available"
+            emptyDescription="Run `cd apps/backend && python manage.py generate_trade_reviews` to generate demo trade reviews for the new retrospective module."
+          >
+            {reviewsSummary ? (
+              <dl className="dashboard-key-value-list">
+                <div><dt>Total reviews</dt><dd>{reviewsSummary.total_reviews}</dd></div>
+                <div><dt>Favorable</dt><dd>{reviewsSummary.favorable_reviews}</dd></div>
+                <div><dt>Unfavorable</dt><dd>{reviewsSummary.unfavorable_reviews}</dd></div>
+                <div><dt>Stale</dt><dd>{reviewsSummary.stale_reviews}</dd></div>
+                <div><dt>Latest review</dt><dd>{reviewsSummary.latest_reviewed_at ?? '—'}</dd></div>
+                <div><dt>Next step</dt><dd>Open /postmortem for the review queue and detail view.</dd></div>
+              </dl>
+            ) : null}
+          </DataStateWrapper>
+        </SectionCard>
+
         <SectionCard
           eyebrow="Recent catalog activity"
           title="Recent markets"
