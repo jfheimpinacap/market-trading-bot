@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { MarketTradePanel } from '../../components/markets/MarketTradePanel';
 import { PageHeader } from '../../components/PageHeader';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
 import { MarketActiveBadge } from '../../components/markets/MarketActiveBadge';
@@ -10,7 +11,23 @@ import { formatCompactCurrency, formatDateTime, formatNumber, titleize } from '.
 import { SectionCard } from '../../components/SectionCard';
 import { navigate, usePathname } from '../../lib/router';
 import { getMarketDetail } from '../../services/markets';
+import {
+  createPaperTrade,
+  getPaperAccount,
+  getPaperPositions,
+  getPaperSummary,
+  getPaperTrades,
+  revaluePaperPortfolio,
+} from '../../services/paperTrading';
 import type { MarketDetail } from '../../types/markets';
+import type {
+  CreatePaperTradePayload,
+  PaperAccount,
+  PaperPortfolioSummary,
+  PaperPosition,
+  PaperTrade,
+  TradeExecutionState,
+} from '../../types/paperTrading';
 
 function getMarketIdFromPath(pathname: string) {
   const segments = pathname.split('/').filter(Boolean);
@@ -24,54 +41,159 @@ function getErrorMessage(error: unknown, fallback: string) {
 export function MarketDetailPage() {
   const pathname = usePathname();
   const marketId = useMemo(() => getMarketIdFromPath(pathname), [pathname]);
+
   const [market, setMarket] = useState<MarketDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [paperAccount, setPaperAccount] = useState<PaperAccount | null>(null);
+  const [paperSummary, setPaperSummary] = useState<PaperPortfolioSummary | null>(null);
+  const [paperPositions, setPaperPositions] = useState<PaperPosition[]>([]);
+  const [paperTrades, setPaperTrades] = useState<PaperTrade[]>([]);
+  const [paperLoading, setPaperLoading] = useState(true);
+  const [paperError, setPaperError] = useState<string | null>(null);
+  const [paperWarning, setPaperWarning] = useState<string | null>(null);
+  const [isSubmittingTrade, setIsSubmittingTrade] = useState(false);
+  const [tradeExecutionState, setTradeExecutionState] = useState<TradeExecutionState | null>(null);
+
+  const loadMarketDetail = useCallback(async () => {
+    if (!marketId) {
+      setError('The market identifier is missing from the URL.');
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await getMarketDetail(marketId);
+      setMarket(response);
+    } catch (loadError) {
+      setError(getErrorMessage(loadError, 'Could not load market detail.'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [marketId]);
+
+  const loadPaperContext = useCallback(async () => {
+    setPaperLoading(true);
+    setPaperError(null);
+    setPaperWarning(null);
+
+    const [accountResult, summaryResult, positionsResult, tradesResult] = await Promise.allSettled([
+      getPaperAccount(),
+      getPaperSummary(),
+      getPaperPositions(),
+      getPaperTrades(),
+    ]);
+
+    const failures: string[] = [];
+
+    if (accountResult.status === 'fulfilled') {
+      setPaperAccount(accountResult.value);
+    } else {
+      setPaperAccount(null);
+      failures.push(getErrorMessage(accountResult.reason, 'Could not load the active paper account.'));
+    }
+
+    if (summaryResult.status === 'fulfilled') {
+      setPaperSummary(summaryResult.value);
+    } else {
+      setPaperSummary(null);
+      failures.push(getErrorMessage(summaryResult.reason, 'Could not load the paper portfolio summary.'));
+    }
+
+    if (positionsResult.status === 'fulfilled') {
+      setPaperPositions(positionsResult.value);
+    } else {
+      setPaperPositions([]);
+      failures.push(getErrorMessage(positionsResult.reason, 'Could not load paper positions.'));
+    }
+
+    if (tradesResult.status === 'fulfilled') {
+      setPaperTrades(tradesResult.value);
+    } else {
+      setPaperTrades([]);
+      failures.push(getErrorMessage(tradesResult.reason, 'Could not load paper trades.'));
+    }
+
+    if (failures.length === 4) {
+      setPaperError(failures[0]);
+    } else if (failures.length > 0) {
+      setPaperWarning(failures.join(' '));
+    }
+
+    setPaperLoading(false);
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
 
-    async function loadMarketDetail() {
+    async function loadPage() {
       if (!marketId) {
         setError('The market identifier is missing from the URL.');
         setIsLoading(false);
+        setPaperLoading(false);
         return;
       }
 
-      setIsLoading(true);
-      setError(null);
+      setTradeExecutionState(null);
 
-      try {
-        const response = await getMarketDetail(marketId);
-        if (!isMounted) {
-          return;
-        }
-        setMarket(response);
-      } catch (loadError) {
-        if (!isMounted) {
-          return;
-        }
-        setError(getErrorMessage(loadError, 'Could not load market detail.'));
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
+      await Promise.all([
+        (async () => {
+          if (!isMounted) {
+            return;
+          }
+          await loadMarketDetail();
+        })(),
+        (async () => {
+          if (!isMounted) {
+            return;
+          }
+          await loadPaperContext();
+        })(),
+      ]);
     }
 
-    void loadMarketDetail();
+    void loadPage();
 
     return () => {
       isMounted = false;
     };
-  }, [marketId]);
+  }, [loadMarketDetail, loadPaperContext, marketId]);
+
+  const handleTradeSubmit = useCallback(async (payload: CreatePaperTradePayload) => {
+    setIsSubmittingTrade(true);
+    setTradeExecutionState(null);
+
+    try {
+      const response = await createPaperTrade(payload);
+      setTradeExecutionState({
+        status: 'success',
+        message: `${titleize(response.trade.trade_type)} ${response.trade.side} ${formatNumber(response.trade.quantity)} executed at ${Number(response.trade.price).toFixed(4)}. The paper account and portfolio context were refreshed from the backend.`,
+        response,
+      });
+      setPaperAccount(response.account);
+      await revaluePaperPortfolio();
+      await loadPaperContext();
+    } catch (submitError) {
+      setTradeExecutionState({
+        status: 'error',
+        message: getErrorMessage(submitError, 'Failed to execute paper trade.'),
+        response: null,
+      });
+    } finally {
+      setIsSubmittingTrade(false);
+    }
+  }, [loadPaperContext]);
 
   return (
     <div className="page-stack">
       <PageHeader
         eyebrow="Market detail"
         title={market?.title ?? 'Market detail'}
-        description="Inspect current market state, related event context, rule guidance, and the most recent snapshots returned by the backend demo API."
+        description="Inspect current market state, execute demo paper trades, review account exposure, and verify recent backend snapshots from the local API."
         actions={
           <button className="secondary-button" type="button" onClick={() => navigate('/markets')}>
             Back to markets
@@ -178,6 +300,27 @@ export function MarketDetailPage() {
               </SectionCard>
             </section>
 
+            <SectionCard
+              eyebrow="Paper trading"
+              title="Demo trade execution"
+              description="Execute a local simulated buy or sell directly from this market, then immediately inspect how the paper account and this market position changed."
+            >
+              <MarketTradePanel
+                market={market}
+                account={paperAccount}
+                summary={paperSummary}
+                positions={paperPositions}
+                trades={paperTrades}
+                isLoading={paperLoading}
+                error={paperError}
+                warning={paperWarning}
+                isSubmitting={isSubmittingTrade}
+                executionState={tradeExecutionState}
+                onRetry={loadPaperContext}
+                onSubmit={handleTradeSubmit}
+              />
+            </SectionCard>
+
             <section className="content-grid content-grid--two-columns">
               <MarketRulesCard shortRules={market.short_rules} rules={market.rules} />
 
@@ -219,7 +362,13 @@ export function MarketDetailPage() {
               </SectionCard>
             </section>
 
-            <MarketSnapshotsTable snapshots={market.recent_snapshots} />
+            <SectionCard
+              eyebrow="Recent snapshots"
+              title="Backend market snapshots"
+              description="Most recent time-series records returned by the market detail endpoint."
+            >
+              <MarketSnapshotsTable snapshots={market.recent_snapshots} />
+            </SectionCard>
           </>
         ) : null}
       </DataStateWrapper>

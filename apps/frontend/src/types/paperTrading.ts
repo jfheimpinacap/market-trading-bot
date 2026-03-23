@@ -112,3 +112,31 @@ export type PaperPortfolioSummary = {
   exposure_by_market: PaperExposureSummary[];
   recent_trades: PaperRecentTradeSummary[];
 };
+
+export type CreatePaperTradePayload = {
+  market_id: number;
+  trade_type: PaperTradeType;
+  side: PaperSide;
+  quantity: string;
+  notes?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type CreatePaperTradeResponse = {
+  account: PaperAccount;
+  position: PaperPosition;
+  trade: PaperTrade;
+};
+
+export type MarketPaperPositionView = {
+  marketId: number;
+  marketTitle: string;
+  positions: PaperPosition[];
+  latestTrade: PaperTrade | null;
+};
+
+export type TradeExecutionState = {
+  status: 'success' | 'error';
+  message: string;
+  response: CreatePaperTradeResponse | null;
+};
