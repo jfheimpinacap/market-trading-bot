@@ -9,4 +9,5 @@ urlpatterns = [
     path('reviews/', include(('apps.postmortem_demo.urls', 'postmortem_demo'), namespace='postmortem_demo')),
     path('agents/', include(('apps.agents.urls', 'agents'), namespace='agents')),
     path('audit/', include(('apps.audit.urls', 'audit'), namespace='audit')),
+    path('automation/', include(('apps.automation_demo.urls', 'automation_demo'), namespace='automation_demo')),
 ]

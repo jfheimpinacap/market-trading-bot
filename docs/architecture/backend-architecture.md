@@ -176,3 +176,7 @@ Current goals:
 - Prefer explicit app boundaries instead of deeply nested internal frameworks.
 - Avoid cross-app coupling until domain workflows become concrete.
 - Extend the paper trading domain next with richer portfolio history, better summaries, optional auth, and frontend trading workflows while keeping the current demo-only execution model.
+
+## Automation demo boundary
+
+A new `apps/automation_demo/` boundary now coordinates explicit demo actions across the existing market simulation, signal generation, paper portfolio valuation, and post-mortem review services. The orchestration stays synchronous and local-first: each API request creates a `DemoAutomationRun`, executes one action or a sequential demo cycle, stores step-level details in JSON, and returns a readable result to the UI. This keeps automation guided and explainable without introducing Celery orchestration, schedulers, or autonomous trading behavior.
