@@ -15,6 +15,7 @@ The backend is a local-first Django service inside the monorepo. Its current res
 - `apps.common`: abstract timestamped models and shared technical helpers.
 - `apps.health`: lightweight environment-oriented health endpoint.
 - `apps.markets`: provider-agnostic prediction-market catalog with providers, events, markets, historical snapshots, rules, demo seed data, local simulation engine, admin tooling, and read-only endpoints for local UI work.
+- `apps.paper_trading`: demo-only portfolio domain with virtual cash, positions, trades, portfolio snapshots, execution services, valuation services, admin tooling, and simple DRF endpoints.
 - `apps.agents`: reserved for later agent orchestration work.
 - `apps.audit`: reserved for later audit and post-mortem persistence.
 
@@ -29,6 +30,22 @@ Core relationships:
 - `MarketRule` stores fuller rule and resolution text separately from the market summary row.
 
 This gives the backend a clean relational base before adding provider sync, signals, or paper trading layers.
+
+## Paper trading domain shape
+The `apps.paper_trading` app builds directly on `apps.markets` and intentionally stays local-first.
+
+Core relationships:
+- `PaperAccount` represents a virtual account with cash, equity, and PnL state.
+- `PaperPosition` tracks current exposure for one account, one market, and one side (`YES` or `NO`).
+- `PaperTrade` records each immediate paper execution and links back to the position when relevant.
+- `PaperPortfolioSnapshot` stores account-level history for future charts and timeline views.
+
+Service split:
+- `services/execution.py`: execute immediate demo trades and mutate account/position state
+- `services/valuation.py`: resolve current mark prices, validate market tradability, and recalculate mark-to-market values
+- `services/portfolio.py`: ensure the demo account exists, assemble summary payloads, and persist snapshots
+
+This keeps trade logic out of views and avoids overloading model methods while staying simple enough for the current single-demo-account stage.
 
 ## Local demo-data strategy
 The current stage is designed to make the system feel alive locally without real external integrations.
@@ -75,6 +92,7 @@ The simulation layer is deliberately small and service-oriented:
 - Each app owns its own URL patterns and request/response serializers.
 - The health endpoint is kept intentionally lightweight and configuration-oriented.
 - Market endpoints are read-only and currently optimized for local catalog browsing.
+- Paper trading endpoints are intentionally simple and assume a single active demo account by default.
 - Market list and detail serializers intentionally differ so that lists stay lightweight while detail views include rules and recent snapshots.
 
 ## Admin strategy
@@ -85,6 +103,7 @@ Current goals:
 - understand provider/event/market relationships at a glance
 - review recent market snapshots without leaving the market detail page
 - verify simulation activity from market metadata and latest snapshots
+- inspect the demo paper account, positions, trades, and portfolio snapshots after local executions
 - keep editing surfaces simple and maintainable instead of building custom back-office tooling
 
 ## Settings strategy
@@ -104,4 +123,4 @@ Current goals:
 - Keep shared code in `apps/common` small and reusable.
 - Prefer explicit app boundaries instead of deeply nested internal frameworks.
 - Avoid cross-app coupling until domain workflows become concrete.
-- Extend the market domain next with system diagnostics, launcher workflows, demo signals, mock agents, and paper-trading support on top of the current simulation-ready base.
+- Extend the paper trading domain next with richer portfolio history, better summaries, optional auth, and frontend trading workflows while keeping the current demo-only execution model.
