@@ -19,7 +19,8 @@ apps/backend/
 │   ├── audit/
 │   ├── common/
 │   ├── health/
-│   └── markets/
+│   ├── markets/
+│   └── paper_trading/
 ├── config/
 │   ├── api.py
 │   ├── celery.py
@@ -40,6 +41,7 @@ apps/backend/
 - `apps.common`: shared technical building blocks like abstract models and simple shared tasks.
 - `apps.health`: configuration-oriented health endpoint.
 - `apps.markets`: provider, event, market, market snapshot, and market rule models plus demo seeding, simulation, admin tooling, and read-only API endpoints.
+- `apps.paper_trading`: demo-only paper account, positions, trades, portfolio snapshots, valuation services, admin tooling, and basic write APIs for local investing flows.
 - `apps.agents`: placeholder app for future agent domain work.
 - `apps.audit`: placeholder app for future audit and post-mortem work.
 
@@ -64,6 +66,29 @@ Current read-only market endpoints:
 - `/api/markets/`
 - `/api/markets/<id>/`
 - `/api/markets/system-summary/`
+
+## Paper trading app summary
+The `apps.paper_trading` app provides the first backend base for demo investing with fictional money, using existing `Market` prices as the execution source of truth.
+
+Current paper trading models:
+- `PaperAccount`
+- `PaperPosition`
+- `PaperTrade`
+- `PaperPortfolioSnapshot`
+
+Current paper trading workflows:
+- idempotent demo account seeding via `seed_paper_account`
+- immediate demo trade execution via `POST /api/paper/trades/`
+- mark-to-market refresh via `refresh_paper_portfolio` or `POST /api/paper/revalue/`
+- account summary and exposure inspection via read endpoints and Django admin
+
+Current paper trading endpoints:
+- `/api/paper/account/`
+- `/api/paper/positions/`
+- `/api/paper/trades/`
+- `/api/paper/summary/`
+- `/api/paper/revalue/`
+- `/api/paper/snapshots/`
 
 ## Environment configuration
 1. Copy the backend env file:
@@ -134,6 +159,14 @@ python start.py simulate-tick
 python start.py simulate-loop
 ```
 
+Paper trading setup and refresh commands:
+
+```bash
+cd apps/backend
+python manage.py seed_paper_account
+python manage.py refresh_paper_portfolio
+```
+
 What the launcher handles before running backend commands:
 
 - creates `apps/backend/.env` from `apps/backend/.env.example` if needed
@@ -177,6 +210,12 @@ Populate the local database with coherent demo catalog data:
 ```bash
 cd apps/backend
 python manage.py seed_markets_demo
+```
+
+Create the demo paper account after the market seed:
+
+```bash
+python manage.py seed_paper_account
 ```
 
 What gets created right now:
@@ -258,6 +297,10 @@ Recommended admin checks after seeding and simulation:
 - open **Markets** and inspect status badges, liquidity, snapshot counts, latest snapshot, and last simulation tick
 - open a market detail page and review rule inlines plus the latest snapshots inline
 - open **Market Snapshots** to verify recent time-series values and new simulated rows
+- open **Paper Accounts** and confirm the demo account cash/equity fields update after trades
+- open **Paper Positions** to inspect side, quantity, mark price, and unrealized PnL per market
+- open **Paper Trades** to verify buy/sell history and linked market navigation
+- open **Paper Portfolio Snapshots** to confirm account-level history is being captured
 
 ## API examples
 Healthcheck:
