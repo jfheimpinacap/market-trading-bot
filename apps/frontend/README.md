@@ -76,6 +76,22 @@ La ruta `/signals` ya es una vista real para explorar señales demo generadas lo
 - integración ligera con Dashboard y con `/markets/:marketId` para mostrar señales recientes por market
 - manejo de loading, error total y empty state
 
+
+## Qué hace ahora la página `/postmortem`
+
+La ruta `/postmortem` ya es una vista real para revisar paper trades ejecutados con una primera capa de post-mortem demo / trade review mock.
+
+### Implementado en `/postmortem`
+
+- summary cards usando `GET /api/reviews/summary/`
+- tabla desktop-first con trade asociado, market asociado, outcome, score, summary, lesson y recommendation
+- filtros simples por outcome y review status
+- navegación al detalle en `/postmortem/:reviewId`
+- detalle con rationale, lección, recommendation, contexto de señales y links a `/markets/:marketId` y `/portfolio`
+- empty state que sugiere ejecutar `python manage.py generate_trade_reviews`
+- integración ligera con `/portfolio` mediante links a reviews cuando existen
+- integración ligera con `/` mediante un bloque corto de summary en Dashboard
+
 ## Estructura interna
 
 ```text
@@ -104,7 +120,8 @@ apps/frontend/src/
 - `/signals` — Demo signals workspace
 - `/agents` — Agents placeholder
 - `/portfolio` — Paper trading portfolio summary
-- `/postmortem` — Post-Mortem placeholder
+- `/postmortem` — Post-mortem trade review queue
+- `/postmortem/:reviewId` — Post-mortem review detail
 - `/settings` — Settings placeholder
 - `/system` — System technical panel
 
@@ -147,6 +164,14 @@ La UI no genera señales desde el navegador en esta etapa. La generación princi
 - `GET /api/paper/account/`, `GET /api/paper/positions/`, `GET /api/paper/trades/` y `GET /api/paper/summary/` para contexto de cuenta y exposición en el panel
 - `POST /api/paper/revalue/` después de una ejecución exitosa para volver a sincronizar el portfolio visible
 
+### Post-mortem / trade reviews
+
+- `GET /api/reviews/`
+- `GET /api/reviews/<id>/`
+- `GET /api/reviews/summary/`
+
+La UI no genera reviews desde el navegador en esta etapa. La generación principal sigue en `python manage.py generate_trade_reviews`.
+
 ### Portfolio / paper trading
 
 - `GET /api/paper/account/`
@@ -163,7 +188,7 @@ La ruta `/portfolio` ahora muestra:
 - chart histórico simple de portfolio basado en `GET /api/paper/snapshots/`, con `equity` como serie principal y overlays de `cash_balance` y `total_pnl` cuando están disponibles
 - resumen técnico corto del histórico con cantidad de snapshots, latest equity y latest total PnL
 - tabla de posiciones con side, quantity, avg entry, current mark, market value, PnL y estado
-- historial de trades recientes ordenado por `executed_at`
+- historial de trades recientes ordenado por `executed_at`, con links a trade reviews cuando existen
 - panel técnico de snapshots del portfolio
 - acción manual **Revalue portfolio** que llama `POST /api/paper/revalue/` y luego refresca account, summary, positions, trades, snapshots y el chart histórico visible
 - loading, error parcial, error total y empty states claros por sección, incluyendo casos de pocos o ningún snapshot

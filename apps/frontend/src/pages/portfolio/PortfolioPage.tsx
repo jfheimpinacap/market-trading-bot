@@ -13,6 +13,7 @@ import { PaperTradesTable } from '../../components/paper-trading/PaperTradesTabl
 import { RevalueToolbar } from '../../components/paper-trading/RevalueToolbar';
 import { formatTechnicalTimestamp } from '../../components/paper-trading/utils';
 import { API_BASE_URL } from '../../lib/config';
+import { getTradeReviews } from '../../services/reviews';
 import {
   getPaperAccount,
   getPaperPositions,
@@ -28,6 +29,7 @@ import type {
   PaperPosition,
   PaperTrade,
 } from '../../types/paperTrading';
+import type { TradeReview } from '../../types/reviews';
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -39,18 +41,21 @@ export function PortfolioPage() {
   const [positions, setPositions] = useState<PaperPosition[]>([]);
   const [trades, setTrades] = useState<PaperTrade[]>([]);
   const [snapshots, setSnapshots] = useState<PaperPortfolioSnapshot[]>([]);
+  const [reviews, setReviews] = useState<TradeReview[]>([]);
 
   const [accountLoading, setAccountLoading] = useState(true);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [positionsLoading, setPositionsLoading] = useState(true);
   const [tradesLoading, setTradesLoading] = useState(true);
   const [snapshotsLoading, setSnapshotsLoading] = useState(true);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
 
   const [accountError, setAccountError] = useState<string | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [positionsError, setPositionsError] = useState<string | null>(null);
   const [tradesError, setTradesError] = useState<string | null>(null);
   const [snapshotsError, setSnapshotsError] = useState<string | null>(null);
+  const [reviewsError, setReviewsError] = useState<string | null>(null);
 
   const [isRevaluing, setIsRevaluing] = useState(false);
   const [revalueMessage, setRevalueMessage] = useState<string | null>(null);
@@ -62,12 +67,14 @@ export function PortfolioPage() {
     setPositionsLoading(true);
     setTradesLoading(true);
     setSnapshotsLoading(true);
+    setReviewsLoading(true);
 
     setAccountError(null);
     setSummaryError(null);
     setPositionsError(null);
     setTradesError(null);
     setSnapshotsError(null);
+    setReviewsError(null);
 
     const [
       accountResult,
@@ -75,12 +82,14 @@ export function PortfolioPage() {
       positionsResult,
       tradesResult,
       snapshotsResult,
+      reviewsResult,
     ] = await Promise.allSettled([
       getPaperAccount(),
       getPaperSummary(),
       getPaperPositions(),
       getPaperTrades(),
       getPaperSnapshots(),
+      getTradeReviews({ ordering: '-reviewed_at' }),
     ]);
 
     if (accountResult.status === 'fulfilled') {
@@ -118,11 +127,19 @@ export function PortfolioPage() {
       setSnapshotsError(getErrorMessage(snapshotsResult.reason, 'Could not load portfolio snapshots.'));
     }
 
+    if (reviewsResult.status === 'fulfilled') {
+      setReviews(reviewsResult.value);
+    } else {
+      setReviews([]);
+      setReviewsError(getErrorMessage(reviewsResult.reason, 'Could not load trade reviews for the portfolio links.'));
+    }
+
     setAccountLoading(false);
     setSummaryLoading(false);
     setPositionsLoading(false);
     setTradesLoading(false);
     setSnapshotsLoading(false);
+    setReviewsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -166,6 +183,7 @@ export function PortfolioPage() {
     () => positions.filter((position) => position.status === 'OPEN' && Number(position.quantity) > 0),
     [positions],
   );
+  const reviewLookup = useMemo(() => Object.fromEntries(reviews.map((review) => [review.trade_id, review])), [reviews]);
 
   return (
     <div className="page-stack">
@@ -290,7 +308,7 @@ export function PortfolioPage() {
       <SectionCard
         eyebrow="Execution history"
         title="Trades"
-        description="Recent paper trade history from GET /api/paper/trades/, ordered by most recent execution so the demo account activity can be audited quickly."
+        description="Recent paper trade history from GET /api/paper/trades/, ordered by most recent execution so the demo account activity can be audited quickly. When reviews exist, the table also links each trade to /postmortem."
         aside={<StatusBadge tone={tradesError ? 'offline' : tradesLoading ? 'loading' : 'ready'}>{tradesError ? 'Trades unavailable' : `${trades.length} trades loaded`}</StatusBadge>}
       >
         <DataStateWrapper
@@ -304,7 +322,8 @@ export function PortfolioPage() {
           emptyTitle="No trades recorded yet"
           emptyDescription="The paper account has not executed demo trades yet. Use the backend paper trading flows first, then return here to inspect the history."
         >
-          <PaperTradesTable trades={trades} currency={currency} />
+          {reviewsError ? <p className="paper-inline-notice">Review links unavailable: {reviewsError}</p> : null}
+          <PaperTradesTable trades={trades} currency={currency} reviewLookup={reviewLookup} />
         </DataStateWrapper>
       </SectionCard>
 

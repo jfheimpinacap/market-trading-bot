@@ -13,6 +13,7 @@ The frontend is a local-first operator workspace for `market-trading-bot`. In th
 7. provide a market-detail paper trading entry flow so a user can execute a local simulated trade directly from `/markets/:marketId`
 8. surface demo signals and mock-agent output as a bridge between markets, paper trading, and future automation
 9. expose a simple trade-guard step so paper trades can be evaluated before local execution
+10. provide a post-mortem workspace where executed paper trades can be reviewed with deterministic mock heuristics
 
 This phase intentionally excludes authentication, real trading logic, market integrations, websockets, and advanced data visualization beyond simple snapshot-based line charts in market detail and the paper-trading portfolio view.
 
@@ -135,6 +136,20 @@ The trade panel on `/markets/:marketId` now introduces a deliberate two-step flo
 
 This keeps the feature didactic, explainable, and ready to evolve into a stronger backend-driven guard later without introducing a wizard or complex client state.
 
+
+### Post-mortem page
+
+The `/postmortem` and `/postmortem/:reviewId` routes follow the same local-first pattern:
+
+- use `services/reviews.ts` as the single integration point for the review API
+- keep contracts in `types/reviews.ts`
+- load list, summary, and optional detail independently so partial failures stay isolated
+- reuse existing `PageHeader`, `SectionCard`, `DataStateWrapper`, table styling, and link patterns
+- connect back to `/markets/:marketId` and `/portfolio` instead of creating a separate navigation model
+- stay explicitly demo-only: the UI explains reviews as heuristics, not as real analytics or professional advice
+
+This keeps the new module coherent with the rest of the frontend and prepares a clean boundary for a more capable review engine later.
+
 ## UI principles for this stage
 
 - sober, readable visual design
@@ -157,5 +172,5 @@ Near-term frontend evolution can proceed without reworking the shell:
 - add local settings forms
 - introduce richer routing only when it provides clear value
 - expand the Portfolio page from read-only visibility into controlled paper trade entry flows once UX requirements are clear
-- prepare lightweight summaries for Agents and Post-Mortem once backend endpoints exist
+- deepen the post-mortem module with richer trade context, filters, and refresh actions once the backend heuristics evolve
 - consider optional lightweight auto-refresh for local simulation monitoring if manual refresh becomes limiting

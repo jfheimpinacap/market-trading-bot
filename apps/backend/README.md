@@ -44,6 +44,7 @@ apps/backend/
 - `apps.paper_trading`: demo-only paper account, positions, trades, portfolio snapshots, valuation services, admin tooling, and basic write APIs for local investing flows.
 - `apps.risk_demo`: demo-only trade guard layer that evaluates proposed paper trades with explainable heuristics before execution.
 - `apps.signals`: demo-only signals and mock-agent layer that generates local insights from market snapshots and exposes read-only endpoints for the frontend.
+- `apps.postmortem_demo`: demo-only trade review layer that generates post-trade reviews for executed paper trades using deterministic heuristics.
 - `apps.agents`: placeholder app for future agent domain work.
 - `apps.audit`: placeholder app for future audit and post-mortem work.
 
@@ -132,6 +133,30 @@ Current signals endpoints:
 - `/api/signals/agents/`
 - `/api/signals/summary/`
 
+
+## Post-mortem demo app summary
+The `apps.postmortem_demo` app closes the first local review loop across markets, signals, risk demo, paper trading, and the frontend `/postmortem` workspace.
+
+Current post-mortem model:
+- `TradeReview`
+
+Current post-mortem workflow:
+- generate or refresh trade reviews with `python manage.py generate_trade_reviews`
+- classify each executed paper trade as `FAVORABLE`, `NEUTRAL`, or `UNFAVORABLE` using explainable heuristics
+- persist summary, rationale, lesson, recommendation, estimated outcome context, and links back to the original trade
+- expose read-only review endpoints for the frontend and admin
+
+Current post-mortem endpoints:
+- `/api/reviews/`
+- `/api/reviews/<id>/`
+- `/api/reviews/summary/`
+
+Out of scope by design:
+- ML-based post-mortem analysis
+- autonomous post-trade agents
+- news-based attribution
+- real-time streaming review generation
+
 ## Environment configuration
 1. Copy the backend env file:
    ```bash
@@ -207,6 +232,7 @@ Paper trading setup and refresh commands:
 cd apps/backend
 python manage.py seed_paper_account
 python manage.py refresh_paper_portfolio
+python manage.py generate_trade_reviews
 ```
 
 What the launcher handles before running backend commands:

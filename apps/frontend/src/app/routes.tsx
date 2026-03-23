@@ -57,8 +57,9 @@ export const appRoutes: AppRoute[] = [
   {
     label: 'Post-Mortem',
     path: '/postmortem',
-    description: 'Retrospectives, incident reviews, and learning loops.',
+    description: 'Retrospectives, trade reviews, and learning loops for paper trades.',
     component: PostMortemPage,
+    match: (pathname) => /^\/postmortem(\/[^/]+)?\/?$/.test(pathname),
   },
   {
     label: 'Settings',

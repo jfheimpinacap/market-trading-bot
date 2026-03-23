@@ -28,9 +28,15 @@ export const dashboardQuickLinks: DashboardQuickLink[] = [
   },
   {
     title: 'Portfolio',
-    description: 'Reserved for paper positions, exposure snapshots, and execution telemetry.',
+    description: 'Inspect paper balances, trade history, positions, and review links for executed trades.',
     path: '/portfolio',
-    availability: 'placeholder',
+    availability: 'live',
+  },
+  {
+    title: 'Post-Mortem',
+    description: 'Inspect demo trade reviews, outcome counts, and simple lessons from the local review engine.',
+    path: '/postmortem',
+    availability: 'live',
   },
 ];
 
@@ -62,25 +68,25 @@ export const dashboardModules: DashboardModuleStatus[] = [
   },
   {
     name: 'Paper trading',
-    summary: 'Execution workflows, positions, and PnL remain out of scope for this milestone.',
-    status: 'pending',
+    summary: 'Execution workflows, positions, PnL, and portfolio history are available in the local demo account.',
+    status: 'ready',
   },
   {
     name: 'Risk engine',
-    summary: 'Position limits, scenario checks, and risk overlays are still future roadmap items.',
-    status: 'pending',
+    summary: 'The demo risk guard is integrated into the trade flow before paper execution.',
+    status: 'ready',
   },
   {
     name: 'Post-mortem',
-    summary: 'Retrospective tooling is reserved in navigation but not implemented yet.',
-    status: 'pending',
+    summary: 'Trade reviews, outcome summaries, and linked retrospective detail are now available for paper trades.',
+    status: 'ready',
   },
 ];
 
 export const nextProjectSteps = [
   'Extend the System panel with provider diagnostics, worker visibility, and richer local service checks.',
   'Keep expanding the seeded demo catalog so the dashboard and Markets module feel realistic during development.',
-  'Prepare the Portfolio and Agents placeholders to consume backend summaries once those endpoints exist.',
+  'Expand the post-mortem heuristics with richer execution context and refresh flows once the review loop settles.',
 ];
 
 export const localEnvironmentHighlights = [
