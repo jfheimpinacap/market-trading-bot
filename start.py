@@ -44,6 +44,14 @@ class PythonInterpreter:
     source: str
 
 
+@dataclass(frozen=True)
+class ToolStatus:
+    name: str
+    found: bool
+    command: str | None
+    version: str | None
+
+
 ROOT = Path(__file__).resolve().parent
 PATHS = ProjectPaths(
     root=ROOT,
@@ -72,60 +80,19 @@ DEFAULT_PORTS = {
 
 
 def info(message: str) -> None:
-    print(f"[INFO] {message}")
+    print(f'[INFO] {message}')
 
 
 def ok(message: str) -> None:
-    print(f"[OK] {message}")
+    print(f'[OK] {message}')
 
 
 def warn(message: str) -> None:
-    print(f"[WARN] {message}")
+    print(f'[WARN] {message}')
 
 
 def fail(message: str) -> None:
     raise LauncherError(message)
-
-
-def run_command(
-    command: Sequence[str],
-    *,
-    cwd: Path | None = None,
-    env: dict[str, str] | None = None,
-    capture_output: bool = False,
-    check: bool = True,
-) -> subprocess.CompletedProcess[str]:
-    try:
-        return subprocess.run(
-            list(command),
-            cwd=cwd,
-            env=env,
-            check=check,
-            text=True,
-            capture_output=capture_output,
-        )
-    except FileNotFoundError as exc:
-        fail(f"Command not found: {command[0]}")
-    except subprocess.CalledProcessError as exc:
-        if capture_output:
-            output = '\n'.join(part for part in [exc.stdout, exc.stderr] if part).strip()
-            detail = f"\n{output}" if output else ''
-            fail(f"Command failed ({' '.join(command)}).{detail}")
-        fail(f"Command failed ({' '.join(command)}).")
-
-
-def parse_env_file(env_path: Path) -> dict[str, str]:
-    values: dict[str, str] = {}
-    if not env_path.exists():
-        return values
-
-    for raw_line in env_path.read_text(encoding='utf-8').splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith('#') or '=' not in line:
-            continue
-        key, value = line.split('=', 1)
-        values[key.strip()] = value.strip()
-    return values
 
 
 def build_paths() -> ProjectPaths:
@@ -144,12 +111,176 @@ def ensure_project_structure(paths: ProjectPaths) -> None:
     missing = [name for name, path in required_paths.items() if not path.exists()]
     if missing:
         fail(
-            'Repository structure is incomplete. Missing: ' + ', '.join(missing)
+            'Repository structure is incomplete. Missing: '
+            + ', '.join(missing)
+            + '. Please confirm the monorepo still uses apps/backend and apps/frontend.'
         )
 
 
-def find_executable(name: str) -> str | None:
-    return shutil.which(name)
+def subprocess_env(extra: dict[str, str] | None = None) -> dict[str, str]:
+    env = os.environ.copy()
+    env.setdefault('PYTHONUNBUFFERED', '1')
+    if os.name == 'nt':
+        env['PATH'] = os.environ.get('PATH', env.get('PATH', ''))
+        env['PATHEXT'] = os.environ.get('PATHEXT', env.get('PATHEXT', ''))
+    if extra:
+        env.update(extra)
+    return env
+
+
+def run_command(
+    command: Sequence[str],
+    *,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+    capture_output: bool = False,
+    check: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    safe_env = subprocess_env(env)
+    try:
+        return subprocess.run(
+            [str(part) for part in command],
+            cwd=cwd,
+            env=safe_env,
+            check=check,
+            text=True,
+            capture_output=capture_output,
+        )
+    except FileNotFoundError:
+        fail(
+            f'Command not found: {command[0]}. '
+            'Please verify it from the same terminal with the exact command shown above.'
+        )
+    except subprocess.CalledProcessError as exc:
+        if capture_output:
+            output = '\n'.join(part for part in [exc.stdout, exc.stderr] if part).strip()
+            detail = f'\n{output}' if output else ''
+            fail(f"Command failed ({' '.join(str(part) for part in command)}).{detail}")
+        fail(f"Command failed ({' '.join(str(part) for part in command)}).")
+
+
+def parse_env_file(env_path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if not env_path.exists():
+        return values
+
+    for raw_line in env_path.read_text(encoding='utf-8').splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def command_candidates(name: str) -> tuple[str, ...]:
+    if os.name != 'nt':
+        return (name,)
+    windows_aliases = {
+        'node': ('node', 'node.exe'),
+        'npm': ('npm', 'npm.cmd'),
+        'py': ('py', 'py.exe'),
+        'python': ('python', 'python.exe'),
+    }
+    return windows_aliases.get(name, (name,))
+
+
+def resolve_command(name: str) -> str | None:
+    for candidate in command_candidates(name):
+        resolved = shutil.which(candidate)
+        if resolved:
+            return resolved
+    return None
+
+
+def has_command(name: str) -> bool:
+    return resolve_command(name) is not None
+
+
+def npm_exec() -> str:
+    return shutil.which('npm') or shutil.which('npm.cmd') or 'npm'
+
+
+def node_exec() -> str:
+    return shutil.which('node') or shutil.which('node.exe') or 'node'
+
+
+def command_version_candidates(candidates: Sequence[str]) -> str | None:
+    for candidate in candidates:
+        try:
+            result = subprocess.run(
+                [candidate, '--version'],
+                check=False,
+                text=True,
+                capture_output=True,
+                env=subprocess_env(),
+            )
+        except (FileNotFoundError, OSError):
+            continue
+        if result.returncode == 0:
+            output = '\n'.join(part for part in [result.stdout, result.stderr] if part).strip()
+            return output.splitlines()[0] if output else 'available'
+    return None
+
+
+def node_version() -> str | None:
+    return command_version_candidates(command_candidates('node'))
+
+
+def npm_version() -> str | None:
+    candidates = ['npm']
+    if os.name == 'nt':
+        candidates.append('npm.cmd')
+    return command_version_candidates(candidates)
+
+
+def inspect_node_tooling() -> dict[str, ToolStatus]:
+    node_command = resolve_command('node')
+    npm_command = shutil.which('npm') or shutil.which('npm.cmd')
+    return {
+        'node': ToolStatus(
+            name='node',
+            found=node_command is not None,
+            command=node_command,
+            version=node_version(),
+        ),
+        'npm': ToolStatus(
+            name='npm',
+            found=npm_command is not None,
+            command=npm_command,
+            version=npm_version(),
+        ),
+    }
+
+
+def ensure_node_tooling() -> dict[str, ToolStatus]:
+    tooling = inspect_node_tooling()
+    node = tooling['node']
+    npm = tooling['npm']
+
+    if node.found and npm.found:
+        ok(
+            'Node.js tooling detected '
+            f"(node: {node.version or 'available'}, npm: {npm.version or 'available'})."
+        )
+        return tooling
+
+    diagnostics = [
+        'Frontend tooling is required but Node.js/npm could not be resolved correctly.',
+        f"node found: {'yes' if node.found else 'no'}; resolved command: {node.command or 'not found'}; version: {node.version or 'unavailable'}.",
+        f"npm found: {'yes' if npm.found else 'no'}; resolved command: {npm.command or 'not found'}; version: {npm.version or 'unavailable'}.",
+        'From the same PowerShell or VS Code terminal, verify:',
+        '  node --version',
+        '  npm --version',
+    ]
+    if os.name == 'nt':
+        diagnostics.extend(
+            [
+                'On Windows this launcher also checks npm.cmd and node.exe explicitly.',
+                'If those commands work interactively, reopen the terminal so PATH/PATHEXT refresh correctly.',
+            ]
+        )
+    fail(' '.join(diagnostics))
 
 
 def is_valid_python_interpreter(command: str) -> bool:
@@ -159,6 +290,7 @@ def is_valid_python_interpreter(command: str) -> bool:
             check=False,
             text=True,
             capture_output=True,
+            env=subprocess_env(),
         )
     except (FileNotFoundError, OSError):
         return False
@@ -189,50 +321,67 @@ def resolve_python_interpreter() -> PythonInterpreter | None:
     return None
 
 
-def command_version(command: Sequence[str]) -> str:
-    result = run_command(command, capture_output=True, check=False)
-    output = '\n'.join(part for part in [result.stdout, result.stderr] if part).strip()
-    return output.splitlines()[0] if output else 'available'
-
-
-def detect_docker_compose() -> list[str] | None:
-    docker = find_executable('docker')
+def detect_docker_compose() -> tuple[list[str] | None, str]:
+    docker = shutil.which('docker')
     if docker:
         result = subprocess.run(
             [docker, 'compose', 'version'],
             check=False,
             text=True,
             capture_output=True,
+            env=subprocess_env(),
         )
         if result.returncode == 0:
-            return [docker, 'compose']
+            return [docker, 'compose'], 'docker compose'
 
-    docker_compose = find_executable('docker-compose')
+    docker_compose = shutil.which('docker-compose')
     if docker_compose:
-        return [docker_compose]
-    return None
+        return [docker_compose], 'docker-compose'
+    return None, 'missing'
+
+
+def ensure_python_available() -> PythonInterpreter:
+    python = resolve_python_interpreter()
+    if python is None:
+        fail(
+            'Python is required but no valid interpreter was found. '
+            'Try running this launcher with py, python, or python3.'
+        )
+    return python
+
+
+def ensure_docker_available() -> tuple[list[str], str]:
+    compose_command, compose_mode = detect_docker_compose()
+    if compose_command is None:
+        fail(
+            'Docker Compose is required to start PostgreSQL and Redis but was not found. '
+            'Please verify `docker --version` and `docker compose version` in this terminal.'
+        )
+    return compose_command, compose_mode
+
+
+def command_output(command: Sequence[str]) -> str:
+    result = run_command(command, capture_output=True, check=False)
+    output = '\n'.join(part for part in [result.stdout, result.stderr] if part).strip()
+    return output.splitlines()[0] if output else 'available'
 
 
 def verify_prerequisites(*, require_node: bool, require_docker: bool) -> dict[str, Any]:
-    python = resolve_python_interpreter()
-    if python is None:
-        fail('Python is required but no valid interpreter was found. Try running this launcher with py, python, or python3.')
+    python = ensure_python_available()
+    node_tooling = ensure_node_tooling() if require_node else inspect_node_tooling()
+    compose_command, compose_mode = detect_docker_compose()
 
-    node_path = find_executable('node')
-    npm_path = find_executable('npm')
-    if require_node and (not node_path or not npm_path):
-        fail('Node.js and npm are required for the frontend but were not found in PATH.')
-
-    compose_command = detect_docker_compose()
     if require_docker and compose_command is None:
-        fail('Docker Compose is required to start PostgreSQL and Redis, but neither docker compose nor docker-compose was found.')
+        fail(
+            'Docker Compose is required to start PostgreSQL and Redis but was not found. '
+            'Please verify `docker --version` and `docker compose version`.'
+        )
 
     return {
-        'python': python.command,
-        'python_source': python.source,
-        'node': node_path,
-        'npm': npm_path,
+        'python': python,
+        'node_tooling': node_tooling,
         'docker_compose': compose_command,
+        'docker_compose_mode': compose_mode,
     }
 
 
@@ -273,11 +422,8 @@ def ensure_backend_venv(paths: ProjectPaths) -> Path:
         ok('Backend virtual environment already present.')
         return venv_python
 
-    interpreter = resolve_python_interpreter()
-    if interpreter is None:
-        fail('Python is required to create the backend virtual environment. Try running this launcher with py, python, or python3.')
-
-    info('Creating backend virtual environment...')
+    interpreter = ensure_python_available()
+    info(f'Creating backend virtual environment with {interpreter.command}...')
     run_command([interpreter.command, '-m', 'venv', str(paths.backend / '.venv')], cwd=paths.backend)
     ok('Backend virtual environment created.')
     return venv_python
@@ -305,7 +451,15 @@ def ensure_backend_dependencies(paths: ProjectPaths, *, skip_install: bool) -> P
     return venv_python
 
 
-def ensure_frontend_dependencies(paths: ProjectPaths, *, skip_install: bool) -> None:
+def ensure_frontend_deps(paths: ProjectPaths, *, skip_install: bool) -> None:
+    if not paths.frontend_package.exists():
+        fail(
+            'Frontend package.json is missing at apps/frontend/package.json. '
+            'Please confirm the monorepo structure before running frontend commands.'
+        )
+
+    ensure_node_tooling()
+
     node_modules = paths.frontend / 'node_modules'
     package_lock = paths.frontend / 'package-lock.json'
     stamp = node_modules / '.mtb-package.sha256'
@@ -319,25 +473,40 @@ def ensure_frontend_dependencies(paths: ProjectPaths, *, skip_install: bool) -> 
         warn('Skipping frontend dependency installation because --skip-install was used.')
         return
 
-    if node_modules.exists() and installed_hash == package_hash:
+    if not node_modules.exists():
+        info('apps/frontend/node_modules is missing, so npm install will run now...')
+    elif installed_hash != package_hash:
+        info('Frontend dependency manifest changed, so npm install will run now...')
+    else:
         ok('Frontend dependencies already installed.')
         return
 
-    info('Installing frontend dependencies with npm install...')
-    run_command(['npm', 'install'], cwd=paths.frontend)
+    run_command([npm_exec(), 'install'], cwd=paths.frontend)
     node_modules.mkdir(parents=True, exist_ok=True)
     stamp.write_text(package_hash, encoding='utf-8')
     ok('Frontend dependencies installed.')
 
 
 def backend_command_env(paths: ProjectPaths) -> dict[str, str]:
-    env = os.environ.copy()
-    env.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.local')
-    env.setdefault('PYTHONUNBUFFERED', '1')
-    return env
+    _ = paths
+    return subprocess_env(
+        {
+            'DJANGO_SETTINGS_MODULE': os.environ.get('DJANGO_SETTINGS_MODULE', 'config.settings.local'),
+        }
+    )
 
 
-def run_backend_manage(paths: ProjectPaths, args: Sequence[str], *, capture_output: bool = False) -> subprocess.CompletedProcess[str]:
+def frontend_command_env() -> dict[str, str]:
+    return subprocess_env()
+
+
+def run_backend_manage(
+    paths: ProjectPaths,
+    args: Sequence[str],
+    *,
+    capture_output: bool = False,
+    check: bool = True,
+) -> subprocess.CompletedProcess[str]:
     venv_python = get_backend_venv_python(paths)
     if not venv_python.exists():
         fail('Backend virtual environment is missing. Run python start.py setup first.')
@@ -346,6 +515,7 @@ def run_backend_manage(paths: ProjectPaths, args: Sequence[str], *, capture_outp
         cwd=paths.backend,
         env=backend_command_env(paths),
         capture_output=capture_output,
+        check=check,
     )
 
 
@@ -397,7 +567,27 @@ def prepare_backend(paths: ProjectPaths, *, skip_install: bool) -> Path:
 
 def prepare_frontend(paths: ProjectPaths, *, skip_install: bool) -> None:
     info('Preparing frontend...')
-    ensure_frontend_dependencies(paths, skip_install=skip_install)
+    ensure_frontend_deps(paths, skip_install=skip_install)
+
+
+def prepare_dev_environment(
+    paths: ProjectPaths,
+    *,
+    skip_backend: bool,
+    skip_frontend: bool,
+    skip_install: bool,
+    no_seed: bool,
+) -> None:
+    if not skip_backend:
+        prepare_backend(paths, skip_install=skip_install)
+        maybe_seed(paths, no_seed=no_seed)
+    else:
+        warn('Skipping backend preparation.')
+
+    if not skip_frontend:
+        prepare_frontend(paths, skip_install=skip_install)
+    else:
+        warn('Skipping frontend preparation.')
 
 
 def should_seed_demo(paths: ProjectPaths) -> bool:
@@ -429,10 +619,13 @@ def maybe_seed(paths: ProjectPaths, *, no_seed: bool) -> None:
     ok('Market data already exists; automatic demo seed skipped.')
 
 
-def process_kwargs() -> dict[str, Any]:
-    kwargs: dict[str, Any] = {}
+def process_kwargs(new_console: bool = False) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {'text': True}
     if os.name == 'nt':
-        kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
+        if new_console:
+            creationflags |= subprocess.CREATE_NEW_CONSOLE
+        kwargs['creationflags'] = creationflags
     else:
         kwargs['start_new_session'] = True
     return kwargs
@@ -449,8 +642,40 @@ def remove_state_file() -> None:
 
 
 def spawn_process(label: str, command: Sequence[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.Popen[str]:
-    info(f"Starting {label}: {' '.join(command)}")
-    return subprocess.Popen(list(command), cwd=cwd, env=env, text=True, **process_kwargs())
+    info(f"Starting {label}: {' '.join(str(part) for part in command)}")
+    return subprocess.Popen(
+        [str(part) for part in command],
+        cwd=cwd,
+        env=subprocess_env(env),
+        **process_kwargs(),
+    )
+
+
+def open_new_console_windows(process_specs: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    launched: list[dict[str, Any]] = []
+    for spec in process_specs:
+        label = spec['label']
+        command = [str(part) for part in spec['command']]
+        cwd = str(spec['cwd'])
+        title = spec.get('title', label)
+        info(f"Opening new console for {label}: {' '.join(command)}")
+        process = subprocess.Popen(
+            command,
+            cwd=cwd,
+            env=subprocess_env(spec.get('env')),
+            **process_kwargs(new_console=True),
+        )
+        launched.append(
+            {
+                'label': label,
+                'pid': process.pid,
+                'command': ' '.join(command),
+                'cwd': cwd,
+                'mode': 'windows-console',
+                'title': title,
+            }
+        )
+    return launched
 
 
 def stop_managed_processes() -> None:
@@ -466,7 +691,13 @@ def stop_managed_processes() -> None:
             continue
         try:
             if os.name == 'nt':
-                os.kill(pid, signal.SIGTERM)
+                subprocess.run(
+                    ['taskkill', '/PID', str(pid), '/T', '/F'],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env=subprocess_env(),
+                )
             else:
                 os.killpg(pid, signal.SIGTERM)
             ok(f'Stopped {label} (pid {pid}).')
@@ -499,97 +730,150 @@ def print_urls(root_env: dict[str, str] | None = None) -> None:
     print(f'Redis:    {redis_port}')
 
 
+def backend_run_command(paths: ProjectPaths) -> list[str]:
+    return [str(get_backend_venv_python(paths)), str(paths.backend_manage), 'runserver', '0.0.0.0:8000']
+
+
+def frontend_run_command() -> list[str]:
+    return [npm_exec(), 'run', 'dev', '--', '--host', '0.0.0.0', '--port', str(DEFAULT_PORTS['frontend'])]
+
+
+def build_dev_process_specs(
+    paths: ProjectPaths,
+    *,
+    include_backend: bool,
+    include_frontend: bool,
+    with_sim_loop: bool,
+) -> list[dict[str, Any]]:
+    process_specs: list[dict[str, Any]] = []
+    if include_backend:
+        process_specs.append(
+            {
+                'label': 'backend',
+                'title': 'market-trading-bot backend',
+                'command': backend_run_command(paths),
+                'cwd': paths.backend,
+                'env': backend_command_env(paths),
+            }
+        )
+    if include_frontend:
+        process_specs.append(
+            {
+                'label': 'frontend',
+                'title': 'market-trading-bot frontend',
+                'command': frontend_run_command(),
+                'cwd': paths.frontend,
+                'env': frontend_command_env(),
+            }
+        )
+    if with_sim_loop:
+        process_specs.append(
+            {
+                'label': 'simulation loop',
+                'title': 'market-trading-bot simulation loop',
+                'command': [str(get_backend_venv_python(paths)), str(paths.backend_manage), 'simulate_markets_loop'],
+                'cwd': paths.backend,
+                'env': backend_command_env(paths),
+            }
+        )
+    return process_specs
+
+
+def start_dev_servers(process_specs: Sequence[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[tuple[str, subprocess.Popen[str]]]]:
+    if os.name == 'nt':
+        launched = open_new_console_windows(process_specs)
+        write_state_file(launched)
+        return launched, []
+
+    processes: list[dict[str, Any]] = []
+    live_processes: list[tuple[str, subprocess.Popen[str]]] = []
+    for spec in process_specs:
+        process = spawn_process(spec['label'], spec['command'], spec['cwd'], env=spec.get('env'))
+        live_processes.append((spec['label'], process))
+        processes.append(
+            {
+                'label': spec['label'],
+                'pid': process.pid,
+                'command': ' '.join(str(part) for part in spec['command']),
+                'cwd': str(spec['cwd']),
+                'mode': 'background-process',
+            }
+        )
+    write_state_file(processes)
+    return processes, live_processes
+
+
 def command_up(args: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
-    prereqs = verify_prerequisites(
-        require_node=not args.skip_frontend,
-        require_docker=True,
-    )
+    prereqs = verify_prerequisites(require_node=not args.skip_frontend, require_docker=True)
     ensure_env_files()
     start_infrastructure(paths, prereqs['docker_compose'])
 
-    backend_process: subprocess.Popen[str] | None = None
-    frontend_process: subprocess.Popen[str] | None = None
-    sim_process: subprocess.Popen[str] | None = None
-    processes: list[dict[str, Any]] = []
-
     try:
-        if not args.skip_backend:
-            prepare_backend(paths, skip_install=args.skip_install)
-            maybe_seed(paths, no_seed=args.no_seed)
-            backend_process = spawn_process(
-                'backend',
-                [str(get_backend_venv_python(paths)), str(paths.backend_manage), 'runserver', '0.0.0.0:8000'],
-                cwd=paths.backend,
-                env=backend_command_env(paths),
-            )
-            processes.append({'label': 'backend', 'pid': backend_process.pid, 'command': 'runserver'})
+        prepare_dev_environment(
+            paths,
+            skip_backend=args.skip_backend,
+            skip_frontend=args.skip_frontend,
+            skip_install=args.skip_install,
+            no_seed=args.no_seed,
+        )
+
+        include_backend = not args.skip_backend
+        include_frontend = not args.skip_frontend
+        if args.with_sim_loop and not include_backend:
+            warn('Simulation loop was requested, but backend startup is skipped, so the loop was not started.')
+        process_specs = build_dev_process_specs(
+            paths,
+            include_backend=include_backend,
+            include_frontend=include_frontend,
+            with_sim_loop=args.with_sim_loop and include_backend,
+        )
+
+        started_processes: list[dict[str, Any]] = []
+        live_processes: list[tuple[str, subprocess.Popen[str]]] = []
+        if process_specs:
+            started_processes, live_processes = start_dev_servers(process_specs)
         else:
-            warn('Skipping backend preparation and startup.')
-
-        if not args.skip_frontend:
-            prepare_frontend(paths, skip_install=args.skip_install)
-            frontend_process = spawn_process(
-                'frontend',
-                ['npm', 'run', 'dev', '--', '--host', '0.0.0.0', '--port', str(DEFAULT_PORTS['frontend'])],
-                cwd=paths.frontend,
-            )
-            processes.append({'label': 'frontend', 'pid': frontend_process.pid, 'command': 'npm run dev'})
-        else:
-            warn('Skipping frontend preparation and startup.')
-
-        if args.with_sim_loop:
-            if args.skip_backend:
-                warn('Simulation loop was requested, but backend startup is skipped, so the loop was not started.')
-            else:
-                sim_process = spawn_process(
-                    'simulation loop',
-                    [str(get_backend_venv_python(paths)), str(paths.backend_manage), 'simulate_markets_loop'],
-                    cwd=paths.backend,
-                    env=backend_command_env(paths),
-                )
-                processes.append({'label': 'simulation loop', 'pid': sim_process.pid, 'command': 'simulate_markets_loop'})
-
-        if processes:
-            write_state_file(processes)
+            warn('Both backend and frontend startup were skipped; nothing was started.')
 
         print_urls()
-        info('Launcher is running. Press Ctrl+C to stop backend/frontend child processes.')
+        if os.name == 'nt' and started_processes:
+            ok('Windows mode: backend/frontend were launched in separate console windows.')
+            info('Use `python start.py down` from the repo root to stop launcher-managed processes and Docker services.')
+            return 0
 
-        while True:
-            for label, process in [('backend', backend_process), ('frontend', frontend_process), ('simulation loop', sim_process)]:
-                if process is not None:
+        if started_processes:
+            info('Launcher is running. Press Ctrl+C to stop backend/frontend child processes.')
+            while True:
+                for label, process in live_processes:
                     code = process.poll()
                     if code is not None:
                         fail(f'{label} exited unexpectedly with code {code}.')
-            time.sleep(1)
+                time.sleep(1)
+        return 0
     except KeyboardInterrupt:
         warn('Received Ctrl+C. Stopping launcher-managed processes...')
     finally:
-        stop_managed_processes()
+        if os.name != 'nt':
+            stop_managed_processes()
     return 0
 
 
 def command_setup(args: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
-    prereqs = verify_prerequisites(
-        require_node=not args.skip_frontend,
-        require_docker=not args.skip_infra,
-    )
+    prereqs = verify_prerequisites(require_node=not args.skip_frontend, require_docker=not args.skip_infra)
     ensure_env_files()
     if not args.skip_infra:
         start_infrastructure(paths, prereqs['docker_compose'])
-    if not args.skip_backend:
-        prepare_backend(paths, skip_install=args.skip_install)
-        maybe_seed(paths, no_seed=args.no_seed)
-    else:
-        warn('Skipping backend setup.')
-    if not args.skip_frontend:
-        prepare_frontend(paths, skip_install=args.skip_install)
-    else:
-        warn('Skipping frontend setup.')
+    prepare_dev_environment(
+        paths,
+        skip_backend=args.skip_backend,
+        skip_frontend=args.skip_frontend,
+        skip_install=args.skip_install,
+        no_seed=args.no_seed,
+    )
     print_urls()
     ok('Setup completed. Use python start.py up when you want to start the servers.')
     return 0
@@ -598,45 +882,53 @@ def command_setup(args: argparse.Namespace) -> int:
 def command_status(_: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
-    compose_command = detect_docker_compose()
     python = resolve_python_interpreter()
-    node_path = find_executable('node')
-    npm_path = find_executable('npm')
+    node_tooling = inspect_node_tooling()
+    compose_command, compose_mode = detect_docker_compose()
     root_env_values = parse_env_file(paths.root_env)
-
-    backend_status = 'OK' if paths.backend.exists() else 'MISSING'
-    frontend_status = 'OK' if paths.frontend.exists() else 'MISSING'
-    python_version = command_version([python.command, '--version']) if python else 'MISSING'
-    node_version = command_version([node_path, '--version']) if node_path else 'MISSING'
-    npm_version = command_version([npm_path, '--version']) if npm_path else 'MISSING'
+    backend_venv_python = get_backend_venv_python(paths)
+    docker_found = shutil.which('docker') is not None
 
     print('=== market-trading-bot local status ===')
-    print(f'Repo root:      {paths.root}')
-    print(f'Backend dir:    {backend_status} -> {paths.backend}')
-    print(f'Frontend dir:   {frontend_status} -> {paths.frontend}')
-    print(f'Docker compose: {" ".join(compose_command) if compose_command else "MISSING"}')
-    print(f'Python:         {python_version}')
-    print(f'Current interpreter: {python.command if python else "MISSING"}')
-    print(f'Python source:  {python.source if python else "not detected"}')
-    print(f'Node:           {node_version}')
-    print(f'npm:            {npm_version}')
+    print(f'Repo root:               {paths.root}')
+    print(f'Python current interpreter: {sys.executable or "not detected"}')
+    print(f'Python launcher interpreter: {(python.command if python else "not detected")}')
+    print(f'Python launcher source:  {(python.source if python else "not detected")}')
+    print(f'Backend venv python:     {backend_venv_python} ({"present" if backend_venv_python.exists() else "missing"})')
+    if python:
+        print(f'Python version:          {command_output([python.command, "--version"])}')
+    print('')
+    print('Node / npm:')
+    print(f"  Node found:            {'yes' if node_tooling['node'].found else 'no'}")
+    print(f"  Node resolved command: {node_tooling['node'].command or 'not found'}")
+    print(f"  Node version:          {node_tooling['node'].version or 'unavailable'}")
+    print(f"  npm found:             {'yes' if node_tooling['npm'].found else 'no'}")
+    print(f"  npm resolved command:  {node_tooling['npm'].command or 'not found'}")
+    print(f"  npm version:           {node_tooling['npm'].version or 'unavailable'}")
+    print('')
+    print('Docker:')
+    print(f"  Docker found:          {'yes' if docker_found else 'no'}")
+    print(f"  Docker Compose mode:   {compose_mode}")
+    print(f"  Docker Compose command:{' ' + ' '.join(compose_command) if compose_command else ' not found'}")
     print('')
     print('Environment files:')
-    print(f'  root .env:         {"present" if paths.root_env.exists() else "missing"}')
-    print(f'  backend .env:      {"present" if paths.backend_env.exists() else "missing"}')
-    print(f'  frontend .env:     {"present" if paths.frontend_env.exists() else "missing"}')
+    print(f"  .env:                  {'present' if paths.root_env.exists() else 'missing'}")
+    print(f"  apps/backend/.env:     {'present' if paths.backend_env.exists() else 'missing'}")
+    print(f"  apps/frontend/.env:    {'present' if paths.frontend_env.exists() else 'missing'}")
     print('')
     print('Dependency state:')
-    print(f'  backend .venv:     {"present" if (paths.backend / ".venv").exists() else "missing"}')
-    print(f'  frontend node_modules: {"present" if (paths.frontend / "node_modules").exists() else "missing"}')
+    print(f"  apps/backend/.venv:    {'present' if (paths.backend / '.venv').exists() else 'missing'}")
+    print(f"  apps/frontend/node_modules: {'present' if (paths.frontend / 'node_modules').exists() else 'missing'}")
     print('')
-    print('Expected local ports:')
-    print(f"  backend:   {DEFAULT_PORTS['backend']}")
-    print(f"  frontend:  {DEFAULT_PORTS['frontend']}")
-    print(f"  postgres:  {root_env_values.get('POSTGRES_PORT', str(DEFAULT_PORTS['postgres']))}")
-    print(f"  redis:     {root_env_values.get('REDIS_PORT', str(DEFAULT_PORTS['redis']))}")
+    print('Ports:')
+    print(f"  backend:               {DEFAULT_PORTS['backend']}")
+    print(f"  frontend:              {DEFAULT_PORTS['frontend']}")
+    print(f"  postgres:              {root_env_values.get('POSTGRES_PORT', str(DEFAULT_PORTS['postgres']))}")
+    print(f"  redis:                 {root_env_values.get('REDIS_PORT', str(DEFAULT_PORTS['redis']))}")
+    print_urls(root_env_values)
     print('')
     print('Recommended commands:')
+    print('  python start.py status')
     print('  python start.py setup')
     print('  python start.py up')
     print('  python start.py seed')
@@ -644,17 +936,16 @@ def command_status(_: argparse.Namespace) -> int:
     print('  python start.py simulate-loop')
     print('  python start.py down')
     print('')
-    print_urls(root_env_values)
     if PATHS.state_file.exists():
-        print(f'Launcher state file: present at {PATHS.state_file}')
+        print(f'Launcher state file:     present at {PATHS.state_file}')
     else:
-        print('Launcher state file: not present')
+        print('Launcher state file:     not present')
     return 0
 
 
 def command_down(_: argparse.Namespace) -> int:
     paths = build_paths()
-    compose_command = detect_docker_compose()
+    compose_command, _ = detect_docker_compose()
     stop_managed_processes()
     stop_infrastructure(paths, compose_command)
     return 0
@@ -698,17 +989,117 @@ def command_simulate_loop(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_backend(args: argparse.Namespace) -> int:
+    paths = build_paths()
+    ensure_project_structure(paths)
+    prereqs = verify_prerequisites(require_node=False, require_docker=not args.skip_infra)
+    ensure_env_files()
+    if not args.skip_infra:
+        start_infrastructure(paths, prereqs['docker_compose'])
+    prepare_backend(paths, skip_install=args.skip_install)
+    if args.no_seed:
+        warn('Skipping automatic seed for backend-only startup because --no-seed was used.')
+    else:
+        maybe_seed(paths, no_seed=False)
+    if os.name == 'nt':
+        launched = open_new_console_windows(
+            [
+                {
+                    'label': 'backend',
+                    'title': 'market-trading-bot backend',
+                    'command': backend_run_command(paths),
+                    'cwd': paths.backend,
+                    'env': backend_command_env(paths),
+                }
+            ]
+        )
+        write_state_file(launched)
+        print_urls()
+        ok('Windows mode: backend launched in a separate console window.')
+        return 0
+
+    process = spawn_process('backend', backend_run_command(paths), paths.backend, env=backend_command_env(paths))
+    write_state_file([
+        {
+            'label': 'backend',
+            'pid': process.pid,
+            'command': ' '.join(backend_run_command(paths)),
+            'cwd': str(paths.backend),
+            'mode': 'background-process',
+        }
+    ])
+    info('Backend is running. Press Ctrl+C to stop it.')
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        warn('Received Ctrl+C. Stopping backend...')
+    finally:
+        stop_managed_processes()
+    return 0
+
+
+def command_frontend(args: argparse.Namespace) -> int:
+    paths = build_paths()
+    ensure_project_structure(paths)
+    verify_prerequisites(require_node=True, require_docker=False)
+    ensure_env_files()
+    prepare_frontend(paths, skip_install=args.skip_install)
+    if os.name == 'nt':
+        launched = open_new_console_windows(
+            [
+                {
+                    'label': 'frontend',
+                    'title': 'market-trading-bot frontend',
+                    'command': frontend_run_command(),
+                    'cwd': paths.frontend,
+                    'env': frontend_command_env(),
+                }
+            ]
+        )
+        write_state_file(launched)
+        print_urls()
+        ok('Windows mode: frontend launched in a separate console window.')
+        return 0
+
+    process = spawn_process('frontend', frontend_run_command(), paths.frontend, env=frontend_command_env())
+    write_state_file([
+        {
+            'label': 'frontend',
+            'pid': process.pid,
+            'command': ' '.join(frontend_run_command()),
+            'cwd': str(paths.frontend),
+            'mode': 'background-process',
+        }
+    ])
+    info('Frontend is running. Press Ctrl+C to stop it.')
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        warn('Received Ctrl+C. Stopping frontend...')
+    finally:
+        stop_managed_processes()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description='Local-first launcher for the market-trading-bot monorepo.',
-    )
+    parser = argparse.ArgumentParser(description='Local-first launcher for the market-trading-bot monorepo.')
     subparsers = parser.add_subparsers(dest='command')
 
     common_setup = argparse.ArgumentParser(add_help=False)
     common_setup.add_argument('--skip-install', action='store_true', help='Skip pip/npm install steps.')
-    common_setup.add_argument('--skip-backend', action='store_true', help='Skip backend preparation.')
-    common_setup.add_argument('--skip-frontend', action='store_true', help='Skip frontend preparation.')
+    common_setup.add_argument('--skip-backend', action='store_true', help='Skip backend preparation/startup.')
+    common_setup.add_argument('--skip-frontend', action='store_true', help='Skip frontend preparation/startup.')
     common_setup.add_argument('--no-seed', action='store_true', help='Do not auto-run the demo seed.')
+
+    backend_only = argparse.ArgumentParser(add_help=False)
+    backend_only.add_argument('--skip-install', action='store_true', help='Skip pip install before running the command.')
+    backend_only.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup before running the command.')
+    backend_only.add_argument('--no-seed', action='store_true', help='Do not auto-run the demo seed before backend startup.')
+
+    frontend_only = argparse.ArgumentParser(add_help=False)
+    frontend_only.add_argument('--skip-install', action='store_true', help='Skip npm install before running the command.')
 
     up_parser = subparsers.add_parser('up', parents=[common_setup], help='Prepare the project and start backend + frontend.')
     up_parser.add_argument('--with-sim-loop', action='store_true', help='Start simulate_markets_loop alongside the backend.')
@@ -724,10 +1115,6 @@ def build_parser() -> argparse.ArgumentParser:
     down_parser = subparsers.add_parser('down', help='Stop launcher-managed processes and Docker Compose services.')
     down_parser.set_defaults(func=command_down)
 
-    backend_only = argparse.ArgumentParser(add_help=False)
-    backend_only.add_argument('--skip-install', action='store_true', help='Skip pip install before running the command.')
-    backend_only.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup before running the command.')
-
     seed_parser = subparsers.add_parser('seed', parents=[backend_only], help='Run seed_markets_demo.')
     seed_parser.set_defaults(func=command_seed)
 
@@ -737,7 +1124,21 @@ def build_parser() -> argparse.ArgumentParser:
     loop_parser = subparsers.add_parser('simulate-loop', parents=[backend_only], help='Run simulate_markets_loop.')
     loop_parser.set_defaults(func=command_simulate_loop)
 
-    parser.set_defaults(command='up', func=command_up, skip_install=False, skip_backend=False, skip_frontend=False, no_seed=False, with_sim_loop=False)
+    backend_parser = subparsers.add_parser('backend', parents=[backend_only], help='Prepare and start only the Django backend.')
+    backend_parser.set_defaults(func=command_backend)
+
+    frontend_parser = subparsers.add_parser('frontend', parents=[frontend_only], help='Prepare and start only the Vite frontend.')
+    frontend_parser.set_defaults(func=command_frontend)
+
+    parser.set_defaults(
+        command='up',
+        func=command_up,
+        skip_install=False,
+        skip_backend=False,
+        skip_frontend=False,
+        no_seed=False,
+        with_sim_loop=False,
+    )
     return parser
 
 

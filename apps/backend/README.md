@@ -127,6 +127,8 @@ python start.py setup --skip-frontend
 Backend-related launcher commands:
 
 ```bash
+python start.py setup --skip-frontend
+python start.py backend
 python start.py seed
 python start.py simulate-tick
 python start.py simulate-loop
@@ -139,7 +141,8 @@ What the launcher handles before running backend commands:
 - installs `requirements.txt` only when the dependency hash changes
 - starts PostgreSQL and Redis unless `--skip-infra` is used
 - runs `python manage.py migrate`
-- auto-seeds the demo catalog during `up` / `setup` only when no markets exist yet
+- auto-seeds the demo catalog during `up`, `setup`, and `backend` only when no markets exist yet
+- on Windows, `python start.py backend` opens the Django server in a dedicated console window
 
 ### Run migrations
 From `apps/backend`:
