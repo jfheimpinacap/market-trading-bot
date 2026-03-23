@@ -430,7 +430,7 @@ def maybe_seed(paths: ProjectPaths, *, no_seed: bool) -> None:
 
 
 def process_kwargs() -> dict[str, Any]:
-    kwargs: dict[str, Any] = {'cwd': str(PATHS.root)}
+    kwargs: dict[str, Any] = {}
     if os.name == 'nt':
         kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
     else:
