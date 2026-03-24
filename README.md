@@ -11,6 +11,19 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 
 ### Real data UX boundary (current)
 
+
+### Paper trading on real-market data (current)
+
+The backend now supports **paper trading using real read-only market data**:
+
+- real market data can be ingested and used as paper pricing reference
+- execution still stays `paper_demo_only` with fictional cash/positions/trades
+- risk/policy/proposal flows can evaluate trades on real read-only markets
+- serializers expose explicit source/execution context for frontend clarity
+
+Still not implemented: real auth, real order placement, real portfolio sync, or real execution paths.
+
+
 - Frontend markets views now distinguish **demo/local** markets from **real/read-only** markets with explicit source badges and filters.
 - Real provider data is explorable in `/markets` and `/markets/:marketId` as read-only context.
 - Paper trading remains simulated only; no real execution path is enabled from the frontend.

@@ -175,6 +175,26 @@ This keeps demo trading workflows isolated while enabling real-market discovery 
 
 Out of scope remains unchanged: no trading auth, no order execution, no real portfolio, no auto-sync workers.
 
+
+## Paper trading on real-market data architecture
+
+The paper-trading stack now treats **market-data source** and **execution mode** as independent concerns:
+
+- `Market.source_type`: `demo` vs `real_read_only`
+- execution mode for this stage: `paper_demo_only`
+
+A shared pricing/tradability layer in `apps.paper_trading.services.market_pricing` provides:
+- centralized yes/no price resolution with probability fallback
+- explicit paper-tradability checks for market status/activity/pricing completeness
+- clear rejection messages for non-operable real markets
+
+Reuse across layers:
+- paper execution + valuation reuse the same price resolution
+- risk demo and policy engine consume the same tradability/pricing constraints
+- proposal engine uses the same price source and avoids synthetic fallback pricing
+
+This preserves auditability and avoids scattered conditional logic while keeping all execution fictional/local-first.
+
 ## API conventions
 - All endpoints live under `/api/`.
 - `config/api.py` is the single place where app endpoints are mounted.

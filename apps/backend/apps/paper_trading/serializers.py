@@ -7,10 +7,10 @@ from apps.paper_trading.models import (
     PaperAccount,
     PaperPortfolioSnapshot,
     PaperPosition,
+    PaperPositionSide,
     PaperPositionStatus,
     PaperTrade,
     PaperTradeType,
-    PaperPositionSide,
 )
 from apps.paper_trading.services.execution import execute_paper_trade
 from apps.paper_trading.services.portfolio import build_account_summary, get_active_account
@@ -49,6 +49,9 @@ class PaperPositionSerializer(serializers.ModelSerializer):
     market_title = serializers.CharField(source='market.title', read_only=True)
     market_slug = serializers.CharField(source='market.slug', read_only=True)
     market_status = serializers.CharField(source='market.status', read_only=True)
+    market_source_type = serializers.CharField(source='market.source_type', read_only=True)
+    is_real_data = serializers.SerializerMethodField()
+    execution_mode = serializers.SerializerMethodField()
 
     class Meta:
         model = PaperPosition
@@ -59,6 +62,9 @@ class PaperPositionSerializer(serializers.ModelSerializer):
             'market_title',
             'market_slug',
             'market_status',
+            'market_source_type',
+            'is_real_data',
+            'execution_mode',
             'side',
             'quantity',
             'average_entry_price',
@@ -77,9 +83,18 @@ class PaperPositionSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    def get_is_real_data(self, obj):
+        return obj.market.source_type == 'real_read_only'
+
+    def get_execution_mode(self, obj):
+        return 'paper_demo_only'
+
 
 class PaperTradeSerializer(serializers.ModelSerializer):
     market_title = serializers.CharField(source='market.title', read_only=True)
+    market_source_type = serializers.CharField(source='market.source_type', read_only=True)
+    is_real_data = serializers.SerializerMethodField()
+    execution_mode = serializers.SerializerMethodField()
 
     class Meta:
         model = PaperTrade
@@ -88,6 +103,9 @@ class PaperTradeSerializer(serializers.ModelSerializer):
             'account',
             'market',
             'market_title',
+            'market_source_type',
+            'is_real_data',
+            'execution_mode',
             'position',
             'trade_type',
             'side',
@@ -103,6 +121,12 @@ class PaperTradeSerializer(serializers.ModelSerializer):
             'updated_at',
         )
         read_only_fields = fields
+
+    def get_is_real_data(self, obj):
+        return obj.market.source_type == 'real_read_only'
+
+    def get_execution_mode(self, obj):
+        return 'paper_demo_only'
 
 
 class PaperPortfolioSnapshotSerializer(serializers.ModelSerializer):

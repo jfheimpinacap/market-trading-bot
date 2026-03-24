@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.markets.demo_data import seed_demo_markets
-from apps.markets.models import Market
+from apps.markets.models import Event, Market, MarketSourceType, MarketStatus, Provider
 from apps.paper_trading.services.execution import execute_paper_trade
 from apps.paper_trading.services.portfolio import ensure_demo_account
 from apps.policy_engine.models import ApprovalDecisionType
@@ -62,6 +62,28 @@ class ProposalEngineServiceTests(TestCase):
         proposal_with_exposure = generate_trade_proposal(market=self.market, paper_account=self.account)
 
         self.assertGreaterEqual(proposal_without_exposure.suggested_quantity, proposal_with_exposure.suggested_quantity)
+
+
+    def test_proposal_generation_works_for_real_read_only_market(self):
+        provider = Provider.objects.create(name='Kalshi Proposal Real', slug='kalshi-proposal-real')
+        event = Event.objects.create(provider=provider, title='Proposal Real Event', slug='proposal-real-event', source_type=MarketSourceType.REAL_READ_ONLY, status='open')
+        market = Market.objects.create(
+            provider=provider,
+            event=event,
+            title='Proposal Real Market',
+            slug='proposal-real-market',
+            status=MarketStatus.OPEN,
+            is_active=True,
+            source_type=MarketSourceType.REAL_READ_ONLY,
+            current_yes_price=Decimal('61.0000'),
+            current_no_price=Decimal('39.0000'),
+            current_market_probability=Decimal('0.6100'),
+        )
+
+        proposal = generate_trade_proposal(market=market, paper_account=self.account, triggered_from='market_detail')
+
+        self.assertEqual(proposal.market.source_type, MarketSourceType.REAL_READ_ONLY)
+        self.assertIn(proposal.direction, [choice.value for choice in ProposalDirection])
 
 
 class ProposalEngineApiTests(TestCase):

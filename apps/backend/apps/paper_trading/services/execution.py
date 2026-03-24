@@ -15,6 +15,7 @@ from apps.paper_trading.models import (
     PaperTradeType,
 )
 from apps.paper_trading.services.portfolio import create_portfolio_snapshot, get_active_account
+from apps.paper_trading.services.market_pricing import resolve_market_price
 from apps.paper_trading.services.valuation import (
     PaperTradingRejectionError,
     PaperTradingValidationError,
@@ -54,6 +55,7 @@ def execute_paper_trade(*, market: Market, trade_type: str, side: str, quantity,
         raise PaperTradingValidationError('Quantity must be greater than zero.')
 
     validate_market_for_trading(market)
+    price_resolution = resolve_market_price(market=market, side=side)
     price = get_market_price(market=market, side=side)
     gross_amount = quantize_money(quantity * price)
     fees = quantize_money(Decimal('0'))
@@ -123,7 +125,10 @@ def execute_paper_trade(*, market: Market, trade_type: str, side: str, quantity,
         status=PaperTradeStatus.EXECUTED,
         notes=notes,
         metadata={
-            'execution_mode': 'immediate-demo',
+            'execution_mode': 'paper_demo_only',
+            'market_data_source': market.source_type,
+            'is_real_data': market.source_type == 'real_read_only',
+            'price_source': price_resolution.source,
             **metadata,
         },
     )

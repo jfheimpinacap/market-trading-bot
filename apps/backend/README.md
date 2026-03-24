@@ -128,6 +128,31 @@ Current paper trading endpoints:
 - `/api/paper/revalue/`
 - `/api/paper/snapshots/`
 
+
+## Paper trading on real-market data mode
+
+The backend now supports **paper trading on real-market data** with strict boundary separation:
+
+- **Market data source** can be `demo` or `real_read_only`.
+- **Execution mode** remains `paper_demo_only` for all paper trades.
+- Real markets are still read-only catalog data; no real auth, no real order placement, no real portfolio sync.
+
+What is enabled now:
+- `POST /api/paper/trades/` accepts `real_read_only` markets when they are paper-tradable.
+- `POST /api/risk/assess-trade/`, `POST /api/policy/evaluate-trade/`, and `POST /api/proposals/generate/` work with real read-only markets.
+- serializers expose explicit mode fields (`source_type`, `is_real_data`, `paper_tradable`, `execution_mode`) to avoid ambiguity.
+
+Paper tradability guardrails:
+- open + active market required
+- paused/terminal market blocked
+- missing valid yes/no/probability pricing blocked
+- clear validation messages when blocked
+
+Still out of scope:
+- real execution/auth/order routing
+- real balances/positions/portfolio
+- websocket execution or continuous exchange sync
+
 ## Risk demo app summary
 The `apps.risk_demo` app adds a first trade-guard boundary between market detail and paper trade execution without pretending to be a real risk engine.
 

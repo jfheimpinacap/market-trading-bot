@@ -25,6 +25,9 @@ class PolicyMatchedRuleSerializer(serializers.Serializer):
 class ApprovalDecisionSerializer(serializers.ModelSerializer):
     market_title = serializers.CharField(source='market.title', read_only=True)
     market_slug = serializers.CharField(source='market.slug', read_only=True)
+    market_source_type = serializers.CharField(source='market.source_type', read_only=True)
+    is_real_data = serializers.SerializerMethodField()
+    execution_mode = serializers.SerializerMethodField()
     paper_account_slug = serializers.CharField(source='paper_account.slug', read_only=True)
     linked_signal_id = serializers.IntegerField(source='linked_signal.id', read_only=True, allow_null=True)
     matched_rules = PolicyMatchedRuleSerializer(many=True, read_only=True)
@@ -36,6 +39,9 @@ class ApprovalDecisionSerializer(serializers.ModelSerializer):
             'market',
             'market_title',
             'market_slug',
+            'market_source_type',
+            'is_real_data',
+            'execution_mode',
             'paper_account',
             'paper_account_slug',
             'risk_assessment',
@@ -60,6 +66,12 @@ class ApprovalDecisionSerializer(serializers.ModelSerializer):
             'updated_at',
         )
         read_only_fields = fields
+
+    def get_is_real_data(self, obj):
+        return obj.market.source_type == 'real_read_only'
+
+    def get_execution_mode(self, obj):
+        return 'paper_demo_only'
 
 
 class EvaluateTradePolicyRequestSerializer(serializers.Serializer):

@@ -60,6 +60,7 @@ class PaperPositionAdmin(admin.ModelAdmin):
         'id',
         'account',
         'market_link',
+        'market_source_type',
         'side',
         'status',
         'quantity',
@@ -80,6 +81,10 @@ class PaperPositionAdmin(admin.ModelAdmin):
         url = reverse('admin:markets_market_change', args=[obj.market_id])
         return format_html('<a href="{}">{}</a>', url, obj.market.title)
 
+    @admin.display(description='Market source')
+    def market_source_type(self, obj):
+        return obj.market.source_type
+
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('account', 'market', 'market__provider')
 
@@ -91,6 +96,7 @@ class PaperTradeAdmin(admin.ModelAdmin):
         'executed_at',
         'account',
         'market_link',
+        'market_source_type',
         'trade_type',
         'side',
         'quantity',
@@ -108,6 +114,10 @@ class PaperTradeAdmin(admin.ModelAdmin):
     def market_link(self, obj):
         url = reverse('admin:markets_market_change', args=[obj.market_id])
         return format_html('<a href="{}">{}</a>', url, obj.market.title)
+
+    @admin.display(description='Market source')
+    def market_source_type(self, obj):
+        return obj.market.source_type
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('account', 'market', 'position', 'market__provider')

@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.paper_trading.services.market_pricing import get_paper_tradability
+
 from .models import Event, Market, MarketRule, MarketSnapshot, Provider
 
 
@@ -95,6 +97,10 @@ class MarketSnapshotSerializer(serializers.ModelSerializer):
 class MarketListSerializer(serializers.ModelSerializer):
     is_demo = serializers.SerializerMethodField()
     is_real = serializers.SerializerMethodField()
+    is_real_data = serializers.SerializerMethodField()
+    paper_tradable = serializers.SerializerMethodField()
+    paper_tradable_reason = serializers.SerializerMethodField()
+    execution_mode = serializers.SerializerMethodField()
     provider = ProviderSummarySerializer(read_only=True)
     event_id = serializers.IntegerField(source='event.id', read_only=True)
     event_title = serializers.CharField(source='event.title', read_only=True)
@@ -132,11 +138,18 @@ class MarketListSerializer(serializers.ModelSerializer):
             'source_type',
             'is_demo',
             'is_real',
+            'is_real_data',
+            'paper_tradable',
+            'paper_tradable_reason',
+            'execution_mode',
             'snapshot_count',
             'latest_snapshot_at',
             'created_at',
             'updated_at',
         )
+
+    def _tradability(self, obj):
+        return get_paper_tradability(obj)
 
     def get_is_demo(self, obj):
         return obj.source_type == 'demo'
@@ -144,6 +157,17 @@ class MarketListSerializer(serializers.ModelSerializer):
     def get_is_real(self, obj):
         return obj.source_type == 'real_read_only'
 
+    def get_is_real_data(self, obj):
+        return self.get_is_real(obj)
+
+    def get_paper_tradable(self, obj):
+        return self._tradability(obj).is_tradable
+
+    def get_paper_tradable_reason(self, obj):
+        return self._tradability(obj).message
+
+    def get_execution_mode(self, obj):
+        return 'paper_demo_only'
 
 
 class MarketDetailSerializer(MarketListSerializer):

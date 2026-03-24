@@ -6,7 +6,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from apps.markets.models import Market, MarketStatus
 from apps.paper_trading.models import PaperPositionStatus, PaperPositionSide, PaperTradeType
 from apps.paper_trading.services.portfolio import get_active_account
-from apps.paper_trading.services.valuation import get_market_price
+from apps.paper_trading.services.market_pricing import get_paper_tradability
+from apps.paper_trading.services.valuation import PaperTradingValidationError, get_market_price
 from apps.risk_demo.models import TradeRiskAssessment, TradeRiskDecision
 from apps.signals.models import MarketSignal, MarketSignalStatus, SignalDirection
 
@@ -121,8 +122,36 @@ def assess_trade(*, market: Market, trade_type: str, side: str, quantity, reques
     metadata = metadata or {}
 
     warnings: list[WarningDraft] = []
-    estimated_price = Decimal(str(requested_price)) if requested_price is not None else get_market_price(market=market, side=side)
-    estimated_cost = (quantity * estimated_price).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    estimated_price = None
+    if requested_price is not None:
+        estimated_price = Decimal(str(requested_price)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+    else:
+        try:
+            estimated_price = get_market_price(market=market, side=side)
+        except PaperTradingValidationError as exc:
+            _add_warning(
+                warnings,
+                code='PRICE_UNAVAILABLE',
+                severity='high',
+                message=str(exc),
+                penalty='60',
+                blocks=True,
+            )
+
+    estimated_cost = ZERO
+    if estimated_price is not None:
+        estimated_cost = (quantity * estimated_price).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    tradability = get_paper_tradability(market)
+    if not tradability.is_tradable:
+        _add_warning(
+            warnings,
+            code=tradability.code,
+            severity='high',
+            message=tradability.message,
+            penalty='55',
+            blocks=True,
+        )
 
     if not market.is_active:
         _add_warning(
@@ -153,7 +182,7 @@ def assess_trade(*, market: Market, trade_type: str, side: str, quantity, reques
             blocks=True,
         )
 
-    if trade_type == PaperTradeType.BUY and account.cash_balance < estimated_cost:
+    if trade_type == PaperTradeType.BUY and estimated_price is not None and account.cash_balance < estimated_cost:
         _add_warning(
             warnings,
             code='INSUFFICIENT_CASH',
@@ -274,13 +303,13 @@ def assess_trade(*, market: Market, trade_type: str, side: str, quantity, reques
         summary = 'Trade looks reasonable for the current demo context.'
     elif decision == TradeRiskDecision.CAUTION:
         summary = 'Trade is possible in the demo, but the guard found warnings worth reviewing first.'
-    elif 'MARKET_NOT_TRADABLE' in warning_codes or 'MARKET_PAUSED' in warning_codes or 'MARKET_INACTIVE' in warning_codes:
-        summary = 'Trade is blocked because this market is not tradable in the current local demo state.'
+    elif {'MARKET_TERMINAL', 'MARKET_PAUSED', 'MARKET_INACTIVE', 'MARKET_NOT_OPEN'} & warning_codes:
+        summary = 'Trade is blocked because this market is not tradable in paper mode right now.'
     else:
         summary = 'Trade is blocked by the demo guard because the market or account context is not suitable.'
 
     rationale_parts = [
-        f'Estimated price {estimated_price:.4f} and gross amount {estimated_cost:.2f} were compared against demo cash {cash_balance:.2f}.',
+        f'Estimated price {(f"{estimated_price:.4f}" if estimated_price is not None else "n/a")} and gross amount {estimated_cost:.2f} were compared against demo cash {cash_balance:.2f}.',
         f'Market status is {market.status} with spread {int(spread_bps)} bps, liquidity {liquidity:.0f}, and 24h volume {volume_24h:.0f}.',
     ]
     if same_market_positions:
