@@ -9,6 +9,7 @@ import { getEvents, getMarketSystemSummary, getMarkets, getProviders } from '../
 import type { MarketEvent, MarketFilters, MarketListItem, MarketProvider, MarketSystemSummary } from '../../types/markets';
 
 const defaultFilters: MarketFilters = {
+  source_type: '',
   provider: '',
   category: '',
   status: '',
@@ -77,6 +78,33 @@ export function MarketsPage() {
   useEffect(() => {
     let isMounted = true;
 
+    async function loadEventsForFilters() {
+      try {
+        const response = await getEvents({
+          provider: filters.provider || undefined,
+          status: filters.status || undefined,
+          source_type: filters.source_type || undefined,
+        });
+        if (isMounted) {
+          setEvents(response);
+        }
+      } catch {
+        if (isMounted) {
+          setEvents([]);
+        }
+      }
+    }
+
+    void loadEventsForFilters();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [filters.provider, filters.source_type, filters.status]);
+
+  useEffect(() => {
+    let isMounted = true;
+
     async function loadMarkets() {
       setMarketsLoading(true);
       setMarketsError(null);
@@ -111,13 +139,32 @@ export function MarketsPage() {
     () => Object.values(filters).filter((value) => value.trim().length > 0).length,
     [filters],
   );
+  const realMarketCount = useMemo(
+    () => markets.filter((market) => market.source_type === 'real_read_only').length,
+    [markets],
+  );
+  const demoMarketCount = useMemo(
+    () => markets.filter((market) => market.source_type === 'demo').length,
+    [markets],
+  );
+  const selectedSource = filters.source_type || 'all';
+  const emptyTitle = selectedSource === 'real_read_only'
+    ? 'No real read-only markets found'
+    : selectedSource === 'demo'
+      ? 'No demo markets found'
+      : 'No markets found for the selected filters';
+  const emptyDescription = selectedSource === 'real_read_only'
+    ? 'No real markets are currently ingested in this local environment. Run the backend ingestion flow first, then refresh this page.'
+    : selectedSource === 'demo'
+      ? 'No demo markets match the current filters. Try clearing filters or reseeding demo markets.'
+      : 'Try clearing one or more filters to broaden the catalog.';
 
   return (
     <div className="page-stack">
       <PageHeader
         eyebrow="Discovery"
         title="Markets"
-        description="Explore the local demo market catalog, inspect platform summary metrics, and drill into market-level rules and recent snapshots."
+        description="Explore local demo markets and real provider markets in read-only mode, with clear source labels to avoid mixing simulation and real data."
       />
 
       <DataStateWrapper
@@ -135,8 +182,8 @@ export function MarketsPage() {
         <SectionCard
           eyebrow="Catalog"
           title="Market list"
-          description="Desktop-first table for browsing demo markets and opening a focused detail page for each contract."
-          aside={<span className="muted-text">{activeFilterCount} active filters</span>}
+          description="Desktop-first table for browsing markets by source/provider and opening detail pages with clear read-only versus paper-demo context."
+          aside={<span className="muted-text">{activeFilterCount} active filters · {demoMarketCount} demo · {realMarketCount} real</span>}
         >
           <DataStateWrapper
             isLoading={marketsLoading}
@@ -146,8 +193,8 @@ export function MarketsPage() {
             loadingTitle="Loading markets"
             loadingDescription="Querying the local backend for market rows that match the current filters."
             errorTitle="Could not load market list"
-            emptyTitle="No markets found for the selected filters"
-            emptyDescription="Try clearing one or more filters to broaden the local demo market catalog."
+            emptyTitle={emptyTitle}
+            emptyDescription={emptyDescription}
             action={
               activeFilterCount > 0 ? (
                 <button className="secondary-button" type="button" onClick={() => setFilters(defaultFilters)}>

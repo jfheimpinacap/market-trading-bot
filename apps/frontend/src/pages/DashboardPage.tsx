@@ -114,6 +114,10 @@ export function DashboardPage() {
   const [proposals, setProposals] = useState<TradeProposal[]>([]);
   const [proposalsLoading, setProposalsLoading] = useState(true);
   const [proposalsError, setProposalsError] = useState<string | null>(null);
+  const [realMarketCount, setRealMarketCount] = useState(0);
+  const [realProviders, setRealProviders] = useState<string[]>([]);
+  const [realContextLoading, setRealContextLoading] = useState(true);
+  const [realContextError, setRealContextError] = useState<string | null>(null);
 
   const loadSummary = useCallback(async () => {
     setSummaryLoading(true);
@@ -140,6 +144,23 @@ export function DashboardPage() {
       setRecentMarketsError(getErrorMessage(error, 'Could not load recent markets from the local catalog.'));
     } finally {
       setRecentMarketsLoading(false);
+    }
+  }, []);
+
+  const loadRealContext = useCallback(async () => {
+    setRealContextLoading(true);
+    setRealContextError(null);
+
+    try {
+      const response = await getMarkets({ source_type: 'real_read_only' });
+      setRealMarketCount(response.length);
+      setRealProviders(Array.from(new Set(response.map((market) => market.provider.name))).sort((left, right) => left.localeCompare(right)));
+    } catch (error) {
+      setRealMarketCount(0);
+      setRealProviders([]);
+      setRealContextError(getErrorMessage(error, 'Could not load real read-only market context.'));
+    } finally {
+      setRealContextLoading(false);
     }
   }, []);
 
@@ -210,12 +231,13 @@ export function DashboardPage() {
     await Promise.all([
       loadSummary(),
       loadRecentMarkets(),
+      loadRealContext(),
       loadSignalsContext(),
       loadReviewsSummary(),
       loadPaperSummary(),
       loadProposalsContext(),
     ]);
-  }, [loadPaperSummary, loadProposalsContext, loadRecentMarkets, loadReviewsSummary, loadSignalsContext, loadSummary]);
+  }, [loadPaperSummary, loadProposalsContext, loadRealContext, loadRecentMarkets, loadReviewsSummary, loadSignalsContext, loadSummary]);
 
   useEffect(() => {
     void refreshDashboard();
@@ -354,6 +376,31 @@ export function DashboardPage() {
           emptyDescription="The backend responded without market summary data. Verify the demo seed and the read-only endpoints."
         >
           <DashboardStatGrid stats={marketStats} />
+        </DataStateWrapper>
+      </SectionCard>
+
+      <SectionCard
+        eyebrow="Real data visibility"
+        title="Read-only provider connectivity"
+        description="Quick visibility for real provider ingestion while keeping the app execution model strictly demo/paper."
+        aside={<StatusBadge tone={realContextError ? 'offline' : realMarketCount > 0 ? 'ready' : 'pending'}>{realMarketCount > 0 ? 'Connected' : 'Not ingested yet'}</StatusBadge>}
+      >
+        <DataStateWrapper
+          isLoading={realContextLoading}
+          isError={Boolean(realContextError)}
+          errorMessage={realContextError ?? undefined}
+          loadingTitle="Loading real market context"
+          loadingDescription="Checking read-only real markets from the shared markets endpoint."
+          errorTitle="Could not load real market context"
+          isEmpty={!realContextLoading && !realContextError && realMarketCount === 0}
+          emptyTitle="No real markets ingested yet"
+          emptyDescription="Run the backend ingestion command for Kalshi or Polymarket, then refresh this dashboard."
+        >
+          <dl className="dashboard-key-value-list">
+            <div><dt>Real markets</dt><dd>{realMarketCount}</dd></div>
+            <div><dt>Real providers</dt><dd>{realProviders.length > 0 ? realProviders.join(', ') : '—'}</dd></div>
+            <div><dt>Trading mode</dt><dd>Paper/demo only</dd></div>
+          </dl>
         </DataStateWrapper>
       </SectionCard>
 

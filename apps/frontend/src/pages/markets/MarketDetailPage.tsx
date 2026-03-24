@@ -6,10 +6,12 @@ import { PageHeader } from '../../components/PageHeader';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
 import { MarketActiveBadge } from '../../components/markets/MarketActiveBadge';
 import { MarketProbabilityBadge } from '../../components/markets/MarketProbabilityBadge';
+import { MarketProviderBadge } from '../../components/markets/MarketProviderBadge';
 import { MarketHistoryChart } from '../../components/markets/MarketHistoryChart';
 import { MarketRulesCard } from '../../components/markets/MarketRulesCard';
 import { MarketSnapshotsTable } from '../../components/markets/MarketSnapshotsTable';
 import { MarketStatusBadge } from '../../components/markets/MarketStatusBadge';
+import { MarketSourceBadge } from '../../components/markets/MarketSourceBadge';
 import { formatCompactCurrency, formatDateTime, formatNumber, titleize } from '../../components/markets/utils';
 import { ReviewOutcomeBadge } from '../../components/postmortem/ReviewOutcomeBadge';
 import { SectionCard } from '../../components/SectionCard';
@@ -282,6 +284,7 @@ export function MarketDetailPage() {
   }, [market]);
 
   const openPositions = useMemo(() => (market ? getOpenPositionsForMarket(paperPositions, market.id) : []), [market, paperPositions]);
+  const isRealReadOnlyMarket = market?.source_type === 'real_read_only';
   const latestTrade = useMemo(() => (market ? getLatestTradeForMarket(paperTrades, market.id) : null), [market, paperTrades]);
   const latestReview = useMemo(() => (market ? getLatestReviewForMarket(marketReviews, market.id) : null), [market, marketReviews]);
   const latestDecision = useMemo(() => {
@@ -401,6 +404,8 @@ export function MarketDetailPage() {
                 description="Primary identifiers and related event context for this contract."
                 aside={
                   <div className="market-header-badges">
+                    <MarketSourceBadge sourceType={market.source_type} />
+                    <MarketProviderBadge providerName={market.provider.name} />
                     <MarketStatusBadge status={market.status} />
                     <MarketActiveBadge isActive={market.is_active} />
                   </div>
@@ -409,7 +414,11 @@ export function MarketDetailPage() {
                 <dl className="market-detail-list">
                   <div>
                     <dt>Provider</dt>
-                    <dd>{market.provider.name}</dd>
+                    <dd><MarketProviderBadge providerName={market.provider.name} /></dd>
+                  </div>
+                  <div>
+                    <dt>Source</dt>
+                    <dd><MarketSourceBadge sourceType={market.source_type} /></dd>
                   </div>
                   <div>
                     <dt>Category</dt>
@@ -557,6 +566,11 @@ export function MarketDetailPage() {
               title="Demo trade execution"
               description="Review the market context above, run the risk check, execute a local simulated trade, and then continue into portfolio or post-mortem with clear next steps."
             >
+              {isRealReadOnlyMarket ? (
+                <p className="market-readonly-notice">
+                  Real market data (read-only source). Any trading in this app remains demo/paper only.
+                </p>
+              ) : null}
               <MarketTradePanel
                 market={market}
                 account={paperAccount}
@@ -599,6 +613,10 @@ export function MarketDetailPage() {
                   <div>
                     <dt>Resolution source</dt>
                     <dd>{market.resolution_source || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Source mode</dt>
+                    <dd>{market.source_type === 'real_read_only' ? 'Real market data · read-only' : 'Demo/local seeded market'}</dd>
                   </div>
                   <div>
                     <dt>Open time</dt>

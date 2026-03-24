@@ -24,6 +24,7 @@ export type MarketEvent = {
   slug: string;
   category: string;
   status: string;
+  source_type: 'demo' | 'real_read_only' | string;
   open_time: string | null;
   close_time: string | null;
   resolution_time: string | null;
@@ -99,6 +100,9 @@ export type MarketListItem = {
   volume_24h: string | null;
   volume_total: string | null;
   spread_bps: string | null;
+  source_type: 'demo' | 'real_read_only' | string;
+  is_demo: boolean;
+  is_real: boolean;
   snapshot_count: number;
   latest_snapshot_at: string | null;
   created_at: string;
@@ -123,6 +127,7 @@ export type MarketSystemSummary = {
 };
 
 export type MarketFilters = {
+  source_type: string;
   provider: string;
   category: string;
   status: string;

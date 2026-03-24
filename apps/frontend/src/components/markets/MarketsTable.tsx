@@ -3,7 +3,9 @@ import type { MarketListItem } from '../../types/markets';
 import { navigate } from '../../lib/router';
 import { MarketActiveBadge } from './MarketActiveBadge';
 import { MarketProbabilityBadge } from './MarketProbabilityBadge';
+import { MarketProviderBadge } from './MarketProviderBadge';
 import { MarketStatusBadge } from './MarketStatusBadge';
+import { MarketSourceBadge } from './MarketSourceBadge';
 import { formatCompactCurrency, formatDateTime } from './utils';
 
 type MarketsTableProps = {
@@ -26,6 +28,7 @@ export function MarketsTable({ markets }: MarketsTableProps) {
         <thead>
           <tr>
             <th>Title</th>
+            <th>Source</th>
             <th>Provider</th>
             <th>Category</th>
             <th>Status</th>
@@ -45,7 +48,12 @@ export function MarketsTable({ markets }: MarketsTableProps) {
                   <span>{market.event_title ?? 'Standalone market'}</span>
                 </a>
               </td>
-              <td>{market.provider.name}</td>
+              <td>
+                <MarketSourceBadge sourceType={market.source_type} />
+              </td>
+              <td>
+                <MarketProviderBadge providerName={market.provider.name} />
+              </td>
               <td>{market.category || '—'}</td>
               <td>
                 <MarketStatusBadge status={market.status} />

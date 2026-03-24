@@ -309,16 +309,25 @@ export function SystemPage() {
   }, [markets, refreshHealth, summary]);
 
   const summaryStats = useMemo(() => (summary ? buildSummaryStats(summary) : []), [summary]);
+  const realMarketsCount = useMemo(
+    () => markets.filter((market) => market.source_type === 'real_read_only').length,
+    [markets],
+  );
+  const realProviders = useMemo(
+    () => Array.from(new Set(markets.filter((market) => market.source_type === 'real_read_only').map((market) => market.provider.name))).sort((left, right) => left.localeCompare(right)),
+    [markets],
+  );
   const runtimeItems = useMemo<SystemRuntimeInfo[]>(
     () => [
       { label: 'API base URL', value: API_BASE_URL },
       { label: 'Backend health endpoint', value: `${API_BASE_URL}/api/health/` },
       { label: 'Execution mode', value: 'Local demo' },
       { label: 'Simulation engine', value: 'Available via management commands' },
-      { label: 'Data source', value: 'Seeded demo markets' },
+      { label: 'Data source', value: `Demo + real read-only (${realMarketsCount} real markets)` },
+      { label: 'Real providers', value: realProviders.length > 0 ? realProviders.join(', ') : 'No real providers ingested yet' },
       { label: 'Backend environment', value: data?.environment ?? 'Unavailable until health responds' },
     ],
-    [data?.environment],
+    [data?.environment, realMarketsCount, realProviders],
   );
   const activityItems = useMemo(() => mapSimulationActivity(markets), [markets]);
   const observations = useMemo(

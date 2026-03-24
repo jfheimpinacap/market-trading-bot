@@ -12,6 +12,7 @@ In the current phase it focuses on these responsibilities:
 4. present a useful dashboard powered by real local demo data
 5. connect discovery, signals, proposals, risk, policy, paper execution, portfolio, and post-mortem into one coherent demo flow
 6. keep the architecture intentionally simple: no websockets, no global state framework, no realtime orchestration, no new heavy routing model
+7. support read-only exploration of real provider markets without blurring the boundary with demo/paper execution
 
 ## Current UX narrative
 
@@ -147,6 +148,11 @@ The `/markets/:marketId` route is now the operational hub of the demo:
 - paper trade execution
 - position / latest trade / latest review summary
 - direct next-step links into Portfolio and Post-mortem
+- explicit source context:
+  - source badge (`DEMO` vs `REAL · READ-ONLY`)
+  - provider badge
+  - read-only warning when the market comes from a real provider source
+  - explicit reminder that trading in the app still remains paper/demo only
 
 ### Portfolio
 
@@ -173,6 +179,7 @@ The `/postmortem` route now closes the loop more clearly:
 - contextual navigation instead of long onboarding
 - better empty states instead of cold "no data" messages
 - consistent labels for actionability, risk decision, trade status, and review outcome
+- explicit source distinction (demo vs real read-only) in list and detail views
 - no unnecessary client complexity
 
 ## Explicitly not introduced yet
