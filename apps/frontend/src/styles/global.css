@@ -2477,3 +2477,23 @@ button {
   display: grid;
   gap: 14px;
 }
+
+.button-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.ghost-button {
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-border, #334155);
+  background: transparent;
+  color: var(--color-text, #e2e8f0);
+  cursor: pointer;
+}
+
+.ghost-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

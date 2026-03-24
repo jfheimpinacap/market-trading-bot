@@ -4,7 +4,7 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 
 ## Current scope
 
-- **Frontend:** React + Vite + TypeScript local-first operator workspace with dashboard, markets, signals, risk, policy approval flow, paper trading, portfolio, post-mortem, automation, and system views.
+- **Frontend:** React + Vite + TypeScript local-first operator workspace with dashboard, markets, signals, risk, policy approval flow, paper trading, portfolio, post-mortem, automation, semi-auto demo, and system views.
 - **Backend:** Django + Django REST Framework modular API with markets demo, signals demo, risk demo, policy engine demo, paper trading, post-mortem, automation, and health endpoints.
 - **Infrastructure:** Docker Compose services for PostgreSQL and Redis.
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
@@ -28,6 +28,17 @@ Still not implemented: real auth, real order placement, real portfolio sync, or 
 - Frontend now also surfaces **paper-tradable vs blocked** status (with backend reason) for real read-only markets in `/markets` and `/markets/:marketId`.
 - Real provider data is explorable in `/markets` and `/markets/:marketId` as read-only context.
 - Paper trading remains simulated only; no real execution path is enabled from the frontend.
+
+### Semi-autonomous demo mode (current)
+
+The platform now includes a conservative semi-autonomous demo mode:
+
+- evaluate-only proposal classification
+- guarded paper-only auto execution for strict AUTO_APPROVE cases
+- manual pending approval queue for APPROVAL_REQUIRED outcomes
+- explicit hard blocks for policy HARD_BLOCK and safety guardrail failures
+
+Still out of scope: real trading, exchange auth, autonomous schedulers/workers, websockets, and ML/LLM execution.
 
 ## What this scaffold does not include yet
 

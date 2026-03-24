@@ -7,6 +7,7 @@ import { PortfolioPage } from '../pages/PortfolioPage';
 import { ProposalsPage } from '../pages/ProposalsPage';
 import { PostMortemPage } from '../pages/PostMortemPage';
 import { SettingsPage } from '../pages/SettingsPage';
+import { SemiAutoPage } from '../pages/SemiAutoPage';
 import { SignalsPage } from '../pages/SignalsPage';
 import { SystemPage } from '../pages/SystemPage';
 import type { NavRoute } from '../types/system';
@@ -55,6 +56,12 @@ export const appRoutes: AppRoute[] = [
     path: '/agents',
     description: 'Agent orchestration, automation status, and run visibility.',
     component: AgentsPage,
+  },
+  {
+    label: 'Semi-Auto',
+    path: '/semi-auto',
+    description: 'Controlled semi-autonomous demo execution with strict policy and paper-only guardrails.',
+    component: SemiAutoPage,
   },
   {
     label: 'Automation',

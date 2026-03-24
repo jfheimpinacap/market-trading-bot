@@ -306,3 +306,14 @@ Flujo UI actual:
    - `HARD_BLOCK` -> mantiene ejecución deshabilitada y sugiere correcciones
 
 La página `/automation` también deja explícito que la automatización demo no opera trades por sí sola y que futuras propuestas automáticas deberían pasar por policy engine primero.
+
+
+### Semi-auto
+- `POST /api/semi-auto/evaluate/`
+- `POST /api/semi-auto/run/`
+- `GET /api/semi-auto/runs/`
+- `GET /api/semi-auto/runs/<id>/`
+- `GET /api/semi-auto/pending-approvals/`
+- `POST /api/semi-auto/pending-approvals/<id>/approve/`
+- `POST /api/semi-auto/pending-approvals/<id>/reject/`
+- `GET /api/semi-auto/summary/`

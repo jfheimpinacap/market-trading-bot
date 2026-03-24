@@ -217,9 +217,14 @@ export function AutomationPage() {
         title="Automation"
         description="Guided local-first automation controls for the demo workflow. This page accelerates simulation, signals, portfolio revalue, and review generation without enabling auto-trading or autonomous agents."
         actions={
-          <button type="button" className="secondary-button" onClick={() => navigate('/system')}>
-            Open system context
-          </button>
+          <div className="button-row">
+            <button type="button" className="secondary-button" onClick={() => navigate('/semi-auto')}>
+              Open semi-auto
+            </button>
+            <button type="button" className="secondary-button" onClick={() => navigate('/system')}>
+              Open system context
+            </button>
+          </div>
         }
       />
 
