@@ -1,6 +1,7 @@
 import { AgentsPage } from '../pages/AgentsPage';
 import { AutomationPage } from '../pages/AutomationPage';
 import { DashboardPage } from '../pages/DashboardPage';
+import { ContinuousDemoPage } from '../pages/ContinuousDemoPage';
 import { MarketDetailPage } from '../pages/MarketDetailPage';
 import { MarketsPage } from '../pages/MarketsPage';
 import { PortfolioPage } from '../pages/PortfolioPage';
@@ -62,6 +63,13 @@ export const appRoutes: AppRoute[] = [
     path: '/semi-auto',
     description: 'Controlled semi-autonomous demo execution with strict policy and paper-only guardrails.',
     component: SemiAutoPage,
+  },
+
+  {
+    label: 'Continuous Demo',
+    path: '/continuous-demo',
+    description: 'Autonomous continuous demo loop in paper-only mode with strict guardrails, controls, and auditable cycle history.',
+    component: ContinuousDemoPage,
   },
   {
     label: 'Automation',
