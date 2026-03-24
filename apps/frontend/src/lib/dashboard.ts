@@ -27,6 +27,12 @@ export const dashboardQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Semi-Auto',
+    description: 'Run evaluate-only or conservative paper-only semi-auto cycles with explicit pending approvals.',
+    path: '/semi-auto',
+    availability: 'live',
+  },
+  {
     title: 'Portfolio',
     description: 'Check paper balances, positions, trade history, and which executions already have reviews.',
     path: '/portfolio',

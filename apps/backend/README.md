@@ -50,6 +50,7 @@ apps/backend/
 - `apps.audit`: placeholder app for future audit and post-mortem work.
 - `apps.policy_engine`: demo-only operational approval layer that translates trade context into `AUTO_APPROVE`, `APPROVAL_REQUIRED`, or `HARD_BLOCK`.
 - `apps.proposal_engine`: demo-only trade proposal layer that consolidates market + signals + risk + policy + paper context into auditable `TradeProposal` records.
+- `apps.semi_auto_demo`: conservative semi-autonomous demo orchestration layer for evaluate-only, guarded paper auto-execution, and pending manual approvals.
 
 ## Markets app summary
 The `apps.markets` app now provides a practical local catalog for prediction-market development without adding trading workflows or provider integrations.
@@ -226,6 +227,36 @@ Out of scope by design:
 - ML/LLM decisioning
 - complex approval queue orchestration
 
+
+
+## Semi-auto demo app summary
+The `apps.semi_auto_demo` app adds a conservative orchestration layer on top of proposal/risk/policy/paper-trading without duplicating policy logic.
+
+Current semi-auto models:
+- `SemiAutoRun`
+- `PendingApproval`
+
+Current semi-auto workflow:
+- evaluate-only cycle that generates proposals and classifies outcomes without execution
+- scan-and-execute cycle that only auto-executes strict `AUTO_APPROVE` + guardrail-compliant BUY paper proposals
+- pending approval queue for `APPROVAL_REQUIRED`
+- explicit block path for `HARD_BLOCK` and guardrail failures
+
+Current semi-auto endpoints:
+- `/api/semi-auto/evaluate/`
+- `/api/semi-auto/run/`
+- `/api/semi-auto/runs/`
+- `/api/semi-auto/runs/<id>/`
+- `/api/semi-auto/pending-approvals/`
+- `/api/semi-auto/pending-approvals/<id>/approve/`
+- `/api/semi-auto/pending-approvals/<id>/reject/`
+- `/api/semi-auto/summary/`
+
+Out of scope by design:
+- real trading execution
+- exchange auth
+- autonomous background schedulers/workers
+- websockets or complex concurrency
 
 ## Signals app summary
 The `apps.signals` app adds the first demo-only bridge between market simulation, paper trading, and future automation architecture.

@@ -15,6 +15,12 @@ export const systemQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Semi-Auto',
+    description: 'Inspect conservative semi-autonomous paper execution with manual approval gates.',
+    path: '/semi-auto',
+    availability: 'live',
+  },
+  {
     title: 'Markets',
     description: 'Inspect the seeded market catalog, filters, and per-market detail pages.',
     path: '/markets',

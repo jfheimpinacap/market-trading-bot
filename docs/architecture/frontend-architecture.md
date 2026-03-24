@@ -227,3 +227,5 @@ Current UX behavior:
 - `HARD_BLOCK` -> the CTA stays disabled and the panel suggests concrete fixes
 
 The `/automation` page also reinforces that automation remains operator-driven and that future automated proposals should still pass through the policy layer before any execution step.
+
+- Semi-Auto page (`/semi-auto`) provides evaluate/run controls, safety guardrail overview, pending approval queue, and recent run audit list.
