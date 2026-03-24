@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 
 from apps.paper_trading.models import PaperPositionSide, PaperTradeType
+from apps.paper_trading.services.valuation import PaperTradingValidationError, get_market_price
 from apps.policy_engine.models import ApprovalDecision, ApprovalDecisionType, PolicyRequestedBy, PolicyTriggeredFrom
 from apps.policy_engine.services import evaluate_trade_policy
 from apps.proposal_engine.models import ProposalDirection
@@ -14,6 +15,7 @@ from apps.risk_demo.services.assessment import assess_trade
 ZERO = Decimal('0')
 ONE = Decimal('1')
 HUNDRED = Decimal('100')
+HOLD_TRADE_TYPE = "HOLD"
 
 
 @dataclass
@@ -60,26 +62,32 @@ def _build_trade_idea(context: ProposalContext) -> tuple[str, str, str, str, str
         direction = ProposalDirection.BUY_YES
         trade_type = PaperTradeType.BUY
         side = PaperPositionSide.YES
-        price_ref = market.current_yes_price
+        try:
+            price_ref = get_market_price(market=market, side=PaperPositionSide.YES)
+        except PaperTradingValidationError:
+            price_ref = None
         score = Decimal('70.00') + (Decimal(actionable) * Decimal('5.00'))
         confidence = Decimal('0.55') + (context.avg_signal_confidence * Decimal('0.30'))
     elif actionable >= 1 and bearish >= bullish + 1:
         direction = ProposalDirection.BUY_NO
         trade_type = PaperTradeType.BUY
         side = PaperPositionSide.NO
-        price_ref = market.current_no_price
+        try:
+            price_ref = get_market_price(market=market, side=PaperPositionSide.NO)
+        except PaperTradingValidationError:
+            price_ref = None
         score = Decimal('70.00') + (Decimal(actionable) * Decimal('5.00'))
         confidence = Decimal('0.55') + (context.avg_signal_confidence * Decimal('0.30'))
     elif bullish > 0 and bearish > 0:
         direction = ProposalDirection.HOLD
-        trade_type = PaperTradeType.HOLD
+        trade_type = HOLD_TRADE_TYPE
         side = None
         price_ref = None
         score = Decimal('48.00')
         confidence = Decimal('0.42')
     else:
         direction = ProposalDirection.AVOID
-        trade_type = PaperTradeType.HOLD
+        trade_type = HOLD_TRADE_TYPE
         side = None
         price_ref = None
         score = Decimal('35.00')
@@ -98,8 +106,8 @@ def _build_trade_idea(context: ProposalContext) -> tuple[str, str, str, str, str
     return direction, headline, thesis, rationale, trade_type, side, price_ref, q2(clamp(score, ZERO, HUNDRED)), q2(clamp(confidence, Decimal('0.00'), ONE))
 
 
-def _compute_quantity(*, context: ProposalContext, confidence: Decimal, trade_type: str) -> Decimal:
-    if trade_type == PaperTradeType.HOLD:
+def _compute_quantity(*, context: ProposalContext, confidence: Decimal, trade_type: str, side: str | None, suggested_price_reference: Decimal | None) -> Decimal:
+    if trade_type == HOLD_TRADE_TYPE:
         return Decimal('0.0000')
 
     cash = context.cash_balance
@@ -115,9 +123,17 @@ def _compute_quantity(*, context: ProposalContext, confidence: Decimal, trade_ty
     elif context.market_exposure_quantity >= Decimal('20.0000'):
         budget *= Decimal('0.75')
 
-    price = context.market.current_yes_price or Decimal('0.50')
+    if side is None:
+        return Decimal('0.0000')
+
+    price = suggested_price_reference
+    if price is None:
+        try:
+            price = get_market_price(market=context.market, side=side)
+        except PaperTradingValidationError:
+            return Decimal('0.0000')
     if price <= ZERO:
-        price = Decimal('0.50')
+        return Decimal('0.0000')
 
     quantity = budget / price
     return q4(clamp(quantity, Decimal('1.0000'), Decimal('250.0000')))
@@ -140,11 +156,13 @@ def evaluate_proposal_heuristics(*, context: ProposalContext, triggered_from: st
         context=context,
         confidence=confidence,
         trade_type=suggested_trade_type,
+        side=suggested_side,
+        suggested_price_reference=suggested_price_reference,
     )
 
     risk_assessment = assess_trade(
         market=context.market,
-        trade_type=PaperTradeType.BUY if suggested_trade_type == PaperTradeType.HOLD else suggested_trade_type,
+        trade_type=PaperTradeType.BUY if suggested_trade_type == HOLD_TRADE_TYPE else suggested_trade_type,
         side=suggested_side or PaperPositionSide.YES,
         quantity=suggested_quantity if suggested_quantity > ZERO else Decimal('1.0000'),
         requested_price=suggested_price_reference,
@@ -164,10 +182,12 @@ def evaluate_proposal_heuristics(*, context: ProposalContext, triggered_from: st
     normalized_triggered_from = triggered_from
     if normalized_triggered_from == 'signals':
         normalized_triggered_from = PolicyTriggeredFrom.SIGNAL
+    elif normalized_triggered_from == 'dashboard':
+        normalized_triggered_from = PolicyTriggeredFrom.SYSTEM
 
     policy_decision = evaluate_trade_policy(
         market=context.market,
-        trade_type=PaperTradeType.BUY if suggested_trade_type == PaperTradeType.HOLD else suggested_trade_type,
+        trade_type=PaperTradeType.BUY if suggested_trade_type == HOLD_TRADE_TYPE else suggested_trade_type,
         side=suggested_side or PaperPositionSide.YES,
         quantity=suggested_quantity if suggested_quantity > ZERO else Decimal('1.0000'),
         requested_price=suggested_price_reference,

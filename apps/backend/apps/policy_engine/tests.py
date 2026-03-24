@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.markets.demo_data import seed_demo_markets
-from apps.markets.models import Market, MarketStatus
+from apps.markets.models import Event, Market, MarketSourceType, MarketStatus, Provider
 from apps.paper_trading.services.execution import execute_paper_trade
 from apps.paper_trading.services.portfolio import ensure_demo_account, get_active_account
 from apps.policy_engine.models import ApprovalDecision, ApprovalDecisionType
@@ -122,6 +122,33 @@ class PolicyEvaluationServiceTests(TestCase):
 
         self.assertIn(decision.decision, {ApprovalDecisionType.APPROVAL_REQUIRED, ApprovalDecisionType.HARD_BLOCK})
         self.assertTrue(any(rule['code'].startswith('MARKET_EXPOSURE') for rule in decision.matched_rules))
+
+
+    def test_policy_evaluation_works_for_real_read_only_market(self):
+        provider = Provider.objects.create(name='Kalshi Policy Real', slug='kalshi-policy-real')
+        event = Event.objects.create(provider=provider, title='Policy Real Event', slug='policy-real-event', source_type=MarketSourceType.REAL_READ_ONLY, status='open')
+        market = Market.objects.create(
+            provider=provider,
+            event=event,
+            title='Policy Real Market',
+            slug='policy-real-market',
+            status=MarketStatus.OPEN,
+            is_active=True,
+            source_type=MarketSourceType.REAL_READ_ONLY,
+            current_yes_price=Decimal('52.0000'),
+            current_no_price=Decimal('48.0000'),
+            current_market_probability=Decimal('0.5200'),
+        )
+
+        decision = evaluate_trade_policy(
+            market=market,
+            trade_type='BUY',
+            side='YES',
+            quantity=Decimal('2.0000'),
+        )
+
+        self.assertIn(decision.decision, {ApprovalDecisionType.AUTO_APPROVE, ApprovalDecisionType.APPROVAL_REQUIRED})
+        self.assertEqual(decision.market.source_type, MarketSourceType.REAL_READ_ONLY)
 
 
 class PolicyEvaluationApiTests(TestCase):

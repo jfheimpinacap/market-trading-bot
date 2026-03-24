@@ -8,7 +8,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from .demo_data import seed_demo_markets
-from .models import Event, Market, MarketRule, MarketSnapshot, MarketStatus, Provider
+from .models import Event, Market, MarketRule, MarketSnapshot, MarketSourceType, MarketStatus, Provider
 from .provider_registry import _ensure_provider_paths
 from .services.real_data_ingestion import ingest_provider_markets
 
@@ -114,6 +114,33 @@ class MarketsApiTests(TestCase):
         self.assertEqual(len(payload['rules']), 2)
         self.assertEqual(len(payload['recent_snapshots']), 5)
         self.assertEqual(payload['recent_snapshots'][0]['market_probability'], '0.5400')
+
+
+    def test_market_serializer_exposes_real_vs_demo_and_paper_tradability(self):
+        real_provider = Provider.objects.create(name='Serializer Real', slug='serializer-real')
+        real_event = Event.objects.create(provider=real_provider, title='Serializer Event', slug='serializer-event', source_type=MarketSourceType.REAL_READ_ONLY, status='open')
+        real_market = Market.objects.create(
+            provider=real_provider,
+            event=real_event,
+            title='Serializer Real Market',
+            slug='serializer-real-market',
+            status=MarketStatus.OPEN,
+            is_active=True,
+            source_type=MarketSourceType.REAL_READ_ONLY,
+            current_yes_price=Decimal('58.0000'),
+            current_no_price=Decimal('42.0000'),
+            current_market_probability=Decimal('0.5800'),
+        )
+
+        demo_response = self.client.get(reverse('markets:market-detail', kwargs={'pk': self.market.pk}))
+        real_response = self.client.get(reverse('markets:market-detail', kwargs={'pk': real_market.pk}))
+
+        self.assertEqual(demo_response.status_code, 200)
+        self.assertEqual(real_response.status_code, 200)
+        self.assertFalse(demo_response.json()['is_real_data'])
+        self.assertEqual(demo_response.json()['execution_mode'], 'paper_demo_only')
+        self.assertTrue(real_response.json()['is_real_data'])
+        self.assertTrue(real_response.json()['paper_tradable'])
 
     def test_market_system_summary_endpoint_returns_counts(self):
         response = self.client.get(reverse('markets:market-system-summary'))

@@ -3,12 +3,16 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction
 from django.utils import timezone
 
-from apps.markets.models import Market, MarketStatus
+from apps.markets.models import Market
 from apps.paper_trading.models import (
     PaperAccount,
     PaperPosition,
-    PaperPositionSide,
     PaperPositionStatus,
+)
+from apps.paper_trading.services.market_pricing import (
+    MarketPricingError,
+    get_paper_tradability,
+    resolve_market_price,
 )
 
 FOUR_DP = Decimal('0.0001')
@@ -41,24 +45,16 @@ def quantize_quantity(value: Decimal | str | int | float | None) -> Decimal:
 
 
 def get_market_price(*, market: Market, side: str) -> Decimal:
-    if side == PaperPositionSide.YES:
-        if market.current_yes_price is not None:
-            return quantize_price(market.current_yes_price)
-        probability = Decimal(str(market.current_market_probability or '0'))
-        return quantize_price(probability * Decimal('100'))
-
-    if market.current_no_price is not None:
-        return quantize_price(market.current_no_price)
-
-    probability = Decimal(str(market.current_market_probability or '0'))
-    return quantize_price((Decimal('1') - probability) * Decimal('100'))
+    try:
+        return resolve_market_price(market=market, side=side).price
+    except MarketPricingError as exc:
+        raise PaperTradingValidationError(str(exc)) from exc
 
 
 def validate_market_for_trading(market: Market) -> None:
-    if market.status != MarketStatus.OPEN or not market.is_active:
-        raise PaperTradingValidationError(
-            f'Market {market.id} is not available for paper trading in status {market.status}.',
-        )
+    tradability = get_paper_tradability(market)
+    if not tradability.is_tradable:
+        raise PaperTradingValidationError(tradability.message)
 
 
 @transaction.atomic
@@ -103,7 +99,11 @@ def revalue_account(account: PaperAccount, *, create_snapshot: bool = False) -> 
     unrealized_total = ZERO
 
     for position in positions:
-        revalue_position(position)
+        try:
+            revalue_position(position)
+        except PaperTradingValidationError:
+            # Keep previous valuation when fresh pricing is unavailable.
+            pass
         realized_total += Decimal(str(position.realized_pnl or '0'))
         unrealized_total += Decimal(str(position.unrealized_pnl or '0'))
         total_market_value += Decimal(str(position.market_value or '0'))
