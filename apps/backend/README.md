@@ -325,6 +325,7 @@ Main variables:
 - `DJANGO_CORS_ALLOWED_ORIGINS`
 - `DJANGO_SETTINGS_MODULE`
 - `DJANGO_ENV`
+- `APP_MODE`
 - `DJANGO_TIME_ZONE`
 
 ## Install dependencies
@@ -606,10 +607,26 @@ This keeps the system maintainable and ready for later additions like a system p
 ## Settings layout
 - `base.py` contains shared defaults, installed apps, middleware, DRF, CORS, PostgreSQL, Redis, and Celery defaults.
 - `local.py` keeps local development behavior simple.
+- `lite.py` enables lightweight local execution without Docker using SQLite.
 - `test.py` uses SQLite and eager Celery execution for lightweight test runs.
 - `production.py` is reserved as a minimal production profile for later hardening.
 
 By default, `manage.py`, ASGI, WSGI, and Celery use `config.settings.local` unless `DJANGO_SETTINGS_MODULE` is provided explicitly.
+
+### Full mode vs lite mode
+
+- **Full mode:** `config.settings.local` (PostgreSQL + Redis, usually with Docker Compose).
+- **Lite mode:** `config.settings.lite` (SQLite, Docker skipped, Redis optional/disabled).
+
+Useful launcher commands:
+
+```bash
+python start.py --lite
+python start.py setup --lite
+python start.py up --lite
+```
+
+In lite mode, backend behavior stays local-first paper/demo only with reduced infra expectations.
 
 ## Local frontend integration
 CORS is configured for local Vite defaults only:

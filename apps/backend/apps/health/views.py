@@ -14,8 +14,10 @@ class HealthCheckView(APIView):
             'status': 'ok',
             'service': 'market-trading-bot-backend',
             'environment': settings.ENVIRONMENT,
+            'app_mode': getattr(settings, 'APP_MODE', 'full'),
             'database_configured': bool(settings.DATABASES.get('default', {}).get('NAME')),
             'redis_configured': bool(getattr(settings, 'REDIS_URL', '')),
+            'redis_required': bool(getattr(settings, 'REDIS_REQUIRED', True)),
         }
         serializer = HealthCheckSerializer(payload)
         return Response(serializer.data)

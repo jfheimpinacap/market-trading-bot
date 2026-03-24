@@ -163,6 +163,23 @@ python start.py backend
 python start.py frontend
 ```
 
+### Runtime modes: full vs lite
+
+The launcher now supports two explicit local modes:
+
+- **FULL mode (default):** PostgreSQL + Redis via Docker Compose, Django `config.settings.local`.
+- **LITE mode (`--lite`):** SQLite, Docker skipped, Redis optional/disabled, Django `config.settings.lite`.
+
+Examples:
+
+```bash
+python start.py --lite
+python start.py setup --lite
+python start.py up --lite
+```
+
+`--lite` can be used from notebooks or machines without Docker. In lite mode the launcher forces `--skip-infra`, runs migrations against SQLite, and keeps the frontend flow unchanged.
+
 Useful optional flags:
 
 ```bash
@@ -175,12 +192,13 @@ python start.py up --with-sim-loop
 python start.py setup --skip-frontend
 python start.py setup --skip-backend
 python start.py setup --skip-install
+python start.py up --lite
 ```
 
 ### What each command does
 
 - `python start.py` / `python start.py up`: validates prerequisites first, prepares the local environment, starts Postgres + Redis, runs migrations, seeds demo data if needed, launches backend + frontend in detached mode, waits for both services to respond, opens the browser by default, and then returns control to the same console.
-- `python start.py setup`: prepares `.env`, `.venv`, backend/frontend dependencies, Docker services, migrations, and auto-seed logic without starting the dev servers.
+- `python start.py setup`: prepares `.env`, `.venv`, backend/frontend dependencies, infra (or skips infra in lite mode), migrations, and auto-seed logic without starting the dev servers.
 - `python start.py status`: prints the current Python interpreter, backend venv python, Node/npm resolution, Docker Compose mode, env/dependency presence, process/runtime readiness, startup mode, and URLs.
 - `python start.py down`: stops launcher-managed backend/frontend processes and runs `docker compose down` (or `docker-compose down`).
 - `python start.py seed`: runs `python manage.py seed_markets_demo`.
@@ -188,6 +206,12 @@ python start.py setup --skip-install
 - `python start.py simulate-loop`: runs the existing loop command `python manage.py simulate_markets_loop`.
 - `python start.py backend`: prepares and starts only the Django backend.
 - `python start.py frontend`: prepares and starts only the Vite frontend.
+
+### Lite mode limitations (intentional)
+
+- SQLite is for local portability, not production concurrency.
+- Redis is optional/disabled in lite mode; anything requiring external broker behavior should be treated as degraded local-demo behavior.
+- Continuous/semi-auto/evaluation flows remain paper/demo oriented and suitable for local iteration, not long-running production sessions.
 
 ## Running each part manually
 

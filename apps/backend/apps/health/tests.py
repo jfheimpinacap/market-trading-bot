@@ -14,8 +14,10 @@ class HealthCheckTests(SimpleTestCase):
         self.assertEqual(response.json()['status'], 'ok')
         self.assertEqual(response.json()['service'], 'market-trading-bot-backend')
         self.assertIn('environment', response.json())
+        self.assertIn('app_mode', response.json())
         self.assertIn('database_configured', response.json())
         self.assertIn('redis_configured', response.json())
+        self.assertIn('redis_required', response.json())
 
     def test_healthcheck_is_available_under_api_prefix(self):
         response = self.client.get('/api/health/')

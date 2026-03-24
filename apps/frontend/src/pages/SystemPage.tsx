@@ -322,12 +322,13 @@ export function SystemPage() {
       { label: 'API base URL', value: API_BASE_URL },
       { label: 'Backend health endpoint', value: `${API_BASE_URL}/api/health/` },
       { label: 'Execution mode', value: 'Local demo' },
+      { label: 'App mode', value: data?.app_mode?.toUpperCase() ?? 'Unavailable until health responds' },
       { label: 'Simulation engine', value: 'Available via management commands' },
       { label: 'Data source', value: `Demo + real read-only (${realMarketsCount} real markets)` },
       { label: 'Real providers', value: realProviders.length > 0 ? realProviders.join(', ') : 'No real providers ingested yet' },
       { label: 'Backend environment', value: data?.environment ?? 'Unavailable until health responds' },
     ],
-    [data?.environment, realMarketsCount, realProviders],
+    [data?.app_mode, data?.environment, realMarketsCount, realProviders],
   );
   const activityItems = useMemo(() => mapSimulationActivity(markets), [markets]);
   const observations = useMemo(
@@ -364,8 +365,10 @@ export function SystemPage() {
           details={[
             { label: 'Backend online', value: backendStatus === 'online' ? 'Yes' : backendStatus === 'loading' ? 'Checking' : 'No' },
             { label: 'Environment', value: data?.environment ?? 'Unavailable' },
+            { label: 'App mode', value: data?.app_mode?.toUpperCase() ?? 'Unavailable' },
             { label: 'Database configured', value: formatBooleanFlag(data?.database_configured) },
             { label: 'Redis configured', value: formatBooleanFlag(data?.redis_configured) },
+            { label: 'Redis required', value: formatBooleanFlag(data?.redis_required) },
             { label: 'Last checked', value: formatTimestamp(lastCheckedAt) },
           ]}
         />
