@@ -10,7 +10,7 @@ In the current phase it focuses on these responsibilities:
 2. expose clear navigation for the existing demo modules
 3. surface technical backend health and local runtime context
 4. present a useful dashboard powered by real local demo data
-5. connect discovery, signals, risk, paper execution, portfolio, and post-mortem into one coherent demo flow
+5. connect discovery, signals, proposals, risk, policy, paper execution, portfolio, and post-mortem into one coherent demo flow
 6. keep the architecture intentionally simple: no websockets, no global state framework, no realtime orchestration, no new heavy routing model
 
 ## Current UX narrative
@@ -20,11 +20,12 @@ The frontend now tries to tell one clear story:
 1. discover an opportunity
 2. inspect the market
 3. review the demo signal
-4. evaluate the trade with the risk guard
-5. evaluate the operational approval decision with the policy engine
-6. execute a paper trade only when the policy result allows it
-7. inspect portfolio impact
-8. review the post-mortem
+4. generate and inspect a trade proposal
+5. evaluate the trade with the risk guard
+6. evaluate the operational approval decision with the policy engine
+7. execute a paper trade only when the policy result allows it
+8. inspect portfolio impact
+9. review the post-mortem
 
 This is accomplished mostly with **navigation refinements, cross-module summaries, empty-state guidance, and lightweight refresh coordination**, not with a new architecture.
 
@@ -68,6 +69,7 @@ Instead, each page coordinates a small set of explicit service calls.
 
 - `services/markets.ts` for catalog and detail views
 - `services/signals.ts` for signals summary, list, and agents
+- `services/proposals.ts` for trade proposal list, detail, and generation endpoints
 - `services/paperTrading.ts` for account, positions, trades, snapshots, summary, and revalue
 - `services/reviews.ts` for review summary, list, and detail
 - `services/riskDemo.ts` for pre-trade assessment
@@ -124,12 +126,22 @@ The `/signals` route remains intentionally simple, but now works as a bridge ins
 - workflow context can expose related positions and reviews
 - page-level context blocks explain when to continue into Markets, Portfolio, or Post-mortem
 
+### Proposals
+
+The `/proposals` route provides a desktop-first proposal inbox:
+
+- generated proposal list with thesis and headline context
+- direction / suggested quantity / score / confidence
+- risk and policy decision visibility with actionable status
+- links into market detail to continue toward manual execution
+
 ### Market detail
 
 The `/markets/:marketId` route is now the operational hub of the demo:
 
 - market context
 - recent signals
+- proposal generation and proposal bridge panel
 - risk assessment
 - policy approval decision
 - paper trade execution

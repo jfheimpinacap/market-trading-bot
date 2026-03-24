@@ -13,6 +13,7 @@ import type {
   TradeExecutionState,
 } from '../../types/paperTrading';
 import type { TradeRiskAssessment } from '../../types/riskDemo';
+import type { TradeProposal } from '../../types/proposals';
 import { formatCompactCurrency, formatPercent, titleize } from './utils';
 import { PaperStatusBadge } from '../paper-trading/PaperStatusBadge';
 import { PnlBadge } from '../paper-trading/PnlBadge';
@@ -39,6 +40,8 @@ type MarketTradePanelProps = {
   warning: string | null;
   isSubmitting: boolean;
   executionState: TradeExecutionState | null;
+  proposal?: TradeProposal | null;
+  proposalPrefillVersion?: number;
   onRetry: () => Promise<void> | void;
   onSubmit: (payload: CreatePaperTradePayload) => Promise<void>;
 };
@@ -98,6 +101,8 @@ export function MarketTradePanel({
   warning,
   isSubmitting,
   executionState,
+  proposal,
+  proposalPrefillVersion,
   onRetry,
   onSubmit,
 }: MarketTradePanelProps) {
@@ -167,6 +172,35 @@ export function MarketTradePanel({
     setPolicyError(null);
     setLastAssessmentKey(null);
   }, [market.id, tradeType, side, quantity]);
+
+  useEffect(() => {
+    if (!proposal || !proposalPrefillVersion) {
+      return;
+    }
+
+    if (proposal.suggested_trade_type === 'BUY' || proposal.suggested_trade_type === 'SELL') {
+      setTradeType(proposal.suggested_trade_type);
+    }
+
+    if (proposal.suggested_side === 'YES' || proposal.suggested_side === 'NO') {
+      setSide(proposal.suggested_side);
+    }
+
+    setQuantity(proposal.suggested_quantity ?? '');
+    setValidationMessage(null);
+  }, [proposal, proposalPrefillVersion]);
+
+  function applyProposalSuggestion() {
+    if (!proposal || proposal.suggested_trade_type === 'HOLD' || !proposal.suggested_side || !proposal.suggested_quantity) {
+      setValidationMessage('No actionable proposal suggestion available to preload.');
+      return;
+    }
+
+    setTradeType(proposal.suggested_trade_type === 'SELL' ? 'SELL' : 'BUY');
+    setSide(proposal.suggested_side);
+    setQuantity(proposal.suggested_quantity);
+    setValidationMessage(null);
+  }
 
   function validateForm(options?: { requireTradable?: boolean }) {
     const requireTradable = options?.requireTradable ?? false;
@@ -490,6 +524,14 @@ export function MarketTradePanel({
           <div className="market-trade-form__actions">
             <button className="secondary-button" type="button" onClick={() => void onRetry()} disabled={isSubmitting || isEvaluatingRisk || isEvaluatingPolicy}>
               Refresh paper context
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => applyProposalSuggestion()}
+              disabled={isSubmitting || isEvaluatingRisk || isEvaluatingPolicy || !proposal}
+            >
+              Use proposal suggestion
             </button>
             <button
               className="secondary-button"

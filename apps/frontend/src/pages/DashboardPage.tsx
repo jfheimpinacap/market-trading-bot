@@ -18,11 +18,13 @@ import { getMarketSystemSummary, getMarkets } from '../services/markets';
 import { getPaperSummary } from '../services/paperTrading';
 import { getReviewsSummary } from '../services/reviews';
 import { getSignals, getSignalsSummary } from '../services/signals';
+import { getTradeProposals } from '../services/proposals';
 import type { MarketListItem, MarketSystemSummary } from '../types/markets';
 import type { DashboardStatCard, RecentMarketItem } from '../types/dashboard';
 import type { PaperPortfolioSummary } from '../types/paperTrading';
 import type { TradeReviewSummary } from '../types/reviews';
 import type { MarketSignal, SignalSummary } from '../types/signals';
+import type { TradeProposal } from '../types/proposals';
 import type { WorkflowStatusItem } from '../types/demoFlow';
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -109,6 +111,9 @@ export function DashboardPage() {
   const [paperSummary, setPaperSummary] = useState<PaperPortfolioSummary | null>(null);
   const [paperSummaryLoading, setPaperSummaryLoading] = useState(true);
   const [paperSummaryError, setPaperSummaryError] = useState<string | null>(null);
+  const [proposals, setProposals] = useState<TradeProposal[]>([]);
+  const [proposalsLoading, setProposalsLoading] = useState(true);
+  const [proposalsError, setProposalsError] = useState<string | null>(null);
 
   const loadSummary = useCallback(async () => {
     setSummaryLoading(true);
@@ -185,6 +190,22 @@ export function DashboardPage() {
     }
   }, []);
 
+
+  const loadProposalsContext = useCallback(async () => {
+    setProposalsLoading(true);
+    setProposalsError(null);
+
+    try {
+      const response = await getTradeProposals();
+      setProposals(response);
+    } catch (error) {
+      setProposals([]);
+      setProposalsError(getErrorMessage(error, 'Could not load trade proposals summary.'));
+    } finally {
+      setProposalsLoading(false);
+    }
+  }, []);
+
   const refreshDashboard = useCallback(async () => {
     await Promise.all([
       loadSummary(),
@@ -192,8 +213,9 @@ export function DashboardPage() {
       loadSignalsContext(),
       loadReviewsSummary(),
       loadPaperSummary(),
+      loadProposalsContext(),
     ]);
-  }, [loadPaperSummary, loadRecentMarkets, loadReviewsSummary, loadSignalsContext, loadSummary]);
+  }, [loadPaperSummary, loadProposalsContext, loadRecentMarkets, loadReviewsSummary, loadSignalsContext, loadSummary]);
 
   useEffect(() => {
     void refreshDashboard();
@@ -215,6 +237,7 @@ export function DashboardPage() {
       : 'Local environment ready';
 
   const marketStats = useMemo(() => (summary ? buildStats(summary) : []), [summary]);
+  const actionableProposals = useMemo(() => proposals.filter((proposal) => proposal.is_actionable), [proposals]);
   const workflowItems = useMemo<WorkflowStatusItem[]>(() => {
     const openPositions = paperSummary?.open_positions_count ?? 0;
     const recentReviews = reviewsSummary?.total_reviews ?? 0;
@@ -343,6 +366,34 @@ export function DashboardPage() {
           <QuickLinksPanel links={dashboardQuickLinks} />
         </SectionCard>
 
+        <SectionCard
+          eyebrow="Proposal engine"
+          title="Trade proposals snapshot"
+          description="Compact summary for proposal throughput and actionability before entering market detail and trade evaluation."
+          aside={
+            <StatusBadge tone={proposalsError ? 'offline' : proposalsLoading ? 'loading' : 'ready'}>
+              {proposalsLoading ? 'Syncing proposals' : 'Proposals synced'}
+            </StatusBadge>
+          }
+        >
+          <DataStateWrapper
+            isLoading={proposalsLoading}
+            isError={Boolean(proposalsError)}
+            errorMessage={proposalsError ?? undefined}
+            loadingTitle="Loading proposals snapshot"
+            loadingDescription="Requesting proposal engine demo records for dashboard context."
+            errorTitle="Could not load proposals snapshot"
+          >
+            <dl className="dashboard-key-value-list">
+              <div><dt>Total proposals</dt><dd>{proposals.length}</dd></div>
+              <div><dt>Actionable proposals</dt><dd>{actionableProposals.length}</dd></div>
+              <div><dt>Latest proposal</dt><dd>{proposals[0] ? `#${proposals[0].id} · ${proposals[0].direction}` : 'No proposals yet'}</dd></div>
+            </dl>
+          </DataStateWrapper>
+        </SectionCard>
+      </section>
+
+      <section className="content-grid content-grid--two-columns">
         <SectionCard
           eyebrow="Execution status"
           title="Project modules"

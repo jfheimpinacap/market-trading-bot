@@ -4,6 +4,7 @@ import { DashboardPage } from '../pages/DashboardPage';
 import { MarketDetailPage } from '../pages/MarketDetailPage';
 import { MarketsPage } from '../pages/MarketsPage';
 import { PortfolioPage } from '../pages/PortfolioPage';
+import { ProposalsPage } from '../pages/ProposalsPage';
 import { PostMortemPage } from '../pages/PostMortemPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { SignalsPage } from '../pages/SignalsPage';
@@ -42,6 +43,12 @@ export const appRoutes: AppRoute[] = [
     path: '/signals',
     description: 'Demo signals workspace for mock-agent insights, scored opportunities, and local heuristics.',
     component: SignalsPage,
+  },
+  {
+    label: 'Proposals',
+    path: '/proposals',
+    description: 'Demo trade proposal inbox with generated thesis, suggested sizing, and approval context before paper execution.',
+    component: ProposalsPage,
   },
   {
     label: 'Agents',

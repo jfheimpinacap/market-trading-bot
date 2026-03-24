@@ -9,9 +9,10 @@ El frontend ya no se siente como un conjunto de módulos separados. La UX ahora 
 1. **Dashboard** para entender el estado general del sistema demo.
 2. **Markets** para descubrir contratos activos.
 3. **Signals** para detectar oportunidades demo y saltar al market correcto.
-4. **Market detail** para revisar señal, evaluar riesgo, evaluar policy engine y ejecutar paper trade sólo cuando la gobernanza demo lo permite.
-5. **Portfolio** para ver impacto en equity, posiciones y trades.
-6. **Post-mortem** para revisar outcome, lecciones y volver al market o portfolio.
+4. **Market detail** para revisar señal, generar proposal demo, evaluar riesgo, evaluar policy engine y ejecutar paper trade sólo cuando la gobernanza demo lo permite.
+5. **Proposals** para ver la bandeja de propuestas demo y validar direction, quantity, risk/policy y actionability.
+6. **Portfolio** para ver impacto en equity, posiciones y trades.
+7. **Post-mortem** para revisar outcome, lecciones y volver al market o portfolio.
 
 ## Conexiones principales entre pantallas
 
@@ -34,6 +35,9 @@ El frontend ya no se siente como un conjunto de módulos separados. La UX ahora 
 
 ### `/markets/:marketId`
 - consolidado como **núcleo operativo** del recorrido demo
+- botón **Generate trade proposal**
+- panel proposal bridge con thesis, rationale, direction, quantity sugerida, risk/policy, approval_required e is_actionable
+- botón **Use proposal suggestion** en el panel de trade para precargar side/type/quantity sugeridos
 - workflow summary visible con:
   - señales del market
   - última decisión de riesgo conocida
@@ -41,6 +45,12 @@ El frontend ya no se siente como un conjunto de módulos separados. La UX ahora 
   - latest review si existe
 - CTA claros hacia `Portfolio`, `Signals` y `Post-Mortem`
 - después de ejecutar un trade, la página refresca contexto de trading y publica un refresh liviano para el resto del flujo
+
+### `/proposals`
+- bandeja demo de propuestas en formato tabla desktop-first
+- columnas para: market, direction, suggested quantity, proposal score, confidence, policy, actionable, status y created_at
+- quick summary superior con total, actionable y latest proposal
+- links directos a `market detail` para continuar hacia el panel de trade demo
 
 ### `/portfolio`
 - posiciones con link claro a market detail
@@ -134,6 +144,11 @@ python start.py simulate-loop
 - `GET /api/paper/trades/`
 - `GET /api/reviews/`
 
+### Proposals
+- `GET /api/proposals/`
+- `GET /api/proposals/<id>/`
+- `POST /api/proposals/generate/`
+
 ### Portfolio
 - `GET /api/paper/account/`
 - `GET /api/paper/positions/`
@@ -167,6 +182,7 @@ Con esto la experiencia queda más consistente sin introducir websockets, pollin
 - `/markets` — Markets explorer
 - `/markets/:marketId` — Market detail + risk + policy engine + paper trade
 - `/signals` — Demo signals workspace
+- `/proposals` — Trade proposal inbox demo
 - `/agents` — Agents placeholder
 - `/portfolio` — Paper trading portfolio summary
 - `/postmortem` — Post-mortem trade review queue

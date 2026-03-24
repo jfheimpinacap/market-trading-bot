@@ -28,11 +28,16 @@ import {
 } from '../../services/paperTrading';
 import { getTradeReviews } from '../../services/reviews';
 import { getSignals } from '../../services/signals';
+import { generateTradeProposal, getTradeProposals } from '../../services/proposals';
 import type { ContextLinkItem, WorkflowStatusItem } from '../../types/demoFlow';
 import type { MarketDetail } from '../../types/markets';
 import type { CreatePaperTradePayload, PaperAccount, PaperPortfolioSummary, PaperPosition, PaperTrade, TradeExecutionState } from '../../types/paperTrading';
 import type { TradeReview } from '../../types/reviews';
 import type { MarketSignal } from '../../types/signals';
+import type { TradeProposal } from '../../types/proposals';
+import { PolicyDecisionBadge } from '../../components/policy/PolicyDecisionBadge';
+import { ProposalActionableBadge, ProposalApprovalBadge, ProposalDirectionBadge, ProposalStatusBadge } from '../../components/proposals/ProposalBadges';
+import { RiskDecisionBadge } from '../../components/markets/RiskDecisionBadge';
 
 function getMarketIdFromPath(pathname: string) {
   const segments = pathname.split('/').filter(Boolean);
@@ -67,6 +72,11 @@ export function MarketDetailPage() {
   const [paperWarning, setPaperWarning] = useState<string | null>(null);
   const [isSubmittingTrade, setIsSubmittingTrade] = useState(false);
   const [tradeExecutionState, setTradeExecutionState] = useState<TradeExecutionState | null>(null);
+  const [latestProposal, setLatestProposal] = useState<TradeProposal | null>(null);
+  const [proposalLoading, setProposalLoading] = useState(false);
+  const [proposalError, setProposalError] = useState<string | null>(null);
+  const [proposalContextWarning, setProposalContextWarning] = useState<string | null>(null);
+  const [proposalPrefillVersion, setProposalPrefillVersion] = useState(0);
 
   const loadMarketDetail = useCallback(async () => {
     if (!marketId) {
@@ -181,6 +191,22 @@ export function MarketDetailPage() {
     setPaperLoading(false);
   }, []);
 
+  const loadLatestProposal = useCallback(async () => {
+    if (!marketId) {
+      return;
+    }
+
+    setProposalContextWarning(null);
+
+    try {
+      const response = await getTradeProposals({ market: marketId });
+      setLatestProposal(response[0] ?? null);
+    } catch (loadError) {
+      setLatestProposal(null);
+      setProposalContextWarning(getErrorMessage(loadError, 'Could not load proposal context for this market.'));
+    }
+  }, [marketId]);
+
   const refreshPage = useCallback(async () => {
     if (!marketId) {
       setError('The market identifier is missing from the URL.');
@@ -194,8 +220,9 @@ export function MarketDetailPage() {
       loadMarketSignals(),
       loadPaperContext(),
       loadMarketReviews(),
+      loadLatestProposal(),
     ]);
-  }, [loadMarketDetail, loadMarketReviews, loadMarketSignals, loadPaperContext, marketId]);
+  }, [loadLatestProposal, loadMarketDetail, loadMarketReviews, loadMarketSignals, loadPaperContext, marketId]);
 
   useEffect(() => {
     setTradeExecutionState(null);
@@ -218,6 +245,7 @@ export function MarketDetailPage() {
       setPaperAccount(response.account);
       await revaluePaperPortfolio();
       await Promise.all([loadPaperContext(), loadMarketReviews()]);
+      await loadLatestProposal();
       publishDemoFlowRefresh('paper-trade-executed');
     } catch (submitError) {
       setTradeExecutionState({
@@ -228,7 +256,30 @@ export function MarketDetailPage() {
     } finally {
       setIsSubmittingTrade(false);
     }
-  }, [loadMarketReviews, loadPaperContext]);
+  }, [loadLatestProposal, loadMarketReviews, loadPaperContext]);
+
+  const handleGenerateProposal = useCallback(async () => {
+    if (!market) {
+      return;
+    }
+
+    setProposalLoading(true);
+    setProposalError(null);
+
+    try {
+      const response = await generateTradeProposal({
+        market_id: market.id,
+        triggered_from: 'market_detail',
+      });
+      setLatestProposal(response.proposal);
+      setProposalPrefillVersion((current) => current + 1);
+      publishDemoFlowRefresh('proposals-generated');
+    } catch (generationError) {
+      setProposalError(getErrorMessage(generationError, 'Could not generate trade proposal for this market.'));
+    } finally {
+      setProposalLoading(false);
+    }
+  }, [market]);
 
   const openPositions = useMemo(() => (market ? getOpenPositionsForMarket(paperPositions, market.id) : []), [market, paperPositions]);
   const latestTrade = useMemo(() => (market ? getLatestTradeForMarket(paperTrades, market.id) : null), [market, paperTrades]);
@@ -460,6 +511,48 @@ export function MarketDetailPage() {
             </SectionCard>
 
             <SectionCard
+              eyebrow="Proposal engine"
+              title="Trade proposal (demo)"
+              description="Generate a local proposal from current market + signal + risk/policy context, then use it as a bridge before manual paper trade execution."
+              aside={
+                <button className="secondary-button" type="button" onClick={() => void handleGenerateProposal()} disabled={proposalLoading}>
+                  {proposalLoading ? 'Generating proposal…' : 'Generate trade proposal'}
+                </button>
+              }
+            >
+              {proposalError ? <p className="market-trade-feedback market-trade-feedback--error">{proposalError}</p> : null}
+              {proposalContextWarning ? <p className="paper-inline-notice">{proposalContextWarning}</p> : null}
+              {latestProposal ? (
+                <div className="content-grid content-grid--two-columns">
+                  <dl className="dashboard-key-value-list">
+                    <div><dt>Direction</dt><dd><ProposalDirectionBadge direction={latestProposal.direction} /></dd></div>
+                    <div><dt>Suggested quantity</dt><dd>{latestProposal.suggested_quantity ? formatNumber(latestProposal.suggested_quantity) : '—'}</dd></div>
+                    <div><dt>Risk decision</dt><dd><RiskDecisionBadge decision={latestProposal.risk_decision} /></dd></div>
+                    <div><dt>Policy decision</dt><dd><PolicyDecisionBadge decision={latestProposal.policy_decision} /></dd></div>
+                    <div><dt>Approval</dt><dd><ProposalApprovalBadge approvalRequired={latestProposal.approval_required} /></dd></div>
+                    <div><dt>Actionability</dt><dd><ProposalActionableBadge isActionable={latestProposal.is_actionable} /></dd></div>
+                    <div><dt>Status</dt><dd><ProposalStatusBadge status={latestProposal.proposal_status} /></dd></div>
+                  </dl>
+                  <div className="market-trade-empty-state">
+                    <strong>{latestProposal.headline}</strong>
+                    <p>{latestProposal.thesis}</p>
+                    <p>{latestProposal.rationale || latestProposal.recommendation || 'No rationale provided by the demo engine.'}</p>
+                    {latestProposal.suggested_trade_type !== 'HOLD' && latestProposal.suggested_side && latestProposal.suggested_quantity ? (
+                      <p className="muted-text">
+                        Suggested bridge to trade: {latestProposal.suggested_trade_type} {latestProposal.suggested_side} {formatNumber(latestProposal.suggested_quantity)}.
+                        Use “Use proposal suggestion” in the trade panel below.
+                      </p>
+                    ) : (
+                      <p className="muted-text">No actionable proposal yet. Signals are not strong enough for a demo proposal.</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="muted-text">Generate a trade proposal for this market.</p>
+              )}
+            </SectionCard>
+
+            <SectionCard
               eyebrow="Paper trading"
               title="Demo trade execution"
               description="Review the market context above, run the risk check, execute a local simulated trade, and then continue into portfolio or post-mortem with clear next steps."
@@ -475,6 +568,8 @@ export function MarketDetailPage() {
                 warning={paperWarning}
                 isSubmitting={isSubmittingTrade}
                 executionState={tradeExecutionState}
+                proposal={latestProposal}
+                proposalPrefillVersion={proposalPrefillVersion}
                 onRetry={loadPaperContext}
                 onSubmit={handleTradeSubmit}
               />
