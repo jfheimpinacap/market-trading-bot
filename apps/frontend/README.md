@@ -14,6 +14,34 @@ El frontend ya no se siente como un conjunto de módulos separados. La UX ahora 
 6. **Portfolio** para ver impacto en equity, posiciones y trades.
 7. **Post-mortem** para revisar outcome, lecciones y volver al market o portfolio.
 
+## Exploración de mercados reales (read-only) en frontend
+
+La vista de mercados ahora soporta dos orígenes de datos sin ambigüedad visual:
+
+- **DEMO**: mercados locales/sembrados para flujo de simulación.
+- **REAL · READ-ONLY**: mercados ingeridos desde providers reales (ej. Kalshi/Polymarket) solo para exploración.
+
+### Cómo usarlo en UI
+
+1. Ir a `/markets`.
+2. En **Source**, elegir:
+   - `Demo markets`
+   - `Real markets (read-only)`
+   - `All sources`
+3. (Opcional) filtrar por **Provider** (`Kalshi`, `Polymarket`, etc.).
+4. Abrir `/markets/:marketId` para inspección detallada.
+
+### Señales visuales de seguridad operativa
+
+- El listado incluye badges explícitos de **source** y **provider**.
+- En market detail de fuente real aparece aviso explícito:
+  - `Real market data (read-only source). Any trading in this app remains demo/paper only.`
+- El panel de paper trading se mantiene como simulación local; no se habilita ejecución real.
+
+### Empty states para real-data
+
+Si no hay mercados reales disponibles al filtrar por `Real markets (read-only)`, la UI guía al operador indicando que primero debe correr la ingesta del backend y luego refrescar.
+
 ## Conexiones principales entre pantallas
 
 ### `/`
@@ -135,6 +163,16 @@ python start.py simulate-loop
 - `GET /api/paper/trades/`
 - `GET /api/paper/summary/`
 - `POST /api/paper/revalue/`
+
+Query params de markets usados por frontend (sin cliente HTTP paralelo):
+
+- `source_type=demo|real_read_only`
+- `provider=<slug>`
+- `category=<name>`
+- `status=<status>`
+- `search=<text>`
+- `is_active=true|false`
+- `ordering=<field>`
 
 ### Signals
 - `GET /api/signals/summary/`

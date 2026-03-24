@@ -9,6 +9,12 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 - **Infrastructure:** Docker Compose services for PostgreSQL and Redis.
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
 
+### Real data UX boundary (current)
+
+- Frontend markets views now distinguish **demo/local** markets from **real/read-only** markets with explicit source badges and filters.
+- Real provider data is explorable in `/markets` and `/markets/:marketId` as read-only context.
+- Paper trading remains simulated only; no real execution path is enabled from the frontend.
+
 ## What this scaffold does not include yet
 
 - Real trading provider integrations (execution/auth).

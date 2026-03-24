@@ -528,6 +528,22 @@ button {
   background: var(--brand-soft);
   color: var(--brand);
 }
+.market-badge--demo {
+  background: #e8f0ff;
+  color: #1f4ccc;
+}
+.market-badge--real {
+  background: #ecf8ef;
+  color: #0f9f6e;
+}
+.market-badge--provider-kalshi {
+  background: #eef2ff;
+  color: #3846b7;
+}
+.market-badge--provider-polymarket {
+  background: #fff3e8;
+  color: #b7791f;
+}
 
 .market-badge--open,
 .market-badge--resolved,
@@ -562,6 +578,15 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+.market-readonly-notice {
+  margin: 0 0 16px;
+  border: 1px solid #bfe7cd;
+  background: #f2fcf5;
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: #1f5f36;
+  font-weight: 600;
 }
 
 .market-detail-list {

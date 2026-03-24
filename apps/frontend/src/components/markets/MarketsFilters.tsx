@@ -38,7 +38,7 @@ export function MarketsFilters({ filters, providers, events, onChange, onReset }
         <div>
           <p className="section-label">Filters</p>
           <h3>Refine the market catalog</h3>
-          <p>Filter the local demo dataset by provider, category, status, activity, or title search.</p>
+          <p>Switch between demo and real read-only markets, then refine by provider, category, status, activity, or title.</p>
         </div>
         <div className="markets-filters__actions">
           <span className="muted-text">{providers.length} providers available</span>
@@ -49,6 +49,15 @@ export function MarketsFilters({ filters, providers, events, onChange, onReset }
       </div>
 
       <div className="markets-filters__grid">
+        <label className="field-group">
+          <span>Source</span>
+          <select className="select-input" name="source_type" value={filters.source_type} onChange={handleFieldChange}>
+            <option value="">All sources</option>
+            <option value="demo">Demo markets</option>
+            <option value="real_read_only">Real markets (read-only)</option>
+          </select>
+        </label>
+
         <label className="field-group">
           <span>Search</span>
           <input

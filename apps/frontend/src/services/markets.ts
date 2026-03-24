@@ -40,7 +40,7 @@ export function getProviders() {
   return requestJson<MarketProvider[]>('/api/markets/providers/');
 }
 
-export function getEvents(params?: Pick<MarketQueryParams, 'provider' | 'category' | 'status'>) {
+export function getEvents(params?: Pick<MarketQueryParams, 'provider' | 'category' | 'status' | 'source_type'>) {
   return requestJson<MarketEvent[]>(`/api/markets/events/${buildQueryString(params)}`);
 }
 
