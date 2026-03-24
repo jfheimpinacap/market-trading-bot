@@ -1,5 +1,13 @@
 # provider-polymarket
 
-- **Purpose:** Polymarket-specific adapter placeholder.
-- **Future responsibility:** Will implement provider-core contracts for Polymarket market data and execution flows.
-- **Relation to other modules:** Depends on provider-core and is consumed by services needing Polymarket connectivity.
+Polymarket read-only adapter implementation.
+
+## Current scope (read-only)
+- Public market listing via Gamma API.
+- Public market detail retrieval.
+- Normalization into provider-core `NormalizedMarketRecord`.
+
+## Out of scope
+- Trading authentication.
+- Order placement.
+- Execution logic.

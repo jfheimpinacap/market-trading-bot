@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[2]
+MONOREPO_ROOT = BASE_DIR.parents[1]
 
 
 def load_env_file(env_path: Path) -> None:

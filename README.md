@@ -11,7 +11,8 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 
 ## What this scaffold does not include yet
 
-- Real market provider integrations.
+- Real trading provider integrations (execution/auth).
+- Note: real **read-only** market-data ingestion is now available for Kalshi and Polymarket.
 - Authentication or user management.
 - Real trading or provider execution logic.
 - ML, forecasting models, or agent orchestration.
@@ -241,7 +242,7 @@ Each service currently contains only a README describing its intended future res
 - `feature-store`
 - `common-utils`
 
-Each library currently contains only a README describing its intended future responsibility.
+Provider libraries now include a first read-only implementation for market-data ingestion (Kalshi + Polymarket) plus shared provider-core abstractions.
 
 ## Documentation
 
@@ -335,3 +336,15 @@ A new policy engine / approval rules layer now governs proposed demo trades befo
 - `HARD_BLOCK`
 
 This layer is intentionally deterministic and auditable. It does **not** use ML, real providers, autonomous agents, or live auto-trading.
+
+
+## Real data ingestion (read-only)
+
+From `apps/backend` run:
+
+```bash
+python manage.py ingest_kalshi_markets --limit 50 --active-only
+python manage.py ingest_polymarket_markets --limit 50 --active-only
+```
+
+These commands only ingest public market data. They do **not** place orders and do **not** require trading authentication.

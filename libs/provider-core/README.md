@@ -1,5 +1,13 @@
 # provider-core
 
-- **Purpose:** Shared abstractions for market providers.
-- **Future responsibility:** Will define common interfaces, schemas, and error handling for external venue adapters.
-- **Relation to other modules:** Acts as the foundation for Kalshi, Polymarket, and future provider libraries.
+Shared read-only abstractions for external market data providers.
+
+## Current scope (read-only)
+- Common `ReadOnlyProviderClient` interface for listing/getting markets.
+- Shared normalized schema via `NormalizedMarketRecord`.
+- Lightweight HTTP JSON helper with consistent error wrapping.
+
+## Out of scope
+- Trading authentication.
+- Order placement/cancelation.
+- Real execution adapters.

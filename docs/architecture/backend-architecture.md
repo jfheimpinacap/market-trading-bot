@@ -156,6 +156,25 @@ The simulation layer is deliberately small and service-oriented:
 - status transitions are conservative and limited to `open`, `paused`, `closed`, and `resolved`
 - each useful tick creates a fresh `MarketSnapshot` aligned with the updated market fields
 
+
+## Real provider read-only ingestion layer
+
+A provider-agnostic real-data ingestion path now exists for **read-only market data**:
+
+- `libs/provider-core`: shared interface (`ReadOnlyProviderClient`) and normalized record shape.
+- `libs/provider-kalshi`: Kalshi public market-data adapter.
+- `libs/provider-polymarket`: Polymarket Gamma public market-data adapter.
+- `apps.markets.services.real_data_ingestion`: maps normalized records to `Provider/Event/Market/MarketSnapshot`.
+- `apps.markets.management.commands.ingest_kalshi_markets` and `ingest_polymarket_markets`: manual pull commands.
+
+Data source separation is explicit via `source_type` on `Event` and `Market`:
+- `demo`
+- `real_read_only`
+
+This keeps demo trading workflows isolated while enabling real-market discovery and persistence.
+
+Out of scope remains unchanged: no trading auth, no order execution, no real portfolio, no auto-sync workers.
+
 ## API conventions
 - All endpoints live under `/api/`.
 - `config/api.py` is the single place where app endpoints are mounted.

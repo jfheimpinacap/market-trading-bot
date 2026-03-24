@@ -1,5 +1,6 @@
 from decimal import Decimal
 from io import StringIO
+from unittest.mock import patch
 
 from django.core.management import call_command
 from django.test import TestCase
@@ -8,6 +9,8 @@ from rest_framework.test import APIClient
 
 from .demo_data import seed_demo_markets
 from .models import Event, Market, MarketRule, MarketSnapshot, MarketStatus, Provider
+from .provider_registry import _ensure_provider_paths
+from .services.real_data_ingestion import ingest_provider_markets
 
 
 class MarketsModelTests(TestCase):
@@ -191,3 +194,162 @@ class MarketSimulationTests(TestCase):
         self.assertIn('Tick 1:', output)
         self.assertIn('Tick 2:', output)
         self.assertIn('Simulation loop finished after 2 tick(s).', output)
+
+
+class ProviderNormalizationTests(TestCase):
+    def setUp(self):
+        _ensure_provider_paths()
+
+    @patch('provider_kalshi.client.get_json')
+    def test_kalshi_normalization_maps_binary_fields(self, mocked_get_json):
+        from provider_kalshi import KalshiReadOnlyClient
+
+        mocked_get_json.return_value = {
+            'markets': [
+                {
+                    'ticker': 'KXTEST',
+                    'event_ticker': 'EV123',
+                    'title': 'Will X happen?',
+                    'status': 'open',
+                    'yes_bid': '54',
+                    'yes_ask': '55',
+                    'volume': '120000',
+                    'liquidity': '350000',
+                    'category': 'politics',
+                }
+            ]
+        }
+        records = KalshiReadOnlyClient().list_markets(limit=1)
+        record = records[0]
+        self.assertEqual(record.provider_market_id, 'KXTEST')
+        self.assertEqual(record.provider_event_id, 'EV123')
+        self.assertEqual(record.market_probability, Decimal('0.5500'))
+        self.assertEqual(record.no_price, Decimal('0.4500'))
+
+    @patch('provider_polymarket.client.get_json')
+    def test_polymarket_normalization_maps_public_fields(self, mocked_get_json):
+        from provider_polymarket import PolymarketReadOnlyClient
+
+        mocked_get_json.return_value = [
+            {
+                'id': '987',
+                'eventId': 'evt-9',
+                'question': 'Will Y happen?',
+                'active': True,
+                'probability': '0.6200',
+                'liquidity': '220000.55',
+                'volume24hr': '1200.50',
+            }
+        ]
+        records = PolymarketReadOnlyClient().list_markets(limit=1, active_only=True)
+        record = records[0]
+        self.assertEqual(record.provider_market_id, '987')
+        self.assertEqual(record.provider_event_id, 'evt-9')
+        self.assertEqual(record.market_probability, Decimal('0.6200'))
+        self.assertEqual(record.no_price, Decimal('0.3800'))
+
+
+class RealDataIngestionTests(TestCase):
+    @patch('apps.markets.services.real_data_ingestion.get_provider_client')
+    def test_ingest_provider_markets_persists_real_read_only_records(self, mocked_get_provider_client):
+        _ensure_provider_paths()
+        from provider_core.types import NormalizedMarketRecord
+
+        class FakeClient:
+            def list_markets(self, **kwargs):
+                return [
+                    NormalizedMarketRecord(
+                        provider_name='Kalshi',
+                        provider_slug='kalshi',
+                        provider_market_id='KALSHI-1',
+                        provider_event_id='EV-1',
+                        title='Test real market',
+                        category='politics',
+                        status='open',
+                        is_active=True,
+                        market_probability=Decimal('0.6600'),
+                        yes_price=Decimal('0.6600'),
+                        no_price=Decimal('0.3400'),
+                        liquidity=Decimal('1234.5600'),
+                        volume=Decimal('4567.8900'),
+                        volume_24h=Decimal('89.1000'),
+                        metadata={'raw': {'foo': 'bar'}},
+                        event_title='Test real event',
+                    )
+                ]
+
+        mocked_get_provider_client.return_value = FakeClient()
+        result = ingest_provider_markets('kalshi', limit=1)
+        self.assertEqual(result.fetched, 1)
+        market = Market.objects.get(provider_market_id='KALSHI-1')
+        self.assertEqual(market.source_type, 'real_read_only')
+        self.assertEqual(market.provider.slug, 'kalshi-real')
+        self.assertEqual(market.snapshots.count(), 1)
+
+    @patch('apps.markets.services.real_data_ingestion.ingest_provider_markets')
+    def test_ingest_kalshi_command_runs_with_flags(self, mocked_ingest_provider_markets):
+        mocked_ingest_provider_markets.return_value = type(
+            'Result',
+            (),
+            {
+                'fetched': 1,
+                'events_created': 1,
+                'events_updated': 0,
+                'markets_created': 1,
+                'markets_updated': 0,
+                'snapshots_created': 1,
+            },
+        )()
+        stdout = StringIO()
+        call_command(
+            'ingest_kalshi_markets',
+            '--limit',
+            '1',
+            '--active-only',
+            '--query',
+            'election',
+            stdout=stdout,
+        )
+        mocked_ingest_provider_markets.assert_called_once()
+        self.assertIn('Kalshi ingestion complete', stdout.getvalue())
+
+
+class RealMarketApiFilterTests(TestCase):
+    def setUp(self):
+        seed_demo_markets()
+        provider = Provider.objects.create(
+            slug='kalshi-real',
+            name='Kalshi (Real Read-only)',
+            base_url='https://kalshi.com',
+            api_base_url='https://api.elections.kalshi.com/trade-api/v2',
+        )
+        event = Event.objects.create(
+            provider=provider,
+            provider_event_id='EVR-1',
+            title='Real event',
+            source_type='real_read_only',
+            status='open',
+        )
+        Market.objects.create(
+            provider=provider,
+            event=event,
+            provider_market_id='KREAL-1',
+            ticker='KREAL-1',
+            title='Real market',
+            source_type='real_read_only',
+            status='open',
+            is_active=True,
+        )
+        self.client = APIClient()
+
+    def test_market_list_filters_support_source_type_and_real_demo_flags(self):
+        response_real = self.client.get(reverse('markets:market-list'), {'is_real': 'true'})
+        response_demo = self.client.get(reverse('markets:market-list'), {'is_demo': 'true'})
+        response_source = self.client.get(reverse('markets:market-list'), {'source_type': 'real_read_only'})
+
+        self.assertEqual(response_real.status_code, 200)
+        self.assertEqual(response_demo.status_code, 200)
+        self.assertEqual(response_source.status_code, 200)
+        self.assertEqual(len(response_source.json()), 1)
+        self.assertEqual(response_source.json()[0]['title'], 'Real market')
+        self.assertGreater(len(response_demo.json()), 1)
