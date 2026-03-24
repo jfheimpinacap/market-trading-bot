@@ -248,3 +248,12 @@ A new `apps/automation_demo/` boundary now coordinates explicit demo actions acr
 ### Safety guard boundary
 
 A dedicated `safety_guard` app now sits above risk+policy to enforce system-level operational limits (cooldown, hard stop, kill switch, exposure/session guardrails). It integrates with `continuous_demo` and `semi_auto_demo` via service calls and emits auditable `SafetyEvent` records.
+
+## Learning memory layer (heuristic demo)
+
+Nueva capa backend `apps.learning_memory`:
+- Ingesta: reviews + evaluation metrics + safety events
+- Persistencia: `LearningMemoryEntry` y `LearningAdjustment`
+- Servicios: `ingest.py`, `adjustments.py`, `heuristics.py`
+- Integración: proposal/risk reciben solo nudges conservadores y auditable metadata
+- Rebuild explícito: command + endpoint

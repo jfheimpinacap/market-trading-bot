@@ -439,3 +439,14 @@ This repo now includes an explicit **safety guard** layer to harden demo operati
 - auditable safety events for warnings/stops/escalations
 
 Still intentionally not implemented: real trading execution, real exchange auth, local LLM, advanced adaptive optimization.
+
+### Learning memory / adaptive heuristics demo (new)
+
+El sistema ahora incluye una capa de **learning memory heurística y auditable** (sin ML/LLM):
+
+- persiste memoria de outcomes recientes desde postmortem/evaluation/safety
+- genera ajustes conservadores activos por scope (`global`, `provider`, `source_type`, `signal_type`)
+- influye de forma limitada en proposal/risk sin reemplazar policy
+- expone `/learning` en frontend y `/api/learning/*` en backend
+
+Sigue fuera de alcance: ML real, entrenamiento automático, LLM local, ejecución real y dinero real.

@@ -365,3 +365,17 @@ Nueva vista técnica para benchmark/evaluación del sistema autónomo paper/demo
 - estados explícitos de loading/error/empty cuando no hay sesiones evaluables
 
 La pantalla consume: `GET /api/evaluation/summary/` y `GET /api/evaluation/comparison/`.
+
+## Learning Memory UI (new)
+
+Se agregó la ruta `/learning` para visualizar memoria operativa heurística (demo, no ML):
+
+- summary cards de entradas/magnitud conservadora
+- tabla de memory entries
+- tabla de ajustes activos
+- botón de rebuild (`POST /api/learning/rebuild/`)
+- explicación explícita de impacto acotado en proposal/risk
+
+Integraciones de navegación:
+- quick link desde `/evaluation` a `/learning`
+- quick link desde `/postmortem` a `/learning`

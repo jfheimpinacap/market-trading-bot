@@ -742,3 +742,21 @@ Out of scope by design:
 - strategy optimization/tuning
 - ML/LLM scoring
 - real-money execution
+
+## Learning memory / adaptive heuristics demo app (new)
+
+Se agregó `apps.learning_memory` como capa explícita de memoria operativa demo.
+
+Incluye:
+- modelos auditables `LearningMemoryEntry` y `LearningAdjustment`
+- servicios de ingesta heurística desde postmortem/evaluation/safety
+- rebuild deterministico vía command y endpoint
+- API read-first para memory/adjustments/summary
+- integración conservadora con `proposal_engine` y `risk_demo`
+
+Comandos y endpoints clave:
+- `python manage.py rebuild_learning_memory`
+- `GET /api/learning/memory/`
+- `GET /api/learning/adjustments/`
+- `GET /api/learning/summary/`
+- `POST /api/learning/rebuild/`

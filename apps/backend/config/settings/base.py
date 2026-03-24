@@ -78,6 +78,7 @@ LOCAL_APPS = [
     'apps.continuous_demo',
     'apps.safety_guard',
     'apps.evaluation_lab',
+    'apps.learning_memory',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

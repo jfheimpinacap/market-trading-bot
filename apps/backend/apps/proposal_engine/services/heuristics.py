@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 
+from apps.learning_memory.services import build_learning_influence
 from apps.paper_trading.models import PaperPositionSide, PaperTradeType
 from apps.paper_trading.services.valuation import PaperTradingValidationError, get_market_price
 from apps.policy_engine.models import ApprovalDecision, ApprovalDecisionType, PolicyRequestedBy, PolicyTriggeredFrom
@@ -152,6 +153,14 @@ def evaluate_proposal_heuristics(*, context: ProposalContext, triggered_from: st
         confidence,
     ) = _build_trade_idea(context)
 
+    learning_influence = build_learning_influence(
+        market=context.market,
+        signal_type=context.latest_signals[0].signal_type if context.latest_signals else None,
+        source_type=context.market.source_type,
+    )
+
+    confidence = clamp(confidence + learning_influence.confidence_delta, Decimal('0.25'), ONE)
+
     suggested_quantity = _compute_quantity(
         context=context,
         confidence=confidence,
@@ -159,6 +168,8 @@ def evaluate_proposal_heuristics(*, context: ProposalContext, triggered_from: st
         side=suggested_side,
         suggested_price_reference=suggested_price_reference,
     )
+
+    suggested_quantity = q4(suggested_quantity * learning_influence.quantity_multiplier)
 
     risk_assessment = assess_trade(
         market=context.market,
@@ -210,6 +221,9 @@ def evaluate_proposal_heuristics(*, context: ProposalContext, triggered_from: st
         and policy_decision.decision != ApprovalDecisionType.HARD_BLOCK
     )
 
+    if learning_influence.reasons:
+        rationale = f"{rationale} Learning memory influence: {'; '.join(learning_influence.reasons[:3])}."
+
     if policy_decision.decision == ApprovalDecisionType.HARD_BLOCK:
         recommendation = 'No ejecutar: policy devolvió HARD_BLOCK. Revisar reglas y contexto antes de intentar de nuevo.'
     elif risk_assessment.decision == TradeRiskDecision.CAUTION:
@@ -218,6 +232,9 @@ def evaluate_proposal_heuristics(*, context: ProposalContext, triggered_from: st
         recommendation = 'No hay edge claro ahora: mantener observación hasta nuevas señales demo accionables.'
     else:
         recommendation = 'Propuesta accionable para paper trading demo bajo guardrails actuales.'
+
+    if learning_influence.reasons and 'cautela' not in recommendation.lower():
+        recommendation = f"{recommendation} Ajuste conservador aplicado por learning memory heurístico."
 
     return HeuristicResult(
         direction=direction,
