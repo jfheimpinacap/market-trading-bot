@@ -126,6 +126,8 @@ export function ContinuousDemoPage() {
               <div><strong>Pending approvals:</strong> {activeSession?.total_pending_approvals ?? status?.pending_approvals ?? 0}</div>
               <div><strong>Blocked:</strong> {activeSession?.total_blocked ?? 0}</div>
               <div><strong>Errors:</strong> {activeSession?.total_errors ?? 0}</div>
+              <div><strong>Learning rebuild:</strong> {activeSession?.settings_snapshot?.learning_rebuild_enabled ? 'automatic (conservative)' : 'manual only'}</div>
+              <div><strong>Learning cadence:</strong> every {String(activeSession?.settings_snapshot?.learning_rebuild_every_n_cycles ?? '—')} cycles</div>
             </div>
           </SectionCard>
 
@@ -140,9 +142,20 @@ export function ContinuousDemoPage() {
               <li>Safety status: {safety?.status ?? 'UNKNOWN'}</li>
               <li>Cooldown active: {safety?.cooldown_until_cycle ? `until cycle ${safety.cooldown_until_cycle}` : 'no'}</li>
               <li>HARD_BLOCK → never executed</li>
+              <li>Automatic learning rebuild: {activeSession?.settings_snapshot?.learning_rebuild_enabled ? 'enabled' : 'disabled for safety'}</li>
             </ul>
           </SectionCard>
         </div>
+
+        <SectionCard eyebrow="Learning integration" title="Controlled learning loop status" description="Continuous demo can trigger rebuild conservatively, never by aggressive per-cycle auto-optimization.">
+          <ul>
+            <li>Mode: {activeSession?.settings_snapshot?.learning_rebuild_enabled ? 'Enabled' : 'Disabled (manual recommended default)'}</li>
+            <li>Every N cycles: {String(activeSession?.settings_snapshot?.learning_rebuild_every_n_cycles ?? 'not configured')}</li>
+            <li>After reviews: {activeSession?.settings_snapshot?.learning_rebuild_after_reviews ? 'enabled' : 'disabled'}</li>
+            <li>Latest cycle learning hook: {String((latestCycle?.details as Record<string, unknown> | undefined)?.learning_rebuild ? 'recorded' : 'not triggered')}</li>
+            <li>Automatic rebuild is disabled for safety unless explicitly enabled with conservative cadence.</li>
+          </ul>
+        </SectionCard>
 
         <SectionCard eyebrow="Pending approvals" title="Manual queue snapshot" description="El loop respeta la cola manual de aprobaciones y no ejecuta propuestas no elegibles automáticamente.">
           <p><strong>PENDING approvals:</strong> {status?.pending_approvals ?? 0}</p>

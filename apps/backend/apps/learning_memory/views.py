@@ -5,13 +5,17 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.learning_memory.models import LearningAdjustment, LearningMemoryEntry, LearningOutcome
-from apps.learning_memory.serializers import LearningAdjustmentSerializer, LearningMemoryEntrySerializer, LearningSummarySerializer
+from apps.continuous_demo.services.control import DEFAULT_LOOP_SETTINGS
+from apps.learning_memory.models import LearningAdjustment, LearningMemoryEntry, LearningOutcome, LearningRebuildRun
+from apps.learning_memory.serializers import (
+    LearningAdjustmentSerializer,
+    LearningMemoryEntrySerializer,
+    LearningRebuildRequestSerializer,
+    LearningRebuildRunSerializer,
+    LearningSummarySerializer,
+)
 from apps.learning_memory.services import (
-    ingest_recent_evaluation_runs,
-    ingest_recent_reviews,
-    ingest_recent_safety_events,
-    rebuild_active_adjustments,
+    run_learning_rebuild,
 )
 
 
@@ -89,18 +93,49 @@ class LearningRebuildView(APIView):
     permission_classes = []
 
     def post(self, request, *args, **kwargs):
-        created_reviews = ingest_recent_reviews()
-        created_eval = ingest_recent_evaluation_runs()
-        created_safety = ingest_recent_safety_events()
-        adjusted = rebuild_active_adjustments()
+        serializer = LearningRebuildRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        rebuild_run = run_learning_rebuild(
+            triggered_from=serializer.validated_data['triggered_from'],
+            related_session_id=serializer.validated_data.get('related_session_id'),
+            related_cycle_id=serializer.validated_data.get('related_cycle_id'),
+        )
+        return Response(LearningRebuildRunSerializer(rebuild_run).data, status=status.HTTP_200_OK)
+
+
+class LearningRebuildRunListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = LearningRebuildRunSerializer
+
+    def get_queryset(self):
+        return LearningRebuildRun.objects.order_by('-started_at', '-id')[:100]
+
+
+class LearningRebuildRunDetailView(generics.RetrieveAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = LearningRebuildRunSerializer
+    queryset = LearningRebuildRun.objects.order_by('-started_at', '-id')
+
+
+class LearningIntegrationStatusView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        latest = LearningRebuildRun.objects.order_by('-started_at', '-id').first()
         return Response(
             {
-                'status': 'ok',
-                'created_memory_entries': created_reviews + created_eval + created_safety,
-                'created_from_reviews': created_reviews,
-                'created_from_evaluation': created_eval,
-                'created_from_safety': created_safety,
-                **adjusted,
+                'learning_rebuild_enabled': DEFAULT_LOOP_SETTINGS.get('learning_rebuild_enabled', False),
+                'learning_rebuild_every_n_cycles': DEFAULT_LOOP_SETTINGS.get('learning_rebuild_every_n_cycles'),
+                'learning_rebuild_after_reviews': DEFAULT_LOOP_SETTINGS.get('learning_rebuild_after_reviews', False),
+                'latest_rebuild_run': LearningRebuildRunSerializer(latest).data if latest else None,
+                'message': (
+                    'Learning rebuild is currently manual.'
+                    if not DEFAULT_LOOP_SETTINGS.get('learning_rebuild_enabled', False)
+                    else 'Automatic rebuild can run with conservative cadence.'
+                ),
             },
             status=status.HTTP_200_OK,
         )

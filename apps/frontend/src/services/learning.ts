@@ -1,5 +1,5 @@
 import { requestJson } from './api/client';
-import type { LearningAdjustment, LearningMemoryEntry, LearningSummary } from '../types/learning';
+import type { LearningAdjustment, LearningIntegrationStatus, LearningMemoryEntry, LearningRebuildRun, LearningSummary } from '../types/learning';
 
 export function getLearningSummary() {
   return requestJson<LearningSummary>('/api/learning/summary/');
@@ -14,8 +14,20 @@ export function getLearningAdjustments() {
 }
 
 export function rebuildLearningMemory() {
-  return requestJson<{ status: string; created_memory_entries: number; adjustments_processed: number }>('/api/learning/rebuild/', {
+  return requestJson<LearningRebuildRun>('/api/learning/rebuild/', {
     method: 'POST',
     body: JSON.stringify({}),
   });
+}
+
+export function getLearningRebuildRuns() {
+  return requestJson<LearningRebuildRun[]>('/api/learning/rebuild-runs/');
+}
+
+export function getLearningRebuildRun(id: number | string) {
+  return requestJson<LearningRebuildRun>(`/api/learning/rebuild-runs/${id}/`);
+}
+
+export function getLearningIntegrationStatus() {
+  return requestJson<LearningIntegrationStatus>('/api/learning/integration-status/');
 }

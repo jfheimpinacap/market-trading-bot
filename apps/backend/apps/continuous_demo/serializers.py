@@ -62,6 +62,9 @@ class ContinuousDemoControlRequestSerializer(serializers.Serializer):
     review_after_trade = serializers.BooleanField(required=False)
     revalue_after_trade = serializers.BooleanField(required=False)
     enabled = serializers.BooleanField(required=False)
+    learning_rebuild_enabled = serializers.BooleanField(required=False)
+    learning_rebuild_every_n_cycles = serializers.IntegerField(required=False, min_value=2, max_value=500)
+    learning_rebuild_after_reviews = serializers.BooleanField(required=False)
 
 
 class ContinuousDemoStatusSerializer(serializers.Serializer):

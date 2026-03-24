@@ -18,6 +18,10 @@ DEFAULT_LOOP_SETTINGS = {
     'review_after_trade': True,
     'revalue_after_trade': True,
     'market_limit_per_cycle': 8,
+    'learning_rebuild_enabled': False,
+    'learning_rebuild_every_n_cycles': 10,
+    'learning_rebuild_after_reviews': False,
+    'learning_max_adjustment_magnitude': '0.2000',
 }
 
 

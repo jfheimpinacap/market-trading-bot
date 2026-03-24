@@ -4,7 +4,9 @@ export type DemoAutomationActionType =
   | 'revalue_portfolio'
   | 'generate_trade_reviews'
   | 'sync_demo_state'
-  | 'run_demo_cycle';
+  | 'run_demo_cycle'
+  | 'rebuild_learning_memory'
+  | 'run_full_learning_cycle';
 
 export type DemoAutomationStatus = 'RUNNING' | 'SUCCESS' | 'PARTIAL' | 'FAILED';
 export type DemoAutomationStepStatus = 'SUCCESS' | 'FAILED' | 'SKIPPED';

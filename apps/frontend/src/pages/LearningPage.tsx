@@ -5,8 +5,15 @@ import { SectionCard } from '../components/SectionCard';
 import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
-import { getLearningAdjustments, getLearningMemory, getLearningSummary, rebuildLearningMemory } from '../services/learning';
-import type { LearningAdjustment, LearningMemoryEntry, LearningSummary } from '../types/learning';
+import {
+  getLearningAdjustments,
+  getLearningIntegrationStatus,
+  getLearningMemory,
+  getLearningRebuildRuns,
+  getLearningSummary,
+  rebuildLearningMemory,
+} from '../services/learning';
+import type { LearningAdjustment, LearningIntegrationStatus, LearningMemoryEntry, LearningRebuildRun, LearningSummary } from '../types/learning';
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -27,6 +34,8 @@ export function LearningPage() {
   const [summary, setSummary] = useState<LearningSummary | null>(null);
   const [memoryEntries, setMemoryEntries] = useState<LearningMemoryEntry[]>([]);
   const [adjustments, setAdjustments] = useState<LearningAdjustment[]>([]);
+  const [rebuildRuns, setRebuildRuns] = useState<LearningRebuildRun[]>([]);
+  const [integrationStatus, setIntegrationStatus] = useState<LearningIntegrationStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRebuilding, setIsRebuilding] = useState(false);
@@ -35,14 +44,18 @@ export function LearningPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [summaryRes, memoryRes, adjustmentsRes] = await Promise.all([
+      const [summaryRes, memoryRes, adjustmentsRes, rebuildRunsRes, integrationStatusRes] = await Promise.all([
         getLearningSummary(),
         getLearningMemory(),
         getLearningAdjustments(),
+        getLearningRebuildRuns(),
+        getLearningIntegrationStatus(),
       ]);
       setSummary(summaryRes);
       setMemoryEntries(memoryRes);
       setAdjustments(adjustmentsRes);
+      setRebuildRuns(rebuildRunsRes);
+      setIntegrationStatus(integrationStatusRes);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Could not load learning memory data.');
     } finally {
@@ -74,7 +87,7 @@ export function LearningPage() {
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>Open Evaluation</button>
             <button type="button" className="secondary-button" disabled={isRebuilding} onClick={() => void handleRebuild()}>
-              {isRebuilding ? 'Rebuilding...' : 'Rebuild Memory'}
+              {isRebuilding ? 'Rebuilding learning memory...' : 'Rebuild learning memory'}
             </button>
           </div>
         )}
@@ -96,6 +109,57 @@ export function LearningPage() {
                 <div><strong>Negative patterns detected:</strong> {summary.negative_patterns_detected}</div>
                 <div><strong>Conservative bias score:</strong> {summary.conservative_bias_score}</div>
               </div>
+            </SectionCard>
+
+
+            <SectionCard eyebrow="Controlled loop" title="Learning integration status" description="How rebuild is integrated into automation/continuous demo under conservative guardrails.">
+              <div className="system-metadata-grid">
+                <div><strong>Mode:</strong> {integrationStatus?.learning_rebuild_enabled ? 'Automatic (conservative)' : 'Manual by default'}</div>
+                <div><strong>Cadence:</strong> every {integrationStatus?.learning_rebuild_every_n_cycles ?? '—'} cycles</div>
+                <div><strong>After reviews:</strong> {integrationStatus?.learning_rebuild_after_reviews ? 'enabled' : 'disabled'}</div>
+                <div><strong>Guidance:</strong> {integrationStatus?.message ?? 'Learning rebuild is currently manual.'}</div>
+              </div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Rebuild audit" title="Recent rebuild runs" description="Every rebuild leaves explicit traceability: trigger, counts, summary, and warnings.">
+              {rebuildRuns.length === 0 ? (
+                <EmptyState
+                  eyebrow="No rebuild runs"
+                  title="No learning rebuild runs yet"
+                  description="Run reviews and evaluation first to get better learning results."
+                />
+              ) : (
+                <div className="table-wrapper">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Status</th>
+                        <th>Triggered from</th>
+                        <th>Entries</th>
+                        <th>Created</th>
+                        <th>Updated</th>
+                        <th>Deactivated</th>
+                        <th>Started</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rebuildRuns.slice(0, 10).map((run) => (
+                        <tr key={run.id}>
+                          <td>{run.id}</td>
+                          <td><StatusBadge tone={run.status === 'SUCCESS' ? 'ready' : run.status === 'PARTIAL' ? 'pending' : 'offline'}>{run.status}</StatusBadge></td>
+                          <td>{run.triggered_from}</td>
+                          <td>{run.memory_entries_processed}</td>
+                          <td>{run.adjustments_created}</td>
+                          <td>{run.adjustments_updated}</td>
+                          <td>{run.adjustments_deactivated}</td>
+                          <td>{formatDate(run.started_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </SectionCard>
 
             <SectionCard eyebrow="Entries" title="Memory entries" description="Recent memory entries used to derive conservative biases for proposals and risk.">

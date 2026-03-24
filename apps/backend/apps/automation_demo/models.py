@@ -9,6 +9,8 @@ class DemoAutomationRun(models.Model):
         GENERATE_TRADE_REVIEWS = 'generate_trade_reviews', 'Generate trade reviews'
         SYNC_DEMO_STATE = 'sync_demo_state', 'Sync demo state'
         RUN_DEMO_CYCLE = 'run_demo_cycle', 'Run demo cycle'
+        REBUILD_LEARNING_MEMORY = 'rebuild_learning_memory', 'Rebuild learning memory'
+        RUN_FULL_LEARNING_CYCLE = 'run_full_learning_cycle', 'Run full learning cycle'
 
     class Status(models.TextChoices):
         RUNNING = 'RUNNING', 'Running'

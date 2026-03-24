@@ -4,6 +4,7 @@ from rest_framework.test import APIClient
 
 from apps.continuous_demo.models import ContinuousDemoSession, SessionStatus
 from apps.continuous_demo.services.loop import start_session, stop_session
+from apps.learning_memory.models import LearningRebuildRun
 from apps.markets.demo_data import seed_demo_markets
 from apps.paper_trading.services.portfolio import ensure_demo_account
 from apps.semi_auto_demo.models import PendingApproval, PendingApprovalStatus
@@ -71,3 +72,28 @@ class ContinuousDemoServiceTests(TestCase):
         session = ContinuousDemoSession.objects.order_by('-id').first()
         self.assertIsNotNone(session)
         self.assertEqual(client.get(reverse('continuous_demo:session-detail', kwargs={'pk': session.id})).status_code, 200)
+
+    def test_learning_rebuild_not_triggered_when_disabled(self):
+        client = APIClient()
+        before = LearningRebuildRun.objects.count()
+        response = client.post(reverse('continuous_demo:run-cycle'), {}, format='json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('learning_rebuild', payload['details'])
+        self.assertFalse(payload['details']['learning_rebuild'].get('triggered', True))
+        self.assertEqual(LearningRebuildRun.objects.count(), before)
+
+    def test_learning_rebuild_can_trigger_on_cycle_cadence(self):
+        client = APIClient()
+        settings = {
+            'cycle_interval_seconds': 2,
+            'learning_rebuild_enabled': True,
+            'learning_rebuild_every_n_cycles': 1,
+        }
+        start_response = client.post(reverse('continuous_demo:start'), settings, format='json')
+        self.assertEqual(start_response.status_code, 200)
+        before = LearningRebuildRun.objects.count()
+        manual_cycle = client.post(reverse('continuous_demo:run-cycle'), {}, format='json')
+        self.assertEqual(manual_cycle.status_code, 200)
+        self.assertIn('learning_rebuild', manual_cycle.json()['details'])
+        self.assertGreaterEqual(LearningRebuildRun.objects.count(), before)

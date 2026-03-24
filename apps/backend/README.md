@@ -760,3 +760,25 @@ Comandos y endpoints clave:
 - `GET /api/learning/adjustments/`
 - `GET /api/learning/summary/`
 - `POST /api/learning/rebuild/`
+
+
+## Controlled learning loop integration (new)
+
+Se integró `learning_memory` con `automation_demo` y `continuous_demo` sin rehacer arquitectura:
+
+- `LearningRebuildRun` persiste cada rebuild con trazabilidad y métricas.
+- `/api/automation/` incluye:
+  - `POST /rebuild-learning-memory/`
+  - `POST /run-full-learning-cycle/`
+- `/api/learning/` incluye:
+  - `GET /rebuild-runs/`
+  - `GET /rebuild-runs/<id>/`
+  - `GET /integration-status/`
+- `continuous_demo` agrega settings conservadores para rebuild (`learning_rebuild_enabled`, `learning_rebuild_every_n_cycles`, `learning_rebuild_after_reviews`), desactivado por defecto.
+
+Jerarquía operativa explícita:
+- learning ajusta (heurístico, acotado)
+- policy gobierna decisiones
+- safety limita/puede frenar
+
+Fuera de alcance: ML real, LLM local, ejecución real o dinero real.

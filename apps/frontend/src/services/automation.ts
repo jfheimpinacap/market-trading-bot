@@ -42,6 +42,14 @@ export function runDemoCycle(triggeredFrom?: DemoAutomationTriggeredFrom) {
   return postAutomationAction('/api/automation/run-demo-cycle/', triggeredFrom);
 }
 
+export function runRebuildLearningMemory(triggeredFrom?: DemoAutomationTriggeredFrom) {
+  return postAutomationAction('/api/automation/rebuild-learning-memory/', triggeredFrom);
+}
+
+export function runFullLearningCycle(triggeredFrom?: DemoAutomationTriggeredFrom) {
+  return postAutomationAction('/api/automation/run-full-learning-cycle/', triggeredFrom);
+}
+
 export function getAutomationRuns(limit?: number) {
   return requestJson<DemoAutomationRun[]>(`/api/automation/runs/${buildQueryString(limit)}`);
 }

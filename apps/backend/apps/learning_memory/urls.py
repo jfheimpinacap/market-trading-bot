@@ -5,6 +5,9 @@ from apps.learning_memory.views import (
     LearningMemoryDetailView,
     LearningMemoryListView,
     LearningRebuildView,
+    LearningRebuildRunDetailView,
+    LearningRebuildRunListView,
+    LearningIntegrationStatusView,
     LearningSummaryView,
 )
 
@@ -14,4 +17,7 @@ urlpatterns = [
     path('adjustments/', LearningAdjustmentListView.as_view(), name='adjustment-list'),
     path('summary/', LearningSummaryView.as_view(), name='summary'),
     path('rebuild/', LearningRebuildView.as_view(), name='rebuild'),
+    path('rebuild-runs/', LearningRebuildRunListView.as_view(), name='rebuild-run-list'),
+    path('rebuild-runs/<int:pk>/', LearningRebuildRunDetailView.as_view(), name='rebuild-run-detail'),
+    path('integration-status/', LearningIntegrationStatusView.as_view(), name='integration-status'),
 ]

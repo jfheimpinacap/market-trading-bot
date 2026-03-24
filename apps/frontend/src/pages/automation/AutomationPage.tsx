@@ -12,6 +12,8 @@ import {
   getAutomationRuns,
   getAutomationSummary,
   runDemoCycle,
+  runFullLearningCycle,
+  runRebuildLearningMemory,
   runGenerateSignals,
   runGenerateTradeReviews,
   runRevaluePortfolio,
@@ -70,6 +72,20 @@ const actionDefinitions: Array<{
     tone: 'primary',
     run: () => runDemoCycle('automation_page'),
   },
+  {
+    actionType: 'rebuild_learning_memory',
+    label: 'Rebuild learning memory',
+    description: 'Rebuild heuristic learning memory and conservative adjustments with full traceability.',
+    tone: 'secondary',
+    run: () => runRebuildLearningMemory('automation_page'),
+  },
+  {
+    actionType: 'run_full_learning_cycle',
+    label: 'Run full learning cycle',
+    description: 'Run demo cycle plus controlled learning rebuild in one auditable operation.',
+    tone: 'primary',
+    run: () => runFullLearningCycle('automation_page'),
+  },
 ];
 
 const guidedFlow = [
@@ -79,6 +95,7 @@ const guidedFlow = [
   'Execute a paper trade manually from Market detail when you want to continue the demo flow.',
   'Revalue portfolio to update equity and capture the latest paper account snapshot.',
   'Generate trade reviews to close the loop in Post-Mortem.',
+  'Rebuild learning memory to apply conservative adjustments in future proposal/risk cycles.',
 ];
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -221,8 +238,11 @@ export function AutomationPage() {
             <button type="button" className="secondary-button" onClick={() => navigate('/semi-auto')}>
               Open semi-auto
             </button>
-            <button type="button" className="secondary-button" onClick={() => navigate('/system')}>
-              Open system context
+            <button type="button" className="secondary-button" onClick={() => navigate('/learning')}>
+              Open learning
+            </button>
+            <button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>
+              Open evaluation
             </button>
           </div>
         }

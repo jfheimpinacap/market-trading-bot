@@ -379,3 +379,18 @@ Se agregó la ruta `/learning` para visualizar memoria operativa heurística (de
 Integraciones de navegación:
 - quick link desde `/evaluation` a `/learning`
 - quick link desde `/postmortem` a `/learning`
+
+
+## Controlled learning loop UI (new)
+
+Se amplió la UX en rutas existentes, sin rediseño completo:
+
+- `/automation` ahora permite `Rebuild learning memory` y `Run full learning cycle`.
+- `/continuous-demo` muestra estado de integración de rebuild automático (conservador y configurable).
+- `/learning` incorpora `recent rebuild runs`, estado de integración y trazabilidad de rebuilds.
+
+Mensajes operativos explícitos:
+- no ML
+- no auto-optimización opaca
+- paper/demo only
+- rebuild automático desactivado por defecto por seguridad

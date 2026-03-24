@@ -5,7 +5,8 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.automation_demo.models import DemoAutomationRun
-from apps.automation_demo.services import execute_demo_action, run_demo_cycle
+from apps.automation_demo.services import execute_demo_action, run_demo_cycle, run_full_learning_cycle
+from apps.learning_memory.models import LearningRebuildRun
 from apps.markets.demo_data import seed_demo_markets
 from apps.markets.models import Market, MarketSnapshot
 from apps.paper_trading.models import PaperPortfolioSnapshot
@@ -71,6 +72,16 @@ class DemoAutomationServiceTests(TestCase):
         )
         self.assertTrue(all(step['status'] == 'SUCCESS' for step in run.details['steps']))
 
+    def test_run_full_learning_cycle_executes_learning_rebuild(self):
+        initial_runs = LearningRebuildRun.objects.count()
+        run = execute_demo_action(action_type=DemoAutomationRun.ActionType.REBUILD_LEARNING_MEMORY)
+        self.assertIn(run.status, [DemoAutomationRun.Status.SUCCESS, DemoAutomationRun.Status.PARTIAL])
+        self.assertGreater(LearningRebuildRun.objects.count(), initial_runs)
+
+        full_run = run_full_learning_cycle(triggered_from=DemoAutomationRun.TriggeredFrom.AUTOMATION_PAGE)
+        self.assertEqual(full_run.action_type, DemoAutomationRun.ActionType.RUN_FULL_LEARNING_CYCLE)
+        self.assertEqual(full_run.details['steps'][-1]['step_name'], DemoAutomationRun.ActionType.REBUILD_LEARNING_MEMORY)
+
 
 class DemoAutomationApiTests(TestCase):
     def setUp(self):
@@ -86,7 +97,9 @@ class DemoAutomationApiTests(TestCase):
             ('automation_demo:generate-signals', DemoAutomationRun.ActionType.GENERATE_SIGNALS),
             ('automation_demo:revalue-portfolio', DemoAutomationRun.ActionType.REVALUE_PORTFOLIO),
             ('automation_demo:generate-trade-reviews', DemoAutomationRun.ActionType.GENERATE_TRADE_REVIEWS),
+            ('automation_demo:rebuild-learning-memory', DemoAutomationRun.ActionType.REBUILD_LEARNING_MEMORY),
             ('automation_demo:run-demo-cycle', DemoAutomationRun.ActionType.RUN_DEMO_CYCLE),
+            ('automation_demo:run-full-learning-cycle', DemoAutomationRun.ActionType.RUN_FULL_LEARNING_CYCLE),
         ]
 
         for route_name, action_type in cases:

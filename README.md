@@ -450,3 +450,19 @@ El sistema ahora incluye una capa de **learning memory heurística y auditable**
 - expone `/learning` en frontend y `/api/learning/*` en backend
 
 Sigue fuera de alcance: ML real, entrenamiento automático, LLM local, ejecución real y dinero real.
+
+
+## Controlled learning loop integration (current)
+
+The platform now closes a controlled learning loop across existing modules:
+
+- automation and continuous demo can trigger a conservative learning-memory rebuild
+- every rebuild is persisted as an auditable `LearningRebuildRun`
+- rebuilt adjustments continue to influence proposal confidence/quantity and risk caution in later cycles
+- defaults remain conservative (manual-first, no per-cycle aggressive rebuild)
+
+Still intentionally out of scope:
+- ML training/inference
+- local LLM agents
+- real money or real execution
+- opaque autonomous tuning

@@ -257,3 +257,15 @@ Nueva capa backend `apps.learning_memory`:
 - Servicios: `ingest.py`, `adjustments.py`, `heuristics.py`
 - Integración: proposal/risk reciben solo nudges conservadores y auditable metadata
 - Rebuild explícito: command + endpoint
+
+
+## Controlled learning loop integration
+
+A conservative integration path now connects `learning_memory` with automation layers:
+
+- `LearningRebuildRun` provides explicit rebuild audit trails.
+- `learning_memory.services.integration.run_learning_rebuild` centralizes ingest + rebuild + run logging.
+- `automation_demo` exposes explicit rebuild actions (manual and full-learning-cycle composite).
+- `continuous_demo` can optionally trigger rebuild using conservative cadence settings.
+
+Design intent stays deterministic and auditable: no ML/LLM, no real execution, no opaque self-tuning.
