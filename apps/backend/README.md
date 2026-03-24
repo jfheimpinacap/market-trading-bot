@@ -20,7 +20,8 @@ apps/backend/
 │   ├── common/
 │   ├── health/
 │   ├── markets/
-│   └── paper_trading/
+│   ├── paper_trading/
+│   └── proposal_engine/
 ├── config/
 │   ├── api.py
 │   ├── celery.py
@@ -48,6 +49,7 @@ apps/backend/
 - `apps.agents`: placeholder app for future agent domain work.
 - `apps.audit`: placeholder app for future audit and post-mortem work.
 - `apps.policy_engine`: demo-only operational approval layer that translates trade context into `AUTO_APPROVE`, `APPROVAL_REQUIRED`, or `HARD_BLOCK`.
+- `apps.proposal_engine`: demo-only trade proposal layer that consolidates market + signals + risk + policy + paper context into auditable `TradeProposal` records.
 
 ## Markets app summary
 The `apps.markets` app now provides a practical local catalog for prediction-market development without adding trading workflows or provider integrations.
@@ -142,6 +144,31 @@ Out of scope by design:
 - autonomous execution
 - ML-based policy scoring
 - push notifications or realtime approval routing
+
+## Proposal engine demo app summary
+The `apps.proposal_engine` app consolidates demo market context, recent signals, risk guard output, policy decisions, and paper-account exposure into a single auditable proposal object for backend-first workflows.
+
+Current proposal engine model:
+- `TradeProposal`
+
+Current proposal engine workflow:
+- generate one proposal via `POST /api/proposals/generate/`
+- compute direction (`BUY_YES`, `BUY_NO`, `HOLD`, `AVOID`) using clear local heuristics
+- run `risk_demo` and `policy_engine` checks before persisting `is_actionable` and recommendation
+- persist metadata linking signals, account context, and downstream assessment IDs
+
+Current proposal engine endpoints:
+- `/api/proposals/`
+- `/api/proposals/<id>/`
+- `/api/proposals/generate/`
+
+Out of scope by design:
+- frontend proposal UI
+- auto-trading or batch autonomous generation
+- real market data integrations
+- ML/LLM decisioning
+- complex approval queue orchestration
+
 
 ## Signals app summary
 The `apps.signals` app adds the first demo-only bridge between market simulation, paper trading, and future automation architecture.
