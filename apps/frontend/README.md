@@ -29,14 +29,22 @@ La vista de mercados ahora soporta dos orígenes de datos sin ambigüedad visual
    - `Real markets (read-only)`
    - `All sources`
 3. (Opcional) filtrar por **Provider** (`Kalshi`, `Polymarket`, etc.).
+4. (Opcional) usar **Paper tradable** para separar mercados reales que sí/no permiten paper execution.
 4. Abrir `/markets/:marketId` para inspección detallada.
+
+En la tabla, cada row muestra:
+- `DEMO` o `REAL · READ-ONLY`
+- provider
+- estado de paper mode (`Paper-tradable` o `Not paper-tradable`) con razón cuando existe.
 
 ### Señales visuales de seguridad operativa
 
 - El listado incluye badges explícitos de **source** y **provider**.
 - En market detail de fuente real aparece aviso explícito:
-  - `Real market data (read-only source). Any trading in this app remains demo/paper only.`
+  - `This market uses real read-only data. Any trading in this app remains simulated (paper only).`
+- El panel también muestra `execution_mode` y `paper_tradable_reason`.
 - El panel de paper trading se mantiene como simulación local; no se habilita ejecución real.
+- Si `paper_tradable=false`, la UI bloquea evaluación/ejecución desde el panel y muestra la razón del backend.
 
 ### Empty states para real-data
 
@@ -83,6 +91,7 @@ Si no hay mercados reales disponibles al filtrar por `Real markets (read-only)`,
 ### `/portfolio`
 - posiciones con link claro a market detail
 - trades con link claro a review cuando existe
+- posiciones y trades muestran badge de source (`DEMO` / `REAL · READ-ONLY`) y `execution_mode`
 - bloque corto de reviews recientes
 - empty states más guiados hacia `Markets` y `Signals`
 - revalue manual refresca la página y también notifica al resto de vistas del flujo

@@ -101,6 +101,10 @@ export type MarketListItem = {
   volume_total: string | null;
   spread_bps: string | null;
   source_type: 'demo' | 'real_read_only' | string;
+  is_real_data?: boolean;
+  paper_tradable?: boolean;
+  paper_tradable_reason?: string | null;
+  execution_mode?: 'paper_demo_only' | string;
   is_demo: boolean;
   is_real: boolean;
   snapshot_count: number;
@@ -129,6 +133,7 @@ export type MarketSystemSummary = {
 export type MarketFilters = {
   source_type: string;
   provider: string;
+  paper_tradable: string;
   category: string;
   status: string;
   is_active: string;

@@ -1,6 +1,7 @@
 import type { MouseEvent } from 'react';
 import { navigate } from '../../lib/router';
 import { formatDateTime, formatNumber } from '../markets/utils';
+import { MarketSourceBadge } from '../markets/MarketSourceBadge';
 import { PolicyDecisionBadge } from '../policy/PolicyDecisionBadge';
 import type { TradeProposal } from '../../types/proposals';
 import {
@@ -32,6 +33,7 @@ export function ProposalsTable({ proposals }: ProposalsTableProps) {
           <tr>
             <th>Proposal</th>
             <th>Market</th>
+            <th>Source</th>
             <th>Direction</th>
             <th>Suggested qty</th>
             <th>Score</th>
@@ -60,8 +62,14 @@ export function ProposalsTable({ proposals }: ProposalsTableProps) {
                   onClick={(event) => handleClick(event, `/markets/${proposal.market}`)}
                 >
                   <strong>{proposal.market_title}</strong>
-                  <span>{proposal.market_slug}</span>
+                  <span>{proposal.market_provider_name ?? proposal.market_slug}</span>
                 </a>
+              </td>
+              <td>
+                <div className="table-inline-stack">
+                  <MarketSourceBadge sourceType={proposal.market_source_type ?? 'demo'} />
+                  <span className="muted-text">{proposal.execution_mode ?? 'paper_demo_only'}</span>
+                </div>
               </td>
               <td><ProposalDirectionBadge direction={proposal.direction} /></td>
               <td>{proposal.suggested_quantity ? formatNumber(proposal.suggested_quantity) : '—'}</td>

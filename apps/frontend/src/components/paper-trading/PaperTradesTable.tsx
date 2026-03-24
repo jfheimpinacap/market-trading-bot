@@ -7,6 +7,7 @@ import { SideBadge } from './SideBadge';
 import { formatPaperCurrency, formatQuantity, formatTechnicalTimestamp } from './utils';
 import { titleize } from '../markets/utils';
 import { ReviewOutcomeBadge } from '../postmortem/ReviewOutcomeBadge';
+import { MarketSourceBadge } from '../markets/MarketSourceBadge';
 
 type PaperTradesTableProps = {
   trades: PaperTrade[];
@@ -31,6 +32,7 @@ export function PaperTradesTable({ trades, currency, reviewLookup = {} }: PaperT
           <tr>
             <th>Executed at</th>
             <th>Market</th>
+            <th>Source</th>
             <th>Trade type</th>
             <th>Side</th>
             <th>Quantity</th>
@@ -50,8 +52,14 @@ export function PaperTradesTable({ trades, currency, reviewLookup = {} }: PaperT
                 <td>
                   <a href={`/markets/${trade.market}`} className="market-link" onClick={(event) => handleNavigate(event, `/markets/${trade.market}`)}>
                     <strong>{trade.market_title}</strong>
-                    <span>Market #{trade.market}</span>
+                    <span>{trade.market_provider_name ?? `Market #${trade.market}`}</span>
                   </a>
+                </td>
+                <td>
+                  <div className="table-inline-stack">
+                    <MarketSourceBadge sourceType={trade.market_source_type ?? 'demo'} />
+                    <span className="muted-text">{trade.execution_mode ?? 'paper_demo_only'}</span>
+                  </div>
                 </td>
                 <td>{titleize(trade.trade_type)}</td>
                 <td>

@@ -36,6 +36,8 @@ export type MarketSignal = {
   market_slug: string;
   market_status: string;
   market_provider_slug: string;
+  market_source_type?: 'demo' | 'real_read_only' | string;
+  execution_mode?: 'paper_demo_only' | string;
   agent: MockAgent | null;
   run: number | null;
   signal_type: SignalType;

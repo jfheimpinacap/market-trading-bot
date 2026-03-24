@@ -13,6 +13,7 @@ import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { useSystemHealth } from '../app/SystemHealthProvider';
 import { API_BASE_URL, PROJECT_NAME } from '../lib/config';
 import { dashboardModules, dashboardQuickLinks, localEnvironmentHighlights, nextProjectSteps } from '../lib/dashboard';
+import { navigate } from '../lib/router';
 import { useDemoFlowRefresh } from '../hooks/useDemoFlowRefresh';
 import { getMarketSystemSummary, getMarkets } from '../services/markets';
 import { getPaperSummary } from '../services/paperTrading';
@@ -115,6 +116,7 @@ export function DashboardPage() {
   const [proposalsLoading, setProposalsLoading] = useState(true);
   const [proposalsError, setProposalsError] = useState<string | null>(null);
   const [realMarketCount, setRealMarketCount] = useState(0);
+  const [realPaperTradableCount, setRealPaperTradableCount] = useState(0);
   const [realProviders, setRealProviders] = useState<string[]>([]);
   const [realContextLoading, setRealContextLoading] = useState(true);
   const [realContextError, setRealContextError] = useState<string | null>(null);
@@ -154,9 +156,11 @@ export function DashboardPage() {
     try {
       const response = await getMarkets({ source_type: 'real_read_only' });
       setRealMarketCount(response.length);
+      setRealPaperTradableCount(response.filter((market) => market.paper_tradable).length);
       setRealProviders(Array.from(new Set(response.map((market) => market.provider.name))).sort((left, right) => left.localeCompare(right)));
     } catch (error) {
       setRealMarketCount(0);
+      setRealPaperTradableCount(0);
       setRealProviders([]);
       setRealContextError(getErrorMessage(error, 'Could not load real read-only market context.'));
     } finally {
@@ -398,9 +402,13 @@ export function DashboardPage() {
         >
           <dl className="dashboard-key-value-list">
             <div><dt>Real markets</dt><dd>{realMarketCount}</dd></div>
+            <div><dt>Real paper-tradable</dt><dd>{realPaperTradableCount}</dd></div>
             <div><dt>Real providers</dt><dd>{realProviders.length > 0 ? realProviders.join(', ') : '—'}</dd></div>
             <div><dt>Trading mode</dt><dd>Paper/demo only</dd></div>
           </dl>
+          <button className="secondary-button" type="button" onClick={() => navigate('/markets')}>
+            Explore real read-only markets
+          </button>
         </DataStateWrapper>
       </SectionCard>
 

@@ -1,6 +1,7 @@
 import type { MouseEvent } from 'react';
 import { navigate } from '../../lib/router';
 import type { PaperPosition } from '../../types/paperTrading';
+import { MarketSourceBadge } from '../markets/MarketSourceBadge';
 import { PaperStatusBadge } from './PaperStatusBadge';
 import { PnlBadge } from './PnlBadge';
 import { SideBadge } from './SideBadge';
@@ -23,6 +24,7 @@ export function PaperPositionsTable({ positions, currency }: PaperPositionsTable
         <thead>
           <tr>
             <th>Market</th>
+            <th>Source</th>
             <th>Side</th>
             <th>Quantity</th>
             <th>Avg entry</th>
@@ -40,8 +42,14 @@ export function PaperPositionsTable({ positions, currency }: PaperPositionsTable
               <td>
                 <a href={`/markets/${position.market}`} className="market-link" onClick={(event) => handleMarketClick(event, position.market)}>
                   <strong>{position.market_title}</strong>
-                  <span>Market #{position.market}</span>
+                  <span>{position.market_provider_name ?? `Market #${position.market}`}</span>
                 </a>
+              </td>
+              <td>
+                <div className="table-inline-stack">
+                  <MarketSourceBadge sourceType={position.market_source_type ?? 'demo'} />
+                  <span className="muted-text">{position.execution_mode ?? 'paper_demo_only'}</span>
+                </div>
               </td>
               <td>
                 <SideBadge side={position.side} />

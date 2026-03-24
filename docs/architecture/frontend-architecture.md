@@ -153,6 +153,8 @@ The `/markets/:marketId` route is now the operational hub of the demo:
   - provider badge
   - read-only warning when the market comes from a real provider source
   - explicit reminder that trading in the app still remains paper/demo only
+  - explicit `execution_mode`, `paper_tradable`, and `paper_tradable_reason` context in overview and trade panel
+  - blocked CTA behavior when a market is not paper-tradable
 
 ### Portfolio
 
@@ -162,6 +164,7 @@ The `/portfolio` route is now more clearly positioned as the impact view:
 - trade rows link to reviews when available
 - review summary block surfaces recent retrospective context
 - empty states suggest the next useful step instead of only showing missing data
+- position and trade rows now surface market source + execution mode to avoid confusion between real read-only pricing and simulated execution
 
 ### Post-mortem
 
@@ -180,6 +183,7 @@ The `/postmortem` route now closes the loop more clearly:
 - better empty states instead of cold "no data" messages
 - consistent labels for actionability, risk decision, trade status, and review outcome
 - explicit source distinction (demo vs real read-only) in list and detail views
+- explicit paper tradability distinction for real read-only markets (tradable vs blocked with reason)
 - no unnecessary client complexity
 
 ## Explicitly not introduced yet

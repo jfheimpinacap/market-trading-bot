@@ -285,6 +285,7 @@ export function MarketDetailPage() {
 
   const openPositions = useMemo(() => (market ? getOpenPositionsForMarket(paperPositions, market.id) : []), [market, paperPositions]);
   const isRealReadOnlyMarket = market?.source_type === 'real_read_only';
+  const executionMode = market?.execution_mode || 'paper_demo_only';
   const latestTrade = useMemo(() => (market ? getLatestTradeForMarket(paperTrades, market.id) : null), [market, paperTrades]);
   const latestReview = useMemo(() => (market ? getLatestReviewForMarket(marketReviews, market.id) : null), [market, marketReviews]);
   const latestDecision = useMemo(() => {
@@ -421,6 +422,18 @@ export function MarketDetailPage() {
                     <dd><MarketSourceBadge sourceType={market.source_type} /></dd>
                   </div>
                   <div>
+                    <dt>Execution mode in app</dt>
+                    <dd><code>{executionMode}</code></dd>
+                  </div>
+                  <div>
+                    <dt>Paper tradable</dt>
+                    <dd>{market.paper_tradable ? 'Yes' : 'No'}</dd>
+                  </div>
+                  <div>
+                    <dt>Paper tradable reason</dt>
+                    <dd>{market.paper_tradable_reason || 'Tradable in paper mode with current backend context.'}</dd>
+                  </div>
+                  <div>
                     <dt>Category</dt>
                     <dd>{market.category || '—'}</dd>
                   </div>
@@ -534,6 +547,8 @@ export function MarketDetailPage() {
               {latestProposal ? (
                 <div className="content-grid content-grid--two-columns">
                   <dl className="dashboard-key-value-list">
+                    <div><dt>Market source</dt><dd><MarketSourceBadge sourceType={latestProposal.market_source_type ?? market.source_type} /></dd></div>
+                    <div><dt>Execution mode</dt><dd><code>{latestProposal.execution_mode ?? executionMode}</code></dd></div>
                     <div><dt>Direction</dt><dd><ProposalDirectionBadge direction={latestProposal.direction} /></dd></div>
                     <div><dt>Suggested quantity</dt><dd>{latestProposal.suggested_quantity ? formatNumber(latestProposal.suggested_quantity) : '—'}</dd></div>
                     <div><dt>Risk decision</dt><dd><RiskDecisionBadge decision={latestProposal.risk_decision} /></dd></div>
@@ -568,7 +583,7 @@ export function MarketDetailPage() {
             >
               {isRealReadOnlyMarket ? (
                 <p className="market-readonly-notice">
-                  Real market data (read-only source). Any trading in this app remains demo/paper only.
+                  This market uses real read-only data. Any trading in this app remains simulated (paper only).
                 </p>
               ) : null}
               <MarketTradePanel

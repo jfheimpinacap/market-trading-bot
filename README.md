@@ -25,6 +25,7 @@ Still not implemented: real auth, real order placement, real portfolio sync, or 
 
 
 - Frontend markets views now distinguish **demo/local** markets from **real/read-only** markets with explicit source badges and filters.
+- Frontend now also surfaces **paper-tradable vs blocked** status (with backend reason) for real read-only markets in `/markets` and `/markets/:marketId`.
 - Real provider data is explorable in `/markets` and `/markets/:marketId` as read-only context.
 - Paper trading remains simulated only; no real execution path is enabled from the frontend.
 
