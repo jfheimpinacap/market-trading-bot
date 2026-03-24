@@ -42,6 +42,16 @@ Still out of scope: real trading, exchange auth, autonomous schedulers/workers, 
 
 ### Autonomous continuous demo loop (new)
 
+### Evaluation harness (new)
+
+The platform now includes an explicit **benchmark/evaluation harness** for autonomous paper/demo operation:
+
+- objective session/run metrics across proposals, approvals, blocks, executions, reviews, PnL/equity, and safety events
+- auditable run records via `EvaluationRun` + `EvaluationMetricSet`
+- technical frontend route at `/evaluation` for snapshots, recent run comparisons, and guidance
+- strict local-first boundary: no ML, no LLM, no real-money execution
+
+
 The platform now also includes a controlled **autonomous continuous demo loop** (`/continuous-demo` + `/api/continuous-demo/*`):
 
 - starts, pauses, resumes, and stops continuous background cycles

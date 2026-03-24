@@ -28,6 +28,12 @@ export const systemQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Evaluation',
+    description: 'Inspect objective benchmark metrics and run-to-run comparisons before increasing autonomy.',
+    path: '/evaluation',
+    availability: 'live',
+  },
+  {
     title: 'Markets',
     description: 'Inspect the seeded market catalog, filters, and per-market detail pages.',
     path: '/markets',

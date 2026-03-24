@@ -52,6 +52,12 @@ export const dashboardQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Evaluation',
+    description: 'Review benchmark snapshots, run comparisons, and objective paper/demo system performance metrics.',
+    path: '/evaluation',
+    availability: 'live',
+  },
+  {
     title: 'Safety',
     description: 'Monitor operational guardrails, cooldown state, kill switch, and safety events.',
     path: '/safety',

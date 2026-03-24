@@ -348,3 +348,15 @@ Frontend now includes `/continuous-demo` for autonomous loop operations in paper
 - New `/safety` route centralizes operational safety state for demo mode.
 - Shows current status (`healthy`, `warning`, `cooldown`, `hard-stop`, `kill-switch`), guardrail limits, kill switch controls, and recent safety events.
 - Continuous Demo and Semi-Auto pages now surface safety restrictions and disable auto actions when blocked by guardrails.
+
+
+### /evaluation
+Nueva vista técnica para benchmark/evaluación del sistema autónomo paper/demo:
+
+- snapshot actual de auto-execution rate, approval/block rates, review quality, PnL/equity y safety pressure
+- tabla de runs recientes comparables
+- bloque simple de comparación entre runs recientes
+- guidance rule-based (sin ML/LLM) para detectar conservadurismo/agresividad o deterioro de calidad
+- estados explícitos de loading/error/empty cuando no hay sesiones evaluables
+
+La pantalla consume: `GET /api/evaluation/summary/` y `GET /api/evaluation/comparison/`.

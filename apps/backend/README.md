@@ -700,3 +700,28 @@ Out of scope by design:
 - Includes configurable limits for exposure, session drawdown, auto-trade caps, cooldown thresholds, and kill switch behavior.
 - `continuous_demo` and `semi_auto_demo` now consult safety state before auto execution.
 - Critical/manual actions remain manual by design: kill switch enable/disable, cooldown reset, config updates, pending approval decisions.
+
+
+## Evaluation lab app summary
+The `apps.evaluation_lab` app adds a benchmark/evaluation harness to objectively measure autonomous paper/demo behavior before increasing system autonomy.
+
+Current evaluation models:
+- `EvaluationRun`
+- `EvaluationMetricSet`
+
+Current evaluation workflow:
+- build an auditable run from an existing continuous demo session (`POST /api/evaluation/build-for-session/<session_id>/`)
+- aggregate cross-module metrics from cycles, proposals, approvals, paper trades, post-mortem reviews, safety events, and portfolio snapshots
+- expose run summaries and simple comparisons for operator review
+
+Current evaluation endpoints:
+- `/api/evaluation/summary/`
+- `/api/evaluation/runs/`
+- `/api/evaluation/runs/<id>/`
+- `/api/evaluation/recent/`
+- `/api/evaluation/comparison/?left_id=<id>&right_id=<id>`
+
+Out of scope by design:
+- strategy optimization/tuning
+- ML/LLM scoring
+- real-money execution
