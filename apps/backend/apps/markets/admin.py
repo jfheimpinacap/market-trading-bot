@@ -57,6 +57,7 @@ class EventAdmin(admin.ModelAdmin):
     list_display = (
         'title',
         'provider',
+        'source_type',
         'status',
         'category',
         'market_count',
@@ -65,7 +66,7 @@ class EventAdmin(admin.ModelAdmin):
         'updated_at',
     )
     search_fields = ('title', 'slug', 'provider_event_id', 'category', 'description')
-    list_filter = ('provider', 'status', 'category')
+    list_filter = ('provider', 'source_type', 'status', 'category')
     ordering = ('provider__name', 'title')
     autocomplete_fields = ('provider',)
     readonly_fields = ('created_at', 'updated_at', 'slug')
@@ -85,6 +86,7 @@ class MarketAdmin(admin.ModelAdmin):
     list_display = (
         'title',
         'provider',
+        'source_type',
         'event_link',
         'status_badge',
         'market_type',
@@ -97,7 +99,7 @@ class MarketAdmin(admin.ModelAdmin):
         'close_time',
     )
     search_fields = ('title', 'slug', 'ticker', 'provider_market_id', 'category', 'resolution_source')
-    list_filter = ('provider', 'status', 'market_type', 'outcome_type', 'is_active', 'category')
+    list_filter = ('provider', 'source_type', 'status', 'market_type', 'outcome_type', 'is_active', 'category')
     ordering = ('provider__name', 'title')
     autocomplete_fields = ('provider', 'event')
     readonly_fields = (
@@ -112,7 +114,7 @@ class MarketAdmin(admin.ModelAdmin):
     actions = ('mark_selected_active', 'mark_selected_inactive')
 
     fieldsets = (
-        ('Catalog', {'fields': ('provider', 'event', 'provider_market_id', 'ticker', 'title', 'slug', 'category')}),
+        ('Catalog', {'fields': ('provider', 'event', 'provider_market_id', 'ticker', 'title', 'slug', 'category', 'source_type')}),
         ('Trading state', {
             'fields': (
                 'status', 'is_active', 'market_type', 'outcome_type', 'current_market_probability',

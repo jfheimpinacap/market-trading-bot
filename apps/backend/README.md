@@ -73,6 +73,38 @@ Current read-only market endpoints:
 - `/api/markets/<id>/`
 - `/api/markets/system-summary/`
 
+
+## Real market data (new, read-only)
+
+The backend now supports **real market data ingestion in read-only mode** for:
+- Kalshi
+- Polymarket
+
+Implemented boundaries:
+- provider-agnostic adapter layer (`libs/provider-core`, `libs/provider-kalshi`, `libs/provider-polymarket`)
+- manual ingestion commands:
+  - `python manage.py ingest_kalshi_markets`
+  - `python manage.py ingest_polymarket_markets`
+- optional flags: `--limit`, `--active-only`, `--provider-market-id`, `--query`
+- normalized persistence into existing `Provider`/`Event`/`Market` models plus basic `MarketSnapshot`
+- explicit source separation: `source_type=demo` vs `source_type=real_read_only`
+
+API filtering additions on `/api/markets/`:
+- `provider`
+- `status`
+- `category`
+- `active` / `is_active`
+- `source_type`
+- `is_demo`
+- `is_real`
+- `search`
+
+Explicitly still out of scope:
+- real trading auth
+- order placement/execution
+- real portfolio/positions
+- websocket/polling auto-sync
+
 ## Paper trading app summary
 The `apps.paper_trading` app provides the first backend base for demo investing with fictional money, using existing `Market` prices as the execution source of truth.
 

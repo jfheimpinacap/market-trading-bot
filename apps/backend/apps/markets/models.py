@@ -45,6 +45,13 @@ class OutcomeType(models.TextChoices):
     OTHER = 'other', 'Other'
 
 
+
+
+class MarketSourceType(models.TextChoices):
+    DEMO = 'demo', 'Demo/Local'
+    REAL_READ_ONLY = 'real_read_only', 'Real Read-only'
+
+
 class RuleSourceType(models.TextChoices):
     PROVIDER = 'provider', 'Provider'
     INTERNAL = 'internal', 'Internal'
@@ -88,6 +95,11 @@ class Event(TimeStampedModel):
     close_time = models.DateTimeField(null=True, blank=True)
     resolution_time = models.DateTimeField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
+    source_type = models.CharField(
+        max_length=24,
+        choices=MarketSourceType.choices,
+        default=MarketSourceType.DEMO,
+    )
 
     class Meta:
         ordering = ['title']
@@ -166,6 +178,11 @@ class Market(TimeStampedModel):
     volume_total = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
     spread_bps = models.PositiveIntegerField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
+    source_type = models.CharField(
+        max_length=24,
+        choices=MarketSourceType.choices,
+        default=MarketSourceType.DEMO,
+    )
 
     class Meta:
         ordering = ['title']

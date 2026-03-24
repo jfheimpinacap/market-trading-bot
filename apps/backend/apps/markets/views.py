@@ -47,6 +47,10 @@ class EventListView(generics.ListAPIView):
         if category:
             queryset = queryset.filter(category__iexact=category)
 
+        source_type = self.request.query_params.get('source_type')
+        if source_type:
+            queryset = queryset.filter(source_type=source_type)
+
         return queryset.order_by('provider__name', 'title')
 
 
@@ -82,6 +86,10 @@ class MarketListView(generics.ListAPIView):
         if status_value:
             queryset = queryset.filter(status=status_value)
 
+        source_type = self.request.query_params.get('source_type')
+        if source_type:
+            queryset = queryset.filter(source_type=source_type)
+
         event_id = self.request.query_params.get('event')
         if event_id:
             queryset = queryset.filter(event_id=event_id)
@@ -93,6 +101,30 @@ class MarketListView(generics.ListAPIView):
                 queryset = queryset.filter(is_active=True)
             elif normalized in {'false', '0', 'no'}:
                 queryset = queryset.filter(is_active=False)
+
+        active = self.request.query_params.get('active')
+        if active is not None:
+            normalized = active.strip().lower()
+            if normalized in {'true', '1', 'yes'}:
+                queryset = queryset.filter(is_active=True)
+            elif normalized in {'false', '0', 'no'}:
+                queryset = queryset.filter(is_active=False)
+
+        is_demo = self.request.query_params.get('is_demo')
+        if is_demo is not None:
+            normalized = is_demo.strip().lower()
+            if normalized in {'true', '1', 'yes'}:
+                queryset = queryset.filter(source_type='demo')
+            elif normalized in {'false', '0', 'no'}:
+                queryset = queryset.exclude(source_type='demo')
+
+        is_real = self.request.query_params.get('is_real')
+        if is_real is not None:
+            normalized = is_real.strip().lower()
+            if normalized in {'true', '1', 'yes'}:
+                queryset = queryset.filter(source_type='real_read_only')
+            elif normalized in {'false', '0', 'no'}:
+                queryset = queryset.exclude(source_type='real_read_only')
 
         search = self.request.query_params.get('search')
         if search:

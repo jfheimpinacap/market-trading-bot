@@ -48,6 +48,7 @@ class EventListSerializer(serializers.ModelSerializer):
             'open_time',
             'close_time',
             'resolution_time',
+            'source_type',
             'market_count',
             'created_at',
             'updated_at',
@@ -92,6 +93,8 @@ class MarketSnapshotSerializer(serializers.ModelSerializer):
 
 
 class MarketListSerializer(serializers.ModelSerializer):
+    is_demo = serializers.SerializerMethodField()
+    is_real = serializers.SerializerMethodField()
     provider = ProviderSummarySerializer(read_only=True)
     event_id = serializers.IntegerField(source='event.id', read_only=True)
     event_title = serializers.CharField(source='event.title', read_only=True)
@@ -126,11 +129,21 @@ class MarketListSerializer(serializers.ModelSerializer):
             'volume_24h',
             'volume_total',
             'spread_bps',
+            'source_type',
+            'is_demo',
+            'is_real',
             'snapshot_count',
             'latest_snapshot_at',
             'created_at',
             'updated_at',
         )
+
+    def get_is_demo(self, obj):
+        return obj.source_type == 'demo'
+
+    def get_is_real(self, obj):
+        return obj.source_type == 'real_read_only'
+
 
 
 class MarketDetailSerializer(MarketListSerializer):
