@@ -160,6 +160,13 @@ export function PostMortemPage() {
       tone: 'secondary',
     },
     {
+      title: 'Open learning memory',
+      description: 'Use heuristic learning memory to see which conservative adjustments are active after recent post-mortem results.',
+      href: '/learning',
+      actionLabel: 'Open learning',
+      tone: 'secondary',
+    },
+    {
       title: 'Review fresh opportunities',
       description: 'Signals can help you test whether the next trade should be approached differently after reading the review.',
       href: '/signals',

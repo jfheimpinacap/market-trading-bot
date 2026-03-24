@@ -234,3 +234,11 @@ The `/automation` page also reinforces that automation remains operator-driven a
 ### Safety route and cross-module integration
 
 Frontend includes a dedicated `/safety` route and `services/safety.ts` client bindings. Continuous Demo and Semi-Auto pages consume safety status to explain restrictions and disable unsafe auto actions when cooldown/hard-stop/kill-switch is active.
+
+## Learning route (`/learning`)
+
+Nueva vista técnica para memoria operativa demo:
+- consume `/api/learning/summary`, `/api/learning/memory`, `/api/learning/adjustments`
+- incluye rebuild controlado vía `/api/learning/rebuild`
+- muestra estado loading/error/empty
+- enlaza con evaluación y postmortem para cerrar loop de aprendizaje operativo

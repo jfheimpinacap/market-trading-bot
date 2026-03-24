@@ -8,6 +8,7 @@ from apps.paper_trading.models import PaperPositionStatus, PaperPositionSide, Pa
 from apps.paper_trading.services.portfolio import get_active_account
 from apps.paper_trading.services.market_pricing import get_paper_tradability
 from apps.paper_trading.services.valuation import PaperTradingValidationError, get_market_price
+from apps.learning_memory.services import build_learning_influence
 from apps.risk_demo.models import TradeRiskAssessment, TradeRiskDecision
 from apps.signals.models import MarketSignal, MarketSignalStatus, SignalDirection
 
@@ -257,6 +258,16 @@ def assess_trade(*, market: Market, trade_type: str, side: str, quantity, reques
 
     signal_context = _signal_warnings(market=market, trade_type=trade_type, side=side, warnings=warnings)
 
+    learning_influence = build_learning_influence(market=market, source_type=market.source_type)
+    if learning_influence.caution_delta > Decimal('0.0000'):
+        _add_warning(
+            warnings,
+            code='LEARNING_MEMORY_CAUTION',
+            severity='medium',
+            message='Recent heuristic learning memory suggests more conservative risk posture for this scope.',
+            penalty=learning_influence.caution_delta * Decimal('100'),
+        )
+
     if trade_type == PaperTradeType.SELL:
         matching_position = open_positions.filter(market=market, side=side).first()
         if matching_position is None or matching_position.quantity < quantity:
@@ -357,6 +368,12 @@ def assess_trade(*, market: Market, trade_type: str, side: str, quantity, reques
             'cost_ratio': f'{cost_ratio:.4f}',
             'concentration_ratio': f'{concentration_ratio:.4f}',
             'signal_context': signal_context,
+            'learning_influence': {
+                'confidence_delta': str(learning_influence.confidence_delta),
+                'quantity_multiplier': str(learning_influence.quantity_multiplier),
+                'caution_delta': str(learning_influence.caution_delta),
+                'reasons': learning_influence.reasons,
+            },
             **metadata,
         },
     )

@@ -2,6 +2,7 @@ import { AgentsPage } from '../pages/AgentsPage';
 import { AutomationPage } from '../pages/AutomationPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { EvaluationPage } from '../pages/EvaluationPage';
+import { LearningPage } from '../pages/LearningPage';
 import { ContinuousDemoPage } from '../pages/ContinuousDemoPage';
 import { MarketDetailPage } from '../pages/MarketDetailPage';
 import { MarketsPage } from '../pages/MarketsPage';
@@ -103,6 +104,13 @@ export const appRoutes: AppRoute[] = [
     path: '/evaluation',
     description: 'Benchmark and evaluation harness for autonomous paper/demo performance over time.',
     component: EvaluationPage,
+  },
+
+  {
+    label: 'Learning',
+    path: '/learning',
+    description: 'Heuristic demo learning memory with auditable adjustments for conservative proposal/risk influence.',
+    component: LearningPage,
   },
   {
     label: 'Safety',
