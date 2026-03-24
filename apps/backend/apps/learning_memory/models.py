@@ -95,3 +95,45 @@ class LearningAdjustment(TimeStampedModel):
                 name='learning_memory_unique_adjustment_scope',
             )
         ]
+
+
+class LearningRebuildRun(TimeStampedModel):
+    class Status(models.TextChoices):
+        SUCCESS = 'SUCCESS', 'Success'
+        PARTIAL = 'PARTIAL', 'Partial'
+        FAILED = 'FAILED', 'Failed'
+
+    class TriggeredFrom(models.TextChoices):
+        MANUAL = 'manual', 'Manual'
+        AUTOMATION = 'automation', 'Automation'
+        CONTINUOUS_DEMO = 'continuous_demo', 'Continuous demo'
+        EVALUATION = 'evaluation', 'Evaluation'
+        POSTMORTEM = 'postmortem', 'Postmortem'
+
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.SUCCESS)
+    triggered_from = models.CharField(max_length=24, choices=TriggeredFrom.choices, default=TriggeredFrom.MANUAL)
+    related_session = models.ForeignKey(
+        'continuous_demo.ContinuousDemoSession',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='learning_rebuild_runs',
+    )
+    related_cycle = models.ForeignKey(
+        'continuous_demo.ContinuousDemoCycleRun',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='learning_rebuild_runs',
+    )
+    started_at = models.DateTimeField()
+    finished_at = models.DateTimeField(null=True, blank=True)
+    memory_entries_processed = models.PositiveIntegerField(default=0)
+    adjustments_created = models.PositiveIntegerField(default=0)
+    adjustments_updated = models.PositiveIntegerField(default=0)
+    adjustments_deactivated = models.PositiveIntegerField(default=0)
+    summary = models.CharField(max_length=255, blank=True)
+    details = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']

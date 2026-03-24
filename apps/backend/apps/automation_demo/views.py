@@ -8,7 +8,7 @@ from apps.automation_demo.serializers import (
     DemoAutomationRunSerializer,
     DemoAutomationSummarySerializer,
 )
-from apps.automation_demo.services import execute_demo_action, get_automation_summary, run_demo_cycle
+from apps.automation_demo.services import execute_demo_action, get_automation_summary, run_demo_cycle, run_full_learning_cycle
 
 
 class DemoAutomationActionView(APIView):
@@ -44,6 +44,10 @@ class SyncDemoStateView(DemoAutomationActionView):
     action_type = DemoAutomationRun.ActionType.SYNC_DEMO_STATE
 
 
+class RebuildLearningMemoryView(DemoAutomationActionView):
+    action_type = DemoAutomationRun.ActionType.REBUILD_LEARNING_MEMORY
+
+
 class RunDemoCycleView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -52,6 +56,17 @@ class RunDemoCycleView(APIView):
         serializer = DemoAutomationActionRequestSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
         run = run_demo_cycle(triggered_from=serializer.validated_data['triggered_from'])
+        return Response(DemoAutomationRunSerializer(run).data)
+
+
+class RunFullLearningCycleView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = DemoAutomationActionRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_full_learning_cycle(triggered_from=serializer.validated_data['triggered_from'])
         return Response(DemoAutomationRunSerializer(run).data)
 
 

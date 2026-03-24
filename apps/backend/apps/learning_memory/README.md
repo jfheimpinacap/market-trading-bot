@@ -37,3 +37,33 @@ python manage.py rebuild_learning_memory
 - Determinístico y auditable (sin black-box).
 - Ajustes con magnitudes pequeñas y acotadas.
 - Persistencia explícita para trazabilidad en API y admin.
+
+
+## Controlled learning loop integration (new)
+
+Esta app ahora registra cada reconstrucción con `LearningRebuildRun` para trazabilidad operativa.
+
+### Nuevos endpoints
+- `GET /api/learning/rebuild-runs/`
+- `GET /api/learning/rebuild-runs/<id>/`
+- `GET /api/learning/integration-status/`
+
+`POST /api/learning/rebuild/` se mantiene y ahora devuelve el `LearningRebuildRun` creado.
+
+### Qué registra cada rebuild
+- estado (`SUCCESS`, `PARTIAL`, `FAILED`)
+- origen de disparo (`manual`, `automation`, `continuous_demo`, etc.)
+- ventana procesada de memoria
+- conteo de ajustes creados/actualizados/desactivados
+- resumen + detalles auditables
+
+### Integración conservadora
+- `automation_demo` expone acciones manuales para rebuild y full learning cycle.
+- `continuous_demo` puede activar rebuild automático de forma opcional y conservadora (desactivado por defecto).
+- proposal/risk siguen usando ajustes heurísticos acotados; policy y safety mantienen prioridad.
+
+### Fuera de alcance (se mantiene)
+- ML real
+- LLM local
+- dinero real / ejecución real
+- auto-optimización agresiva

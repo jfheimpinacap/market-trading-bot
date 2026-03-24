@@ -9,6 +9,7 @@ from apps.continuous_demo.serializers import (
     ContinuousDemoSessionSerializer,
 )
 from apps.continuous_demo.services import pause_session, resume_session, run_single_cycle, start_session, status_snapshot, stop_session
+from apps.continuous_demo.services.control import DEFAULT_LOOP_SETTINGS
 
 
 class ContinuousDemoStartView(APIView):
@@ -70,14 +71,7 @@ class ContinuousDemoRunCycleView(APIView):
             session = ContinuousDemoSession.objects.create(
                 session_status=SessionStatus.RUNNING,
                 summary='Manual single cycle session.',
-                settings_snapshot={
-                    'cycle_interval_seconds': 30,
-                    'max_auto_trades_per_cycle': 2,
-                    'max_auto_trades_total_per_session': 20,
-                    'market_scope': 'mixed',
-                    'review_after_trade': True,
-                    'revalue_after_trade': True,
-                },
+                settings_snapshot={**DEFAULT_LOOP_SETTINGS},
             )
         try:
             cycle = run_single_cycle(session=session, settings=session.settings_snapshot)

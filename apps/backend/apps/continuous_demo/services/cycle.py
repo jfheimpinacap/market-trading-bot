@@ -7,6 +7,8 @@ from apps.automation_demo.models import DemoAutomationRun
 from apps.automation_demo.services import run_demo_cycle
 from apps.continuous_demo.models import ContinuousDemoCycleRun, ContinuousDemoSession, CycleStatus, SessionStatus
 from apps.continuous_demo.services.control import get_runtime_control
+from apps.learning_memory.models import LearningRebuildRun
+from apps.learning_memory.services import run_learning_rebuild, should_rebuild_learning
 from apps.paper_trading.services.portfolio import get_active_account
 from apps.paper_trading.services.valuation import revalue_account
 from apps.postmortem_demo.services import generate_trade_reviews
@@ -101,6 +103,27 @@ def run_single_cycle(*, session: ContinuousDemoSession, settings: dict) -> Conti
         if settings.get('review_after_trade', True) and semi_auto_run.auto_executed_count > 0:
             review_results = generate_trade_reviews(refresh_existing=True)
             extra['reviews_processed'] = len(review_results)
+        else:
+            review_results = []
+
+        should_rebuild, rebuild_reason = should_rebuild_learning(
+            settings=settings,
+            cycle_number=cycle.cycle_number,
+            reviews_generated=bool(review_results),
+        )
+        if should_rebuild:
+            rebuild_run = run_learning_rebuild(
+                triggered_from=LearningRebuildRun.TriggeredFrom.CONTINUOUS_DEMO,
+                related_session_id=session.id,
+                related_cycle_id=cycle.id,
+            )
+            extra['learning_rebuild'] = {
+                'run_id': rebuild_run.id,
+                'status': rebuild_run.status,
+                'summary': rebuild_run.summary,
+            }
+        else:
+            extra['learning_rebuild'] = {'triggered': False, 'reason': rebuild_reason}
 
         cycle.actions_run = actions_run
         cycle.markets_evaluated = semi_auto_run.markets_evaluated

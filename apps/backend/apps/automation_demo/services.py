@@ -6,6 +6,8 @@ from typing import Callable
 from django.utils import timezone
 
 from apps.automation_demo.models import DemoAutomationRun
+from apps.learning_memory.models import LearningRebuildRun
+from apps.learning_memory.services import run_learning_rebuild
 from apps.markets.models import Market, MarketSnapshot
 from apps.markets.simulation import MarketSimulationEngine
 from apps.paper_trading.models import PaperTrade
@@ -15,7 +17,6 @@ from apps.postmortem_demo.models import TradeReview
 from apps.postmortem_demo.services import generate_trade_reviews
 from apps.signals.models import MarketSignal
 from apps.signals.services import generate_demo_signals
-
 
 STEP_STATUS_SUCCESS = 'SUCCESS'
 STEP_STATUS_FAILED = 'FAILED'
@@ -146,12 +147,31 @@ def _sync_state_step() -> StepExecutionResult:
     )
 
 
+def _learning_rebuild_step() -> StepExecutionResult:
+    rebuild_run = run_learning_rebuild(triggered_from=LearningRebuildRun.TriggeredFrom.AUTOMATION)
+    return StepExecutionResult(
+        step_name=DemoAutomationRun.ActionType.REBUILD_LEARNING_MEMORY,
+        status=STEP_STATUS_SUCCESS if rebuild_run.status != LearningRebuildRun.Status.FAILED else STEP_STATUS_FAILED,
+        summary=rebuild_run.summary,
+        metadata={
+            'rebuild_run_id': rebuild_run.id,
+            'rebuild_status': rebuild_run.status,
+            'memory_entries_processed': rebuild_run.memory_entries_processed,
+            'adjustments_created': rebuild_run.adjustments_created,
+            'adjustments_updated': rebuild_run.adjustments_updated,
+            'adjustments_deactivated': rebuild_run.adjustments_deactivated,
+            'details': rebuild_run.details,
+        },
+    )
+
+
 ACTION_HANDLERS: dict[str, Callable[[], StepExecutionResult]] = {
     DemoAutomationRun.ActionType.SIMULATE_TICK: _simulation_step,
     DemoAutomationRun.ActionType.GENERATE_SIGNALS: _signals_step,
     DemoAutomationRun.ActionType.REVALUE_PORTFOLIO: _revalue_step,
     DemoAutomationRun.ActionType.GENERATE_TRADE_REVIEWS: _reviews_step,
     DemoAutomationRun.ActionType.SYNC_DEMO_STATE: _sync_state_step,
+    DemoAutomationRun.ActionType.REBUILD_LEARNING_MEMORY: _learning_rebuild_step,
 }
 
 
@@ -161,6 +181,8 @@ CYCLE_STEP_ORDER = [
     DemoAutomationRun.ActionType.REVALUE_PORTFOLIO,
     DemoAutomationRun.ActionType.GENERATE_TRADE_REVIEWS,
 ]
+
+FULL_LEARNING_CYCLE_STEP_ORDER = [*CYCLE_STEP_ORDER, DemoAutomationRun.ActionType.REBUILD_LEARNING_MEMORY]
 
 
 def _serialize_step(step: StepExecutionResult) -> dict:
@@ -172,7 +194,7 @@ def _run_action_handler(action_type: str) -> ActionExecutionResult:
     step = handler()
     return ActionExecutionResult(
         action_type=action_type,
-        status=DemoAutomationRun.Status.SUCCESS,
+        status=DemoAutomationRun.Status.SUCCESS if step.status == STEP_STATUS_SUCCESS else DemoAutomationRun.Status.PARTIAL,
         summary=step.summary,
         details={'steps': [_serialize_step(step)], 'result': step.metadata},
     )
@@ -217,10 +239,10 @@ def execute_demo_action(*, action_type: str, triggered_from: str = DemoAutomatio
     return run
 
 
-def run_demo_cycle(*, triggered_from: str = DemoAutomationRun.TriggeredFrom.API) -> DemoAutomationRun:
+def _run_multi_step(*, action_type: str, step_order: list[str], triggered_from: str) -> DemoAutomationRun:
     started_at = timezone.now()
     run = DemoAutomationRun.objects.create(
-        action_type=DemoAutomationRun.ActionType.RUN_DEMO_CYCLE,
+        action_type=action_type,
         status=DemoAutomationRun.Status.RUNNING,
         summary='',
         details={'steps': []},
@@ -230,25 +252,20 @@ def run_demo_cycle(*, triggered_from: str = DemoAutomationRun.TriggeredFrom.API)
 
     step_results: list[dict] = []
     completed_steps = 0
-    total_steps = len(CYCLE_STEP_ORDER)
     failure_message: str | None = None
 
-    for index, step_name in enumerate(CYCLE_STEP_ORDER):
+    for index, step_name in enumerate(step_order):
         try:
             step = ACTION_HANDLERS[step_name]()
             step_results.append(_serialize_step(step))
             completed_steps += 1
+            if step.status == STEP_STATUS_FAILED:
+                failure_message = step.summary
+                break
         except Exception as exc:
             failure_message = f'{step_name} failed: {exc}'
-            step_results.append(
-                {
-                    'step_name': step_name,
-                    'status': STEP_STATUS_FAILED,
-                    'summary': failure_message,
-                    'metadata': {},
-                }
-            )
-            for skipped_step_name in CYCLE_STEP_ORDER[index + 1 :]:
+            step_results.append({'step_name': step_name, 'status': STEP_STATUS_FAILED, 'summary': failure_message, 'metadata': {}})
+            for skipped_step_name in step_order[index + 1 :]:
                 step_results.append(
                     {
                         'step_name': skipped_step_name,
@@ -259,19 +276,17 @@ def run_demo_cycle(*, triggered_from: str = DemoAutomationRun.TriggeredFrom.API)
                 )
             break
 
+    total_steps = len(step_order)
     if failure_message:
         run.status = DemoAutomationRun.Status.PARTIAL if completed_steps > 0 else DemoAutomationRun.Status.FAILED
-        run.summary = (
-            f'Demo cycle completed {completed_steps} of {total_steps} steps before stopping. '
-            f'Last error: {failure_message}'
-        )
+        run.summary = f'{action_type} completed {completed_steps} of {total_steps} steps before stopping. Last error: {failure_message}'
     else:
         run.status = DemoAutomationRun.Status.SUCCESS
-        run.summary = f'Demo cycle completed all {total_steps} steps successfully.'
+        run.summary = f'{action_type} completed all {total_steps} steps successfully.'
 
     run.finished_at = timezone.now()
     run.details = {
-        'action_type': DemoAutomationRun.ActionType.RUN_DEMO_CYCLE,
+        'action_type': action_type,
         'overall_status': run.status,
         'completed_steps': completed_steps,
         'total_steps': total_steps,
@@ -280,6 +295,22 @@ def run_demo_cycle(*, triggered_from: str = DemoAutomationRun.TriggeredFrom.API)
     }
     run.save(update_fields=['status', 'summary', 'details', 'finished_at', 'updated_at'])
     return run
+
+
+def run_demo_cycle(*, triggered_from: str = DemoAutomationRun.TriggeredFrom.API) -> DemoAutomationRun:
+    return _run_multi_step(
+        action_type=DemoAutomationRun.ActionType.RUN_DEMO_CYCLE,
+        step_order=CYCLE_STEP_ORDER,
+        triggered_from=triggered_from,
+    )
+
+
+def run_full_learning_cycle(*, triggered_from: str = DemoAutomationRun.TriggeredFrom.API) -> DemoAutomationRun:
+    return _run_multi_step(
+        action_type=DemoAutomationRun.ActionType.RUN_FULL_LEARNING_CYCLE,
+        step_order=FULL_LEARNING_CYCLE_STEP_ORDER,
+        triggered_from=triggered_from,
+    )
 
 
 def get_automation_summary() -> dict:
@@ -292,6 +323,8 @@ def get_automation_summary() -> dict:
         DemoAutomationRun.ActionType.GENERATE_TRADE_REVIEWS,
         DemoAutomationRun.ActionType.SYNC_DEMO_STATE,
         DemoAutomationRun.ActionType.RUN_DEMO_CYCLE,
+        DemoAutomationRun.ActionType.REBUILD_LEARNING_MEMORY,
+        DemoAutomationRun.ActionType.RUN_FULL_LEARNING_CYCLE,
     ]
     last_by_action: dict[str, DemoAutomationRun | None] = {}
     for action in actions:
@@ -329,6 +362,16 @@ def get_automation_summary() -> dict:
                 'action_type': DemoAutomationRun.ActionType.RUN_DEMO_CYCLE,
                 'label': 'Run full demo cycle',
                 'description': 'Runs simulation, signals, portfolio revalue, and trade review generation in order.',
+            },
+            {
+                'action_type': DemoAutomationRun.ActionType.REBUILD_LEARNING_MEMORY,
+                'label': 'Rebuild learning memory',
+                'description': 'Rebuilds conservative learning adjustments from reviews/evaluation/safety memory.',
+            },
+            {
+                'action_type': DemoAutomationRun.ActionType.RUN_FULL_LEARNING_CYCLE,
+                'label': 'Run full learning cycle',
+                'description': 'Runs the full demo cycle and then rebuilds learning memory in one controlled action.',
             },
         ],
         'latest_run': latest_run,

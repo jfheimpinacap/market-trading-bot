@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.learning_memory.models import LearningAdjustment, LearningMemoryEntry
+from apps.learning_memory.models import LearningAdjustment, LearningMemoryEntry, LearningRebuildRun
 
 
 class LearningMemoryEntrySerializer(serializers.ModelSerializer):
@@ -62,3 +62,36 @@ class LearningSummarySerializer(serializers.Serializer):
     adjustments_by_scope = serializers.DictField(child=serializers.IntegerField())
     recent_memory = LearningMemoryEntrySerializer(many=True)
     recent_adjustments = LearningAdjustmentSerializer(many=True)
+
+
+class LearningRebuildRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LearningRebuildRun
+        fields = (
+            'id',
+            'status',
+            'triggered_from',
+            'related_session',
+            'related_cycle',
+            'started_at',
+            'finished_at',
+            'memory_entries_processed',
+            'adjustments_created',
+            'adjustments_updated',
+            'adjustments_deactivated',
+            'summary',
+            'details',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+
+class LearningRebuildRequestSerializer(serializers.Serializer):
+    triggered_from = serializers.ChoiceField(
+        choices=LearningRebuildRun.TriggeredFrom.choices,
+        required=False,
+        default=LearningRebuildRun.TriggeredFrom.MANUAL,
+    )
+    related_session_id = serializers.IntegerField(required=False, min_value=1)
+    related_cycle_id = serializers.IntegerField(required=False, min_value=1)

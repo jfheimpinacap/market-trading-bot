@@ -6,7 +6,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.evaluation_lab.models import EvaluationRun, EvaluationRunStatus, EvaluationScope, EvaluationMarketScope, EvaluationMetricSet
-from apps.learning_memory.models import LearningAdjustment, LearningAdjustmentType, LearningMemoryEntry, LearningOutcome
+from apps.learning_memory.models import LearningAdjustment, LearningAdjustmentType, LearningMemoryEntry, LearningOutcome, LearningRebuildRun
 from apps.learning_memory.services import ingest_recent_reviews, rebuild_active_adjustments
 from apps.markets.demo_data import seed_demo_markets
 from apps.markets.models import Market
@@ -64,6 +64,21 @@ class LearningMemoryIngestTests(TestCase):
         payload = response.json()
         self.assertGreaterEqual(payload['total_memory_entries'], 1)
         self.assertIn('negative_patterns_detected', payload)
+
+    def test_rebuild_endpoint_creates_rebuild_run_trace(self):
+        self._seed_unfavorable_review()
+        response = self.client.post(reverse('learning_memory:rebuild'), {'triggered_from': 'manual'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['triggered_from'], 'manual')
+        self.assertIn(payload['status'], ['SUCCESS', 'PARTIAL', 'FAILED'])
+        self.assertTrue(LearningRebuildRun.objects.filter(id=payload['id']).exists())
+
+        list_response = self.client.get(reverse('learning_memory:rebuild-run-list'))
+        detail_response = self.client.get(reverse('learning_memory:rebuild-run-detail', kwargs={'pk': payload['id']}))
+        self.assertEqual(list_response.status_code, 200)
+        self.assertGreaterEqual(len(list_response.json()), 1)
+        self.assertEqual(detail_response.status_code, 200)
 
 
 class LearningInfluenceIntegrationTests(TestCase):

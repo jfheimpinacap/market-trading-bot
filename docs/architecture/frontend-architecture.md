@@ -242,3 +242,15 @@ Nueva vista técnica para memoria operativa demo:
 - incluye rebuild controlado vía `/api/learning/rebuild`
 - muestra estado loading/error/empty
 - enlaza con evaluación y postmortem para cerrar loop de aprendizaje operativo
+
+
+## Controlled learning loop UX integration
+
+Frontend integration reuses existing route boundaries and service modules:
+
+- `services/learning.ts` now includes rebuild-run and integration-status fetchers.
+- `/automation` surfaces explicit controlled-learning actions.
+- `/continuous-demo` surfaces whether automatic rebuild is enabled and cadence.
+- `/learning` surfaces rebuild-run history plus influence context.
+
+UI strategy remains technical and minimal: cards/tables/badges with explicit loading/error/empty messaging.
