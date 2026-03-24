@@ -14,6 +14,13 @@ export const systemQuickLinks: DashboardQuickLink[] = [
     path: '/automation',
     availability: 'live',
   },
+
+  {
+    title: 'Continuous Demo',
+    description: 'Open autonomous continuous loop controls, status, and safety guardrails for paper mode.',
+    path: '/continuous-demo',
+    availability: 'live',
+  },
   {
     title: 'Semi-Auto',
     description: 'Inspect conservative semi-autonomous paper execution with manual approval gates.',
@@ -67,7 +74,12 @@ export const systemModuleReadiness: DashboardModuleStatus[] = [
   },
   {
     name: 'Guided automation',
-    summary: 'Automation is available as explicit user-triggered controls without background autonomy or auto-trading.',
+    summary: 'Automation actions are available as explicit operator controls and feed the continuous demo loop.',
+    status: 'ready',
+  },
+  {
+    name: 'Continuous demo loop',
+    summary: 'Background/pseudo-background autonomous paper-only cycles are now available with stop/pause/kill controls.',
     status: 'ready',
   },
   {

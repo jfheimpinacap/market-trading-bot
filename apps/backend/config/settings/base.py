@@ -74,6 +74,7 @@ LOCAL_APPS = [
     'apps.policy_engine',
     'apps.proposal_engine',
     'apps.semi_auto_demo',
+    'apps.continuous_demo',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

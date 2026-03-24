@@ -658,3 +658,37 @@ The backend now includes `apps/automation_demo/`, a local-first orchestration la
 ### Intentional scope
 
 This layer reuses the existing simulation, signals, paper trading, and post-mortem services. It records `DemoAutomationRun` rows for traceability, but it does **not** enable auto-trading, schedulers, Celery orchestration, provider integrations, or autonomous background agents.
+
+
+## Continuous demo loop app summary
+The `apps.continuous_demo` app adds a local-first autonomous loop for controlled background demo operation without real execution.
+
+Current continuous demo models:
+- `ContinuousDemoSession`
+- `ContinuousDemoCycleRun`
+- `LoopRuntimeControl`
+
+Current continuous demo workflow:
+- start/pause/resume/stop managed loop sessions
+- run one manual cycle on demand
+- one RUNNING session at a time with cycle-level concurrency guard
+- strict paper-only path by reusing `automation_demo` + `semi_auto_demo` services
+- pending approvals are delegated to `semi_auto_demo.PendingApproval`
+
+Current continuous demo endpoints:
+- `/api/continuous-demo/start/`
+- `/api/continuous-demo/stop/`
+- `/api/continuous-demo/pause/`
+- `/api/continuous-demo/resume/`
+- `/api/continuous-demo/run-cycle/`
+- `/api/continuous-demo/status/`
+- `/api/continuous-demo/sessions/`
+- `/api/continuous-demo/sessions/<id>/`
+- `/api/continuous-demo/cycles/`
+- `/api/continuous-demo/cycles/<id>/`
+- `/api/continuous-demo/summary/`
+
+Out of scope by design:
+- real trading execution
+- exchange credentials/authentication
+- distributed schedulers and websocket orchestration

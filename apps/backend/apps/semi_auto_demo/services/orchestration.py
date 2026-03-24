@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from django.utils import timezone
 
-from apps.markets.models import Market, MarketStatus
+from apps.markets.models import Market, MarketSourceType, MarketStatus
 from apps.paper_trading.services.portfolio import get_active_account
 from apps.paper_trading.services.execution import execute_paper_trade
 from apps.policy_engine.models import ApprovalDecisionType
@@ -16,10 +16,17 @@ from apps.semi_auto_demo.services.guards import DEFAULT_GUARD_CONFIG, evaluate_a
 @dataclass
 class RunOptions:
     market_limit: int = 8
+    market_scope: str = 'mixed'
+    max_auto_trades_per_run: int | None = None
 
 
-def _eligible_markets(limit: int):
-    return Market.objects.filter(is_active=True, status=MarketStatus.OPEN).order_by('-updated_at', '-id')[:limit]
+def _eligible_markets(limit: int, market_scope: str):
+    queryset = Market.objects.filter(is_active=True, status=MarketStatus.OPEN)
+    if market_scope == 'demo_only':
+        queryset = queryset.filter(source_type=MarketSourceType.DEMO)
+    elif market_scope == 'real_only':
+        queryset = queryset.filter(source_type=MarketSourceType.REAL_READ_ONLY)
+    return queryset.order_by('-updated_at', '-id')[:limit]
 
 
 def _build_run_summary(*, run: SemiAutoRun) -> str:
@@ -45,7 +52,9 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
     auto_executed = 0
 
     try:
-        for market in _eligible_markets(options.market_limit):
+        guard_config = replace(DEFAULT_GUARD_CONFIG, max_auto_trades_per_run=options.max_auto_trades_per_run) if options.max_auto_trades_per_run is not None else DEFAULT_GUARD_CONFIG
+
+        for market in _eligible_markets(options.market_limit, options.market_scope):
             proposal = generate_trade_proposal(market=market, paper_account=account, triggered_from='automation')
             run.markets_evaluated += 1
             run.proposals_generated += 1
@@ -89,7 +98,7 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
                     item['classification'] = 'blocked'
                     item['reasons'].append('Policy required approval but proposal did not include executable trade fields.')
             else:
-                passed, reasons = evaluate_auto_execution_guards(proposal=proposal, auto_trades_so_far=auto_executed, config=DEFAULT_GUARD_CONFIG)
+                passed, reasons = evaluate_auto_execution_guards(proposal=proposal, auto_trades_so_far=auto_executed, config=guard_config)
                 item['classification'] = 'auto_executable' if passed else 'blocked'
                 item['reasons'] = reasons
 
@@ -125,10 +134,11 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
     run.details = {
         'results': results,
         'guardrails': {
-            'max_auto_quantity': str(DEFAULT_GUARD_CONFIG.max_auto_quantity),
-            'max_auto_trades_per_run': DEFAULT_GUARD_CONFIG.max_auto_trades_per_run,
-            'max_market_exposure_value': str(DEFAULT_GUARD_CONFIG.max_market_exposure_value),
-            'max_total_exposure_value': str(DEFAULT_GUARD_CONFIG.max_total_exposure_value),
+            'max_auto_quantity': str(guard_config.max_auto_quantity),
+            'max_auto_trades_per_run': guard_config.max_auto_trades_per_run,
+            'max_market_exposure_value': str(guard_config.max_market_exposure_value),
+            'max_total_exposure_value': str(guard_config.max_total_exposure_value),
+            'market_scope': options.market_scope,
             'buy_only_auto_execution': True,
         },
     }

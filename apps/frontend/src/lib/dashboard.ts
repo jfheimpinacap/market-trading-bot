@@ -26,6 +26,13 @@ export const dashboardQuickLinks: DashboardQuickLink[] = [
     path: '/automation',
     availability: 'live',
   },
+
+  {
+    title: 'Continuous Demo',
+    description: 'Run a continuous autonomous paper-only loop with start/pause/resume/stop and cycle audit traces.',
+    path: '/continuous-demo',
+    availability: 'live',
+  },
   {
     title: 'Semi-Auto',
     description: 'Run evaluate-only or conservative paper-only semi-auto cycles with explicit pending approvals.',
@@ -86,6 +93,11 @@ export const dashboardModules: DashboardModuleStatus[] = [
   {
     name: 'Automation demo',
     summary: 'Guided UI controls can now trigger safe local demo actions and a traceable full cycle.',
+    status: 'ready',
+  },
+  {
+    name: 'Continuous autonomous loop',
+    summary: 'A controlled background loop can now run start/pause/resume/stop cycles in paper-only mode.',
     status: 'ready',
   },
   {

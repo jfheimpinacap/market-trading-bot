@@ -40,6 +40,18 @@ The platform now includes a conservative semi-autonomous demo mode:
 
 Still out of scope: real trading, exchange auth, autonomous schedulers/workers, websockets, and ML/LLM execution.
 
+### Autonomous continuous demo loop (new)
+
+The platform now also includes a controlled **autonomous continuous demo loop** (`/continuous-demo` + `/api/continuous-demo/*`):
+
+- starts, pauses, resumes, and stops continuous background cycles
+- supports single manual cycle execution for safe operator testing
+- persists session + cycle audit trails
+- reuses existing automation and semi-auto services
+- remains strictly paper/demo only with explicit kill switch support
+
+Still out of scope: real execution, exchange auth, distributed schedulers, websockets, and LLM agents.
+
 ## What this scaffold does not include yet
 
 - Real trading provider integrations (execution/auth).

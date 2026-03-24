@@ -317,3 +317,27 @@ La página `/automation` también deja explícito que la automatización demo no
 - `POST /api/semi-auto/pending-approvals/<id>/approve/`
 - `POST /api/semi-auto/pending-approvals/<id>/reject/`
 - `GET /api/semi-auto/summary/`
+
+
+## Continuous demo loop UI
+
+Frontend now includes `/continuous-demo` for autonomous loop operations in paper/demo mode:
+
+- runtime control panel (start/pause/resume/stop/kill-switch/run single cycle)
+- current status and active session metrics
+- safety panel with active guardrails
+- recent cycle history table
+- pending approvals snapshot linking to `/semi-auto`
+
+### Continuous demo endpoints consumed
+- `POST /api/continuous-demo/start/`
+- `POST /api/continuous-demo/stop/`
+- `POST /api/continuous-demo/pause/`
+- `POST /api/continuous-demo/resume/`
+- `POST /api/continuous-demo/run-cycle/`
+- `GET /api/continuous-demo/status/`
+- `GET /api/continuous-demo/sessions/`
+- `GET /api/continuous-demo/sessions/<id>/`
+- `GET /api/continuous-demo/cycles/`
+- `GET /api/continuous-demo/cycles/<id>/`
+- `GET /api/continuous-demo/summary/`
