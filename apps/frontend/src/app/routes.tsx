@@ -8,6 +8,7 @@ import { PortfolioPage } from '../pages/PortfolioPage';
 import { ProposalsPage } from '../pages/ProposalsPage';
 import { PostMortemPage } from '../pages/PostMortemPage';
 import { SettingsPage } from '../pages/SettingsPage';
+import { SafetyPage } from '../pages/SafetyPage';
 import { SemiAutoPage } from '../pages/SemiAutoPage';
 import { SignalsPage } from '../pages/SignalsPage';
 import { SystemPage } from '../pages/SystemPage';
@@ -95,6 +96,12 @@ export const appRoutes: AppRoute[] = [
     path: '/settings',
     description: 'Local-first application configuration and environment notes.',
     component: SettingsPage,
+  },
+  {
+    label: 'Safety',
+    path: '/safety',
+    description: 'Operational safety guardrails, cooldowns, kill switch controls, and auditable events for paper/demo mode.',
+    component: SafetyPage,
   },
   {
     label: 'System',

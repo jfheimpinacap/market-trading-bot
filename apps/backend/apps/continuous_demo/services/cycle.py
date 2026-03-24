@@ -11,6 +11,8 @@ from apps.paper_trading.services.portfolio import get_active_account
 from apps.paper_trading.services.valuation import revalue_account
 from apps.postmortem_demo.services import generate_trade_reviews
 from apps.semi_auto_demo.services.orchestration import RunOptions, run_scan_and_execute
+from apps.safety_guard.models import SafetyEventSource
+from apps.safety_guard.services import evaluate_cycle_health
 
 
 def _cycle_summary(*, cycle: ContinuousDemoCycleRun) -> str:
@@ -133,4 +135,6 @@ def run_single_cycle(*, session: ContinuousDemoSession, settings: dict) -> Conti
         'finished_at',
         'updated_at',
     ])
-    return _finish_cycle(session=session, cycle=cycle, error=error_message)
+    cycle = _finish_cycle(session=session, cycle=cycle, error=error_message)
+    evaluate_cycle_health(cycle=cycle, source=SafetyEventSource.CONTINUOUS_DEMO)
+    return cycle

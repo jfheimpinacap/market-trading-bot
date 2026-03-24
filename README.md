@@ -391,3 +391,17 @@ python manage.py ingest_polymarket_markets --limit 50 --active-only
 ```
 
 These commands only ingest public market data. They do **not** place orders and do **not** require trading authentication.
+
+
+## Safety hardening / guardrails (paper-only)
+
+This repo now includes an explicit **safety guard** layer to harden demo operation before any future autonomy increase:
+
+- exposure caps per market and globally
+- auto-trade caps per cycle/session
+- drawdown and unrealized-loss thresholds
+- cooldown soft-stop and hard-stop transitions
+- explicit kill switch policy with manual re-enable
+- auditable safety events for warnings/stops/escalations
+
+Still intentionally not implemented: real trading execution, real exchange auth, local LLM, advanced adaptive optimization.

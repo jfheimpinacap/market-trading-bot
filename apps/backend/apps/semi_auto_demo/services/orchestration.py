@@ -11,6 +11,8 @@ from apps.policy_engine.models import ApprovalDecisionType
 from apps.proposal_engine.services import generate_trade_proposal
 from apps.semi_auto_demo.models import PendingApproval, SemiAutoRun, SemiAutoRunStatus, SemiAutoRunType
 from apps.semi_auto_demo.services.guards import DEFAULT_GUARD_CONFIG, evaluate_auto_execution_guards
+from apps.safety_guard.models import SafetyEventSource
+from apps.safety_guard.services.evaluation import evaluate_auto_execution
 
 
 @dataclass
@@ -102,7 +104,13 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
                 item['classification'] = 'auto_executable' if passed else 'blocked'
                 item['reasons'] = reasons
 
-                if execute_auto and passed:
+                safety_decision = evaluate_auto_execution(
+                    proposal=proposal,
+                    auto_trades_so_far=auto_executed,
+                    source=SafetyEventSource.SEMI_AUTO,
+                )
+
+                if execute_auto and passed and safety_decision.allowed:
                     execution = execute_paper_trade(
                         market=proposal.market,
                         trade_type=proposal.suggested_trade_type,
@@ -118,10 +126,29 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
                     run.auto_executed_count += 1
                     item['action'] = 'auto_executed'
                     item['trade_id'] = execution.trade.id
-                elif not execute_auto and passed:
+                elif execute_auto and passed and safety_decision.requires_manual_approval:
+                    pending = PendingApproval.objects.create(
+                        proposal=proposal,
+                        market=proposal.market,
+                        paper_account=account,
+                        requested_action=proposal.suggested_trade_type,
+                        suggested_side=proposal.suggested_side,
+                        suggested_quantity=proposal.suggested_quantity,
+                        policy_decision='APPROVAL_REQUIRED',
+                        summary=f'Safety escalation: {proposal.headline}',
+                        rationale='; '.join(safety_decision.reasons),
+                        metadata={'source': 'safety_guard', 'classification': safety_decision.classification},
+                    )
+                    run.approval_required_count += 1
+                    item['classification'] = 'approval_required'
+                    item['action'] = 'pending_approval_created'
+                    item['pending_approval_id'] = pending.id
+                    item['reasons'] = item.get('reasons', []) + safety_decision.reasons
+                elif not execute_auto and passed and safety_decision.allowed:
                     item['action'] = 'eligible_for_auto_execution'
                 else:
                     run.blocked_count += 1
+                    item['reasons'] = item.get('reasons', []) + safety_decision.reasons
 
             results.append(item)
 

@@ -6,6 +6,8 @@ import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
 import { publishDemoFlowRefresh } from '../../lib/demoFlow';
 import { navigate } from '../../lib/router';
+import { getSafetyStatus } from '../../services/safety';
+import type { SafetyStatus } from '../../types/safety';
 import {
   approvePendingApproval,
   getPendingApprovals,
@@ -45,15 +47,17 @@ export function SemiAutoPage() {
   const [error, setError] = useState<string | null>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [safety, setSafety] = useState<SafetyStatus | null>(null);
 
   const loadState = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [runsResponse, pendingResponse, summaryResponse] = await Promise.all([getSemiAutoRuns(), getPendingApprovals(), getSemiAutoSummary()]);
+      const [runsResponse, pendingResponse, summaryResponse, safetyResponse] = await Promise.all([getSemiAutoRuns(), getPendingApprovals(), getSemiAutoSummary(), getSafetyStatus()]);
       setRuns(runsResponse);
       setPendingApprovals(pendingResponse.filter((item) => item.status === 'PENDING'));
       setSummary(summaryResponse);
+      setSafety(safetyResponse);
     } catch (loadError) {
       setError(getErrorMessage(loadError, 'Could not load semi-auto demo state.'));
     } finally {
@@ -116,12 +120,13 @@ export function SemiAutoPage() {
           <button type="button" className="secondary-button" disabled={isActionLoading} onClick={() => runAction(runSemiAutoEvaluate)}>
             Evaluate only
           </button>
-          <button type="button" className="primary-button" disabled={isActionLoading} onClick={() => runAction(runSemiAutoExecution)}>
+          <button type="button" className="primary-button" disabled={isActionLoading || Boolean(safety?.kill_switch_enabled || safety?.hard_stop_active || safety?.cooldown_until_cycle)} onClick={() => runAction(runSemiAutoExecution)}>
             Run semi-auto cycle
           </button>
         </div>
         {actionMessage ? <p>{actionMessage}</p> : null}
         <p>This semi-auto mode never places real trades.</p>
+        {safety?.status ? <p><strong>Safety status:</strong> {safety.status} {safety.status_message ? `· ${safety.status_message}` : ''}</p> : null}
       </SectionCard>
 
       <DataStateWrapper isLoading={isLoading} isError={Boolean(error)} errorMessage={error ?? undefined}>
@@ -133,6 +138,8 @@ export function SemiAutoPage() {
               <li>APPROVAL_REQUIRED → pending approval</li>
               <li>HARD_BLOCK → never executed</li>
               <li>BUY-only for auto execution</li>
+              <li>Kill switch active: {safety?.kill_switch_enabled ? 'yes' : 'no'}</li>
+              <li>Cooldown active: {safety?.cooldown_until_cycle ? `until cycle ${safety.cooldown_until_cycle}` : 'no'}</li>
             </ul>
           </SectionCard>
 

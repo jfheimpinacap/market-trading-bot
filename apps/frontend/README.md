@@ -341,3 +341,10 @@ Frontend now includes `/continuous-demo` for autonomous loop operations in paper
 - `GET /api/continuous-demo/cycles/`
 - `GET /api/continuous-demo/cycles/<id>/`
 - `GET /api/continuous-demo/summary/`
+
+
+## Safety UI
+
+- New `/safety` route centralizes operational safety state for demo mode.
+- Shows current status (`healthy`, `warning`, `cooldown`, `hard-stop`, `kill-switch`), guardrail limits, kill switch controls, and recent safety events.
+- Continuous Demo and Semi-Auto pages now surface safety restrictions and disable auto actions when blocked by guardrails.

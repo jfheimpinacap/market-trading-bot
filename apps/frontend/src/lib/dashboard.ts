@@ -52,6 +52,12 @@ export const dashboardQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Safety',
+    description: 'Monitor operational guardrails, cooldown state, kill switch, and safety events.',
+    path: '/safety',
+    availability: 'live',
+  },
+  {
     title: 'System',
     description: 'Verify the backend, runtime context, and local demo health before exploring the rest of the workflow.',
     path: '/system',

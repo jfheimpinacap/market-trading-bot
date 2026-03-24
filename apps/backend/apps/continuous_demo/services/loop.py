@@ -11,6 +11,7 @@ from apps.continuous_demo.serializers import ContinuousDemoCycleRunSerializer, C
 from apps.continuous_demo.services.control import get_runtime_control, normalize_settings
 from apps.continuous_demo.services.cycle import run_single_cycle
 from apps.semi_auto_demo.models import PendingApproval, PendingApprovalStatus
+from apps.safety_guard.services import enable_kill_switch, get_safety_status
 
 _LOOP_THREADS: dict[int, threading.Thread] = {}
 _LOOP_LOCK = threading.Lock()
@@ -29,6 +30,17 @@ def _run_loop(session_id: int) -> None:
             control = get_runtime_control()
             session = ContinuousDemoSession.objects.select_for_update().get(pk=session_id)
             settings = session.settings_snapshot or {}
+            safety = get_safety_status()
+
+            if safety['kill_switch_enabled'] or safety['hard_stop_active']:
+                control.runtime_status = RuntimeStatus.STOPPED
+                control.active_session = None
+                control.stop_requested = False
+                control.pause_requested = False
+                control.cycle_in_progress = False
+                control.save(update_fields=['runtime_status', 'active_session', 'stop_requested', 'pause_requested', 'cycle_in_progress', 'updated_at'])
+                _mark_session_finished(session, status=SessionStatus.STOPPED, summary='Continuous demo session stopped by safety guardrails.')
+                break
 
             if control.kill_switch or not control.enabled or control.stop_requested:
                 control.runtime_status = RuntimeStatus.STOPPED
@@ -46,6 +58,15 @@ def _run_loop(session_id: int) -> None:
                 session.save(update_fields=['session_status', 'updated_at'])
                 control.last_heartbeat_at = timezone.now()
                 control.save(update_fields=['runtime_status', 'last_heartbeat_at', 'updated_at'])
+                time.sleep(1)
+                continue
+
+            if safety['cooldown_until_cycle'] is not None and session.total_cycles < int(safety['cooldown_until_cycle']):
+                control.runtime_status = RuntimeStatus.PAUSED
+                session.session_status = SessionStatus.PAUSED
+                session.summary = 'Safety cooldown active; automatic execution is paused.'
+                session.save(update_fields=['session_status', 'summary', 'updated_at'])
+                control.save(update_fields=['runtime_status', 'updated_at'])
                 time.sleep(1)
                 continue
 
@@ -98,8 +119,11 @@ def start_session(*, settings_overrides: dict | None = None) -> ContinuousDemoSe
 
     with transaction.atomic():
         control = get_runtime_control()
-        if control.kill_switch:
+        safety = get_safety_status()
+        if control.kill_switch or safety['kill_switch_enabled']:
             raise ValueError('Kill switch is active. Disable it before starting a session.')
+        if safety['hard_stop_active']:
+            raise ValueError('Hard stop is active. Resolve safety condition before starting a session.')
         if not settings.get('enabled', True):
             raise ValueError('Continuous demo loop is disabled by settings.')
         if control.runtime_status == RuntimeStatus.RUNNING and control.active_session_id:
@@ -176,6 +200,7 @@ def stop_session(*, kill_switch: bool = False) -> ContinuousDemoSession | None:
             control.runtime_status = RuntimeStatus.STOPPED
             if kill_switch:
                 control.kill_switch = True
+                enable_kill_switch(source='continuous_demo', message='Kill switch activated from continuous demo control.')
             control.save(update_fields=['runtime_status', 'kill_switch', 'updated_at'])
             return None
         session = ContinuousDemoSession.objects.select_for_update().get(pk=control.active_session_id)
@@ -183,6 +208,7 @@ def stop_session(*, kill_switch: bool = False) -> ContinuousDemoSession | None:
         control.pause_requested = False
         if kill_switch:
             control.kill_switch = True
+            enable_kill_switch(source='continuous_demo', message='Kill switch activated from continuous demo control.')
         control.runtime_status = RuntimeStatus.STOPPED
         control.save(update_fields=['stop_requested', 'pause_requested', 'kill_switch', 'runtime_status', 'updated_at'])
         session.session_status = SessionStatus.STOPPED
@@ -194,7 +220,7 @@ def stop_session(*, kill_switch: bool = False) -> ContinuousDemoSession | None:
 def status_snapshot() -> dict:
     control = LoopRuntimeControl.objects.order_by('id').first()
     if not control:
-        return {'runtime': None, 'active_session': None, 'latest_cycle': None, 'pending_approvals': 0}
+        return {'runtime': None, 'active_session': None, 'latest_cycle': None, 'pending_approvals': 0, 'safety': get_safety_status()}
 
     active_session = control.active_session
     latest_cycle = ContinuousDemoCycleRun.objects.filter(session=active_session).order_by('-cycle_number').first() if active_session else None
@@ -203,4 +229,5 @@ def status_snapshot() -> dict:
         'active_session': ContinuousDemoSessionSerializer(active_session).data if active_session else None,
         'latest_cycle': ContinuousDemoCycleRunSerializer(latest_cycle).data if latest_cycle else None,
         'pending_approvals': PendingApproval.objects.filter(status=PendingApprovalStatus.PENDING).count(),
+        'safety': get_safety_status(),
     }

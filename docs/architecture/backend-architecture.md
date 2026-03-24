@@ -241,3 +241,8 @@ Current goals:
 A new `apps/automation_demo/` boundary now coordinates explicit demo actions across the existing market simulation, signal generation, paper portfolio valuation, and post-mortem review services. The orchestration stays synchronous and local-first: each API request creates a `DemoAutomationRun`, executes one action or a sequential demo cycle, stores step-level details in JSON, and returns a readable result to the UI. This keeps automation guided and explainable without introducing Celery orchestration, schedulers, or autonomous trading behavior.
 
 - semi_auto_demo app orchestrates evaluate-only and guarded paper auto-execution while keeping policy engine as the approval authority.
+
+
+### Safety guard boundary
+
+A dedicated `safety_guard` app now sits above risk+policy to enforce system-level operational limits (cooldown, hard stop, kill switch, exposure/session guardrails). It integrates with `continuous_demo` and `semi_auto_demo` via service calls and emits auditable `SafetyEvent` records.
