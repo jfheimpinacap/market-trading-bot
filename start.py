@@ -55,6 +55,16 @@ class ToolStatus:
     version: str | None
 
 
+@dataclass(frozen=True)
+class RuntimeMode:
+    name: str
+    app_mode: str
+    django_settings_module: str
+    use_infra: bool
+    redis_required: bool
+    sqlite_enabled: bool
+
+
 ROOT = Path(__file__).resolve().parent
 PATHS = ProjectPaths(
     root=ROOT,
@@ -89,6 +99,22 @@ STARTUP_TIMEOUTS = {
 DEFAULT_BROWSER_OPEN = True
 DEFAULT_STARTUP_MODE = 'single-console'
 DEFAULT_BROWSER_URL = f"http://localhost:{DEFAULT_PORTS['frontend']}/system"
+FULL_MODE = RuntimeMode(
+    name='FULL',
+    app_mode='full',
+    django_settings_module='config.settings.local',
+    use_infra=True,
+    redis_required=True,
+    sqlite_enabled=False,
+)
+LITE_MODE = RuntimeMode(
+    name='LITE',
+    app_mode='lite',
+    django_settings_module='config.settings.lite',
+    use_infra=False,
+    redis_required=False,
+    sqlite_enabled=True,
+)
 
 
 def info(message: str) -> None:
@@ -397,6 +423,22 @@ def verify_prerequisites(*, require_node: bool, require_docker: bool) -> dict[st
     }
 
 
+def runtime_mode_from_args(args: argparse.Namespace) -> RuntimeMode:
+    return LITE_MODE if getattr(args, 'lite', False) else FULL_MODE
+
+
+def announce_runtime_mode(mode: RuntimeMode, *, skip_infra: bool) -> None:
+    info(f'Running in {mode.name} mode.')
+    if mode.sqlite_enabled:
+        info('SQLite enabled.')
+    if skip_infra:
+        info('Docker skipped.')
+    if mode.redis_required:
+        info('Redis required in this mode.')
+    else:
+        info('Redis disabled/optional in lite mode.')
+
+
 def ensure_env_file(target: Path, template: Path) -> bool:
     if target.exists():
         ok(f'Environment file already present: {target.relative_to(PATHS.root)}')
@@ -499,11 +541,12 @@ def ensure_frontend_deps(paths: ProjectPaths, *, skip_install: bool) -> None:
     ok('Frontend dependencies installed.')
 
 
-def backend_command_env(paths: ProjectPaths) -> dict[str, str]:
+def backend_command_env(paths: ProjectPaths, mode: RuntimeMode) -> dict[str, str]:
     _ = paths
     return subprocess_env(
         {
-            'DJANGO_SETTINGS_MODULE': os.environ.get('DJANGO_SETTINGS_MODULE', 'config.settings.local'),
+            'APP_MODE': mode.app_mode,
+            'DJANGO_SETTINGS_MODULE': os.environ.get('DJANGO_SETTINGS_MODULE', mode.django_settings_module),
         }
     )
 
@@ -514,6 +557,7 @@ def frontend_command_env() -> dict[str, str]:
 
 def run_backend_manage(
     paths: ProjectPaths,
+    mode: RuntimeMode,
     args: Sequence[str],
     *,
     capture_output: bool = False,
@@ -525,7 +569,7 @@ def run_backend_manage(
     return run_command(
         [str(venv_python), str(paths.backend_manage), *args],
         cwd=paths.backend,
-        env=backend_command_env(paths),
+        env=backend_command_env(paths, mode),
         capture_output=capture_output,
         check=check,
     )
@@ -590,6 +634,7 @@ def open_browser(url: str, *, enabled: bool) -> bool:
 
 def print_launcher_summary(
     *,
+    mode: RuntimeMode,
     backend_started: bool,
     frontend_started: bool,
     browser_url: str,
@@ -603,6 +648,7 @@ def print_launcher_summary(
     backend_port = DEFAULT_PORTS['backend']
 
     print('\n=== Launcher summary ===')
+    print(f'Mode:            {mode.name}')
     print(f"Backend ready:   {'yes' if backend_started else 'skipped'}")
     print(f"Frontend ready:  {'yes' if frontend_started else 'skipped'}")
     print(f"Browser opened:  {'yes' if browser_opened else 'no'}")
@@ -623,12 +669,15 @@ def print_launcher_summary(
     if not browser_opened and frontend_started:
         print(f'Browser target:  {browser_url}')
 
-    postgres_port = int(root_env.get('POSTGRES_PORT', DEFAULT_PORTS['postgres']))
-    redis_port = int(root_env.get('REDIS_PORT', DEFAULT_PORTS['redis']))
     print('')
-    print('Infra ports:')
-    print(f'  - PostgreSQL: {postgres_port}')
-    print(f'  - Redis:      {redis_port}')
+    if mode.use_infra:
+        postgres_port = int(root_env.get('POSTGRES_PORT', DEFAULT_PORTS['postgres']))
+        redis_port = int(root_env.get('REDIS_PORT', DEFAULT_PORTS['redis']))
+        print('Infra ports:')
+        print(f'  - PostgreSQL: {postgres_port}')
+        print(f'  - Redis:      {redis_port}')
+    else:
+        print('Infra: Docker skipped; SQLite enabled; Redis optional/disabled.')
 
 
 def start_infrastructure(paths: ProjectPaths, compose_command: Sequence[str]) -> None:
@@ -652,11 +701,11 @@ def stop_infrastructure(paths: ProjectPaths, compose_command: Sequence[str] | No
     ok('Docker Compose services stopped.')
 
 
-def prepare_backend(paths: ProjectPaths, *, skip_install: bool) -> Path:
+def prepare_backend(paths: ProjectPaths, mode: RuntimeMode, *, skip_install: bool) -> Path:
     info('Preparing backend...')
     venv_python = ensure_backend_dependencies(paths, skip_install=skip_install)
     info('Running backend migrations...')
-    run_backend_manage(paths, ['migrate'])
+    run_backend_manage(paths, mode, ['migrate'])
     ok('Backend migrations completed.')
     return venv_python
 
@@ -668,6 +717,7 @@ def prepare_frontend(paths: ProjectPaths, *, skip_install: bool) -> None:
 
 def prepare_dev_environment(
     paths: ProjectPaths,
+    mode: RuntimeMode,
     *,
     skip_backend: bool,
     skip_frontend: bool,
@@ -675,8 +725,8 @@ def prepare_dev_environment(
     no_seed: bool,
 ) -> None:
     if not skip_backend:
-        prepare_backend(paths, skip_install=skip_install)
-        maybe_seed(paths, no_seed=no_seed)
+        prepare_backend(paths, mode, skip_install=skip_install)
+        maybe_seed(paths, mode, no_seed=no_seed)
     else:
         warn('Skipping backend preparation.')
 
@@ -686,9 +736,10 @@ def prepare_dev_environment(
         warn('Skipping frontend preparation.')
 
 
-def should_seed_demo(paths: ProjectPaths) -> bool:
+def should_seed_demo(paths: ProjectPaths, mode: RuntimeMode) -> bool:
     result = run_backend_manage(
         paths,
+        mode,
         ['shell', '-c', 'from apps.markets.models import Market; print("yes" if Market.objects.exists() else "no")'],
         capture_output=True,
     )
@@ -696,20 +747,20 @@ def should_seed_demo(paths: ProjectPaths) -> bool:
     return status != 'yes'
 
 
-def run_seed(paths: ProjectPaths) -> None:
+def run_seed(paths: ProjectPaths, mode: RuntimeMode) -> None:
     info('Running demo seed...')
-    run_backend_manage(paths, ['seed_markets_demo'])
+    run_backend_manage(paths, mode, ['seed_markets_demo'])
     ok('Demo market seed completed.')
 
 
-def maybe_seed(paths: ProjectPaths, *, no_seed: bool) -> None:
+def maybe_seed(paths: ProjectPaths, mode: RuntimeMode, *, no_seed: bool) -> None:
     if no_seed:
         warn('Skipping demo seed because --no-seed was used.')
         return
 
-    if should_seed_demo(paths):
+    if should_seed_demo(paths, mode):
         info('No market data detected, running demo seed automatically...')
-        run_seed(paths)
+        run_seed(paths, mode)
         return
 
     ok('Market data already exists; automatic demo seed skipped.')
@@ -999,6 +1050,7 @@ def frontend_run_command() -> list[str]:
 
 def build_dev_process_specs(
     paths: ProjectPaths,
+    mode: RuntimeMode,
     *,
     include_backend: bool,
     include_frontend: bool,
@@ -1012,7 +1064,7 @@ def build_dev_process_specs(
                 'title': 'market-trading-bot backend',
                 'command': backend_run_command(paths),
                 'cwd': paths.backend,
-                'env': backend_command_env(paths),
+                'env': backend_command_env(paths, mode),
             }
         )
     if include_frontend:
@@ -1032,7 +1084,7 @@ def build_dev_process_specs(
                 'title': 'market-trading-bot simulation loop',
                 'command': [str(get_backend_venv_python(paths)), str(paths.backend_manage), 'simulate_markets_loop'],
                 'cwd': paths.backend,
-                'env': backend_command_env(paths),
+                'env': backend_command_env(paths, mode),
             }
         )
     return process_specs
@@ -1091,6 +1143,11 @@ def command_up(args: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
     ensure_no_running_launcher_processes()
+    mode = runtime_mode_from_args(args)
+    if mode is LITE_MODE and not args.skip_infra:
+        warn('Lite mode selected; forcing --skip-infra so Docker is not required.')
+        args.skip_infra = True
+    announce_runtime_mode(mode, skip_infra=args.skip_infra)
     prereqs = verify_prerequisites(require_node=not args.skip_frontend, require_docker=not args.skip_infra)
     ensure_env_files()
     if not args.skip_infra:
@@ -1101,6 +1158,7 @@ def command_up(args: argparse.Namespace) -> int:
     try:
         prepare_dev_environment(
             paths,
+            mode,
             skip_backend=args.skip_backend,
             skip_frontend=args.skip_frontend,
             skip_install=args.skip_install,
@@ -1113,6 +1171,7 @@ def command_up(args: argparse.Namespace) -> int:
             warn('Simulation loop was requested, but backend startup is skipped, so the loop was not started.')
         process_specs = build_dev_process_specs(
             paths,
+            mode,
             include_backend=include_backend,
             include_frontend=include_frontend,
             with_sim_loop=args.with_sim_loop and include_backend,
@@ -1146,6 +1205,7 @@ def command_up(args: argparse.Namespace) -> int:
             )
         browser_opened = open_browser(browser_url, enabled=include_frontend and not args.no_browser)
         print_launcher_summary(
+            mode=mode,
             backend_started=include_backend,
             frontend_started=include_frontend,
             browser_url=browser_url,
@@ -1174,12 +1234,18 @@ def command_up(args: argparse.Namespace) -> int:
 def command_setup(args: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
+    mode = runtime_mode_from_args(args)
+    if mode is LITE_MODE and not args.skip_infra:
+        warn('Lite mode selected; forcing --skip-infra so Docker is not required.')
+        args.skip_infra = True
+    announce_runtime_mode(mode, skip_infra=args.skip_infra)
     prereqs = verify_prerequisites(require_node=not args.skip_frontend, require_docker=not args.skip_infra)
     ensure_env_files()
     if not args.skip_infra:
         start_infrastructure(paths, prereqs['docker_compose'])
     prepare_dev_environment(
         paths,
+        mode,
         skip_backend=args.skip_backend,
         skip_frontend=args.skip_frontend,
         skip_install=args.skip_install,
@@ -1190,12 +1256,13 @@ def command_setup(args: argparse.Namespace) -> int:
     return 0
 
 
-def command_status(_: argparse.Namespace) -> int:
+def command_status(args: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
     python = resolve_python_interpreter()
     node_tooling = inspect_node_tooling()
     compose_command, compose_mode = detect_docker_compose()
+    mode = runtime_mode_from_args(args)
     status = launcher_status_snapshot(paths)
     state = status['state']
     root_env_values = parse_env_file(paths.root_env)
@@ -1203,6 +1270,9 @@ def command_status(_: argparse.Namespace) -> int:
     docker_found = shutil.which('docker') is not None
 
     print('=== market-trading-bot local status ===')
+    print(f'Runtime mode:             {mode.name}')
+    print(f'App mode env:             {mode.app_mode}')
+    print(f'Django settings default:  {mode.django_settings_module}')
     print(f'Repo root:               {paths.root}')
     print(f'Python current interpreter: {sys.executable or "not detected"}')
     print(f'Python launcher interpreter: {(python.command if python else "not detected")}')
@@ -1283,24 +1353,34 @@ def command_down(_: argparse.Namespace) -> int:
 def command_seed(args: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
+    mode = runtime_mode_from_args(args)
+    if mode is LITE_MODE and not args.skip_infra:
+        warn('Lite mode selected; forcing --skip-infra so Docker is not required.')
+        args.skip_infra = True
+    announce_runtime_mode(mode, skip_infra=args.skip_infra)
     prereqs = verify_prerequisites(require_node=False, require_docker=not args.skip_infra)
     ensure_env_files()
     if not args.skip_infra:
         start_infrastructure(paths, prereqs['docker_compose'])
-    prepare_backend(paths, skip_install=args.skip_install)
-    run_seed(paths)
+    prepare_backend(paths, mode, skip_install=args.skip_install)
+    run_seed(paths, mode)
     return 0
 
 
 def command_simulate_tick(args: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
+    mode = runtime_mode_from_args(args)
+    if mode is LITE_MODE and not args.skip_infra:
+        warn('Lite mode selected; forcing --skip-infra so Docker is not required.')
+        args.skip_infra = True
+    announce_runtime_mode(mode, skip_infra=args.skip_infra)
     prereqs = verify_prerequisites(require_node=False, require_docker=not args.skip_infra)
     ensure_env_files()
     if not args.skip_infra:
         start_infrastructure(paths, prereqs['docker_compose'])
-    prepare_backend(paths, skip_install=args.skip_install)
-    run_backend_manage(paths, ['simulate_markets_tick'])
+    prepare_backend(paths, mode, skip_install=args.skip_install)
+    run_backend_manage(paths, mode, ['simulate_markets_tick'])
     ok('Simulation tick completed.')
     return 0
 
@@ -1308,12 +1388,17 @@ def command_simulate_tick(args: argparse.Namespace) -> int:
 def command_simulate_loop(args: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
+    mode = runtime_mode_from_args(args)
+    if mode is LITE_MODE and not args.skip_infra:
+        warn('Lite mode selected; forcing --skip-infra so Docker is not required.')
+        args.skip_infra = True
+    announce_runtime_mode(mode, skip_infra=args.skip_infra)
     prereqs = verify_prerequisites(require_node=False, require_docker=not args.skip_infra)
     ensure_env_files()
     if not args.skip_infra:
         start_infrastructure(paths, prereqs['docker_compose'])
-    prepare_backend(paths, skip_install=args.skip_install)
-    run_backend_manage(paths, ['simulate_markets_loop'])
+    prepare_backend(paths, mode, skip_install=args.skip_install)
+    run_backend_manage(paths, mode, ['simulate_markets_loop'])
     ok('Simulation loop finished.')
     return 0
 
@@ -1322,22 +1407,27 @@ def command_backend(args: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
     ensure_no_running_launcher_processes()
+    mode = runtime_mode_from_args(args)
+    if mode is LITE_MODE and not args.skip_infra:
+        warn('Lite mode selected; forcing --skip-infra so Docker is not required.')
+        args.skip_infra = True
+    announce_runtime_mode(mode, skip_infra=args.skip_infra)
     prereqs = verify_prerequisites(require_node=False, require_docker=not args.skip_infra)
     ensure_env_files()
     if not args.skip_infra:
         start_infrastructure(paths, prereqs['docker_compose'])
-    prepare_backend(paths, skip_install=args.skip_install)
+    prepare_backend(paths, mode, skip_install=args.skip_install)
     if args.no_seed:
         warn('Skipping automatic seed for backend-only startup because --no-seed was used.')
     else:
-        maybe_seed(paths, no_seed=False)
+        maybe_seed(paths, mode, no_seed=False)
     process_specs = [
         {
             'label': 'backend',
             'title': 'market-trading-bot backend',
             'command': backend_run_command(paths),
             'cwd': paths.backend,
-            'env': backend_command_env(paths),
+            'env': backend_command_env(paths, mode),
         }
     ]
     startup_mode = 'separate-windows' if args.separate_windows else DEFAULT_STARTUP_MODE
@@ -1354,6 +1444,7 @@ def command_backend(args: argparse.Namespace) -> int:
             label='Backend healthcheck',
         )
         print_launcher_summary(
+            mode=mode,
             backend_started=True,
             frontend_started=False,
             browser_url=service_urls()['backend_health'],
@@ -1373,6 +1464,8 @@ def command_frontend(args: argparse.Namespace) -> int:
     paths = build_paths()
     ensure_project_structure(paths)
     ensure_no_running_launcher_processes()
+    mode = runtime_mode_from_args(args)
+    announce_runtime_mode(mode, skip_infra=True)
     verify_prerequisites(require_node=True, require_docker=False)
     ensure_env_files()
     prepare_frontend(paths, skip_install=args.skip_install)
@@ -1400,6 +1493,7 @@ def command_frontend(args: argparse.Namespace) -> int:
         )
         browser_opened = open_browser(service_urls()['frontend_system'], enabled=not args.no_browser)
         print_launcher_summary(
+            mode=mode,
             backend_started=False,
             frontend_started=True,
             browser_url=service_urls()['frontend_system'],
@@ -1417,6 +1511,7 @@ def command_frontend(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='Local-first launcher for the market-trading-bot monorepo.')
+    parser.add_argument('--lite', action='store_true', help='Run in lite mode (SQLite, no Docker-required infra).')
     parser.add_argument('--no-browser', action='store_true', help='Do not open the browser automatically after startup.')
     parser.add_argument('--separate-windows', action='store_true', help='Open backend/frontend in separate console windows instead of detached mode.')
     parser.add_argument('--with-sim-loop', action='store_true', help='Start simulate_markets_loop alongside backend startup.')
@@ -1430,17 +1525,20 @@ def build_parser() -> argparse.ArgumentParser:
     common_setup.add_argument('--skip-frontend', action='store_true', help='Skip frontend preparation/startup.')
     common_setup.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup for postgres/redis.')
     common_setup.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed.')
+    common_setup.add_argument('--lite', action='store_true', help='Run in lite mode (SQLite, no Docker-required infra).')
 
     backend_only = argparse.ArgumentParser(add_help=False)
     backend_only.add_argument('--skip-install', action='store_true', help='Skip pip install before running the command.')
     backend_only.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup before running the command.')
     backend_only.add_argument('--separate-windows', action='store_true', help='Open the backend in a separate console window instead of detached mode.')
     backend_only.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed before backend startup.')
+    backend_only.add_argument('--lite', action='store_true', help='Run in lite mode (SQLite, no Docker-required infra).')
 
     frontend_only = argparse.ArgumentParser(add_help=False)
     frontend_only.add_argument('--skip-install', action='store_true', help='Skip npm install before running the command.')
     frontend_only.add_argument('--no-browser', action='store_true', help='Do not open the browser automatically after startup.')
     frontend_only.add_argument('--separate-windows', action='store_true', help='Open the frontend in a separate console window instead of detached mode.')
+    frontend_only.add_argument('--lite', action='store_true', help='Run in lite mode (frontend still unchanged).')
 
     up_parser = subparsers.add_parser('up', parents=[common_setup], help='Prepare the project and start backend + frontend.')
     up_parser.add_argument('--with-sim-loop', action='store_true', help='Start simulate_markets_loop alongside the backend.')
@@ -1452,6 +1550,7 @@ def build_parser() -> argparse.ArgumentParser:
     setup_parser.set_defaults(func=command_setup)
 
     status_parser = subparsers.add_parser('status', help='Show a local environment summary for this repo.')
+    status_parser.add_argument('--lite', action='store_true', help='Show status using lite-mode defaults.')
     status_parser.set_defaults(func=command_status)
 
     down_parser = subparsers.add_parser('down', help='Stop launcher-managed processes and Docker Compose services.')
@@ -1483,6 +1582,7 @@ def build_parser() -> argparse.ArgumentParser:
         no_browser=False,
         separate_windows=False,
         skip_infra=False,
+        lite=False,
     )
     return parser
 

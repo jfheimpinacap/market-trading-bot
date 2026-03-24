@@ -220,12 +220,14 @@ Current goals:
 ## Settings strategy
 - `base.py` contains shared defaults.
 - `local.py` keeps local development behavior simple.
+- `lite.py` provides a portable local profile (`config.settings.lite`) using SQLite and optional Redis.
 - `test.py` uses SQLite and eager Celery execution for lightweight test runs.
 - Environment variables control PostgreSQL, Redis, hosts, CORS, and runtime profile.
 
 ## Celery strategy
 - Celery is initialized in `config/celery.py`.
 - Redis is the default broker/result backend via environment variables.
+- Lite mode switches to eager/in-memory execution so local notebooks can run without Redis.
 - Apps can add `tasks.py` incrementally; Celery autodiscovery is already enabled.
 - Real ingestion or sync tasks are intentionally deferred to a later stage.
 

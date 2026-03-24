@@ -2,8 +2,10 @@ export type HealthResponse = {
   status: string;
   service: string;
   environment: string;
+  app_mode: string;
   database_configured: boolean;
   redis_configured: boolean;
+  redis_required: boolean;
 };
 
 export type NavRoute = {

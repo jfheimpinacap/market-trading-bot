@@ -263,11 +263,16 @@ También puedes usar:
 
 ```bash
 python start.py up
+python start.py --lite
+python start.py up --lite
+python start.py setup --lite
 python start.py setup
 python start.py frontend
 python start.py status
 python start.py down
 ```
+
+En **lite mode**, el frontend no cambia de arquitectura: sigue apuntando al backend local, pero el backend corre con SQLite y sin requerir Docker/Redis obligatorios. El dashboard y `/system` muestran `app_mode` para distinguir `FULL` vs `LITE`.
 
 ## Automation page
 

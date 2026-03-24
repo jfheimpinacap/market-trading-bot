@@ -323,8 +323,10 @@ export function DashboardPage() {
           details={[
             { label: 'Health endpoint', value: `${API_BASE_URL}/api/health/` },
             { label: 'Environment', value: health.data?.environment ?? 'Unavailable' },
+            { label: 'App mode', value: health.data?.app_mode?.toUpperCase() ?? 'Unavailable' },
             { label: 'Database', value: formatBooleanFlag(health.data?.database_configured) },
             { label: 'Redis', value: formatBooleanFlag(health.data?.redis_configured) },
+            { label: 'Redis required', value: formatBooleanFlag(health.data?.redis_required) },
           ]}
         />
 

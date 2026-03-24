@@ -42,6 +42,7 @@ def get_list(name: str, default: list[str] | None = None) -> list[str]:
 SECRET_KEY = get_env('DJANGO_SECRET_KEY', 'change-me')
 DEBUG = get_bool('DJANGO_DEBUG', default=False)
 ENVIRONMENT = get_env('DJANGO_ENV', 'local')
+APP_MODE = get_env('APP_MODE', 'full')
 ALLOWED_HOSTS = get_list('DJANGO_ALLOWED_HOSTS', default=['127.0.0.1', 'localhost'])
 
 DJANGO_APPS = [
@@ -161,6 +162,7 @@ CORS_ALLOWED_ORIGINS = get_list(
 )
 
 REDIS_URL = get_env('REDIS_URL', 'redis://localhost:6379/0')
+REDIS_REQUIRED = get_bool('REDIS_REQUIRED', default=True)
 CELERY_BROKER_URL = get_env('CELERY_BROKER_URL', REDIS_URL)
 CELERY_RESULT_BACKEND = get_env('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
 CELERY_TASK_ALWAYS_EAGER = False
