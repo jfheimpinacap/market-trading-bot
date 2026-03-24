@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from apps.semi_auto_demo.models import PendingApproval, PendingApprovalStatus, SemiAutoRun
 from apps.semi_auto_demo.serializers import PendingApprovalDecisionSerializer, PendingApprovalSerializer, SemiAutoRunSerializer
 from apps.semi_auto_demo.services import approve_pending_approval, reject_pending_approval, run_evaluate_only, run_scan_and_execute
+from apps.safety_guard.services import get_safety_status
 
 
 class SemiAutoEvaluateView(APIView):
@@ -22,6 +23,9 @@ class SemiAutoRunView(APIView):
     permission_classes = []
 
     def post(self, request, *args, **kwargs):
+        safety = get_safety_status()
+        if safety['kill_switch_enabled'] or safety['hard_stop_active']:
+            return Response({'detail': 'Safety guard blocks new semi-auto execution while kill switch/hard stop is active.'}, status=status.HTTP_409_CONFLICT)
         run = run_scan_and_execute()
         return Response(SemiAutoRunSerializer(run).data, status=status.HTTP_200_OK)
 
@@ -95,6 +99,7 @@ class SemiAutoSummaryView(APIView):
                 'real_execution_enabled': False,
                 'approval_required_behavior': 'create_pending_approval',
                 'hard_block_behavior': 'never_execute',
+                'guardrails': get_safety_status(),
             },
         }
         return Response(payload)

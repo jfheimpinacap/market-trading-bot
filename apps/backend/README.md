@@ -692,3 +692,11 @@ Out of scope by design:
 - real trading execution
 - exchange credentials/authentication
 - distributed schedulers and websocket orchestration
+
+
+## Safety hardening layer (paper/demo only)
+
+- New `apps.safety_guard` module adds explicit guardrails for operational safety.
+- Includes configurable limits for exposure, session drawdown, auto-trade caps, cooldown thresholds, and kill switch behavior.
+- `continuous_demo` and `semi_auto_demo` now consult safety state before auto execution.
+- Critical/manual actions remain manual by design: kill switch enable/disable, cooldown reset, config updates, pending approval decisions.

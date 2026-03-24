@@ -6,6 +6,8 @@ import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
 import { publishDemoFlowRefresh } from '../../lib/demoFlow';
 import { navigate } from '../../lib/router';
+import { getSafetyStatus } from '../../services/safety';
+import type { SafetyStatus } from '../../types/safety';
 import {
   getContinuousDemoCycles,
   getContinuousDemoStatus,
@@ -41,14 +43,16 @@ export function ContinuousDemoPage() {
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [safety, setSafety] = useState<SafetyStatus | null>(null);
 
   const loadState = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [statusResponse, cyclesResponse] = await Promise.all([getContinuousDemoStatus(), getContinuousDemoCycles()]);
+      const [statusResponse, cyclesResponse, safetyResponse] = await Promise.all([getContinuousDemoStatus(), getContinuousDemoCycles(), getSafetyStatus()]);
       setStatus(statusResponse);
       setCycles(cyclesResponse);
+      setSafety(safetyResponse);
     } catch (loadError) {
       setError(getErrorMessage(loadError, 'Could not load continuous demo status.'));
     } finally {
@@ -81,11 +85,11 @@ export function ContinuousDemoPage() {
   const latestCycle = status?.latest_cycle;
 
   const controls = useMemo(() => ({
-    canStart: runtimeStatus !== 'RUNNING',
+    canStart: runtimeStatus !== 'RUNNING' && !safety?.kill_switch_enabled && !safety?.hard_stop_active,
     canPause: runtimeStatus === 'RUNNING',
-    canResume: runtimeStatus === 'PAUSED',
+    canResume: runtimeStatus === 'PAUSED' && !safety?.kill_switch_enabled,
     canStop: runtimeStatus === 'RUNNING' || runtimeStatus === 'PAUSED',
-  }), [runtimeStatus]);
+  }), [runtimeStatus, safety]);
 
   return (
     <div className="page-stack">
@@ -97,6 +101,7 @@ export function ContinuousDemoPage() {
       />
 
       <SectionCard eyebrow="Runtime control" title="Loop controls" description="Gestiona start, pause, resume, stop y ejecución manual de un ciclo.">
+        {safety?.kill_switch_enabled || safety?.hard_stop_active || safety?.cooldown_until_cycle ? <p><strong>Safety restriction:</strong> Auto execution constrained ({safety?.status}). {safety?.status_message}</p> : null}
         <div className="button-row">
           <button type="button" className="primary-button" disabled={isActionLoading || !controls.canStart} onClick={() => doAction(() => startContinuousDemo({ cycle_interval_seconds: 30 }), 'Continuous demo loop started.')}>Start loop</button>
           <button type="button" className="secondary-button" disabled={isActionLoading || !controls.canPause} onClick={() => doAction(() => pauseContinuousDemo(), 'Loop paused.')}>Pause loop</button>
@@ -132,6 +137,8 @@ export function ContinuousDemoPage() {
               <li>Max auto trades per cycle: {String(activeSession?.settings_snapshot?.max_auto_trades_per_cycle ?? 2)}</li>
               <li>Max auto trades per session: {String(activeSession?.settings_snapshot?.max_auto_trades_total_per_session ?? 20)}</li>
               <li>APPROVAL_REQUIRED → PendingApproval queue</li>
+              <li>Safety status: {safety?.status ?? 'UNKNOWN'}</li>
+              <li>Cooldown active: {safety?.cooldown_until_cycle ? `until cycle ${safety.cooldown_until_cycle}` : 'no'}</li>
               <li>HARD_BLOCK → never executed</li>
             </ul>
           </SectionCard>

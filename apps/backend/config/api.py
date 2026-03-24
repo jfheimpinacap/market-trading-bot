@@ -14,4 +14,5 @@ urlpatterns = [
     path('proposals/', include(('apps.proposal_engine.urls', 'proposal_engine'), namespace='proposal_engine')),
     path('semi-auto/', include(('apps.semi_auto_demo.urls', 'semi_auto_demo'), namespace='semi_auto_demo')),
     path('continuous-demo/', include(('apps.continuous_demo.urls', 'continuous_demo'), namespace='continuous_demo')),
+    path('safety/', include(('apps.safety_guard.urls', 'safety_guard'), namespace='safety_guard')),
 ]
