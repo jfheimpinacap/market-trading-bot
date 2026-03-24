@@ -1,6 +1,7 @@
 import { AgentsPage } from '../pages/AgentsPage';
 import { AutomationPage } from '../pages/AutomationPage';
 import { DashboardPage } from '../pages/DashboardPage';
+import { EvaluationPage } from '../pages/EvaluationPage';
 import { ContinuousDemoPage } from '../pages/ContinuousDemoPage';
 import { MarketDetailPage } from '../pages/MarketDetailPage';
 import { MarketsPage } from '../pages/MarketsPage';
@@ -96,6 +97,12 @@ export const appRoutes: AppRoute[] = [
     path: '/settings',
     description: 'Local-first application configuration and environment notes.',
     component: SettingsPage,
+  },
+  {
+    label: 'Evaluation',
+    path: '/evaluation',
+    description: 'Benchmark and evaluation harness for autonomous paper/demo performance over time.',
+    component: EvaluationPage,
   },
   {
     label: 'Safety',
