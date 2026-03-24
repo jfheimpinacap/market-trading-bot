@@ -513,6 +513,11 @@ button {
   font-size: 0.92rem;
 }
 
+.table-inline-stack {
+  display: grid;
+  gap: 6px;
+}
+
 .market-badge {
   display: inline-flex;
   align-items: center;

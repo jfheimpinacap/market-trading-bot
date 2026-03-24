@@ -118,7 +118,10 @@ export function MarketTradePanel({
   const [isEvaluatingPolicy, setIsEvaluatingPolicy] = useState(false);
   const [lastAssessmentKey, setLastAssessmentKey] = useState<string | null>(null);
 
-  const isTradable = market.is_active && market.status.toLowerCase() === 'open';
+  const isPaperTradable = market.paper_tradable ?? true;
+  const isTradable = market.is_active && market.status.toLowerCase() === 'open' && isPaperTradable;
+  const paperBlockReason = market.paper_tradable_reason?.trim() || null;
+  const executionModeLabel = market.execution_mode || 'paper_demo_only';
   const marketPositions = useMemo(
     () => positions.filter((position) => position.market === market.id),
     [market.id, positions],
@@ -214,6 +217,9 @@ export function MarketTradePanel({
     }
 
     if (requireTradable && !isTradable) {
+      if (!isPaperTradable) {
+        return paperBlockReason ? `Not paper-tradable: ${paperBlockReason}` : 'This market is not currently tradable in paper mode.';
+      }
       return 'This market is not currently tradable in paper mode.';
     }
 
@@ -359,9 +365,27 @@ export function MarketTradePanel({
         </div>
         <div className="market-trade-panel__status">
           <PaperStatusBadge value={isTradable ? 'OPEN' : titleize(market.status)} />
-          <span className="muted-text">{isTradable ? 'Demo trading enabled' : 'Paper trading blocked by market status'}</span>
+          <span className="muted-text">{isTradable ? 'Paper execution enabled' : 'Paper execution blocked by market status or tradability'}</span>
         </div>
       </div>
+
+      {market.source_type === 'real_read_only' ? (
+        <div className="market-trade-notice market-trade-notice--info">
+          <div>
+            <strong>Real data source · read-only market context.</strong>
+            <p>This market uses real read-only pricing context. Execution mode remains simulated: <code>{executionModeLabel}</code>.</p>
+          </div>
+        </div>
+      ) : null}
+
+      {!isPaperTradable ? (
+        <div className="market-trade-notice market-trade-notice--warning">
+          <div>
+            <strong>Not paper-tradable.</strong>
+            <p>{paperBlockReason ?? 'The backend currently blocks paper execution for this market.'}</p>
+          </div>
+        </div>
+      ) : null}
 
       <div className="market-trade-price-grid">
         <article className="market-trade-price-card">
@@ -537,7 +561,7 @@ export function MarketTradePanel({
               className="secondary-button"
               type="button"
               onClick={() => void handleEvaluateTrade()}
-              disabled={isSubmitting || isEvaluatingRisk || isEvaluatingPolicy || Boolean(error) || isLoading || !account}
+              disabled={isSubmitting || isEvaluatingRisk || isEvaluatingPolicy || Boolean(error) || isLoading || !account || !isPaperTradable}
             >
               {isEvaluatingRisk ? 'Evaluating risk…' : 'Evaluate risk'}
             </button>
@@ -545,7 +569,7 @@ export function MarketTradePanel({
               className="secondary-button"
               type="button"
               onClick={() => void handleEvaluatePolicy()}
-              disabled={isSubmitting || isEvaluatingRisk || isEvaluatingPolicy || Boolean(error) || isLoading || !account}
+              disabled={isSubmitting || isEvaluatingRisk || isEvaluatingPolicy || Boolean(error) || isLoading || !account || !isPaperTradable}
             >
               {isEvaluatingPolicy ? 'Evaluating policy…' : 'Evaluate policy'}
             </button>

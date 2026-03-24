@@ -11,6 +11,8 @@ export type TradeRiskAssessment = {
   market: number;
   market_title: string;
   market_slug: string;
+  market_source_type?: 'demo' | 'real_read_only' | string;
+  execution_mode?: 'paper_demo_only' | string;
   paper_account: number | null;
   paper_account_slug: string | null;
   side: string;

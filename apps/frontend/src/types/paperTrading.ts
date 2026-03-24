@@ -30,6 +30,10 @@ export type PaperPosition = {
   market_title: string;
   market_slug: string;
   market_status: string;
+  market_source_type?: 'demo' | 'real_read_only' | string;
+  market_provider_name?: string | null;
+  market_is_real_data?: boolean;
+  execution_mode?: 'paper_demo_only' | string;
   side: PaperSide;
   quantity: string;
   average_entry_price: string;
@@ -52,6 +56,10 @@ export type PaperTrade = {
   account: number;
   market: number;
   market_title: string;
+  market_source_type?: 'demo' | 'real_read_only' | string;
+  market_provider_name?: string | null;
+  market_is_real_data?: boolean;
+  execution_mode?: 'paper_demo_only' | string;
   position: number | null;
   trade_type: PaperTradeType;
   side: PaperSide;

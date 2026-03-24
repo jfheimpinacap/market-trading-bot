@@ -15,6 +15,11 @@ const activeOptions = [
   { value: 'true', label: 'Active only' },
   { value: 'false', label: 'Inactive only' },
 ];
+const paperTradableOptions = [
+  { value: '', label: 'All paper-trading states' },
+  { value: 'true', label: 'Paper-tradable only' },
+  { value: 'false', label: 'Not paper-tradable' },
+];
 const orderingOptions = [
   { value: '', label: 'Default ordering' },
   { value: '-resolution_time', label: 'Resolution time · newest first' },
@@ -77,6 +82,17 @@ export function MarketsFilters({ filters, providers, events, onChange, onReset }
             {providers.map((provider) => (
               <option key={provider.id} value={provider.slug}>
                 {provider.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field-group">
+          <span>Paper tradable</span>
+          <select className="select-input" name="paper_tradable" value={filters.paper_tradable} onChange={handleFieldChange}>
+            {paperTradableOptions.map((option) => (
+              <option key={option.label} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>

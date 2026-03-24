@@ -30,6 +30,7 @@ export function MarketsTable({ markets }: MarketsTableProps) {
             <th>Title</th>
             <th>Source</th>
             <th>Provider</th>
+            <th>Paper mode</th>
             <th>Category</th>
             <th>Status</th>
             <th>Probability</th>
@@ -53,6 +54,16 @@ export function MarketsTable({ markets }: MarketsTableProps) {
               </td>
               <td>
                 <MarketProviderBadge providerName={market.provider.name} />
+              </td>
+              <td>
+                {market.paper_tradable ? (
+                  <span className="market-badge market-badge--open">Paper-tradable</span>
+                ) : (
+                  <div className="table-inline-stack">
+                    <span className="market-badge market-badge--closed">Not paper-tradable</span>
+                    {market.paper_tradable_reason ? <span className="muted-text">{market.paper_tradable_reason}</span> : null}
+                  </div>
+                )}
               </td>
               <td>{market.category || '—'}</td>
               <td>

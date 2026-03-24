@@ -5,6 +5,7 @@ import { formatActionableLabel } from '../../lib/demoFlow';
 import { formatDateTime, formatPercent } from '../markets/utils';
 import { ReviewOutcomeBadge } from '../postmortem/ReviewOutcomeBadge';
 import { SignalBadge } from './SignalBadges';
+import { MarketSourceBadge } from '../markets/MarketSourceBadge';
 
 type SignalWorkflowContext = {
   hasOpenPosition: boolean;
@@ -44,6 +45,7 @@ export function SignalsTable({ signals, workflowContextByMarket = {} }: SignalsT
           <tr>
             <th>Signal</th>
             <th>Market</th>
+            <th>Source</th>
             <th>Agent</th>
             <th>Direction</th>
             <th>Status</th>
@@ -74,6 +76,12 @@ export function SignalsTable({ signals, workflowContextByMarket = {} }: SignalsT
                     <strong>{signal.market_title}</strong>
                     <span>{signal.market_provider_slug} · {signal.market_status}</span>
                   </a>
+                </td>
+                <td>
+                  <div className="table-inline-stack">
+                    <MarketSourceBadge sourceType={signal.market_source_type ?? 'demo'} />
+                    <span className="muted-text">{signal.execution_mode ?? 'paper_demo_only'}</span>
+                  </div>
                 </td>
                 <td>{signal.agent?.name ?? 'Aggregate signal'}</td>
                 <td><SignalBadge kind="direction" value={signal.direction} /></td>

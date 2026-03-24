@@ -11,6 +11,7 @@ import type { MarketEvent, MarketFilters, MarketListItem, MarketProvider, Market
 const defaultFilters: MarketFilters = {
   source_type: '',
   provider: '',
+  paper_tradable: '',
   category: '',
   status: '',
   is_active: '',
@@ -143,6 +144,10 @@ export function MarketsPage() {
     () => markets.filter((market) => market.source_type === 'real_read_only').length,
     [markets],
   );
+  const realPaperTradableCount = useMemo(
+    () => markets.filter((market) => market.source_type === 'real_read_only' && market.paper_tradable).length,
+    [markets],
+  );
   const demoMarketCount = useMemo(
     () => markets.filter((market) => market.source_type === 'demo').length,
     [markets],
@@ -183,7 +188,7 @@ export function MarketsPage() {
           eyebrow="Catalog"
           title="Market list"
           description="Desktop-first table for browsing markets by source/provider and opening detail pages with clear read-only versus paper-demo context."
-          aside={<span className="muted-text">{activeFilterCount} active filters · {demoMarketCount} demo · {realMarketCount} real</span>}
+          aside={<span className="muted-text">{activeFilterCount} active filters · {demoMarketCount} demo · {realMarketCount} real · {realPaperTradableCount} real paper-tradable</span>}
         >
           <DataStateWrapper
             isLoading={marketsLoading}
