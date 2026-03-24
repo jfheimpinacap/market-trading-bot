@@ -15,6 +15,12 @@ export const dashboardQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Proposals',
+    description: 'Open the trade proposal inbox and continue into market detail before a demo paper trade.',
+    path: '/proposals',
+    availability: 'live',
+  },
+  {
     title: 'Automation',
     description: 'Use guided demo controls to move the local system forward without touching the terminal.',
     path: '/automation',
@@ -59,6 +65,11 @@ export const dashboardModules: DashboardModuleStatus[] = [
   {
     name: 'Paper trading',
     summary: 'Execution workflows, positions, PnL, and portfolio history are available in the local demo account.',
+    status: 'ready',
+  },
+  {
+    name: 'Proposal engine',
+    summary: 'Demo proposals now bridge signals, risk, policy, and market-level execution decisions.',
     status: 'ready',
   },
   {
