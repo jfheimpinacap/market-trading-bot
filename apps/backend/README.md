@@ -861,3 +861,26 @@ Integration notes:
 - semi-auto and real-ops now create queue items when they create `PendingApproval`.
 - approving a queue item executes paper trade when executable context exists (directly or via linked `PendingApproval`).
 - execution remains paper/demo only; no real order path is introduced.
+
+## Replay lab (historical replay / backtest-like demo)
+
+Nuevo app: `apps.replay_lab`.
+
+Qué hace:
+- Ejecuta replay histórico sobre `MarketSnapshot` persistidos (sin APIs externas en runtime).
+- Recorre timeline cronológico por pasos (`ReplayStep`) y guarda corrida (`ReplayRun`).
+- Reutiliza proposal/risk/policy/allocation/safety para decisiones, pero siempre en paper/demo only.
+- Aísla portfolio con una cuenta paper dedicada por run (`replay-run-<id>`), evitando contaminar la cuenta operativa principal.
+
+Endpoints:
+- `POST /api/replay/run/`
+- `GET /api/replay/runs/`
+- `GET /api/replay/runs/<id>/`
+- `GET /api/replay/summary/`
+- `GET /api/replay/runs/<id>/steps/`
+
+Límites intencionales:
+- No execution real
+- No slippage/order-book sofisticado
+- No backtesting cuantitativo institucional
+- No ML/LLM

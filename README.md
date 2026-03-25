@@ -522,3 +522,14 @@ Explicitly still out of scope:
 - real money
 - local LLM
 - multi-user approval workflow
+
+### Historical replay / backtest-like simulation demo (new)
+
+The platform now includes a dedicated replay layer (`/replay`, `/api/replay/*`) to run controlled historical simulations using already persisted market snapshots.
+
+Key boundaries:
+- uses stored snapshots only (no live streaming dependency during replay)
+- reuses proposal/risk/policy/allocation/safety flow where possible
+- isolated replay paper account per run to avoid contaminating operational paper account
+- audit-friendly persisted artifacts: run-level summary + step-level timeline
+- still local-first and paper/demo only (no real money, no real execution)

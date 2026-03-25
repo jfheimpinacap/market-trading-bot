@@ -83,6 +83,7 @@ LOCAL_APPS = [
     'apps.real_market_ops',
     'apps.allocation_engine',
     'apps.operator_queue',
+    'apps.replay_lab',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
