@@ -1004,3 +1004,23 @@ Integración:
 - `operator_alerts` sigue siendo SoT de incidentes.
 - `notification_center` solo decide si/cuándo/cómo notificar.
 - digests existentes (`OperatorDigest`) ahora pueden entregarse por `send-digest`.
+
+## Notification automation layer (new)
+
+`apps.notification_center` was extended with a small automation layer:
+
+- `NotificationAutomationState`: global/local toggles and cadence limits
+- `NotificationEscalationEvent`: auditable escalation reason log
+- automatic alert dispatch hooks from `operator_alerts.emit_alert`
+- digest automation via local cycle windows (`run_digest_cycle`)
+- escalation cycle for persistent incidents (`run_escalation_cycle`)
+
+New API endpoints:
+- `GET /api/notifications/automation-status/`
+- `POST /api/notifications/automation-enable/`
+- `POST /api/notifications/automation-disable/`
+- `POST /api/notifications/run-automatic-dispatch/`
+- `POST /api/notifications/run-digest-cycle/`
+- `GET /api/notifications/escalations/`
+
+Design boundary: still local-first, paper/demo only, no real execution, no distributed orchestration.

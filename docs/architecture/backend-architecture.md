@@ -467,3 +467,17 @@ Se añade un bounded context explícito `apps.notification_center` encima de `op
 - sin colas distribuidas complejas
 - sin campañas ni multiusuario enterprise
 - sin ejecución real
+
+## Notification automation architecture (new)
+
+`apps.notification_center` now separates three concerns with small services:
+
+- `services/automation.py`: event-driven immediate dispatch decisioning for open alerts
+- `services/scheduler.py`: controlled digest cycle (`cycle_window`) generation and delivery
+- `services/escalation.py`: persistence-based escalation run with auditable reason records
+
+Key boundaries:
+- `operator_alerts` stays source of truth for incidents.
+- notification automation only reacts, routes, dispatches, suppresses, and records.
+- existing rule matching + dedupe + cooldown continue to be enforced.
+- no Celery/distributed scheduler requirement in this phase.

@@ -10,6 +10,7 @@ from apps.notification_center.models import (
     NotificationDelivery,
     NotificationDeliveryMode,
     NotificationDeliveryStatus,
+    NotificationTriggerSource,
 )
 from apps.notification_center.services.routing import dedupe_or_cooldown_reason, evaluate_alert_rules, evaluate_digest_rules
 from apps.operator_alerts.models import OperatorAlert, OperatorDigest
@@ -73,7 +74,7 @@ def _dispatch(channel: NotificationChannel, payload: dict) -> tuple[str, str, di
     return NotificationDeliveryStatus.SKIPPED, 'skipped:unsupported_channel_type', {'channel_type': channel.channel_type}
 
 
-def _record_delivery(*, alert: OperatorAlert | None, digest: OperatorDigest | None, channel: NotificationChannel, mode: str, status: str, reason: str, payload: dict, metadata: dict, rule=None, fingerprint: str = '') -> NotificationDelivery:
+def _record_delivery(*, alert: OperatorAlert | None, digest: OperatorDigest | None, channel: NotificationChannel, mode: str, status: str, reason: str, payload: dict, metadata: dict, trigger_source: str, rule=None, fingerprint: str = '') -> NotificationDelivery:
     delivery = NotificationDelivery.objects.create(
         related_alert=alert,
         related_digest=digest,
@@ -81,6 +82,7 @@ def _record_delivery(*, alert: OperatorAlert | None, digest: OperatorDigest | No
         rule=rule,
         delivery_status=status,
         delivery_mode=mode,
+        trigger_source=trigger_source,
         reason=reason,
         payload_preview=payload,
         response_metadata=metadata,
@@ -90,9 +92,16 @@ def _record_delivery(*, alert: OperatorAlert | None, digest: OperatorDigest | No
     return delivery
 
 
-def send_alert_notifications(alert: OperatorAlert, *, force: bool = False) -> list[NotificationDelivery]:
+def send_alert_notifications(
+    alert: OperatorAlert,
+    *,
+    force: bool = False,
+    trigger_source: str = NotificationTriggerSource.MANUAL,
+    mode: str = NotificationDeliveryMode.IMMEDIATE,
+    allowed_rule_modes: tuple[str, ...] | None = None,
+) -> list[NotificationDelivery]:
     deliveries: list[NotificationDelivery] = []
-    evaluations = evaluate_alert_rules(alert)
+    evaluations = evaluate_alert_rules(alert, allowed_modes=allowed_rule_modes)
 
     if not evaluations:
         return deliveries
@@ -104,7 +113,7 @@ def send_alert_notifications(alert: OperatorAlert, *, force: bool = False) -> li
                 channel=channel,
                 alert=alert,
                 digest=None,
-                mode=NotificationDeliveryMode.IMMEDIATE,
+                mode=mode,
             )
             payload = _build_alert_payload(alert)
             if suppressed and not force:
@@ -112,11 +121,12 @@ def send_alert_notifications(alert: OperatorAlert, *, force: bool = False) -> li
                     alert=alert,
                     digest=None,
                     channel=channel,
-                    mode=NotificationDeliveryMode.IMMEDIATE,
+                    mode=mode,
                     status=NotificationDeliveryStatus.SUPPRESSED,
                     reason=reason,
                     payload=payload,
                     metadata={},
+                    trigger_source=trigger_source,
                     rule=evaluation.rule,
                     fingerprint=fingerprint,
                 ))
@@ -131,11 +141,12 @@ def send_alert_notifications(alert: OperatorAlert, *, force: bool = False) -> li
                 alert=alert,
                 digest=None,
                 channel=channel,
-                mode=NotificationDeliveryMode.IMMEDIATE,
+                mode=mode,
                 status=status,
                 reason=dispatch_reason,
                 payload=payload,
                 metadata=metadata,
+                trigger_source=trigger_source,
                 rule=evaluation.rule,
                 fingerprint=fingerprint,
             ))
@@ -143,7 +154,12 @@ def send_alert_notifications(alert: OperatorAlert, *, force: bool = False) -> li
     return deliveries
 
 
-def send_digest_notifications(digest: OperatorDigest, *, force: bool = False) -> list[NotificationDelivery]:
+def send_digest_notifications(
+    digest: OperatorDigest,
+    *,
+    force: bool = False,
+    trigger_source: str = NotificationTriggerSource.MANUAL,
+) -> list[NotificationDelivery]:
     deliveries: list[NotificationDelivery] = []
     evaluations = evaluate_digest_rules(digest)
     for evaluation in evaluations:
@@ -166,6 +182,7 @@ def send_digest_notifications(digest: OperatorDigest, *, force: bool = False) ->
                     reason=reason,
                     payload=payload,
                     metadata={},
+                    trigger_source=trigger_source,
                     rule=evaluation.rule,
                     fingerprint=fingerprint,
                 ))
@@ -185,6 +202,7 @@ def send_digest_notifications(digest: OperatorDigest, *, force: bool = False) ->
                 reason=dispatch_reason,
                 payload=payload,
                 metadata=metadata,
+                trigger_source=trigger_source,
                 rule=evaluation.rule,
                 fingerprint=fingerprint,
             ))

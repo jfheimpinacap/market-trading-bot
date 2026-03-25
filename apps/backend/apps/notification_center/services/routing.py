@@ -69,9 +69,10 @@ def _get_channels(rule: NotificationRule) -> list[NotificationChannel]:
     return channels
 
 
-def evaluate_alert_rules(alert: OperatorAlert) -> list[RuleEvaluation]:
+def evaluate_alert_rules(alert: OperatorAlert, *, allowed_modes: tuple[str, ...] | None = None) -> list[RuleEvaluation]:
     evaluations: list[RuleEvaluation] = []
-    for rule in NotificationRule.objects.filter(is_enabled=True, delivery_mode=NotificationDeliveryMode.IMMEDIATE).order_by('id'):
+    modes = allowed_modes or (NotificationDeliveryMode.IMMEDIATE,)
+    for rule in NotificationRule.objects.filter(is_enabled=True, delivery_mode__in=modes).order_by('id'):
         if not _severity_meets_threshold(alert, rule.severity_threshold):
             continue
         if not _match_criteria(rule.match_criteria or {}, alert=alert):

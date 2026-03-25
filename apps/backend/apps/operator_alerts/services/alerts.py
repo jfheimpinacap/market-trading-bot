@@ -42,9 +42,12 @@ def emit_alert(payload: AlertEmitPayload) -> OperatorAlert:
             existing.save(update_fields=[
                 'severity', 'title', 'summary', 'source', 'last_seen_at', 'related_object_type', 'related_object_id', 'metadata', 'status', 'updated_at'
             ])
+            from apps.notification_center.services import run_automatic_dispatch_for_alert
+
+            run_automatic_dispatch_for_alert(existing)
             return existing
 
-    return OperatorAlert.objects.create(
+    alert = OperatorAlert.objects.create(
         alert_type=payload.alert_type,
         severity=payload.severity,
         status=OperatorAlertStatus.OPEN,
@@ -58,6 +61,10 @@ def emit_alert(payload: AlertEmitPayload) -> OperatorAlert:
         last_seen_at=now,
         metadata=metadata,
     )
+    from apps.notification_center.services import run_automatic_dispatch_for_alert
+
+    run_automatic_dispatch_for_alert(alert)
+    return alert
 
 
 def acknowledge_alert(alert: OperatorAlert) -> OperatorAlert:

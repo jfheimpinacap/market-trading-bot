@@ -537,3 +537,13 @@ Servicios frontend añadidos:
 - `src/types/notifications.ts`
 
 La vista mantiene estados de loading/error/empty y no introduce realtime ni mensajería enterprise.
+
+## Notifications automation UX (new)
+
+`/notifications` now includes:
+- automation status card (global + dispatch/digest/escalation flags)
+- control panel (enable/disable automation, run automatic dispatch, run digest cycle)
+- delivery history with explicit trigger badges (`MANUAL`, `AUTOMATIC`, `DIGEST_AUTOMATION`, `ESCALATION`)
+- recent escalations table and empty-state messaging
+
+The page remains technical, desktop-first, and consistent with alerts/runtime/safety modules.

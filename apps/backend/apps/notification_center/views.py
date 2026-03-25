@@ -3,14 +3,25 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.notification_center.models import NotificationChannel, NotificationDelivery, NotificationRule
+from apps.notification_center.models import NotificationChannel, NotificationDelivery, NotificationEscalationEvent, NotificationRule
 from apps.notification_center.serializers import (
+    NotificationAutomationStateSerializer,
     NotificationChannelSerializer,
     NotificationDeliverySerializer,
+    NotificationEscalationEventSerializer,
     NotificationRuleSerializer,
     TriggerSendSerializer,
 )
-from apps.notification_center.services import get_notification_summary, send_alert_notifications, send_digest_notifications
+from apps.notification_center.services import (
+    get_notification_summary,
+    get_or_create_automation_state,
+    run_automatic_dispatch,
+    run_digest_cycle,
+    run_escalation_cycle,
+    send_alert_notifications,
+    send_digest_notifications,
+    set_automation_enabled,
+)
 from apps.notification_center.services.channels import ensure_default_ui_channel
 from apps.operator_alerts.models import OperatorAlert, OperatorDigest
 
@@ -88,3 +99,58 @@ class NotificationSummaryView(APIView):
     def get(self, request, *args, **kwargs):
         ensure_default_ui_channel()
         return Response(get_notification_summary(), status=status.HTTP_200_OK)
+
+
+class NotificationAutomationStatusView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        state = get_or_create_automation_state()
+        return Response(NotificationAutomationStateSerializer(state).data, status=status.HTTP_200_OK)
+
+
+class NotificationAutomationEnableView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        state = set_automation_enabled(True)
+        return Response(NotificationAutomationStateSerializer(state).data, status=status.HTTP_200_OK)
+
+
+class NotificationAutomationDisableView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        state = set_automation_enabled(False)
+        return Response(NotificationAutomationStateSerializer(state).data, status=status.HTTP_200_OK)
+
+
+class RunAutomaticDispatchView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        dispatch_result = run_automatic_dispatch()
+        escalation_result = run_escalation_cycle()
+        return Response({'dispatch': dispatch_result, 'escalation': escalation_result}, status=status.HTTP_200_OK)
+
+
+class RunDigestCycleView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        force = bool((request.data or {}).get('force', False))
+        return Response(run_digest_cycle(force=force), status=status.HTTP_200_OK)
+
+
+class NotificationEscalationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = NotificationEscalationEventSerializer
+
+    def get_queryset(self):
+        return NotificationEscalationEvent.objects.select_related('alert').order_by('-created_at', '-id')[:100]

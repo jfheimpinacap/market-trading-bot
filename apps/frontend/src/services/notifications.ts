@@ -1,5 +1,12 @@
 import { requestJson } from './api/client';
-import type { NotificationChannel, NotificationDelivery, NotificationRule, NotificationSummary } from '../types/notifications';
+import type {
+  NotificationAutomationState,
+  NotificationChannel,
+  NotificationDelivery,
+  NotificationEscalationEvent,
+  NotificationRule,
+  NotificationSummary,
+} from '../types/notifications';
 
 export function getNotificationChannels() {
   return requestJson<NotificationChannel[]>('/api/notifications/channels/');
@@ -47,4 +54,33 @@ export function sendDigestNotification(id: string | number, force = false) {
 
 export function getNotificationSummary() {
   return requestJson<NotificationSummary>('/api/notifications/summary/');
+}
+
+export function getNotificationAutomationStatus() {
+  return requestJson<NotificationAutomationState>('/api/notifications/automation-status/');
+}
+
+export function enableNotificationAutomation() {
+  return requestJson<NotificationAutomationState>('/api/notifications/automation-enable/', { method: 'POST' });
+}
+
+export function disableNotificationAutomation() {
+  return requestJson<NotificationAutomationState>('/api/notifications/automation-disable/', { method: 'POST' });
+}
+
+export function runAutomaticDispatch() {
+  return requestJson<{ dispatch: Record<string, unknown>; escalation: Record<string, unknown> }>('/api/notifications/run-automatic-dispatch/', {
+    method: 'POST',
+  });
+}
+
+export function runDigestCycle(force = false) {
+  return requestJson<Record<string, unknown>>('/api/notifications/run-digest-cycle/', {
+    method: 'POST',
+    body: JSON.stringify({ force }),
+  });
+}
+
+export function getNotificationEscalations() {
+  return requestJson<NotificationEscalationEvent[]>('/api/notifications/escalations/');
 }
