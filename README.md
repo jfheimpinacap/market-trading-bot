@@ -631,3 +631,25 @@ Fuera de alcance por diseño: ejecución real, dinero real, LLM local, campañas
 - automation state controls via API and `/notifications` UI
 
 Still out of scope: real trading, distributed schedulers, websocket push, and complex multi-tenant notification campaigns.
+
+## Local LLM integration layer (Ollama, new)
+
+The backend now includes a **local-first LLM integration layer** for controlled narrative enrichment (not autonomous decisioning):
+
+- provider: `LLM_PROVIDER=ollama`
+- local endpoint: `OLLAMA_BASE_URL=http://localhost:11434`
+- configurable chat model: `OLLAMA_CHAT_MODEL`
+- configurable embedding model: `OLLAMA_EMBED_MODEL` (default `nomic-embed-text`)
+- toggle + timeout: `LLM_ENABLED`, `OLLAMA_TIMEOUT_SECONDS`
+
+Initial use cases:
+- proposal thesis enrichment
+- post-mortem enriched summary + lessons learned
+- learning-note enrichment
+- local embeddings endpoint for prototyping
+
+Explicit boundary remains unchanged:
+- no real money
+- no real execution
+- no LLM replacement of risk/policy/safety
+- no autonomous LLM trading

@@ -413,3 +413,13 @@ Integration split:
 - `pages/notifications/NotificationsPage.tsx`: cards + control actions + delivery/escalation tables with explicit loading/error/empty states
 
 This keeps automation operator-visible and auditable without introducing realtime sockets or heavy client state.
+
+## Local LLM status visibility
+
+Frontend now includes a minimal integration for local LLM observability:
+
+- `services/llm.ts` calls `GET /api/llm/status/`
+- `types/llm.ts` defines status payload typing
+- `SystemPage` renders a small status card showing provider/model/reachability
+
+This keeps UX impact intentionally small while exposing whether local Ollama enrichment is available.
