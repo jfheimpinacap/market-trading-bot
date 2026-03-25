@@ -599,3 +599,23 @@ What remains intentionally out of scope:
 - websockets/realtime infra
 - real money / real order execution
 - LLM-driven incident narratives
+
+## Notification delivery / escalation routing (new)
+
+Se agregó una capa explícita de **notification delivery / escalation routing** para operadores, manteniendo `operator_alerts` como fuente de verdad del incidente:
+
+- Backend nuevo: `apps.notification_center`
+- Entidades: `NotificationChannel`, `NotificationRule`, `NotificationDelivery`
+- Canales iniciales: `ui_only` (siempre), `webhook` simple, `email` opcional
+- Endpoints:
+  - `GET/POST /api/notifications/channels/`
+  - `GET/POST /api/notifications/rules/`
+  - `GET /api/notifications/deliveries/`
+  - `GET /api/notifications/deliveries/<id>/`
+  - `POST /api/notifications/send-alert/<alert_id>/`
+  - `POST /api/notifications/send-digest/<digest_id>/`
+  - `GET /api/notifications/summary/`
+- Dedupe/cooldown: ventana por regla + supresión por fingerprint y cooldown por alerta/canal.
+- Frontend nuevo: ruta `/notifications` con canales, reglas, historial, resumen y acciones manuales.
+
+Fuera de alcance por diseño: ejecución real, dinero real, LLM local, campañas masivas, orquestación enterprise de mensajería.

@@ -6,6 +6,7 @@ import { SectionCard } from '../../components/SectionCard';
 import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
 import { acknowledgeAlert, getAlertDigests, getAlerts, getAlertsSummary, resolveAlert } from '../../services/alerts';
+import { sendAlertNotification, sendDigestNotification } from '../../services/notifications';
 import type { OperatorAlert, OperatorAlertsSummary, OperatorDigest } from '../../types/alerts';
 
 function toneFromSeverity(severity: string) {
@@ -18,6 +19,14 @@ function toneFromStatus(status: string) {
   if (status === 'OPEN') return 'offline';
   if (status === 'ACKNOWLEDGED') return 'pending';
   if (status === 'RESOLVED') return 'ready';
+  return 'neutral';
+}
+
+
+function toneFromDeliveryStatus(status: string | null | undefined) {
+  if (status === 'SENT') return 'ready';
+  if (status === 'FAILED') return 'offline';
+  if (status === 'SUPPRESSED') return 'pending';
   return 'neutral';
 }
 
@@ -85,7 +94,7 @@ export function AlertsPage() {
         eyebrow="Operator incident center"
         title="Operator Alerts"
         description="Operational alerts + digest pipeline for local paper/demo runtime. This center surfaces only meaningful exceptions that may need human intervention."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/operator-queue')}>Open Queue</button><button type="button" className="secondary-button" onClick={() => navigate('/runtime')}>Open Runtime</button></div>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/notifications')}>Open Notifications</button><button type="button" className="secondary-button" onClick={() => navigate('/operator-queue')}>Open Queue</button><button type="button" className="secondary-button" onClick={() => navigate('/runtime')}>Open Runtime</button></div>}
       />
 
       <DataStateWrapper isLoading={isLoading} isError={Boolean(error)} errorMessage={error ?? undefined}>
@@ -103,7 +112,7 @@ export function AlertsPage() {
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
-                <thead><tr><th>Severity</th><th>Type</th><th>Title</th><th>Summary</th><th>Source</th><th>First seen</th><th>Last seen</th><th>Status</th></tr></thead>
+                <thead><tr><th>Severity</th><th>Type</th><th>Title</th><th>Summary</th><th>Source</th><th>First seen</th><th>Last seen</th><th>Status</th><th>Notification</th></tr></thead>
                 <tbody>
                   {alerts.map((item) => (
                     <tr key={item.id} onClick={() => setSelectedId(item.id)} style={{ cursor: 'pointer' }}>
@@ -114,7 +123,7 @@ export function AlertsPage() {
                       <td>{item.source}</td>
                       <td>{formatDate(item.first_seen_at)}</td>
                       <td>{formatDate(item.last_seen_at)}</td>
-                      <td><StatusBadge tone={toneFromStatus(item.status)}>{item.status}</StatusBadge></td>
+                      <td><StatusBadge tone={toneFromStatus(item.status)}>{item.status}</StatusBadge></td><td><StatusBadge tone={toneFromDeliveryStatus(item.latest_notification_status)}>{item.latest_notification_status ?? 'NOT_SENT'}</StatusBadge></td>
                     </tr>
                   ))}
                 </tbody>
@@ -135,6 +144,7 @@ export function AlertsPage() {
               <div><strong>Metadata:</strong><pre>{JSON.stringify(selected.metadata ?? {}, null, 2)}</pre></div>
               <div className="button-row">
                 <button type="button" className="secondary-button" disabled={isActionLoading} onClick={() => void runAction('ack')}>Acknowledge</button>
+                <button type="button" className="secondary-button" disabled={isActionLoading} onClick={async () => { if (!selected) return; setIsActionLoading(true); try { await sendAlertNotification(selected.id); await load(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not send alert notification.'); } finally { setIsActionLoading(false); } }}>Send Notification</button>
                 <button type="button" className="primary-button" disabled={isActionLoading} onClick={() => void runAction('resolve')}>Resolve</button>
               </div>
             </div>
@@ -142,6 +152,9 @@ export function AlertsPage() {
         </SectionCard>
 
         <SectionCard eyebrow="Digest" title="Recent digests" description="What happened in recent windows without opening multiple pages.">
+          <div className="button-row">
+            <button type="button" className="secondary-button" disabled={isActionLoading || digests.length === 0} onClick={async () => { if (!digests[0]) return; setIsActionLoading(true); try { await sendDigestNotification(digests[0].id); await load(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not send digest notification.'); } finally { setIsActionLoading(false); } }}>Send latest digest notification</button>
+          </div>
           {digests.length === 0 ? (
             <p>No digests generated yet. Use POST /api/alerts/build-digest/ to create one on demand.</p>
           ) : (

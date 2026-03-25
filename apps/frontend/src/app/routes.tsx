@@ -1,6 +1,7 @@
 import { AgentsPage } from '../pages/AgentsPage';
 import { AutomationPage } from '../pages/AutomationPage';
 import { AlertsPage } from '../pages/AlertsPage';
+import { NotificationsPage } from '../pages/NotificationsPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { EvaluationPage } from '../pages/EvaluationPage';
 import { ExperimentsPage } from '../pages/ExperimentsPage';
@@ -75,6 +76,12 @@ export const appRoutes: AppRoute[] = [
     path: '/alerts',
     description: 'Operator alert center with deduplicated incidents, attention summary, and digest windows.',
     component: AlertsPage,
+  },
+  {
+    label: 'Notifications',
+    path: '/notifications',
+    description: 'Outbound notification routing for alerts/digests with dedupe, cooldown and delivery audit trail.',
+    component: NotificationsPage,
   },
   {
     label: 'Operator Queue',

@@ -16,10 +16,12 @@ import { API_BASE_URL } from '../lib/config';
 import { developerCommandGroups, systemModuleReadiness, systemQuickLinks } from '../lib/system';
 import { getMarketSystemSummary, getMarkets } from '../services/markets';
 import { getRealSyncRuns, getRealSyncStatus, runRealSync } from '../services/realSync';
+import { getNotificationSummary } from '../services/notifications';
 import type { DashboardStatCard } from '../types/dashboard';
 import type { MarketListItem, MarketSystemSummary } from '../types/markets';
 import type { RealSyncRun, RealSyncStatusResponse } from '../types/realSync';
 import type { SimulationActivityItem, SimulationObservation, SystemRuntimeInfo } from '../types/system';
+import type { NotificationSummary } from '../types/notifications';
 
 const ACTIVITY_MARKET_LIMIT = 5;
 
@@ -235,6 +237,7 @@ export function SystemPage() {
   const [realSyncError, setRealSyncError] = useState<string | null>(null);
   const [isRealSyncLoading, setIsRealSyncLoading] = useState(true);
   const [realSyncTriggerState, setRealSyncTriggerState] = useState<'idle' | 'running'>('idle');
+  const [notificationSummary, setNotificationSummary] = useState<NotificationSummary | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -246,11 +249,12 @@ export function SystemPage() {
       setSummaryError(null);
       setMarketsError(null);
 
-      const [summaryResult, marketsResult, realSyncStatusResult, realSyncRunsResult] = await Promise.allSettled([
+      const [summaryResult, marketsResult, realSyncStatusResult, realSyncRunsResult, notificationSummaryResult] = await Promise.allSettled([
         getMarketSystemSummary(),
         getMarkets(),
         getRealSyncStatus(),
         getRealSyncRuns({ limit: 8 }),
+        getNotificationSummary(),
       ]);
 
       if (!isMounted) {
@@ -274,6 +278,10 @@ export function SystemPage() {
         setRealSyncError(null);
       } else {
         setRealSyncError('Could not load real-data sync status from /api/real-sync/.');
+      }
+
+      if (notificationSummaryResult.status === 'fulfilled') {
+        setNotificationSummary(notificationSummaryResult.value);
       }
 
       setSummaryLoading(false);
@@ -300,12 +308,13 @@ export function SystemPage() {
     setSummaryError(null);
     setMarketsError(null);
 
-    const [healthResult, summaryResult, marketsResult, realSyncStatusResult, realSyncRunsResult] = await Promise.allSettled([
+    const [healthResult, summaryResult, marketsResult, realSyncStatusResult, realSyncRunsResult, notificationSummaryResult] = await Promise.allSettled([
       refreshHealth(),
       getMarketSystemSummary(),
       getMarkets(),
       getRealSyncStatus(),
       getRealSyncRuns({ limit: 8 }),
+      getNotificationSummary(),
     ]);
 
     void healthResult;
@@ -329,6 +338,10 @@ export function SystemPage() {
       setRealSyncError(null);
     } else {
       setRealSyncError('Could not refresh real-data sync status.');
+    }
+
+    if (notificationSummaryResult.status === 'fulfilled') {
+      setNotificationSummary(notificationSummaryResult.value);
     }
 
     setSummaryLoading(false);
@@ -404,6 +417,24 @@ export function SystemPage() {
         description="Local-first monitoring page for backend health, runtime context, demo catalog coverage, and observable simulation movement without adding new backend endpoints."
         actions={<RefreshToolbar lastRefreshedAt={lastRefreshedAt} isRefreshing={isRefreshing} onRefresh={() => void handleRefresh()} />}
       />
+
+
+      <SectionCard
+        eyebrow="Notification delivery"
+        title="Outbound delivery health"
+        description="Delivery routing status from the notification center (alerts/digests only, paper/demo runtime)."
+      >
+        {!notificationSummary ? (
+          <p>Notification delivery summary unavailable.</p>
+        ) : (
+          <div className="dashboard-stats-grid">
+            <article className="stat-card"><p className="section-label">Health</p><h3>{notificationSummary.delivery_health}</h3></article>
+            <article className="stat-card"><p className="section-label">Sent</p><h3>{notificationSummary.deliveries_sent}</h3></article>
+            <article className="stat-card"><p className="section-label">Failed</p><h3>{notificationSummary.deliveries_failed}</h3></article>
+            <article className="stat-card"><p className="section-label">Suppressed</p><h3>{notificationSummary.deliveries_suppressed}</h3></article>
+          </div>
+        )}
+      </SectionCard>
 
       <section className="content-grid content-grid--two-columns">
         <StatusCard

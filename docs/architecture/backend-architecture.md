@@ -441,3 +441,29 @@ Boundary remains strict:
 - aggregation is pull-based (`rebuild`) to avoid hidden side effects in unrelated views
 - no external transport integrations in this phase (email/SMS/chat/push)
 - no autonomous real execution path
+
+## Notification delivery architecture (new)
+
+Se añade un bounded context explícito `apps.notification_center` encima de `operator_alerts`:
+
+- `operator_alerts`: detecta, deduplica y persiste incidentes/digests (source of truth).
+- `notification_center`: evalúa reglas de salida, selecciona canales y registra cada intento de entrega.
+
+### Modelo
+- `NotificationChannel`
+- `NotificationRule`
+- `NotificationDelivery`
+
+### Pipeline
+1. recibir `OperatorAlert` o `OperatorDigest`
+2. evaluar reglas habilitadas por modo (`immediate` o `digest`)
+3. validar umbral de severidad + `match_criteria`
+4. resolver canales (fallback `ui_only`)
+5. aplicar dedupe/cooldown simple
+6. despachar y registrar resultado
+
+### Scope guardrails
+- local-first, paper/demo only
+- sin colas distribuidas complejas
+- sin campañas ni multiusuario enterprise
+- sin ejecución real
