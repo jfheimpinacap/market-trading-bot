@@ -51,6 +51,16 @@ The platform now includes an explicit **benchmark/evaluation harness** for auton
 - technical frontend route at `/evaluation` for snapshots, recent run comparisons, and guidance
 - strict local-first boundary: no ML, no LLM, no real-money execution
 
+### Experiment runner / strategy profiles (new)
+
+The platform now includes an **experiment runner** for profile-based comparison across replay and live paper evaluation:
+
+- persisted `StrategyProfile` configs (conservative/balanced/aggressive/custom)
+- persisted `ExperimentRun` records for replay, live evaluation, and live-vs-replay comparison snapshots
+- normalized metrics and `/api/experiments/comparison/` deltas to identify useful/conservative/stable behavior
+- frontend route `/experiments` with profile cards, run launcher, run history, and side-by-side comparison table
+- strict scope remains paper/demo only: no real money, no real execution, no ML/LLM tuning
+
 
 The platform now also includes a controlled **autonomous continuous demo loop** (`/continuous-demo` + `/api/continuous-demo/*`):
 

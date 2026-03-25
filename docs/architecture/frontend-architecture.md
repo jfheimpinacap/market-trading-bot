@@ -75,6 +75,7 @@ Instead, each page coordinates a small set of explicit service calls.
 - `services/reviews.ts` for review summary, list, and detail
 - `services/riskDemo.ts` for pre-trade assessment
 - `services/policy.ts` for trade approval evaluation and policy decision summaries
+- `services/experiments.ts` for strategy profiles, experiment runs, and run comparisons
 
 This keeps data dependencies understandable and prevents the current demo phase from turning into a client-state rewrite.
 
@@ -322,3 +323,14 @@ Integration points:
 - cross-link with `/evaluation` for future replay-vs-evaluation comparisons
 
 Scope remains explicit: historical paper/demo simulation only.
+
+
+## Experiments route integration
+The `/experiments` page introduces a technical A/B workflow without changing routing architecture:
+
+- fetches strategy profiles and run history with page-local state
+- executes profile-based experiment runs via `/api/experiments/run/`
+- compares two runs with `/api/experiments/comparison/`
+- links from evaluation/replay to keep navigation continuity
+
+UX remains sober and desktop-first: cards/tables/badges, clear loading/error/empty states, and explicit paper/demo-only messaging.

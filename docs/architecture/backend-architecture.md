@@ -22,6 +22,7 @@ The backend is a local-first Django service inside the monorepo. Its current res
 - `apps.agents`: reserved for later agent orchestration work.
 - `apps.audit`: reserved for later audit and post-mortem persistence.
 - `apps.policy_engine`: demo-only governance boundary that converts trade proposals into explicit approval outcomes.
+- `apps.experiment_lab`: profile-driven experiment orchestration layer that reuses replay/evaluation services and produces auditable run comparisons.
 
 ## Market domain shape
 The current `apps.markets` app is intentionally provider-agnostic.
@@ -365,3 +366,17 @@ Operational design:
 - no live provider calls in replay execution path
 - no real execution path
 - replay account isolation prevents state contamination of operational paper account
+
+
+## Experiment lab architecture
+`apps.experiment_lab` is an orchestration and comparison boundary, not a duplicate execution engine.
+
+- Reuses `apps.replay_lab.services.run_replay` for historical replay execution.
+- Reuses `apps.evaluation_lab.services.build_run_for_continuous_session` or existing evaluation runs for live-paper metrics.
+- Normalizes replay/evaluation outputs into a shared metric dictionary in `ExperimentRun.normalized_metrics`.
+- Compares two experiment runs via `services/comparison.py` to produce metric deltas and interpretation hints.
+
+This keeps experiments auditable and maintainable while preserving existing engine ownership:
+- replay remains historical source of truth
+- evaluation remains live-paper source of truth
+- experiment_lab only orchestrates and compares

@@ -84,7 +84,7 @@ export function EvaluationPage() {
         eyebrow="Benchmark / evaluation harness"
         title="Evaluation"
         description="Technical benchmark layer for autonomous paper/demo performance. This view is local-first and paper/demo only. No real-money execution."
-        actions={<div style={{ display: 'flex', gap: '0.75rem' }}><button type="button" className="secondary-button" onClick={() => navigate('/replay')}>Open Replay</button><button type="button" className="secondary-button" onClick={() => navigate('/continuous-demo')}>Open Continuous Demo</button><button type="button" className="secondary-button" onClick={() => navigate('/learning')}>Open Learning</button></div>}
+        actions={<div style={{ display: 'flex', gap: '0.75rem' }}><button type="button" className="secondary-button" onClick={() => navigate('/replay')}>Open Replay</button><button type="button" className="secondary-button" onClick={() => navigate('/experiments')}>Open Experiments</button><button type="button" className="secondary-button" onClick={() => navigate('/continuous-demo')}>Open Continuous Demo</button><button type="button" className="secondary-button" onClick={() => navigate('/learning')}>Open Learning</button></div>}
       />
 
       <DataStateWrapper isLoading={isLoading} isError={Boolean(error)} errorMessage={error ?? undefined}>
