@@ -555,3 +555,27 @@ The platform now includes a dedicated **readiness assessment layer** for formal 
 - explicit gate outcomes (pass/fail/warning), blockers, and recommendations
 
 Important boundary: this does **not** enable real money, real execution, exchange auth, or automatic go-live.
+
+### Runtime promotion controller / operational mode governance (new)
+
+The platform now includes explicit runtime governance for paper/demo autonomy at `/runtime` and `/api/runtime/*`.
+
+Operational modes:
+- `OBSERVE_ONLY`
+- `PAPER_ASSIST`
+- `PAPER_SEMI_AUTO`
+- `PAPER_AUTO`
+
+What this adds:
+- a persisted runtime mode state (`current_mode`, `status`, `set_by`, rationale, metadata)
+- auditable runtime transition logs
+- explicit capability matrix per mode
+- mode changes constrained by **readiness** + **safety**
+- automatic conservative degradation when safety/readiness constraints tighten
+
+Scope remains unchanged:
+- paper/demo only
+- no real-money execution
+- no exchange auth
+- no automatic promotion to real trading
+- no local LLM integration

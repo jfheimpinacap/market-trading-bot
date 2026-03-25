@@ -933,3 +933,28 @@ Main endpoints:
 - `POST /api/readiness/seed-profiles/`
 
 Boundary remains strict: readiness does not trigger real trading or automatic promotion.
+
+## Runtime governor app (new)
+
+`apps.runtime_governor` introduces explicit operational mode governance for runtime autonomy.
+
+Key models:
+- `RuntimeModeProfile`: capability profile for each runtime mode
+- `RuntimeModeState`: persisted effective runtime mode and operational status
+- `RuntimeTransitionLog`: audit log of mode transitions and degradations
+
+Key endpoints:
+- `GET /api/runtime/status/`
+- `GET /api/runtime/modes/`
+- `POST /api/runtime/set-mode/`
+- `GET /api/runtime/transitions/`
+- `GET /api/runtime/capabilities/`
+
+Governance rules include:
+- readiness-aware promotion limits (`NOT_READY` and `CAUTION` constraints)
+- safety-forced degradation (`kill switch`, `hard stop`, cooldown/pause restrictions)
+- conservative fallback to safer modes when constraints are violated
+
+Integration:
+- `semi_auto_demo`, `continuous_demo`, and `real_market_ops` now reconcile runtime mode before execution and respect runtime capabilities.
+- everything remains paper/demo only.

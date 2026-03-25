@@ -401,3 +401,27 @@ Service split:
 - `recommendations.py`: deterministic remediation suggestions
 
 This layer is intentionally advisory/governance-only: no automatic promotion and no real execution path.
+
+## Runtime governance architecture (new)
+
+A dedicated backend boundary `apps.runtime_governor` now governs operational autonomy modes.
+
+Core concepts:
+- `RuntimeModeProfile`: explicit capability matrix per mode (`OBSERVE_ONLY`, `PAPER_ASSIST`, `PAPER_SEMI_AUTO`, `PAPER_AUTO`)
+- `RuntimeModeState`: singleton-like persisted effective mode + status (`ACTIVE`, `DEGRADED`, `PAUSED`, `STOPPED`)
+- `RuntimeTransitionLog`: auditable transition records with source and rationale
+
+Service split:
+- `services/state.py`: state/profile bootstrap and retrieval
+- `services/capabilities.py`: effective capability resolution with safety overrides
+- `services/governance.py`: transition validation, readiness/safety constraints, and reconciliation
+- `services/transitions.py`: transition logging
+
+Cross-app integration:
+- `semi_auto_demo`, `continuous_demo`, and `real_market_ops` now call runtime reconciliation/capabilities before execution.
+- runtime governor consumes readiness/safety state; it does not duplicate those domains.
+
+Boundary remains strict:
+- no real-money mode
+- no exchange execution path
+- no automatic promotion to real operations

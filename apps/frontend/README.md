@@ -488,3 +488,21 @@ Nueva vista técnica para promotion criteria / go-live readiness demo:
 Mensajes de empty state orientan al operador a correr primero evaluation/replay/experiments.
 
 Importante: `/readiness` es solo evaluación formal y **no activa dinero real ni ejecución real**.
+
+## Runtime governance route (`/runtime`) (new)
+
+Frontend now includes `/runtime` to operate and audit explicit runtime governance.
+
+The page shows:
+- current mode and effective status
+- readiness and safety influence
+- mode selector with blocked reasons
+- effective capabilities for the active mode
+- recent transition history
+
+Frontend service bindings:
+- `src/services/runtime.ts`
+- `src/types/runtime.ts`
+
+Important scope note:
+- this is still paper/demo only and does not enable real-money execution.

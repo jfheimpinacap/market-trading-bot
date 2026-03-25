@@ -40,6 +40,12 @@ export const systemQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Runtime',
+    description: 'Open explicit runtime mode governance across readiness, safety, and paper autonomy controls.',
+    path: '/runtime',
+    availability: 'live',
+  },
+  {
     title: 'Markets',
     description: 'Inspect the seeded market catalog, filters, and per-market detail pages.',
     path: '/markets',
