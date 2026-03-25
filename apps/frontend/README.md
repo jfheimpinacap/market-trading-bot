@@ -406,3 +406,16 @@ System + Automation integration:
 - `/automation` now includes a dedicated `Sync real data (read-only)` action that triggers conservative active-only refresh runs.
 
 The UX keeps the same technical design language: explicit status badges, loading/error/empty states, and no real trading controls.
+
+
+## Real Ops UI (`/real-ops`)
+The frontend now includes a dedicated `/real-ops` route for autonomous real-market paper scope operations.
+
+What it shows:
+- explicit safety badges (`REAL`, `READ-ONLY`, `PAPER ONLY`)
+- scope configuration summary
+- Evaluate and Run controls
+- eligible/excluded counters and skip reasons (stale/degraded/no pricing)
+- recent run history from backend `RealMarketOperationRun`.
+
+This page does **not** enable real trading or exchange auth.

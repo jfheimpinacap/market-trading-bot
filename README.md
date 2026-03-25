@@ -482,3 +482,11 @@ Still explicitly out of scope:
 - real exchange auth
 - websocket/streaming infrastructure
 - distributed scheduler/worker orchestration
+
+
+## Autonomous real-market paper operation scope
+- New backend module `real_market_ops` adds conservative autonomous scope for `real_read_only` markets with `paper_demo_only` execution.
+- Eligibility centralizes provider health/freshness, paper tradability, open status, pricing sufficiency, and optional liquidity/volume/category constraints.
+- API endpoints: `/api/real-ops/evaluate/`, `/api/real-ops/run/`, `/api/real-ops/runs/`, `/api/real-ops/status/`.
+- Frontend route `/real-ops` provides controls for evaluation/run, scope summary, provider-sync awareness, and recent run audit table.
+- Explicitly out of scope: real exchange auth, real execution adapters, websockets/streaming, and real-money trading.

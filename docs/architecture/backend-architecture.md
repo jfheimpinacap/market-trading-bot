@@ -289,3 +289,16 @@ Out of scope remains unchanged:
 - real execution/auth
 - websockets/streaming
 - complex distributed sync orchestration
+
+
+### Real-market operation scope layer
+A dedicated backend app `real_market_ops` extends semi-auto/continuous orchestration with a conservative real-market-only scope:
+- central eligibility service (provider health + freshness + paper tradability + pricing/liquidity/volume/category checks)
+- explicit run persistence (`RealMarketOperationRun`)
+- scope config persistence (`RealScopeConfig`)
+- API control surface for evaluate/run/status/history.
+
+Integration notes:
+- reuses proposal, risk, policy, safety, and paper execution components
+- continuous demo can opt-in via `market_scope=real_only` + `use_real_market_scope=true`
+- still hard-limited to read-only real data + paper/demo execution only.

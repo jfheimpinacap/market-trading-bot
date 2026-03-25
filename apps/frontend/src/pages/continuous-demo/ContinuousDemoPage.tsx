@@ -97,7 +97,7 @@ export function ContinuousDemoPage() {
         eyebrow="Autonomous continuous demo"
         title="Continuous Demo"
         description="Loop autónomo continuo para market → signal → proposal → policy/risk → semi-auto paper execution → review. Paper/demo only; nunca trading real."
-        actions={<button type="button" className="secondary-button" onClick={() => navigate('/semi-auto')}>Open Semi-Auto</button>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/semi-auto')}>Open Semi-Auto</button><button type="button" className="secondary-button" onClick={() => navigate('/real-ops')}>Open Real Ops</button></div>}
       />
 
       <SectionCard eyebrow="Runtime control" title="Loop controls" description="Gestiona start, pause, resume, stop y ejecución manual de un ciclo.">

@@ -26,6 +26,7 @@ DEFAULT_LOOP_SETTINGS = {
     'real_data_refresh_every_n_cycles': 5,
     'real_data_refresh_active_only': True,
     'real_data_refresh_limit': 50,
+    'use_real_market_scope': False,
 }
 
 

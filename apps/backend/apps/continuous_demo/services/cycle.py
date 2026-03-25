@@ -13,6 +13,7 @@ from apps.paper_trading.services.portfolio import get_active_account
 from apps.paper_trading.services.valuation import revalue_account
 from apps.postmortem_demo.services import generate_trade_reviews
 from apps.real_data_sync.services import run_provider_sync
+from apps.real_market_ops.services import RunOptions as RealOpsRunOptions, run_real_market_operation
 from apps.semi_auto_demo.services.orchestration import RunOptions, run_scan_and_execute
 from apps.safety_guard.models import SafetyEventSource
 from apps.safety_guard.services import evaluate_cycle_health
@@ -96,26 +97,48 @@ def run_single_cycle(*, session: ContinuousDemoSession, settings: dict) -> Conti
                 real_sync_runs.append({'provider': provider, 'run_id': sync_run.id, 'status': sync_run.status})
 
         automation_run = run_demo_cycle(triggered_from=DemoAutomationRun.TriggeredFrom.API)
-        semi_auto_run = run_scan_and_execute(
-            options=RunOptions(
-                market_limit=int(settings.get('market_limit_per_cycle', 8)),
-                market_scope=str(settings.get('market_scope', 'mixed')),
-                max_auto_trades_per_run=int(settings.get('max_auto_trades_per_cycle', 2)),
+        use_real_scope = bool(settings.get('use_real_market_scope', False)) and str(settings.get('market_scope', 'mixed')) == 'real_only'
+        if use_real_scope:
+            real_ops_run = run_real_market_operation(
+                options=RealOpsRunOptions(execute_auto=True, triggered_from='continuous_demo')
             )
-        )
+            actions_run = [
+                {'action': 'automation_demo.run_demo_cycle', 'run_id': automation_run.id, 'status': automation_run.status},
+                {'action': 'real_market_ops.run_real_market_operation', 'run_id': real_ops_run.id, 'status': real_ops_run.status},
+            ]
+            evaluated = real_ops_run.markets_considered
+            proposals = real_ops_run.proposals_generated
+            auto_count = real_ops_run.auto_executed_count
+            approval_count = real_ops_run.approval_required_count
+            blocked_count = real_ops_run.blocked_count
+            cycle_state = CycleStatus.SUCCESS if real_ops_run.status == 'SUCCESS' else CycleStatus.PARTIAL
+        else:
+            semi_auto_run = run_scan_and_execute(
+                options=RunOptions(
+                    market_limit=int(settings.get('market_limit_per_cycle', 8)),
+                    market_scope=str(settings.get('market_scope', 'mixed')),
+                    max_auto_trades_per_run=int(settings.get('max_auto_trades_per_cycle', 2)),
+                )
+            )
+            actions_run = [
+                {'action': 'automation_demo.run_demo_cycle', 'run_id': automation_run.id, 'status': automation_run.status},
+                {'action': 'semi_auto_demo.run_scan_and_execute', 'run_id': semi_auto_run.id, 'status': semi_auto_run.status},
+            ]
+            evaluated = semi_auto_run.markets_evaluated
+            proposals = semi_auto_run.proposals_generated
+            auto_count = semi_auto_run.auto_executed_count
+            approval_count = semi_auto_run.approval_required_count
+            blocked_count = semi_auto_run.blocked_count
+            cycle_state = CycleStatus.SUCCESS if semi_auto_run.status == 'SUCCESS' else CycleStatus.PARTIAL
 
-        actions_run = [
-            {'action': 'automation_demo.run_demo_cycle', 'run_id': automation_run.id, 'status': automation_run.status},
-            {'action': 'semi_auto_demo.run_scan_and_execute', 'run_id': semi_auto_run.id, 'status': semi_auto_run.status},
-        ]
 
         extra = {}
-        if settings.get('revalue_after_trade', True) and semi_auto_run.auto_executed_count > 0:
+        if settings.get('revalue_after_trade', True) and auto_count > 0:
             account = get_active_account()
             revalue_account(account, create_snapshot=True)
             extra['revalue_after_trade'] = True
 
-        if settings.get('review_after_trade', True) and semi_auto_run.auto_executed_count > 0:
+        if settings.get('review_after_trade', True) and auto_count > 0:
             review_results = generate_trade_reviews(refresh_existing=True)
             extra['reviews_processed'] = len(review_results)
         else:
@@ -141,15 +164,16 @@ def run_single_cycle(*, session: ContinuousDemoSession, settings: dict) -> Conti
             extra['learning_rebuild'] = {'triggered': False, 'reason': rebuild_reason}
 
         cycle.actions_run = actions_run
-        cycle.markets_evaluated = semi_auto_run.markets_evaluated
-        cycle.proposals_generated = semi_auto_run.proposals_generated
-        cycle.auto_executed_count = semi_auto_run.auto_executed_count
-        cycle.approval_required_count = semi_auto_run.approval_required_count
-        cycle.blocked_count = semi_auto_run.blocked_count
-        cycle.status = CycleStatus.SUCCESS if semi_auto_run.status == 'SUCCESS' else CycleStatus.PARTIAL
+        cycle.markets_evaluated = evaluated
+        cycle.proposals_generated = proposals
+        cycle.auto_executed_count = auto_count
+        cycle.approval_required_count = approval_count
+        cycle.blocked_count = blocked_count
+        cycle.status = cycle_state
         cycle.details = {
             'automation_run': {'id': automation_run.id, 'status': automation_run.status, 'summary': automation_run.summary},
-            'semi_auto_run': {'id': semi_auto_run.id, 'status': semi_auto_run.status, 'summary': semi_auto_run.summary},
+            'semi_auto_run': {'id': semi_auto_run.id, 'status': semi_auto_run.status, 'summary': semi_auto_run.summary} if not use_real_scope else None,
+            'real_market_ops_run': {'id': real_ops_run.id, 'status': real_ops_run.status, 'summary': real_ops_run.summary} if use_real_scope else None,
             'real_data_sync_runs': real_sync_runs,
             'settings_applied': settings,
             **extra,

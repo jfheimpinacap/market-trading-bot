@@ -807,3 +807,20 @@ Scope remains intentionally strict:
 - no real exchange auth
 - no real order execution
 - no websocket/streaming sync
+
+
+## Real-market autonomous paper scope
+`apps.real_market_ops` introduces a conservative autonomous operation scope:
+- source must remain `real_read_only`
+- execution remains `paper_demo_only`
+- stale/degraded provider status can hard-block eligibility
+- insufficient pricing/liquidity/volume excludes markets
+- every run is persisted as `RealMarketOperationRun` for auditability.
+
+### API
+- `POST /api/real-ops/evaluate/`
+- `POST /api/real-ops/run/`
+- `GET /api/real-ops/runs/`
+- `GET /api/real-ops/runs/<id>/`
+- `GET /api/real-ops/status/`
+- `GET /api/real-ops/eligible-markets/` (supporting endpoint)
