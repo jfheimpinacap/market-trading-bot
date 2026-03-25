@@ -87,7 +87,7 @@ export function ReplayPage() {
         eyebrow="Historical replay / backtest-like demo"
         title="Replay"
         description="Historical replay uses persisted snapshots in paper/demo mode only. It does not connect to live execution or real money."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>Open Evaluation</button><button type="button" className="secondary-button" onClick={() => navigate('/continuous-demo')}>Open Continuous Demo</button></div>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>Open Evaluation</button><button type="button" className="secondary-button" onClick={() => navigate('/experiments')}>Open Experiments</button><button type="button" className="secondary-button" onClick={() => navigate('/continuous-demo')}>Open Continuous Demo</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>

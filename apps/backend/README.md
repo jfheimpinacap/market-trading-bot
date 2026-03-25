@@ -51,6 +51,7 @@ apps/backend/
 - `apps.policy_engine`: demo-only operational approval layer that translates trade context into `AUTO_APPROVE`, `APPROVAL_REQUIRED`, or `HARD_BLOCK`.
 - `apps.proposal_engine`: demo-only trade proposal layer that consolidates market + signals + risk + policy + paper context into auditable `TradeProposal` records.
 - `apps.semi_auto_demo`: conservative semi-autonomous demo orchestration layer for evaluate-only, guarded paper auto-execution, and pending manual approvals.
+- `apps.experiment_lab`: strategy profile persistence plus experiment run orchestration across replay and evaluation, with normalized comparison outputs.
 
 ## Markets app summary
 The `apps.markets` app now provides a practical local catalog for prediction-market development without adding trading workflows or provider integrations.
@@ -884,3 +885,28 @@ Límites intencionales:
 - No slippage/order-book sofisticado
 - No backtesting cuantitativo institucional
 - No ML/LLM
+
+
+## Experiment lab summary
+The `apps.experiment_lab` app adds a clear experimentation boundary without duplicating replay/evaluation engines.
+
+Models:
+- `StrategyProfile`: persisted operational profile (type, market scope, config JSON)
+- `ExperimentRun`: auditable run record linked to strategy profile and optional replay/evaluation/session entities
+
+Services:
+- `services/profiles.py`: base profile seed set (`Conservative`, `Balanced`, `Aggressive-light`, etc.)
+- `services/runner.py`: applies profile config and orchestrates replay/evaluation calls
+- `services/comparison.py`: run-vs-run metric deltas and simple interpretation text
+
+Endpoints:
+- `GET /api/experiments/profiles/`
+- `GET /api/experiments/profiles/<id>/`
+- `POST /api/experiments/run/`
+- `GET /api/experiments/runs/`
+- `GET /api/experiments/runs/<id>/`
+- `GET /api/experiments/comparison/?left_run_id=<id>&right_run_id=<id>`
+- `POST /api/experiments/seed-profiles/`
+- `GET /api/experiments/summary/`
+
+Out of scope remains unchanged: no real execution, no real money, no auto-tuning optimizer, no ML/LLM strategy training.

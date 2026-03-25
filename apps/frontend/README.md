@@ -235,6 +235,7 @@ Con esto la experiencia queda más consistente sin introducir websockets, pollin
 - `/postmortem` — Post-mortem trade review queue
 - `/postmortem/:reviewId` — Post-mortem review detail
 - `/settings` — Settings placeholder
+- `/experiments` — Strategy profiles + experiment runner + replay-vs-live comparison
 - `/system` — System technical panel
 
 ## Variable de entorno
@@ -458,3 +459,17 @@ Mensajes de estado:
 - guidance cuando falta histórico: `Sync real market data first to build a usable historical replay.`
 
 La vista mantiene límite estricto: paper/demo only, sin dinero real.
+
+
+## Experiments workspace (`/experiments`)
+Nueva ruta técnica para comparación de perfiles de estrategia en paper/demo mode:
+
+- lista de `StrategyProfile` (tipo, scope, descripción)
+- panel para lanzar `replay`, `live_eval` o `live_session_compare`
+- tabla de runs recientes con estado y resumen
+- comparador A/B entre dos runs con métricas clave y deltas
+- mensajes empty/loading/error orientados a ejecutar replay/evaluation antes de comparar
+
+Servicios frontend añadidos:
+- `src/services/experiments.ts`
+- `src/types/experiments.ts`

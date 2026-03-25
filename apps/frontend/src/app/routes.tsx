@@ -2,6 +2,7 @@ import { AgentsPage } from '../pages/AgentsPage';
 import { AutomationPage } from '../pages/AutomationPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { EvaluationPage } from '../pages/EvaluationPage';
+import { ExperimentsPage } from '../pages/ExperimentsPage';
 import { ReplayPage } from '../pages/ReplayPage';
 import { LearningPage } from '../pages/LearningPage';
 import { RealOpsPage } from '../pages/RealOpsPage';
@@ -134,6 +135,13 @@ export const appRoutes: AppRoute[] = [
     path: '/evaluation',
     description: 'Benchmark and evaluation harness for autonomous paper/demo performance over time.',
     component: EvaluationPage,
+  },
+
+  {
+    label: 'Experiments',
+    path: '/experiments',
+    description: 'Strategy profile runner and replay-vs-live paper comparison layer for technical experimentation.',
+    component: ExperimentsPage,
   },
 
   {
