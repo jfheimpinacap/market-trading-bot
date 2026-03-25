@@ -423,3 +423,19 @@ Frontend now includes a minimal integration for local LLM observability:
 - `SystemPage` renders a small status card showing provider/model/reachability
 
 This keeps UX impact intentionally small while exposing whether local Ollama enrichment is available.
+
+## Research UX boundary (`/research`)
+
+The frontend now includes a dedicated `/research` route focused on RSS-first scan/research triage.
+
+Layout strategy:
+- summary cards + latest run status
+- source configuration visibility
+- manual run controls (ingest / analysis)
+- recent narrative items table
+- shortlist/candidate table with narrative-vs-market relation badges
+
+Integration notes:
+- uses `services/research.ts` with the shared API client
+- links shortlist rows back to market detail routes
+- surfaces degraded-mode messaging when `/api/llm/status/` reports unavailable local LLM

@@ -653,3 +653,25 @@ Explicit boundary remains unchanged:
 - no real execution
 - no LLM replacement of risk/policy/safety
 - no autonomous LLM trading
+
+## Narrative ingestion + research scan MVP (new)
+
+A first local-first narrative scan/research block is now available:
+
+- Backend app: `apps/backend/apps/research_agent`
+- Frontend route: `/research`
+- API root: `/api/research/*`
+
+What it does in this phase:
+- ingest configurable RSS sources
+- deduplicate narrative items
+- run structured narrative analysis using local LLM (Ollama) with degraded heuristic fallback
+- create heuristic market links against read-only real/demo markets
+- generate a persisted shortlist of research candidates with narrative-vs-market relation labels (`alignment` / `divergence` / `uncertainty`)
+
+Out of scope remains unchanged:
+- no real-money execution
+- no real exchange execution
+- no complex X/Twitter/Reddit crawling
+- no vector DB/RAG stack
+- no LLM authority over risk/policy/safety
