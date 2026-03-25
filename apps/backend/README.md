@@ -1055,3 +1055,33 @@ Important scope boundary:
 - LLM enriches text and explanations only.
 - Risk/policy/safety remain deterministic authorities.
 - No real execution path is introduced.
+
+## Research agent MVP (RSS-first narrative scan)
+
+New app: `apps.research_agent`
+
+Main entities:
+- `NarrativeSource`
+- `NarrativeItem`
+- `NarrativeAnalysis`
+- `MarketNarrativeLink`
+- `ResearchCandidate`
+- `ResearchScanRun`
+
+Service split:
+- `services/ingest.py`: RSS ingestion + dedupe persistence
+- `services/analyze.py`: structured narrative extraction via local LLM + heuristic fallback
+- `services/linking.py`: basic heuristic narrative-to-market linking
+- `services/shortlist.py`: candidate scoring/ranking
+- `services/scan.py`: orchestrated run with audit trace
+
+API endpoints:
+- `GET/POST /api/research/sources/`
+- `POST /api/research/run-ingest/`
+- `POST /api/research/run-analysis/`
+- `GET /api/research/items/`
+- `GET /api/research/items/<id>/`
+- `GET /api/research/candidates/`
+- `GET /api/research/summary/`
+
+Boundary: paper/demo research support only; no real execution path.

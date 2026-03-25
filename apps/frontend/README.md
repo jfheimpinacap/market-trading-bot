@@ -547,3 +547,18 @@ La vista mantiene estados de loading/error/empty y no introduce realtime ni mens
 - recent escalations table and empty-state messaging
 
 The page remains technical, desktop-first, and consistent with alerts/runtime/safety modules.
+
+## Research route (`/research`)
+
+A new technical route adds the first narrative scan/research workspace:
+
+- source panel for configured RSS feeds
+- run controls for ingest + analysis
+- recent narrative items table (sentiment/confidence/link count)
+- research shortlist table with market direction vs implied direction + divergence/alignment tags
+- explicit degraded mode messaging when local LLM is unavailable
+
+Data bindings:
+- `src/services/research.ts`
+- `src/types/research.ts`
+- route page: `src/pages/ResearchPage.tsx`

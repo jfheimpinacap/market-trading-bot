@@ -2509,3 +2509,16 @@ button {
   display: grid;
   gap: 10px;
 }
+
+.link-button {
+  border: none;
+  background: transparent;
+  color: var(--brand);
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}

@@ -507,3 +507,21 @@ Layer split:
    - `POST /api/llm/embed/`
 
 Current role is intentionally narrow and auditable: narrative enrichment and structured text outputs. It does not replace risk/policy/safety decisioning and does not execute trades.
+
+## Research narrative scan architecture (MVP)
+
+`apps.research_agent` adds the first narrative ingestion/research boundary while preserving existing governance:
+
+Flow:
+1. ingest RSS sources (`NarrativeSource` -> `NarrativeItem`)
+2. run structured narrative analysis (`NarrativeAnalysis`)
+3. link to active markets (`MarketNarrativeLink`)
+4. compute shortlist candidates (`ResearchCandidate`)
+5. persist run audit (`ResearchScanRun`)
+
+Design constraints:
+- local-first and paper/demo only
+- LLM provides narrative enrichment only
+- risk/policy/safety stay authoritative in their own modules
+- read-only real market data reused for implied probability comparison
+- extensible source model keeps room for future Reddit/Twitter connectors without changing current API boundary
