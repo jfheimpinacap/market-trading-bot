@@ -506,3 +506,18 @@ Frontend service bindings:
 
 Important scope note:
 - this is still paper/demo only and does not enable real-money execution.
+
+## Operator alerts UI (`/alerts`)
+
+Frontend now includes an **Operator Alerts** page that consolidates:
+- active alert summary cards
+- deduplicated open-alert table
+- alert detail panel with metadata and operator actions (acknowledge/resolve)
+- recent digest list
+
+Supporting modules:
+- `src/services/alerts.ts`
+- `src/types/alerts.ts`
+- `src/pages/alerts/AlertsPage.tsx`
+
+This view is technical, desktop-first, and aligned with runtime/safety/operator-queue workflows.

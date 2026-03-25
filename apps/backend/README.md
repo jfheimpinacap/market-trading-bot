@@ -958,3 +958,30 @@ Governance rules include:
 Integration:
 - `semi_auto_demo`, `continuous_demo`, and `real_market_ops` now reconcile runtime mode before execution and respect runtime capabilities.
 - everything remains paper/demo only.
+
+## Operator alerts app (`apps.operator_alerts`)
+
+A new backend boundary provides a local-first incident center for operator attention management.
+
+### Models
+- `OperatorAlert`: persistent, deduplicated operational alert records.
+- `OperatorDigest`: persisted summary windows for recent activity.
+
+### Services
+- `services/alerts.py`: emit + dedupe + acknowledge + resolve + summary.
+- `services/aggregation.py`: lightweight integration rules across queue/safety/runtime/sync/readiness/continuous-demo.
+- `services/digest.py`: build digest snapshots from a chosen time window.
+
+### Endpoints
+- `GET /api/alerts/`
+- `GET /api/alerts/<id>/`
+- `GET /api/alerts/summary/`
+- `POST /api/alerts/<id>/acknowledge/`
+- `POST /api/alerts/<id>/resolve/`
+- `GET /api/alerts/digests/`
+- `GET /api/alerts/digests/<id>/`
+- `POST /api/alerts/build-digest/`
+- `POST /api/alerts/rebuild/`
+
+### Scope and boundary
+This layer is paper/demo only and focused on auditable exception handling. It intentionally excludes external push channels, enterprise workflow orchestration, and real execution controls.

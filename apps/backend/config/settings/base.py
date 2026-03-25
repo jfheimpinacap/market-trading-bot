@@ -87,6 +87,7 @@ LOCAL_APPS = [
     'apps.experiment_lab',
     'apps.readiness_lab',
     'apps.runtime_governor',
+    'apps.operator_alerts',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

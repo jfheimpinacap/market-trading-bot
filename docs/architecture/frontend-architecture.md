@@ -368,3 +368,23 @@ Integration is intentionally lightweight:
 - no global state framework changes
 
 This keeps governance auditable and operator-readable while staying local-first and paper/demo only.
+
+## Operator alerts UX layer
+
+A dedicated `/alerts` route now acts as the operator incident center.
+
+### UX structure
+- summary cards for immediate attention
+- central technical alert table with severity/type/source/status
+- detail panel with metadata and suggested operator action
+- recent digests table for time-window summaries
+
+### Integration points
+- quick links from runtime/safety/system/dashboard pathways
+- API integration through `services/alerts.ts` using the shared API client
+- explicit empty-state messaging when no critical attention is required
+
+### Out of scope (intentional)
+- realtime sockets
+- external notification channels
+- non-local deployment concerns

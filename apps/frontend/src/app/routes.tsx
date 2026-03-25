@@ -1,5 +1,6 @@
 import { AgentsPage } from '../pages/AgentsPage';
 import { AutomationPage } from '../pages/AutomationPage';
+import { AlertsPage } from '../pages/AlertsPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { EvaluationPage } from '../pages/EvaluationPage';
 import { ExperimentsPage } from '../pages/ExperimentsPage';
@@ -67,6 +68,13 @@ export const appRoutes: AppRoute[] = [
     path: '/agents',
     description: 'Agent orchestration, automation status, and run visibility.',
     component: AgentsPage,
+  },
+
+  {
+    label: 'Alerts',
+    path: '/alerts',
+    description: 'Operator alert center with deduplicated incidents, attention summary, and digest windows.',
+    component: AlertsPage,
   },
   {
     label: 'Operator Queue',

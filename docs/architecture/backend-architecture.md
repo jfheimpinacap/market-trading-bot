@@ -425,3 +425,19 @@ Boundary remains strict:
 - no real-money mode
 - no exchange execution path
 - no automatic promotion to real operations
+
+## Operator alerts architecture boundary
+
+`apps/operator_alerts` introduces an internal incident-center layer for exception-driven oversight.
+
+### Responsibilities
+- persist actionable `OperatorAlert` records (severity, status, source, dedupe)
+- aggregate signals from queue, safety, runtime governance, real sync, readiness, and continuous demo
+- expose acknowledge/resolve operator state transitions
+- generate persisted `OperatorDigest` windows
+
+### Design choices
+- dedupe is key-based and intentionally simple/auditable
+- aggregation is pull-based (`rebuild`) to avoid hidden side effects in unrelated views
+- no external transport integrations in this phase (email/SMS/chat/push)
+- no autonomous real execution path
