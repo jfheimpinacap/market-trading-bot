@@ -543,3 +543,15 @@ Key boundaries:
 - isolated replay paper account per run to avoid contaminating operational paper account
 - audit-friendly persisted artifacts: run-level summary + step-level timeline
 - still local-first and paper/demo only (no real money, no real execution)
+
+### Go-live readiness / promotion gates (new)
+
+The platform now includes a dedicated **readiness assessment layer** for formal promotion decisions in paper/demo mode:
+
+- backend app: `apps/readiness_lab`
+- API: `/api/readiness/*`
+- frontend route: `/readiness`
+- persisted `ReadinessProfile` and `ReadinessAssessmentRun`
+- explicit gate outcomes (pass/fail/warning), blockers, and recommendations
+
+Important boundary: this does **not** enable real money, real execution, exchange auth, or automatic go-live.

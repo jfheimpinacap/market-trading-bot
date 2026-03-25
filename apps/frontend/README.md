@@ -473,3 +473,18 @@ Nueva ruta técnica para comparación de perfiles de estrategia en paper/demo mo
 Servicios frontend añadidos:
 - `src/services/experiments.ts`
 - `src/types/experiments.ts`
+
+## Readiness route (`/readiness`)
+
+Nueva vista técnica para promotion criteria / go-live readiness demo:
+
+- lista de perfiles de readiness (conservative/balanced/strict)
+- ejecución manual de assessment por perfil
+- summary claro de `READY` / `CAUTION` / `NOT_READY`
+- tabla de gates fallidos (expected vs actual + reason)
+- recomendaciones operativas explícitas
+- historial reciente de readiness runs
+
+Mensajes de empty state orientan al operador a correr primero evaluation/replay/experiments.
+
+Importante: `/readiness` es solo evaluación formal y **no activa dinero real ni ejecución real**.

@@ -123,7 +123,7 @@ export function ExperimentsPage() {
         eyebrow="Experiment runner / strategy profiles"
         title="Experiments"
         description="Compare strategy profiles across replay and live-paper evaluation in a local-first, paper/demo-only workflow. No real-money execution is enabled."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/replay')}>Open Replay</button><button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>Open Evaluation</button><button type="button" className="secondary-button" disabled={seedBusy} onClick={() => void seedProfiles()}>{seedBusy ? 'Seeding…' : 'Seed base profiles'}</button></div>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/replay')}>Open Replay</button><button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>Open Evaluation</button><button type="button" className="secondary-button" onClick={() => navigate('/readiness')}>Open Readiness</button><button type="button" className="secondary-button" disabled={seedBusy} onClick={() => void seedProfiles()}>{seedBusy ? 'Seeding…' : 'Seed base profiles'}</button></div>}
       />
 
       <DataStateWrapper isLoading={isLoading} isError={Boolean(error)} errorMessage={error ?? undefined}>

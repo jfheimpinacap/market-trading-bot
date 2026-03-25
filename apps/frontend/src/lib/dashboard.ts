@@ -76,6 +76,12 @@ export const dashboardQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Readiness',
+    description: 'Formal promotion gates and readiness decisions from replay/evaluation/experiments evidence.',
+    path: '/readiness',
+    availability: 'live',
+  },
+  {
     title: 'Safety',
     description: 'Monitor operational guardrails, cooldown state, kill switch, and safety events.',
     path: '/safety',

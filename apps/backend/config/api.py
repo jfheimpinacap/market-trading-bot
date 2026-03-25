@@ -23,4 +23,5 @@ urlpatterns = [
     path('operator-queue/', include(('apps.operator_queue.urls', 'operator_queue'), namespace='operator_queue')),
     path('replay/', include(('apps.replay_lab.urls', 'replay_lab'), namespace='replay_lab')),
     path('experiments/', include(('apps.experiment_lab.urls', 'experiment_lab'), namespace='experiment_lab')),
+    path('readiness/', include(('apps.readiness_lab.urls', 'readiness_lab'), namespace='readiness_lab')),
 ]
