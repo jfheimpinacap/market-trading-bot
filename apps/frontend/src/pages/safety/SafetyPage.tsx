@@ -58,7 +58,7 @@ export function SafetyPage() {
         eyebrow="Safety hardening"
         title="Safety"
         description="Guardrails operativos para paper/demo only: límites, cooldown, hard-stop y kill switch auditables."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/continuous-demo')}>Open Continuous Demo</button><button type="button" className="secondary-button" onClick={() => navigate('/runtime')}>Open Runtime</button></div>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/continuous-demo')}>Open Continuous Demo</button><button type="button" className="secondary-button" onClick={() => navigate('/runtime')}>Open Runtime</button><button type="button" className="secondary-button" onClick={() => navigate('/alerts')}>Open Alerts</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>

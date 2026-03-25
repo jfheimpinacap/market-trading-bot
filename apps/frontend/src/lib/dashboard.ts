@@ -46,6 +46,12 @@ export const dashboardQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Alerts',
+    description: 'Review deduplicated operational incidents, alert severity, and recent digest summaries.',
+    path: '/alerts',
+    availability: 'live',
+  },
+  {
     title: 'Operator Queue',
     description: 'Review and decide only escalated exceptions (approve/reject/snooze) while autonomy stays in paper/demo mode.',
     path: '/operator-queue',

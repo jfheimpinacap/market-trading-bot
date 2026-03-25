@@ -579,3 +579,23 @@ Scope remains unchanged:
 - no exchange auth
 - no automatic promotion to real trading
 - no local LLM integration
+
+## Operator alerts / incident center / digest pipeline (new)
+
+The platform now includes a dedicated **operator alerts layer** for paper/demo operations:
+
+- backend app: `apps/backend/apps/operator_alerts`
+- frontend route: `/alerts`
+- API base: `/api/alerts/`
+
+What it adds:
+- persistent alerts with severity/status/source and dedupe key
+- simple aggregation from operator queue, safety, runtime, sync, readiness, and continuous demo modules
+- acknowledge/resolve workflow for exception triage
+- digest records that summarize recent windows without manually checking multiple screens
+
+What remains intentionally out of scope:
+- external notifications (email/SMS/push/chat)
+- websockets/realtime infra
+- real money / real order execution
+- LLM-driven incident narratives
