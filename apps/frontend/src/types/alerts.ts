@@ -18,6 +18,8 @@ export type OperatorAlert = {
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+  latest_notification_status?: 'PENDING' | 'SENT' | 'FAILED' | 'SKIPPED' | 'SUPPRESSED' | null;
+  latest_notification_channel?: string | null;
 };
 
 export type OperatorAlertsSummary = {
@@ -44,4 +46,6 @@ export type OperatorDigest = {
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+  latest_notification_status?: 'PENDING' | 'SENT' | 'FAILED' | 'SKIPPED' | 'SUPPRESSED' | null;
+  latest_notification_channel?: string | null;
 };

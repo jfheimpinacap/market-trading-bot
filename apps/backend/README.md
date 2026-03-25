@@ -985,3 +985,22 @@ A new backend boundary provides a local-first incident center for operator atten
 
 ### Scope and boundary
 This layer is paper/demo only and focused on auditable exception handling. It intentionally excludes external push channels, enterprise workflow orchestration, and real execution controls.
+
+## Notification center (delivery + escalation routing)
+
+Nuevo módulo `apps.notification_center` para sacar alertas/digests del panel con reglas claras y trazabilidad:
+
+- `NotificationChannel`: catálogo de canales configurables (`ui_only`, `webhook`, `email`; extensible a slack/telegram/discord sin activarlos todavía).
+- `NotificationRule`: matching explícito (`match_criteria`), `delivery_mode` (`immediate`/`digest`), `severity_threshold`, `cooldown_seconds`, `dedupe_window_seconds`, canales target.
+- `NotificationDelivery`: bitácora persistida por intento (`SENT`, `FAILED`, `SUPPRESSED`, etc.) con `reason`, payload resumido y metadata de respuesta.
+
+Servicios (`apps/notification_center/services/`):
+- `routing.py`: evaluación de reglas, canales y supresión por dedupe/cooldown.
+- `delivery.py`: construcción de payload, dispatch por canal, registro de delivery.
+- `channels.py`: bootstrap de canal `ui_only`.
+- `summary.py`: salud y métricas de delivery.
+
+Integración:
+- `operator_alerts` sigue siendo SoT de incidentes.
+- `notification_center` solo decide si/cuándo/cómo notificar.
+- digests existentes (`OperatorDigest`) ahora pueden entregarse por `send-digest`.

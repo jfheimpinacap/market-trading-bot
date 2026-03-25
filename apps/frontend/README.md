@@ -521,3 +521,19 @@ Supporting modules:
 - `src/pages/alerts/AlertsPage.tsx`
 
 This view is technical, desktop-first, and aligned with runtime/safety/operator-queue workflows.
+
+## Notifications route (`/notifications`)
+
+Nueva vista técnica para delivery outbound de alertas/digests paper-demo:
+
+- cards de resumen (health, sent/failed/suppressed)
+- panel de channels
+- panel de rules
+- historial de deliveries con status badges
+- acciones manuales: enviar último alert abierto y último digest
+
+Servicios frontend añadidos:
+- `src/services/notifications.ts`
+- `src/types/notifications.ts`
+
+La vista mantiene estados de loading/error/empty y no introduce realtime ni mensajería enterprise.

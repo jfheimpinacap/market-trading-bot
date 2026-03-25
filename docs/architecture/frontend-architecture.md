@@ -388,3 +388,17 @@ A dedicated `/alerts` route now acts as the operator incident center.
 - realtime sockets
 - external notification channels
 - non-local deployment concerns
+
+## Notifications UI architecture (new)
+
+Se agregó `/notifications` como superficie dedicada para outbound alert delivery:
+
+- consume `services/notifications.ts`
+- renderiza configuración (channels/rules) + observabilidad (history/summary)
+- expone acciones manuales de envío para alertas y digests
+- mantiene lineamientos existentes: vista técnica, sobria, desktop-first
+
+Integraciones ligeras:
+- `/alerts` incluye enlace rápido a `/notifications`
+- `/alerts` muestra estado de última notificación por alerta
+- `/system` muestra bloque de salud de delivery
