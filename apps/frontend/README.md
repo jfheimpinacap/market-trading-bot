@@ -419,3 +419,13 @@ What it shows:
 - recent run history from backend `RealMarketOperationRun`.
 
 This page does **not** enable real trading or exchange auth.
+
+## Nueva ruta `/allocation`
+
+Se agregó una vista técnica para priorización de ejecución paper:
+- control de evaluate/run
+- resumen de candidates/selected/reduced/rejected/allocated/remaining
+- tabla de propuestas rankeadas con decisión y rationale
+- historial de runs persistidos
+
+La vista mantiene el boundary paper/demo only y agrega quick links desde Real Ops/Continuous Demo/Dashboard.

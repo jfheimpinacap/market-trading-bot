@@ -824,3 +824,20 @@ Scope remains intentionally strict:
 - `GET /api/real-ops/runs/<id>/`
 - `GET /api/real-ops/status/`
 - `GET /api/real-ops/eligible-markets/` (supporting endpoint)
+
+## Allocation engine demo (new)
+
+Nuevo módulo `apps.allocation_engine` para priorización y reparto de capital paper a nivel portfolio.
+
+Qué hace:
+- toma propuestas ya generadas por `proposal_engine` (sin duplicar risk/policy/safety)
+- rankea candidatos con heurísticas auditable (score/confidence/risk/policy/exposición/provider/learning)
+- asigna `final_allocated_quantity` conservadora con límites por cash, corrida y mercado
+- persiste `AllocationRun` + `AllocationDecision`
+
+Integración:
+- `semi_auto_demo` y `real_market_ops` pasan por allocation antes de autoejecutar paper trades
+- mantiene ejecución `paper_demo_only`
+
+Fuera de alcance:
+- optimización cuantitativa avanzada, Kelly, ML/LLM, dinero real

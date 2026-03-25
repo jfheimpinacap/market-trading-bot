@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from django.utils import timezone
 
+from apps.allocation_engine.services import AllocationConfig, evaluate_allocation
 from apps.paper_trading.services.execution import execute_paper_trade
 from apps.paper_trading.services.portfolio import get_active_account
 from apps.policy_engine.models import ApprovalDecisionType
@@ -84,11 +85,44 @@ def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
     account = get_active_account()
     auto_trades = 0
     results: list[dict] = []
+    generated_proposals = []
 
     for market in snapshot.eligible:
         try:
             proposal = generate_trade_proposal(market=market, paper_account=account, triggered_from='real_market_ops')
+            generated_proposals.append(proposal)
             run.proposals_generated += 1
+        except Exception as market_exc:
+            run.blocked_count += 1
+            results.append(
+                {
+                    'market_id': market.id,
+                    'market_title': market.title,
+                    'provider': market.provider.slug,
+                    'classification': 'blocked',
+                    'action': 'none',
+                    'reasons': ['proposal_generation_failed'],
+                    'error': str(market_exc),
+                }
+            )
+
+    allocation_snapshot = evaluate_allocation(
+        scope_type='real_only',
+        triggered_from='real_market_ops',
+        config=AllocationConfig(
+            max_candidates_considered=len(generated_proposals) or 1,
+            max_executions_per_run=scope_config.max_real_auto_trades_per_cycle,
+            prefer_real_markets=True,
+        ),
+        proposals=generated_proposals,
+        persist=True,
+    )
+    allocation_map = {item['proposal'].id: item for item in allocation_snapshot['details']}
+
+    for proposal in generated_proposals:
+        market = proposal.market
+        try:
+            allocated = allocation_map[proposal.id]
             item = {
                 'market_id': market.id,
                 'market_title': market.title,
@@ -97,6 +131,8 @@ def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
                 'proposal_id': proposal.id,
                 'policy_decision': proposal.policy_decision,
                 'risk_decision': proposal.risk_decision,
+                'allocation_decision': allocated['decision'],
+                'allocation_quantity': str(allocated['final_allocated_quantity']),
                 'action': 'none',
                 'classification': 'blocked',
                 'reasons': [],
@@ -128,6 +164,11 @@ def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
                     run.blocked_count += 1
                     item['reasons'].append('approval_required_missing_trade_fields')
             else:
+                if allocated['decision'] not in {'SELECTED', 'REDUCED'}:
+                    run.blocked_count += 1
+                    item['reasons'] = allocated['rationale']
+                    results.append(item)
+                    continue
                 passed, reasons = evaluate_auto_execution_guards(proposal=proposal, auto_trades_so_far=auto_trades, config=DEFAULT_GUARD_CONFIG)
                 safety_decision = evaluate_auto_execution(proposal=proposal, auto_trades_so_far=auto_trades, source=SafetyEventSource.SEMI_AUTO)
 
@@ -136,13 +177,14 @@ def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
                         market=proposal.market,
                         trade_type=proposal.suggested_trade_type,
                         side=proposal.suggested_side,
-                        quantity=proposal.suggested_quantity,
+                        quantity=allocated['final_allocated_quantity'],
                         account=account,
                         notes='Autonomous real-market scope paper execution.',
                         metadata={
                             'real_market_ops_run_id': run.id,
                             'execution_mode': 'paper_demo_only',
                             'source_type': 'real_read_only',
+                            'allocation_run_id': allocation_snapshot['run'].id if allocation_snapshot.get('run') else None,
                         },
                     )
                     run.auto_executed_count += 1
@@ -182,19 +224,18 @@ def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
             results.append(item)
         except Exception as market_exc:
             run.blocked_count += 1
-            results.append(
-                {
-                    'market_id': market.id,
-                    'market_title': market.title,
-                    'provider': market.provider.slug,
-                    'classification': 'blocked',
-                    'action': 'none',
-                    'reasons': ['proposal_generation_failed'],
-                    'error': str(market_exc),
-                }
-            )
+            results.append({'market_id': market.id, 'market_title': market.title, 'provider': market.provider.slug, 'classification': 'blocked', 'action': 'none', 'reasons': ['allocation_or_execution_failed'], 'error': str(market_exc)})
 
-    run.details = {**run.details, 'results': results}
+    run.details = {
+        **run.details,
+        'results': results,
+        'allocation': {
+            'run_id': allocation_snapshot['run'].id if allocation_snapshot.get('run') else None,
+            'proposals_selected': allocation_snapshot['proposals_selected'],
+            'allocated_total': str(allocation_snapshot['allocated_total']),
+            'remaining_cash': str(allocation_snapshot['remaining_cash']),
+        },
+    }
     if run.proposals_generated == 0 and run.markets_eligible == 0:
         run.status = RealMarketRunStatus.SKIPPED
     elif run.proposals_generated == 0:

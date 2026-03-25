@@ -81,6 +81,7 @@ LOCAL_APPS = [
     'apps.learning_memory',
     'apps.real_data_sync',
     'apps.real_market_ops',
+    'apps.allocation_engine',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

@@ -302,3 +302,31 @@ Integration notes:
 - reuses proposal, risk, policy, safety, and paper execution components
 - continuous demo can opt-in via `market_scope=real_only` + `use_real_market_scope=true`
 - still hard-limited to read-only real data + paper/demo execution only.
+
+## Allocation engine boundary (demo)
+
+Nuevo boundary backend: `apps/allocation_engine/`.
+
+Orden funcional:
+`proposal -> risk -> policy -> safety -> allocation -> paper execution`
+
+Principios:
+- no duplica lógica de policy/safety
+- solo prioriza y reparte capital dentro de propuestas ya permitidas
+- produce trazabilidad completa de por qué una propuesta se selecciona, reduce, salta o rechaza
+
+Servicios:
+- `services/ranking.py`: ranking heurístico auditable
+- `services/portfolio_context.py`: cash/exposición actual
+- `services/allocation.py`: aplicación de límites y decisión final
+
+Persistencia:
+- `AllocationRun`: snapshot de corrida
+- `AllocationDecision`: decisión por propuesta (SELECTED/REDUCED/SKIPPED/REJECTED)
+
+API:
+- `POST /api/allocation/evaluate/`
+- `POST /api/allocation/run/`
+- `GET /api/allocation/runs/`
+- `GET /api/allocation/runs/<id>/`
+- `GET /api/allocation/summary/`

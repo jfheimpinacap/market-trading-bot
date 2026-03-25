@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from django.utils import timezone
 
 from apps.markets.models import Market, MarketSourceType, MarketStatus
+from apps.allocation_engine.services import AllocationConfig, evaluate_allocation
 from apps.paper_trading.services.portfolio import get_active_account
 from apps.paper_trading.services.execution import execute_paper_trade
 from apps.policy_engine.models import ApprovalDecisionType
@@ -52,15 +53,31 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
     results = []
     account = get_active_account()
     auto_executed = 0
+    generated_proposals = []
+    allocation_snapshot = {'run': None, 'proposals_selected': 0, 'allocated_total': '0.00', 'remaining_cash': str(account.cash_balance)}
 
     try:
         guard_config = replace(DEFAULT_GUARD_CONFIG, max_auto_trades_per_run=options.max_auto_trades_per_run) if options.max_auto_trades_per_run is not None else DEFAULT_GUARD_CONFIG
 
         for market in _eligible_markets(options.market_limit, options.market_scope):
             proposal = generate_trade_proposal(market=market, paper_account=account, triggered_from='automation')
+            generated_proposals.append(proposal)
             run.markets_evaluated += 1
             run.proposals_generated += 1
+        allocation_snapshot = evaluate_allocation(
+            scope_type=options.market_scope if options.market_scope in {'real_only', 'demo_only'} else 'mixed',
+            triggered_from='semi_auto_demo',
+            config=AllocationConfig(
+                max_candidates_considered=len(generated_proposals) or 1,
+                max_executions_per_run=guard_config.max_auto_trades_per_run if guard_config.max_auto_trades_per_run is not None else 3,
+            ),
+            proposals=generated_proposals,
+            persist=True,
+        )
+        allocation_map = {item['proposal'].id: item for item in allocation_snapshot['details']}
 
+        for proposal in generated_proposals:
+            market = proposal.market
             item = {
                 'market_id': market.id,
                 'market_title': market.title,
@@ -68,6 +85,8 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
                 'policy_decision': proposal.policy_decision,
                 'risk_decision': proposal.risk_decision,
                 'is_actionable': proposal.is_actionable,
+                'allocation_decision': allocation_map[proposal.id]['decision'],
+                'allocation_quantity': str(allocation_map[proposal.id]['final_allocated_quantity']),
                 'classification': 'blocked',
                 'action': 'none',
                 'reasons': [],
@@ -100,6 +119,13 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
                     item['classification'] = 'blocked'
                     item['reasons'].append('Policy required approval but proposal did not include executable trade fields.')
             else:
+                allocated = allocation_map[proposal.id]
+                if allocated['decision'] not in {'SELECTED', 'REDUCED'}:
+                    run.blocked_count += 1
+                    item['classification'] = 'blocked'
+                    item['reasons'] = allocated['rationale']
+                    results.append(item)
+                    continue
                 passed, reasons = evaluate_auto_execution_guards(proposal=proposal, auto_trades_so_far=auto_executed, config=guard_config)
                 item['classification'] = 'auto_executable' if passed else 'blocked'
                 item['reasons'] = reasons
@@ -115,10 +141,15 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
                         market=proposal.market,
                         trade_type=proposal.suggested_trade_type,
                         side=proposal.suggested_side,
-                        quantity=proposal.suggested_quantity,
+                        quantity=allocated['final_allocated_quantity'],
                         account=account,
                         notes='Semi-auto demo auto execution.',
-                        metadata={'semi_auto_proposal_id': proposal.id, 'semi_auto_run_id': run.id, 'semi_auto_execution_origin': 'auto'},
+                        metadata={
+                            'semi_auto_proposal_id': proposal.id,
+                            'semi_auto_run_id': run.id,
+                            'semi_auto_execution_origin': 'auto',
+                            'allocation_run_id': allocation_snapshot['run'].id if allocation_snapshot.get('run') else None,
+                        },
                     )
                     proposal.proposal_status = 'EXECUTED'
                     proposal.save(update_fields=['proposal_status', 'updated_at'])
@@ -160,6 +191,12 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
     run.finished_at = timezone.now()
     run.details = {
         'results': results,
+        'allocation': {
+            'run_id': allocation_snapshot['run'].id if allocation_snapshot.get('run') else None,
+            'proposals_selected': allocation_snapshot['proposals_selected'],
+            'allocated_total': str(allocation_snapshot['allocated_total']),
+            'remaining_cash': str(allocation_snapshot['remaining_cash']),
+        },
         'guardrails': {
             'max_auto_quantity': str(guard_config.max_auto_quantity),
             'max_auto_trades_per_run': guard_config.max_auto_trades_per_run,
