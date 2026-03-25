@@ -442,3 +442,19 @@ It includes:
 - explicit loading/error/empty states with positive empty message
 
 The page consumes `src/services/operatorQueue.ts` and remains paper/demo only.
+
+## Replay route (`/replay`)
+
+Se agregó una ruta técnica para historical replay/backtest-like simulation demo:
+- panel de control para rango histórico, provider/source scope y market limit
+- ejecución de replay sobre snapshots persistidos
+- summary de última corrida
+- tabla de corridas recientes
+- detalle de pasos (`ReplayStep`) para auditoría
+
+Mensajes de estado:
+- loading durante ejecución
+- empty state: `No replay runs yet.`
+- guidance cuando falta histórico: `Sync real market data first to build a usable historical replay.`
+
+La vista mantiene límite estricto: paper/demo only, sin dinero real.

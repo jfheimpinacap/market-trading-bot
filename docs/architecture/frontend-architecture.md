@@ -307,3 +307,18 @@ UX intent:
 - operator only intervenes on exceptions
 - clear rationale-first detail view for auditable manual decisions
 - simple technical controls (approve/reject/snooze) without enterprise workflow complexity
+
+## Replay UI integration
+
+A dedicated `/replay` route was added with a technical-first layout:
+- control panel for historical range and replay config
+- latest-run summary cards
+- recent-runs technical table
+- optional step timeline table
+
+Integration points:
+- service module `src/services/replay.ts`
+- typed contracts in `src/types/replay.ts`
+- cross-link with `/evaluation` for future replay-vs-evaluation comparisons
+
+Scope remains explicit: historical paper/demo simulation only.

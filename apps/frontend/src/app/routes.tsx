@@ -2,6 +2,7 @@ import { AgentsPage } from '../pages/AgentsPage';
 import { AutomationPage } from '../pages/AutomationPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { EvaluationPage } from '../pages/EvaluationPage';
+import { ReplayPage } from '../pages/ReplayPage';
 import { LearningPage } from '../pages/LearningPage';
 import { RealOpsPage } from '../pages/RealOpsPage';
 import { ContinuousDemoPage } from '../pages/ContinuousDemoPage';
@@ -120,6 +121,13 @@ export const appRoutes: AppRoute[] = [
     path: '/settings',
     description: 'Local-first application configuration and environment notes.',
     component: SettingsPage,
+  },
+
+  {
+    label: 'Replay',
+    path: '/replay',
+    description: 'Historical replay/backtest-like simulation over persisted snapshots with isolated paper execution.',
+    component: ReplayPage,
   },
   {
     label: 'Evaluation',

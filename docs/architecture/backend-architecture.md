@@ -346,3 +346,22 @@ Operational constraints remain unchanged:
 - no real exchange execution/auth
 - no multi-user workflow engine
 - no external push systems/websockets
+
+## Replay architecture boundary (`apps.replay_lab`)
+
+`replay_lab` is a thin orchestration layer for historical replay/backtest-like demo runs.
+
+Core persisted entities:
+- `ReplayRun`: run config/scope, aggregate counters, pnl/equity summary, status lifecycle
+- `ReplayStep`: per-timestamp step counters and audit notes
+
+Service split:
+- `services/timeline.py`: snapshot query + chronological timeline construction
+- `services/engine.py`: replay loop, proposal/policy/allocation/safety integration, step persistence
+- `services/execution.py`: isolated replay account lifecycle and temporary activation context
+- `services/metrics.py`: summary payloads for API/UI
+
+Operational design:
+- no live provider calls in replay execution path
+- no real execution path
+- replay account isolation prevents state contamination of operational paper account
