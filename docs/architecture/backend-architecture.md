@@ -380,3 +380,24 @@ This keeps experiments auditable and maintainable while preserving existing engi
 - replay remains historical source of truth
 - evaluation remains live-paper source of truth
 - experiment_lab only orchestrates and compares
+
+## Readiness/promotion gate architecture (new)
+
+A dedicated `apps.readiness_lab` domain now formalizes go-live readiness decisions for paper/demo workflows.
+
+Design goals:
+- keep decision logic out of views
+- make gates explicit and auditable
+- persist each readiness assessment run
+- reuse existing evidence from evaluation/replay/experiments/safety/operator queue
+
+Core models:
+- `ReadinessProfile`: threshold definition of what “ready” means
+- `ReadinessAssessmentRun`: persisted decision + counts + detailed gate evidence
+
+Service split:
+- `assessment.py`: aggregates metrics and computes final `READY`/`CAUTION`/`NOT_READY`
+- `gates.py`: standard comparator-based gate evaluation
+- `recommendations.py`: deterministic remediation suggestions
+
+This layer is intentionally advisory/governance-only: no automatic promotion and no real execution path.

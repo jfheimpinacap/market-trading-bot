@@ -910,3 +910,26 @@ Endpoints:
 - `GET /api/experiments/summary/`
 
 Out of scope remains unchanged: no real execution, no real money, no auto-tuning optimizer, no ML/LLM strategy training.
+
+## Readiness lab app summary (new)
+
+`apps.readiness_lab` adds an auditable promotion-gate layer above evaluation/replay/experiments:
+
+- `ReadinessProfile`: configurable gate thresholds (conservative/balanced/strict/custom)
+- `ReadinessAssessmentRun`: persisted readiness decisions (`READY`, `CAUTION`, `NOT_READY`)
+- services split:
+  - `services/assessment.py`: metrics aggregation + final decision
+  - `services/gates.py`: reusable gate evaluation rules
+  - `services/recommendations.py`: deterministic recommendation generation
+  - `services/profiles.py`: base profile seeding
+
+Main endpoints:
+- `GET /api/readiness/profiles/`
+- `GET /api/readiness/profiles/<id>/`
+- `POST /api/readiness/assess/`
+- `GET /api/readiness/runs/`
+- `GET /api/readiness/runs/<id>/`
+- `GET /api/readiness/summary/`
+- `POST /api/readiness/seed-profiles/`
+
+Boundary remains strict: readiness does not trigger real trading or automatic promotion.

@@ -334,3 +334,18 @@ The `/experiments` page introduces a technical A/B workflow without changing rou
 - links from evaluation/replay to keep navigation continuity
 
 UX remains sober and desktop-first: cards/tables/badges, clear loading/error/empty states, and explicit paper/demo-only messaging.
+
+## Readiness UX layer (new)
+
+The frontend now includes a dedicated `/readiness` route and `services/readiness.ts` bindings.
+
+Responsibilities:
+- expose profile-based readiness criteria
+- run assessments on demand
+- present transparent decision evidence (status, gate counts, failed gates, recommendations)
+- keep the operator aware this is governance-only and still paper/demo-only
+
+Integration choices remain lightweight:
+- quick links from Evaluation and Experiments to Readiness
+- dashboard quick link to readiness module
+- no global client-state rewrite

@@ -3,6 +3,7 @@ import { AutomationPage } from '../pages/AutomationPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { EvaluationPage } from '../pages/EvaluationPage';
 import { ExperimentsPage } from '../pages/ExperimentsPage';
+import { ReadinessPage } from '../pages/ReadinessPage';
 import { ReplayPage } from '../pages/ReplayPage';
 import { LearningPage } from '../pages/LearningPage';
 import { RealOpsPage } from '../pages/RealOpsPage';
@@ -142,6 +143,13 @@ export const appRoutes: AppRoute[] = [
     path: '/experiments',
     description: 'Strategy profile runner and replay-vs-live paper comparison layer for technical experimentation.',
     component: ExperimentsPage,
+  },
+
+  {
+    label: 'Readiness',
+    path: '/readiness',
+    description: 'Go-live readiness and promotion gates audit layer for paper/demo operations.',
+    component: ReadinessPage,
   },
 
   {
