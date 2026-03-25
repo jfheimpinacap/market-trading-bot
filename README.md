@@ -466,3 +466,19 @@ Still intentionally out of scope:
 - local LLM agents
 - real money or real execution
 - opaque autonomous tuning
+
+### Real-data refresh pipeline hardening (new)
+
+The project now includes a dedicated, auditable read-only sync pipeline for real providers (Kalshi + Polymarket):
+
+- persisted sync run tracking (`ProviderSyncRun`)
+- manual sync via API + management command
+- provider health signal exposure (`last success`, `last failed`, `consecutive failures`, stale warning)
+- strengthened snapshot ingestion path for real read-only markets
+- conservative integration hooks for automation and continuous-demo
+
+Still explicitly out of scope:
+- real trading execution
+- real exchange auth
+- websocket/streaming infrastructure
+- distributed scheduler/worker orchestration

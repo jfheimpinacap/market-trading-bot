@@ -269,3 +269,23 @@ A conservative integration path now connects `learning_memory` with automation l
 - `continuous_demo` can optionally trigger rebuild using conservative cadence settings.
 
 Design intent stays deterministic and auditable: no ML/LLM, no real execution, no opaque self-tuning.
+
+## Real data sync boundary (`apps.real_data_sync`)
+
+A dedicated backend app now owns **provider sync orchestration** for real read-only data while reusing existing provider adapters and normalization.
+
+Responsibilities:
+- create and persist `ProviderSyncRun` records for every refresh
+- invoke existing ingestion service (`apps.markets.services.real_data_ingestion`) without duplicating provider logic
+- expose provider sync status and stale/degraded signals for technical/system surfaces
+- provide manual execution boundaries (API + management command)
+
+Why this boundary:
+- keeps provider client logic centralized in adapter libs
+- keeps sync/audit logic explicit and queryable
+- prepares safe foundations for future scheduling without introducing distributed complexity now
+
+Out of scope remains unchanged:
+- real execution/auth
+- websockets/streaming
+- complex distributed sync orchestration

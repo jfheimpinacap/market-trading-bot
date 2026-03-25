@@ -50,6 +50,10 @@ export function runFullLearningCycle(triggeredFrom?: DemoAutomationTriggeredFrom
   return postAutomationAction('/api/automation/run-full-learning-cycle/', triggeredFrom);
 }
 
+export function runSyncRealData(triggeredFrom?: DemoAutomationTriggeredFrom) {
+  return postAutomationAction('/api/automation/sync-real-data/', triggeredFrom);
+}
+
 export function getAutomationRuns(limit?: number) {
   return requestJson<DemoAutomationRun[]>(`/api/automation/runs/${buildQueryString(limit)}`);
 }

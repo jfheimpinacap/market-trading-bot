@@ -12,6 +12,7 @@ from apps.learning_memory.services import run_learning_rebuild, should_rebuild_l
 from apps.paper_trading.services.portfolio import get_active_account
 from apps.paper_trading.services.valuation import revalue_account
 from apps.postmortem_demo.services import generate_trade_reviews
+from apps.real_data_sync.services import run_provider_sync
 from apps.semi_auto_demo.services.orchestration import RunOptions, run_scan_and_execute
 from apps.safety_guard.models import SafetyEventSource
 from apps.safety_guard.services import evaluate_cycle_health
@@ -80,6 +81,20 @@ def run_single_cycle(*, session: ContinuousDemoSession, settings: dict) -> Conti
     cycle = _begin_cycle(session)
     error_message: str | None = None
     try:
+        real_sync_runs: list[dict] = []
+        refresh_enabled = bool(settings.get('real_data_refresh_enabled', False))
+        refresh_every = max(1, int(settings.get('real_data_refresh_every_n_cycles', 5)))
+        if refresh_enabled and cycle.cycle_number % refresh_every == 0:
+            for provider in ('kalshi', 'polymarket'):
+                sync_run = run_provider_sync(
+                    provider=provider,
+                    sync_type='active_only',
+                    active_only=bool(settings.get('real_data_refresh_active_only', True)),
+                    limit=max(1, int(settings.get('real_data_refresh_limit', 50))),
+                    triggered_from='continuous_demo',
+                )
+                real_sync_runs.append({'provider': provider, 'run_id': sync_run.id, 'status': sync_run.status})
+
         automation_run = run_demo_cycle(triggered_from=DemoAutomationRun.TriggeredFrom.API)
         semi_auto_run = run_scan_and_execute(
             options=RunOptions(
@@ -135,6 +150,7 @@ def run_single_cycle(*, session: ContinuousDemoSession, settings: dict) -> Conti
         cycle.details = {
             'automation_run': {'id': automation_run.id, 'status': automation_run.status, 'summary': automation_run.summary},
             'semi_auto_run': {'id': semi_auto_run.id, 'status': semi_auto_run.status, 'summary': semi_auto_run.summary},
+            'real_data_sync_runs': real_sync_runs,
             'settings_applied': settings,
             **extra,
         }

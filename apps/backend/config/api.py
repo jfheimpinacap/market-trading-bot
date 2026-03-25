@@ -17,4 +17,5 @@ urlpatterns = [
     path('safety/', include(('apps.safety_guard.urls', 'safety_guard'), namespace='safety_guard')),
     path('evaluation/', include(('apps.evaluation_lab.urls', 'evaluation_lab'), namespace='evaluation_lab')),
     path('learning/', include(('apps.learning_memory.urls', 'learning_memory'), namespace='learning_memory')),
+    path('real-sync/', include(('apps.real_data_sync.urls', 'real_data_sync'), namespace='real_data_sync')),
 ]

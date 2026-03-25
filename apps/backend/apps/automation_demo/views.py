@@ -48,6 +48,10 @@ class RebuildLearningMemoryView(DemoAutomationActionView):
     action_type = DemoAutomationRun.ActionType.REBUILD_LEARNING_MEMORY
 
 
+class SyncRealDataView(DemoAutomationActionView):
+    action_type = DemoAutomationRun.ActionType.SYNC_REAL_DATA
+
+
 class RunDemoCycleView(APIView):
     authentication_classes = []
     permission_classes = []

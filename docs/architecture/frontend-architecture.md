@@ -254,3 +254,18 @@ Frontend integration reuses existing route boundaries and service modules:
 - `/learning` surfaces rebuild-run history plus influence context.
 
 UI strategy remains technical and minimal: cards/tables/badges with explicit loading/error/empty messaging.
+
+## Real sync frontend integration
+
+The frontend now has a dedicated service/type boundary for real-data sync:
+- `services/realSync.ts`
+- `types/realSync.ts`
+
+Current UX integration points:
+- `/system`: provider sync technical panel (status, stale warnings, recent runs, manual trigger)
+- `/automation`: explicit `sync_real_data` action in the operator control list
+
+Design intent:
+- keep real-data refresh observable and manually controlled
+- surface actionable technical state to operators
+- avoid introducing autonomous realtime behavior at this stage
