@@ -22,6 +22,12 @@ export const systemQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Operator Queue',
+    description: 'Review and decide only escalated exceptions (approve/reject/snooze) while autonomy stays in paper/demo mode.',
+    path: '/operator-queue',
+    availability: 'live',
+  },
+  {
     title: 'Semi-Auto',
     description: 'Inspect conservative semi-autonomous paper execution with manual approval gates.',
     path: '/semi-auto',

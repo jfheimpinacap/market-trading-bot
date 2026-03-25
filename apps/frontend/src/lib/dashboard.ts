@@ -46,6 +46,12 @@ export const dashboardQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Operator Queue',
+    description: 'Review and decide only escalated exceptions (approve/reject/snooze) while autonomy stays in paper/demo mode.',
+    path: '/operator-queue',
+    availability: 'live',
+  },
+  {
     title: 'Semi-Auto',
     description: 'Run evaluate-only or conservative paper-only semi-auto cycles with explicit pending approvals.',
     path: '/semi-auto',

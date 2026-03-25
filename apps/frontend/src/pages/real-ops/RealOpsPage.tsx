@@ -4,6 +4,7 @@ import { SectionCard } from '../../components/SectionCard';
 import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
 import { navigate } from '../../lib/router';
+import { getOperatorQueueSummary } from '../../services/operatorQueue';
 import { evaluateRealMarketOps, getRealMarketOpRuns, getRealMarketOpStatus, runRealMarketOps } from '../../services/realOps';
 import type { RealMarketOpRun, RealMarketOpsEvaluateResponse, RealMarketOpsStatus } from '../../types/realOps';
 
@@ -14,14 +15,16 @@ export function RealOpsPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [queuePending, setQueuePending] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [statusResponse, runsResponse] = await Promise.all([getRealMarketOpStatus(), getRealMarketOpRuns(12)]);
+      const [statusResponse, runsResponse, queueSummary] = await Promise.all([getRealMarketOpStatus(), getRealMarketOpRuns(12), getOperatorQueueSummary()]);
       setStatus(statusResponse);
       setRuns(runsResponse);
+      setQueuePending(queueSummary.pending_count);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load real ops state.');
     } finally {
@@ -85,6 +88,11 @@ export function RealOpsPage() {
             <button type="button" className="secondary-button" disabled={busy} onClick={() => void handleEvaluate()}>Evaluate real-market scope</button>
             <button type="button" className="primary-button" disabled={busy || !status?.enabled} onClick={() => void handleRun()}>Run real-market paper cycle</button>
           </div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Operator queue" title="Manual exception inbox" description="Escalated real-ops cases and approval-required proposals are centralized in /operator-queue.">
+          <p><strong>Pending operator exceptions:</strong> {queuePending}</p>
+          <button type="button" className="secondary-button" onClick={() => navigate('/operator-queue')}>Open /operator-queue</button>
         </SectionCard>
 
         <SectionCard eyebrow="Allocation bridge" title="Execution prioritization status" description="Real Ops uses allocation prioritization before paper auto-execution when multiple proposals compete.">

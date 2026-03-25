@@ -6,6 +6,7 @@ import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
 import { publishDemoFlowRefresh } from '../../lib/demoFlow';
 import { navigate } from '../../lib/router';
+import { getOperatorQueueSummary } from '../../services/operatorQueue';
 import { getSafetyStatus } from '../../services/safety';
 import type { SafetyStatus } from '../../types/safety';
 import {
@@ -44,15 +45,17 @@ export function ContinuousDemoPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [safety, setSafety] = useState<SafetyStatus | null>(null);
+  const [queuePending, setQueuePending] = useState(0);
 
   const loadState = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [statusResponse, cyclesResponse, safetyResponse] = await Promise.all([getContinuousDemoStatus(), getContinuousDemoCycles(), getSafetyStatus()]);
+      const [statusResponse, cyclesResponse, safetyResponse, queueSummary] = await Promise.all([getContinuousDemoStatus(), getContinuousDemoCycles(), getSafetyStatus(), getOperatorQueueSummary()]);
       setStatus(statusResponse);
       setCycles(cyclesResponse);
       setSafety(safetyResponse);
+      setQueuePending(queueSummary.pending_count);
     } catch (loadError) {
       setError(getErrorMessage(loadError, 'Could not load continuous demo status.'));
     } finally {
@@ -159,7 +162,8 @@ export function ContinuousDemoPage() {
 
         <SectionCard eyebrow="Pending approvals" title="Manual queue snapshot" description="El loop respeta la cola manual de aprobaciones y no ejecuta propuestas no elegibles automáticamente.">
           <p><strong>PENDING approvals:</strong> {status?.pending_approvals ?? 0}</p>
-          <button type="button" className="secondary-button" onClick={() => navigate('/semi-auto')}>Open /semi-auto queue</button>
+          <p><strong>Operator queue pending exceptions:</strong> {queuePending}</p>
+          <button type="button" className="secondary-button" onClick={() => navigate('/operator-queue')}>Open /operator-queue</button>
         </SectionCard>
 
         <SectionCard eyebrow="Recent cycles" title="Cycle history" description={latestCycle?.summary ?? 'Cada ciclo queda trazado para auditoría y debugging.'}>

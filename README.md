@@ -500,3 +500,25 @@ El sistema ahora incluye una capa explícita de **portfolio-aware capital alloca
 - integración con `semi_auto_demo` y `real_market_ops` antes de autoejecución paper
 
 Se mantiene fuera de alcance: optimización cuantitativa avanzada, Kelly, ML/LLM, y dinero real.
+
+## Operator Queue / Escalation Center (new)
+
+A new centralized operator queue is now available at:
+- Backend API: `/api/operator-queue/*`
+- Frontend route: `/operator-queue`
+
+What it does:
+- unifies approval-required and escalated exceptions in a single inbox
+- supports approve/reject/snooze decisions with audit logs
+- keeps execution mode strictly paper/demo only
+
+Current source integrations:
+- semi-auto pending approvals
+- real-ops pending approvals and safety-escalated approvals
+
+Explicitly still out of scope:
+- real trading execution
+- exchange authentication
+- real money
+- local LLM
+- multi-user approval workflow
