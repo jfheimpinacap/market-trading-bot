@@ -14,6 +14,7 @@ from apps.paper_trading.services.valuation import revalue_account
 from apps.postmortem_demo.services import generate_trade_reviews
 from apps.real_data_sync.services import run_provider_sync
 from apps.real_market_ops.services import RunOptions as RealOpsRunOptions, run_real_market_operation
+from apps.runtime_governor.services import get_capabilities_for_current_mode, reconcile_runtime_state
 from apps.semi_auto_demo.services.orchestration import RunOptions, run_scan_and_execute
 from apps.safety_guard.models import SafetyEventSource
 from apps.safety_guard.services import evaluate_cycle_health
@@ -79,6 +80,11 @@ def _finish_cycle(*, session: ContinuousDemoSession, cycle: ContinuousDemoCycleR
 
 
 def run_single_cycle(*, session: ContinuousDemoSession, settings: dict) -> ContinuousDemoCycleRun:
+    reconcile_runtime_state(reason='Continuous demo requested reconciliation before cycle.')
+    runtime_caps = get_capabilities_for_current_mode()
+    if not runtime_caps['allow_continuous_loop']:
+        raise ValueError('Runtime mode blocks continuous loop execution.')
+
     cycle = _begin_cycle(session)
     error_message: str | None = None
     try:
@@ -117,7 +123,10 @@ def run_single_cycle(*, session: ContinuousDemoSession, settings: dict) -> Conti
                 options=RunOptions(
                     market_limit=int(settings.get('market_limit_per_cycle', 8)),
                     market_scope=str(settings.get('market_scope', 'mixed')),
-                    max_auto_trades_per_run=int(settings.get('max_auto_trades_per_cycle', 2)),
+                    max_auto_trades_per_run=min(
+                        int(settings.get('max_auto_trades_per_cycle', 2)),
+                        int(runtime_caps['max_auto_trades_per_cycle'] or 0),
+                    ) if runtime_caps['allow_auto_execution'] else 0,
                 )
             )
             actions_run = [
@@ -176,6 +185,7 @@ def run_single_cycle(*, session: ContinuousDemoSession, settings: dict) -> Conti
             'real_market_ops_run': {'id': real_ops_run.id, 'status': real_ops_run.status, 'summary': real_ops_run.summary} if use_real_scope else None,
             'real_data_sync_runs': real_sync_runs,
             'settings_applied': settings,
+            'runtime_caps': runtime_caps,
             **extra,
         }
     except Exception as exc:

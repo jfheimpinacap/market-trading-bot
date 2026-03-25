@@ -98,7 +98,7 @@ export function ReadinessPage() {
         eyebrow="Go-live readiness / promotion gates"
         title="Readiness"
         description="Formal readiness assessment for promotion gates. This does NOT enable real money and remains paper/demo only."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>Open Evaluation</button><button type="button" className="secondary-button" onClick={() => navigate('/experiments')}>Open Experiments</button><button type="button" className="secondary-button" disabled={isSeeding} onClick={() => void onSeedProfiles()}>{isSeeding ? 'Seeding…' : 'Seed base profiles'}</button></div>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>Open Evaluation</button><button type="button" className="secondary-button" onClick={() => navigate('/experiments')}>Open Experiments</button><button type="button" className="secondary-button" onClick={() => navigate('/runtime')}>Open Runtime</button><button type="button" className="secondary-button" disabled={isSeeding} onClick={() => void onSeedProfiles()}>{isSeeding ? 'Seeding…' : 'Seed base profiles'}</button></div>}
       />
 
       <DataStateWrapper isLoading={isLoading} isError={Boolean(error)} errorMessage={error ?? undefined}>

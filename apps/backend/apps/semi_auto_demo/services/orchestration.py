@@ -13,6 +13,7 @@ from apps.policy_engine.models import ApprovalDecisionType
 from apps.proposal_engine.services import generate_trade_proposal
 from apps.semi_auto_demo.models import PendingApproval, SemiAutoRun, SemiAutoRunStatus, SemiAutoRunType
 from apps.semi_auto_demo.services.guards import DEFAULT_GUARD_CONFIG, evaluate_auto_execution_guards
+from apps.runtime_governor.services import get_capabilities_for_current_mode, reconcile_runtime_state
 from apps.safety_guard.models import SafetyEventSource
 from apps.safety_guard.services.evaluation import evaluate_auto_execution
 
@@ -50,6 +51,10 @@ def run_scan_and_execute(*, options: RunOptions | None = None) -> SemiAutoRun:
 
 
 def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoRun:
+    reconcile_runtime_state(reason='Semi-auto requested reconciliation before run.')
+    runtime_caps = get_capabilities_for_current_mode()
+    runtime_execute_auto = execute_auto and runtime_caps['allow_auto_execution'] and not runtime_caps['require_operator_for_all_trades']
+
     run = SemiAutoRun.objects.create(run_type=run_type, status=SemiAutoRunStatus.RUNNING, details={'results': []})
     results = []
     account = get_active_account()
@@ -138,7 +143,7 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
                     source=SafetyEventSource.SEMI_AUTO,
                 )
 
-                if execute_auto and passed and safety_decision.allowed:
+                if runtime_execute_auto and passed and safety_decision.allowed:
                     execution = execute_paper_trade(
                         market=proposal.market,
                         trade_type=proposal.suggested_trade_type,
@@ -159,7 +164,7 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
                     run.auto_executed_count += 1
                     item['action'] = 'auto_executed'
                     item['trade_id'] = execution.trade.id
-                elif execute_auto and passed and safety_decision.requires_manual_approval:
+                elif runtime_execute_auto and passed and safety_decision.requires_manual_approval:
                     pending = PendingApproval.objects.create(
                         proposal=proposal,
                         market=proposal.market,
@@ -178,7 +183,7 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
                     item['action'] = 'pending_approval_created'
                     item['pending_approval_id'] = pending.id
                     item['reasons'] = item.get('reasons', []) + safety_decision.reasons
-                elif not execute_auto and passed and safety_decision.allowed:
+                elif not runtime_execute_auto and passed and safety_decision.allowed:
                     item['action'] = 'eligible_for_auto_execution'
                 else:
                     run.blocked_count += 1
@@ -194,6 +199,12 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
     run.finished_at = timezone.now()
     run.details = {
         'results': results,
+        'runtime': {
+            'mode': runtime_caps['mode'],
+            'allow_auto_execution': runtime_caps['allow_auto_execution'],
+            'require_operator_for_all_trades': runtime_caps['require_operator_for_all_trades'],
+            'blocked_reasons': runtime_caps['blocked_reasons'],
+        },
         'allocation': {
             'run_id': allocation_snapshot['run'].id if allocation_snapshot.get('run') else None,
             'proposals_selected': allocation_snapshot['proposals_selected'],

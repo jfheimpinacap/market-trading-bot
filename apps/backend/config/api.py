@@ -24,4 +24,5 @@ urlpatterns = [
     path('replay/', include(('apps.replay_lab.urls', 'replay_lab'), namespace='replay_lab')),
     path('experiments/', include(('apps.experiment_lab.urls', 'experiment_lab'), namespace='experiment_lab')),
     path('readiness/', include(('apps.readiness_lab.urls', 'readiness_lab'), namespace='readiness_lab')),
+    path('runtime/', include(('apps.runtime_governor.urls', 'runtime_governor'), namespace='runtime_governor')),
 ]

@@ -349,3 +349,22 @@ Integration choices remain lightweight:
 - quick links from Evaluation and Experiments to Readiness
 - dashboard quick link to readiness module
 - no global client-state rewrite
+
+## Runtime governance UX layer (new)
+
+A dedicated `/runtime` route now exposes operational mode governance in the frontend.
+
+UI responsibilities:
+- render effective runtime mode and status
+- surface readiness/safety influence
+- allow explicit operator mode changes when permitted
+- explain blocked modes with clear constraints
+- display effective capability matrix and transition audit table
+
+Integration is intentionally lightweight:
+- route added through existing app router
+- API calls isolated in `services/runtime.ts`
+- typed contracts in `types/runtime.ts`
+- no global state framework changes
+
+This keeps governance auditable and operator-readable while staying local-first and paper/demo only.

@@ -13,6 +13,7 @@ from apps.proposal_engine.services import generate_trade_proposal
 from apps.real_market_ops.models import RealMarketOperationRun, RealMarketRunStatus
 from apps.real_market_ops.services.eligibility import evaluate_real_market_eligibility
 from apps.real_market_ops.services.real_scope import get_real_scope_config
+from apps.runtime_governor.services import get_capabilities_for_current_mode, reconcile_runtime_state
 from apps.semi_auto_demo.models import PendingApproval
 from apps.semi_auto_demo.services.guards import DEFAULT_GUARD_CONFIG, evaluate_auto_execution_guards
 from apps.safety_guard.models import SafetyEventSource
@@ -44,6 +45,8 @@ def _build_summary(run: RealMarketOperationRun) -> str:
 
 
 def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
+    reconcile_runtime_state(reason='Real market ops requested reconciliation before run.')
+    runtime_caps = get_capabilities_for_current_mode()
     snapshot = evaluate_real_market_eligibility()
     scope_config = get_real_scope_config()
 
@@ -74,8 +77,17 @@ def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
         run.save(update_fields=['summary', 'finished_at', 'updated_at'])
         return run
 
+    if not runtime_caps['allow_real_market_ops']:
+        run.summary = 'Real market ops blocked by runtime mode governance.'
+        run.status = RealMarketRunStatus.SKIPPED
+        run.finished_at = timezone.now()
+        run.details = {**run.details, 'runtime_block': runtime_caps}
+        run.save(update_fields=['status', 'summary', 'finished_at', 'details', 'updated_at'])
+        return run
+
     safety = get_safety_status()
-    if options.execute_auto and (safety['kill_switch_enabled'] or safety['hard_stop_active']):
+    execute_auto = options.execute_auto and runtime_caps['allow_auto_execution'] and not runtime_caps['require_operator_for_all_trades']
+    if execute_auto and (safety['kill_switch_enabled'] or safety['hard_stop_active']):
         run.summary = 'Real market ops blocked by safety kill switch/hard stop.'
         run.status = RealMarketRunStatus.SKIPPED
         run.finished_at = timezone.now()
@@ -174,7 +186,7 @@ def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
                 passed, reasons = evaluate_auto_execution_guards(proposal=proposal, auto_trades_so_far=auto_trades, config=DEFAULT_GUARD_CONFIG)
                 safety_decision = evaluate_auto_execution(proposal=proposal, auto_trades_so_far=auto_trades, source=SafetyEventSource.SEMI_AUTO)
 
-                if options.execute_auto and passed and safety_decision.allowed and auto_trades < scope_config.max_real_auto_trades_per_cycle and trade_ready:
+                if execute_auto and passed and safety_decision.allowed and auto_trades < min(scope_config.max_real_auto_trades_per_cycle, runtime_caps['max_auto_trades_per_cycle']) and trade_ready:
                     execution = execute_paper_trade(
                         market=proposal.market,
                         trade_type=proposal.suggested_trade_type,
@@ -194,7 +206,7 @@ def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
                     item['classification'] = 'auto_executed'
                     item['action'] = 'paper_trade_executed'
                     item['trade_id'] = execution.trade.id
-                elif options.execute_auto and passed and safety_decision.requires_manual_approval and trade_ready:
+                elif execute_auto and passed and safety_decision.requires_manual_approval and trade_ready:
                     pending = PendingApproval.objects.create(
                         proposal=proposal,
                         market=proposal.market,
@@ -211,10 +223,10 @@ def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
                     run.approval_required_count += 1
                     item['classification'] = 'approval_required'
                     item['action'] = 'pending_approval_created'
-                elif options.execute_auto and passed and auto_trades >= scope_config.max_real_auto_trades_per_cycle:
+                elif execute_auto and passed and auto_trades >= min(scope_config.max_real_auto_trades_per_cycle, runtime_caps['max_auto_trades_per_cycle']):
                     run.blocked_count += 1
                     item['reasons'] = ['max_real_auto_trades_reached']
-                elif options.execute_auto and passed and not trade_ready:
+                elif execute_auto and passed and not trade_ready:
                     run.blocked_count += 1
                     item['reasons'] = ['proposal_missing_trade_fields']
                 elif passed:
