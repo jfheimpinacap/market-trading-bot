@@ -3,6 +3,7 @@ import { AutomationPage } from '../pages/AutomationPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { EvaluationPage } from '../pages/EvaluationPage';
 import { LearningPage } from '../pages/LearningPage';
+import { RealOpsPage } from '../pages/RealOpsPage';
 import { ContinuousDemoPage } from '../pages/ContinuousDemoPage';
 import { MarketDetailPage } from '../pages/MarketDetailPage';
 import { MarketsPage } from '../pages/MarketsPage';
@@ -68,6 +69,12 @@ export const appRoutes: AppRoute[] = [
     component: SemiAutoPage,
   },
 
+  {
+    label: 'Real Ops',
+    path: '/real-ops',
+    description: 'Autonomous scope for real-market read-only data with paper-only execution and strict eligibility controls.',
+    component: RealOpsPage,
+  },
   {
     label: 'Continuous Demo',
     path: '/continuous-demo',

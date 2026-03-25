@@ -22,6 +22,7 @@ import {
   runSyncDemoState,
 } from '../../services/automation';
 import type { DemoAutomationActionType, DemoAutomationRun, DemoAutomationStatus } from '../../types/automation';
+import { evaluateRealMarketOps, runRealMarketOps } from '../../services/realOps';
 import type { SystemStatus } from '../../types/system';
 
 const actionDefinitions: Array<{
@@ -157,6 +158,7 @@ export function AutomationPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [latestActionRun, setLatestActionRun] = useState<DemoAutomationRun | null>(null);
   const [policySummary, setPolicySummary] = useState<Awaited<ReturnType<typeof getPolicySummary>> | null>(null);
+  const [realOpsMessage, setRealOpsMessage] = useState<string | null>(null);
 
   const loadAutomationState = useCallback(async () => {
     setIsLoading(true);
@@ -246,6 +248,9 @@ export function AutomationPage() {
             <button type="button" className="secondary-button" onClick={() => navigate('/semi-auto')}>
               Open semi-auto
             </button>
+            <button type="button" className="secondary-button" onClick={() => navigate('/real-ops')}>
+              Open real ops
+            </button>
             <button type="button" className="secondary-button" onClick={() => navigate('/learning')}>
               Open learning
             </button>
@@ -270,6 +275,37 @@ export function AutomationPage() {
           { label: 'Background jobs', value: 'Not enabled in this layer' },
         ]}
       />
+
+
+      <SectionCard
+        eyebrow="Real-market scope"
+        title="Operator-triggered real ops"
+        description="Launch controlled evaluate/run calls for real-read-only + paper-only autonomous scope."
+      >
+        <div className="button-row">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={async () => {
+              const result = await evaluateRealMarketOps('automation');
+              setRealOpsMessage(`Real ops evaluate: considered ${result.markets_considered}, eligible ${result.markets_eligible}.`);
+            }}
+          >
+            Evaluate real-market opportunities
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={async () => {
+              const result = await runRealMarketOps('automation');
+              setRealOpsMessage(result.summary);
+            }}
+          >
+            Run real-market paper cycle
+          </button>
+        </div>
+        {realOpsMessage ? <p>{realOpsMessage}</p> : null}
+      </SectionCard>
 
       <DataStateWrapper
         isLoading={isLoading}
@@ -385,7 +421,38 @@ export function AutomationPage() {
             title="Last execution result"
             description="The most recent automation run stays visible here, including step-level status when applicable."
           >
-            <DataStateWrapper
+      
+      <SectionCard
+        eyebrow="Real-market scope"
+        title="Operator-triggered real ops"
+        description="Launch controlled evaluate/run calls for real-read-only + paper-only autonomous scope."
+      >
+        <div className="button-row">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={async () => {
+              const result = await evaluateRealMarketOps('automation');
+              setRealOpsMessage(`Real ops evaluate: considered ${result.markets_considered}, eligible ${result.markets_eligible}.`);
+            }}
+          >
+            Evaluate real-market opportunities
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={async () => {
+              const result = await runRealMarketOps('automation');
+              setRealOpsMessage(result.summary);
+            }}
+          >
+            Run real-market paper cycle
+          </button>
+        </div>
+        {realOpsMessage ? <p>{realOpsMessage}</p> : null}
+      </SectionCard>
+
+      <DataStateWrapper
               isLoading={false}
               isError={false}
               isEmpty={!latestActionRun}
@@ -441,7 +508,38 @@ export function AutomationPage() {
             description="Recent action runs stay visible here so the demo remains traceable and easy to explain."
             aside={<StatusBadge tone="neutral">{runs.length} recent</StatusBadge>}
           >
-            <DataStateWrapper
+      
+      <SectionCard
+        eyebrow="Real-market scope"
+        title="Operator-triggered real ops"
+        description="Launch controlled evaluate/run calls for real-read-only + paper-only autonomous scope."
+      >
+        <div className="button-row">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={async () => {
+              const result = await evaluateRealMarketOps('automation');
+              setRealOpsMessage(`Real ops evaluate: considered ${result.markets_considered}, eligible ${result.markets_eligible}.`);
+            }}
+          >
+            Evaluate real-market opportunities
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={async () => {
+              const result = await runRealMarketOps('automation');
+              setRealOpsMessage(result.summary);
+            }}
+          >
+            Run real-market paper cycle
+          </button>
+        </div>
+        {realOpsMessage ? <p>{realOpsMessage}</p> : null}
+      </SectionCard>
+
+      <DataStateWrapper
               isLoading={false}
               isError={false}
               isEmpty={runs.length === 0}

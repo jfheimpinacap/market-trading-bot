@@ -269,3 +269,14 @@ Design intent:
 - keep real-data refresh observable and manually controlled
 - surface actionable technical state to operators
 - avoid introducing autonomous realtime behavior at this stage
+
+
+### Real Ops frontend slice
+The frontend adds a dedicated `/real-ops` route and `realOps` service module.
+It focuses on operator visibility and controlled triggers:
+- evaluate eligible real-read-only markets
+- run autonomous paper-only cycles in the configured scope
+- inspect exclusions and sync-aware blocking reasons
+- audit recent run outcomes.
+
+This complements (does not replace) `/continuous-demo` and `/automation`.

@@ -69,6 +69,7 @@ class ContinuousDemoControlRequestSerializer(serializers.Serializer):
     real_data_refresh_every_n_cycles = serializers.IntegerField(required=False, min_value=2, max_value=500)
     real_data_refresh_active_only = serializers.BooleanField(required=False)
     real_data_refresh_limit = serializers.IntegerField(required=False, min_value=1, max_value=500)
+    use_real_market_scope = serializers.BooleanField(required=False)
 
 
 class ContinuousDemoStatusSerializer(serializers.Serializer):

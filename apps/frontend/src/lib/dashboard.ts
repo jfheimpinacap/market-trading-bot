@@ -28,6 +28,12 @@ export const dashboardQuickLinks: DashboardQuickLink[] = [
   },
 
   {
+    title: 'Real Ops',
+    description: 'Evaluate and run autonomous paper-only cycles on eligible real read-only markets with conservative scope controls.',
+    path: '/real-ops',
+    availability: 'live',
+  },
+  {
     title: 'Continuous Demo',
     description: 'Run a continuous autonomous paper-only loop with start/pause/resume/stop and cycle audit traces.',
     path: '/continuous-demo',
