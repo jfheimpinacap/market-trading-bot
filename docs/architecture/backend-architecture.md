@@ -481,3 +481,29 @@ Key boundaries:
 - notification automation only reacts, routes, dispatches, suppresses, and records.
 - existing rule matching + dedupe + cooldown continue to be enforced.
 - no Celery/distributed scheduler requirement in this phase.
+
+## Local LLM integration architecture (`apps.llm_local`)
+
+A dedicated backend boundary now exists for local-first LLM usage through Ollama.
+
+Layer split:
+1. **Client layer**
+   - `clients/ollama.py`: local chat + structured JSON output calls
+   - `clients/embeddings.py`: local embedding vectors
+2. **Prompt + schema layer**
+   - `prompts/proposal.py`, `prompts/postmortem.py`, `prompts/learning.py`
+   - `schemas.py`: explicit validation for JSON responses
+3. **Task service layer**
+   - `services/proposal_text.py`
+   - `services/postmortem_text.py`
+   - `services/learning_text.py`
+   - `services/embeddings.py`
+   - `services/status.py`
+4. **API boundary**
+   - `GET /api/llm/status/`
+   - `POST /api/llm/proposal-thesis/`
+   - `POST /api/llm/postmortem-summary/`
+   - `POST /api/llm/learning-note/`
+   - `POST /api/llm/embed/`
+
+Current role is intentionally narrow and auditable: narrative enrichment and structured text outputs. It does not replace risk/policy/safety decisioning and does not execute trades.

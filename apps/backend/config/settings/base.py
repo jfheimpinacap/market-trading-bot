@@ -89,6 +89,7 @@ LOCAL_APPS = [
     'apps.runtime_governor',
     'apps.operator_alerts',
     'apps.notification_center',
+    'apps.llm_local',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -179,3 +180,10 @@ CELERY_RESULT_BACKEND = get_env('CELERY_RESULT_BACKEND', 'redis://localhost:6379
 CELERY_TASK_ALWAYS_EAGER = False
 CELERY_TASK_EAGER_PROPAGATES = False
 CELERY_TIMEZONE = TIME_ZONE
+
+LLM_ENABLED = get_bool('LLM_ENABLED', default=False)
+LLM_PROVIDER = get_env('LLM_PROVIDER', 'ollama')
+OLLAMA_BASE_URL = get_env('OLLAMA_BASE_URL', 'http://localhost:11434')
+OLLAMA_CHAT_MODEL = get_env('OLLAMA_CHAT_MODEL', 'llama3.2:3b')
+OLLAMA_EMBED_MODEL = get_env('OLLAMA_EMBED_MODEL', 'nomic-embed-text')
+OLLAMA_TIMEOUT_SECONDS = int(get_env('OLLAMA_TIMEOUT_SECONDS', '30'))

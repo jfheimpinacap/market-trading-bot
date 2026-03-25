@@ -1024,3 +1024,34 @@ New API endpoints:
 - `GET /api/notifications/escalations/`
 
 Design boundary: still local-first, paper/demo only, no real execution, no distributed orchestration.
+
+## Local LLM integration (`apps.llm_local`, new)
+
+A new backend app provides a clean local LLM boundary for Ollama:
+
+- `clients/ollama.py`: reusable local chat client with timeout/error handling
+- `clients/embeddings.py`: reusable embedding client (`nomic-embed-text` by default)
+- `prompts/`: centralized prompt templates (`proposal.py`, `postmortem.py`, `learning.py`)
+- `schemas.py`: structured JSON validation for thesis/insights/learning note payloads
+- `services/`: task-level orchestration (`proposal_text`, `postmortem_text`, `learning_text`, `embeddings`, `status`)
+- `views.py`: thin API layer with clean degradation (`503` + `degraded=true`)
+
+Endpoints:
+- `GET /api/llm/status/`
+- `POST /api/llm/proposal-thesis/`
+- `POST /api/llm/postmortem-summary/`
+- `POST /api/llm/learning-note/`
+- `POST /api/llm/embed/`
+
+Environment variables:
+- `LLM_ENABLED=true|false`
+- `LLM_PROVIDER=ollama`
+- `OLLAMA_BASE_URL=http://localhost:11434`
+- `OLLAMA_CHAT_MODEL=<model>`
+- `OLLAMA_EMBED_MODEL=nomic-embed-text`
+- `OLLAMA_TIMEOUT_SECONDS=30`
+
+Important scope boundary:
+- LLM enriches text and explanations only.
+- Risk/policy/safety remain deterministic authorities.
+- No real execution path is introduced.

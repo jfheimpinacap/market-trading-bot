@@ -27,4 +27,5 @@ urlpatterns = [
     path('runtime/', include(('apps.runtime_governor.urls', 'runtime_governor'), namespace='runtime_governor')),
     path('alerts/', include(('apps.operator_alerts.urls', 'operator_alerts'), namespace='operator_alerts')),
     path('notifications/', include(('apps.notification_center.urls', 'notification_center'), namespace='notification_center')),
+    path('llm/', include(('apps.llm_local.urls', 'llm_local'), namespace='llm_local')),
 ]

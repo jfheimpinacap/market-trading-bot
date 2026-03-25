@@ -17,11 +17,13 @@ import { developerCommandGroups, systemModuleReadiness, systemQuickLinks } from 
 import { getMarketSystemSummary, getMarkets } from '../services/markets';
 import { getRealSyncRuns, getRealSyncStatus, runRealSync } from '../services/realSync';
 import { getNotificationSummary } from '../services/notifications';
+import { getLlmStatus } from '../services/llm';
 import type { DashboardStatCard } from '../types/dashboard';
 import type { MarketListItem, MarketSystemSummary } from '../types/markets';
 import type { RealSyncRun, RealSyncStatusResponse } from '../types/realSync';
 import type { SimulationActivityItem, SimulationObservation, SystemRuntimeInfo } from '../types/system';
 import type { NotificationSummary } from '../types/notifications';
+import type { LlmStatusResponse } from '../types/llm';
 
 const ACTIVITY_MARKET_LIMIT = 5;
 
@@ -238,6 +240,7 @@ export function SystemPage() {
   const [isRealSyncLoading, setIsRealSyncLoading] = useState(true);
   const [realSyncTriggerState, setRealSyncTriggerState] = useState<'idle' | 'running'>('idle');
   const [notificationSummary, setNotificationSummary] = useState<NotificationSummary | null>(null);
+  const [llmStatus, setLlmStatus] = useState<LlmStatusResponse | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -249,12 +252,13 @@ export function SystemPage() {
       setSummaryError(null);
       setMarketsError(null);
 
-      const [summaryResult, marketsResult, realSyncStatusResult, realSyncRunsResult, notificationSummaryResult] = await Promise.allSettled([
+      const [summaryResult, marketsResult, realSyncStatusResult, realSyncRunsResult, notificationSummaryResult, llmStatusResult] = await Promise.allSettled([
         getMarketSystemSummary(),
         getMarkets(),
         getRealSyncStatus(),
         getRealSyncRuns({ limit: 8 }),
         getNotificationSummary(),
+        getLlmStatus(),
       ]);
 
       if (!isMounted) {
@@ -284,6 +288,10 @@ export function SystemPage() {
         setNotificationSummary(notificationSummaryResult.value);
       }
 
+      if (llmStatusResult.status === 'fulfilled') {
+        setLlmStatus(llmStatusResult.value);
+      }
+
       setSummaryLoading(false);
       setMarketsLoading(false);
       setIsRealSyncLoading(false);
@@ -308,13 +316,14 @@ export function SystemPage() {
     setSummaryError(null);
     setMarketsError(null);
 
-    const [healthResult, summaryResult, marketsResult, realSyncStatusResult, realSyncRunsResult, notificationSummaryResult] = await Promise.allSettled([
+    const [healthResult, summaryResult, marketsResult, realSyncStatusResult, realSyncRunsResult, notificationSummaryResult, llmStatusResult] = await Promise.allSettled([
       refreshHealth(),
       getMarketSystemSummary(),
       getMarkets(),
       getRealSyncStatus(),
       getRealSyncRuns({ limit: 8 }),
       getNotificationSummary(),
+      getLlmStatus(),
     ]);
 
     void healthResult;
@@ -342,6 +351,10 @@ export function SystemPage() {
 
     if (notificationSummaryResult.status === 'fulfilled') {
       setNotificationSummary(notificationSummaryResult.value);
+    }
+
+    if (llmStatusResult.status === 'fulfilled') {
+      setLlmStatus(llmStatusResult.value);
     }
 
     setSummaryLoading(false);
@@ -483,6 +496,26 @@ export function SystemPage() {
       </SectionCard>
 
       <SimulationActivityPanel items={activityItems} observations={observations} isLoading={marketsLoading} errorMessage={marketsError} />
+
+
+      <SectionCard
+        eyebrow="Local AI status"
+        title="LLM local integration"
+        description="Visibility into Ollama connectivity and active local model configuration used for narrative enrichment tasks."
+      >
+        <StatusCard
+          title="Ollama provider"
+          status={llmStatus?.enabled ? (llmStatus.reachable ? 'online' : 'degraded') : 'offline'}
+          description={llmStatus?.message ?? 'LLM status not loaded yet.'}
+          details={[
+            { label: 'Enabled', value: llmStatus?.enabled ? 'Yes' : 'No' },
+            { label: 'Provider', value: llmStatus?.provider ?? 'Unavailable' },
+            { label: 'Chat model', value: llmStatus?.chat_model ?? 'Unavailable' },
+            { label: 'Embedding model', value: llmStatus?.embed_model ?? 'Unavailable' },
+            { label: 'Base URL', value: llmStatus?.ollama_base_url ?? 'Unavailable' },
+          ]}
+        />
+      </SectionCard>
 
       <SectionCard
         eyebrow="Read-only provider sync"
