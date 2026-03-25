@@ -330,3 +330,19 @@ API:
 - `GET /api/allocation/runs/`
 - `GET /api/allocation/runs/<id>/`
 - `GET /api/allocation/summary/`
+
+## Operator queue boundary
+
+A dedicated `operator_queue` app now centralizes manual intervention into a single backend boundary.
+
+Architecture role:
+- consume escalations and approval-required cases (currently from `semi_auto_demo` and `real_market_ops` via `PendingApproval` integration)
+- expose a unified API for list/detail/summary and manual decisions
+- persist full decision audit logs (`OperatorDecisionLog`)
+- keep decision logic in services (`queue.py`, `escalation.py`, `decisions.py`) instead of views
+
+Operational constraints remain unchanged:
+- paper/demo execution only
+- no real exchange execution/auth
+- no multi-user workflow engine
+- no external push systems/websockets

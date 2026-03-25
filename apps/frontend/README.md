@@ -429,3 +429,16 @@ Se agregó una vista técnica para priorización de ejecución paper:
 - historial de runs persistidos
 
 La vista mantiene el boundary paper/demo only y agrega quick links desde Real Ops/Continuous Demo/Dashboard.
+
+## Operator Queue UI (new)
+
+A new route `/operator-queue` centralizes operator-only exceptions.
+
+It includes:
+- summary cards (pending, high priority, approvals/rejections recent, snoozed)
+- central queue table with priority/source/type/market/action/status
+- detailed context panel with rationale and linked records
+- actions: approve and execute, reject, snooze
+- explicit loading/error/empty states with positive empty message
+
+The page consumes `src/services/operatorQueue.ts` and remains paper/demo only.

@@ -292,3 +292,18 @@ Nueva ruta frontend orientada a operación técnica:
 Integración ligera:
 - dashboard quick link
 - botones desde Real Ops y Continuous Demo hacia `/allocation`
+
+## Operator queue frontend integration
+
+The frontend now includes `/operator-queue` as the centralized exception inbox.
+
+Integration shape:
+- service boundary: `src/services/operatorQueue.ts`
+- type boundary: `src/types/operatorQueue.ts`
+- route/page: `src/pages/operator-queue/OperatorQueuePage.tsx`
+- lightweight discoverability links added to dashboard/system quick links and real-ops/continuous pages
+
+UX intent:
+- operator only intervenes on exceptions
+- clear rationale-first detail view for auditable manual decisions
+- simple technical controls (approve/reject/snooze) without enterprise workflow complexity

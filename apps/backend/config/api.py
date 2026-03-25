@@ -20,4 +20,5 @@ urlpatterns = [
     path('real-sync/', include(('apps.real_data_sync.urls', 'real_data_sync'), namespace='real_data_sync')),
     path('real-ops/', include(('apps.real_market_ops.urls', 'real_market_ops'), namespace='real_market_ops')),
     path('allocation/', include(('apps.allocation_engine.urls', 'allocation_engine'), namespace='allocation_engine')),
+    path('operator-queue/', include(('apps.operator_queue.urls', 'operator_queue'), namespace='operator_queue')),
 ]

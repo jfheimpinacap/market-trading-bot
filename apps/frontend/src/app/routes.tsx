@@ -7,6 +7,7 @@ import { RealOpsPage } from '../pages/RealOpsPage';
 import { ContinuousDemoPage } from '../pages/ContinuousDemoPage';
 import { AllocationPage } from '../pages/AllocationPage';
 import { MarketDetailPage } from '../pages/MarketDetailPage';
+import { OperatorQueuePage } from '../pages/OperatorQueuePage';
 import { MarketsPage } from '../pages/MarketsPage';
 import { PortfolioPage } from '../pages/PortfolioPage';
 import { ProposalsPage } from '../pages/ProposalsPage';
@@ -62,6 +63,12 @@ export const appRoutes: AppRoute[] = [
     path: '/agents',
     description: 'Agent orchestration, automation status, and run visibility.',
     component: AgentsPage,
+  },
+  {
+    label: 'Operator Queue',
+    path: '/operator-queue',
+    description: 'Central exception inbox for approval-required and escalated items that need minimal human intervention.',
+    component: OperatorQueuePage,
   },
   {
     label: 'Semi-Auto',

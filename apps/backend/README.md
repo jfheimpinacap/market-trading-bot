@@ -841,3 +841,23 @@ Integración:
 
 Fuera de alcance:
 - optimización cuantitativa avanzada, Kelly, ML/LLM, dinero real
+
+## Operator queue app (new)
+
+`apps.operator_queue` introduces a centralized manual exception inbox:
+- `OperatorQueueItem`: approval/escalation items with source, type, priority, linked proposal/market/pending approval/trade.
+- `OperatorDecisionLog`: auditable manual decisions (`APPROVE`, `REJECT`, `SNOOZE`, etc.).
+
+Endpoints:
+- `GET /api/operator-queue/`
+- `GET /api/operator-queue/<id>/`
+- `GET /api/operator-queue/summary/`
+- `POST /api/operator-queue/<id>/approve/`
+- `POST /api/operator-queue/<id>/reject/`
+- `POST /api/operator-queue/<id>/snooze/`
+- `POST /api/operator-queue/rebuild/`
+
+Integration notes:
+- semi-auto and real-ops now create queue items when they create `PendingApproval`.
+- approving a queue item executes paper trade when executable context exists (directly or via linked `PendingApproval`).
+- execution remains paper/demo only; no real order path is introduced.

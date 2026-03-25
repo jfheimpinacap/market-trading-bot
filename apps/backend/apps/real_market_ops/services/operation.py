@@ -7,6 +7,7 @@ from django.utils import timezone
 from apps.allocation_engine.services import AllocationConfig, evaluate_allocation
 from apps.paper_trading.services.execution import execute_paper_trade
 from apps.paper_trading.services.portfolio import get_active_account
+from apps.operator_queue.services.escalation import ensure_queue_item_for_pending_approval
 from apps.policy_engine.models import ApprovalDecisionType
 from apps.proposal_engine.services import generate_trade_proposal
 from apps.real_market_ops.models import RealMarketOperationRun, RealMarketRunStatus
@@ -145,7 +146,7 @@ def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
                 item['reasons'].append('policy_hard_block')
             elif proposal.policy_decision == ApprovalDecisionType.APPROVAL_REQUIRED:
                 if trade_ready:
-                    PendingApproval.objects.create(
+                    pending = PendingApproval.objects.create(
                         proposal=proposal,
                         market=proposal.market,
                         paper_account=account,
@@ -157,6 +158,7 @@ def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
                         rationale=proposal.rationale,
                         metadata={'source': 'real_market_ops', 'source_type': 'real_read_only'},
                     )
+                    ensure_queue_item_for_pending_approval(pending_approval=pending)
                     run.approval_required_count += 1
                     item['classification'] = 'approval_required'
                     item['action'] = 'pending_approval_created'
@@ -193,7 +195,7 @@ def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
                     item['action'] = 'paper_trade_executed'
                     item['trade_id'] = execution.trade.id
                 elif options.execute_auto and passed and safety_decision.requires_manual_approval and trade_ready:
-                    PendingApproval.objects.create(
+                    pending = PendingApproval.objects.create(
                         proposal=proposal,
                         market=proposal.market,
                         paper_account=account,
@@ -205,6 +207,7 @@ def run_real_market_operation(*, options: RunOptions) -> RealMarketOperationRun:
                         rationale='; '.join(safety_decision.reasons),
                         metadata={'source': 'real_market_ops', 'classification': safety_decision.classification},
                     )
+                    ensure_queue_item_for_pending_approval(pending_approval=pending)
                     run.approval_required_count += 1
                     item['classification'] = 'approval_required'
                     item['action'] = 'pending_approval_created'

@@ -7,6 +7,7 @@ from django.utils import timezone
 from apps.markets.models import Market, MarketSourceType, MarketStatus
 from apps.allocation_engine.services import AllocationConfig, evaluate_allocation
 from apps.paper_trading.services.portfolio import get_active_account
+from apps.operator_queue.services.escalation import ensure_queue_item_for_pending_approval
 from apps.paper_trading.services.execution import execute_paper_trade
 from apps.policy_engine.models import ApprovalDecisionType
 from apps.proposal_engine.services import generate_trade_proposal
@@ -110,6 +111,7 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
                         rationale=proposal.rationale,
                         metadata={'source': 'semi_auto_demo'},
                     )
+                    ensure_queue_item_for_pending_approval(pending_approval=pending)
                     run.approval_required_count += 1
                     item['classification'] = 'approval_required'
                     item['action'] = 'pending_approval_created'
@@ -170,6 +172,7 @@ def _run(*, run_type: str, execute_auto: bool, options: RunOptions) -> SemiAutoR
                         rationale='; '.join(safety_decision.reasons),
                         metadata={'source': 'safety_guard', 'classification': safety_decision.classification},
                     )
+                    ensure_queue_item_for_pending_approval(pending_approval=pending)
                     run.approval_required_count += 1
                     item['classification'] = 'approval_required'
                     item['action'] = 'pending_approval_created'
