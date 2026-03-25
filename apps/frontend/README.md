@@ -394,3 +394,15 @@ Mensajes operativos explícitos:
 - no auto-optimización opaca
 - paper/demo only
 - rebuild automático desactivado por defecto por seguridad
+
+## Real sync UX integration (new)
+
+Frontend now includes typed real-sync API bindings:
+- `src/services/realSync.ts`
+- `src/types/realSync.ts`
+
+System + Automation integration:
+- `/system` now shows provider sync status, stale/degraded signals, recent sync runs, and manual trigger buttons for provider refresh.
+- `/automation` now includes a dedicated `Sync real data (read-only)` action that triggers conservative active-only refresh runs.
+
+The UX keeps the same technical design language: explicit status badges, loading/error/empty states, and no real trading controls.

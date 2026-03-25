@@ -22,6 +22,10 @@ DEFAULT_LOOP_SETTINGS = {
     'learning_rebuild_every_n_cycles': 10,
     'learning_rebuild_after_reviews': False,
     'learning_max_adjustment_magnitude': '0.2000',
+    'real_data_refresh_enabled': False,
+    'real_data_refresh_every_n_cycles': 5,
+    'real_data_refresh_active_only': True,
+    'real_data_refresh_limit': 50,
 }
 
 

@@ -11,6 +11,7 @@ from apps.automation_demo.views import (
     RunDemoCycleView,
     RunFullLearningCycleView,
     SimulateTickView,
+    SyncRealDataView,
     SyncDemoStateView,
 )
 
@@ -21,6 +22,7 @@ urlpatterns = [
     path('generate-trade-reviews/', GenerateTradeReviewsView.as_view(), name='generate-trade-reviews'),
     path('sync-demo-state/', SyncDemoStateView.as_view(), name='sync-demo-state'),
     path('rebuild-learning-memory/', RebuildLearningMemoryView.as_view(), name='rebuild-learning-memory'),
+    path('sync-real-data/', SyncRealDataView.as_view(), name='sync-real-data'),
     path('run-demo-cycle/', RunDemoCycleView.as_view(), name='run-demo-cycle'),
     path('run-full-learning-cycle/', RunFullLearningCycleView.as_view(), name='run-full-learning-cycle'),
     path('runs/', DemoAutomationRunListView.as_view(), name='run-list'),

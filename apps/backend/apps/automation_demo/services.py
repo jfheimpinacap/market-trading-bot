@@ -15,6 +15,7 @@ from apps.paper_trading.services.portfolio import get_active_account
 from apps.paper_trading.services.valuation import revalue_account
 from apps.postmortem_demo.models import TradeReview
 from apps.postmortem_demo.services import generate_trade_reviews
+from apps.real_data_sync.services import run_provider_sync
 from apps.signals.models import MarketSignal
 from apps.signals.services import generate_demo_signals
 
@@ -165,6 +166,36 @@ def _learning_rebuild_step() -> StepExecutionResult:
     )
 
 
+def _sync_real_data_step() -> StepExecutionResult:
+    providers = ('kalshi', 'polymarket')
+    runs = [
+        run_provider_sync(
+            provider=provider,
+            sync_type='active_only',
+            active_only=True,
+            limit=50,
+            triggered_from='automation_demo',
+        )
+        for provider in providers
+    ]
+    failed = [run for run in runs if run.status == 'FAILED']
+    status = STEP_STATUS_FAILED if failed else STEP_STATUS_SUCCESS
+    return StepExecutionResult(
+        step_name=DemoAutomationRun.ActionType.SYNC_REAL_DATA,
+        status=status,
+        summary=(
+            'Real read-only sync completed for Kalshi and Polymarket.'
+            if not failed
+            else f'Real read-only sync finished with failures for: {", ".join(run.provider for run in failed)}.'
+        ),
+        metadata={
+            'providers': [run.provider for run in runs],
+            'run_ids': [run.id for run in runs],
+            'statuses': {run.provider: run.status for run in runs},
+        },
+    )
+
+
 ACTION_HANDLERS: dict[str, Callable[[], StepExecutionResult]] = {
     DemoAutomationRun.ActionType.SIMULATE_TICK: _simulation_step,
     DemoAutomationRun.ActionType.GENERATE_SIGNALS: _signals_step,
@@ -172,6 +203,7 @@ ACTION_HANDLERS: dict[str, Callable[[], StepExecutionResult]] = {
     DemoAutomationRun.ActionType.GENERATE_TRADE_REVIEWS: _reviews_step,
     DemoAutomationRun.ActionType.SYNC_DEMO_STATE: _sync_state_step,
     DemoAutomationRun.ActionType.REBUILD_LEARNING_MEMORY: _learning_rebuild_step,
+    DemoAutomationRun.ActionType.SYNC_REAL_DATA: _sync_real_data_step,
 }
 
 

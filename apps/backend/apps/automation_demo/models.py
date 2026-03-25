@@ -11,6 +11,7 @@ class DemoAutomationRun(models.Model):
         RUN_DEMO_CYCLE = 'run_demo_cycle', 'Run demo cycle'
         REBUILD_LEARNING_MEMORY = 'rebuild_learning_memory', 'Rebuild learning memory'
         RUN_FULL_LEARNING_CYCLE = 'run_full_learning_cycle', 'Run full learning cycle'
+        SYNC_REAL_DATA = 'sync_real_data', 'Sync real data (read-only)'
 
     class Status(models.TextChoices):
         RUNNING = 'RUNNING', 'Running'

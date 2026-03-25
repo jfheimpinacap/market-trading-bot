@@ -15,8 +15,10 @@ import { useSystemHealth } from '../app/SystemHealthProvider';
 import { API_BASE_URL } from '../lib/config';
 import { developerCommandGroups, systemModuleReadiness, systemQuickLinks } from '../lib/system';
 import { getMarketSystemSummary, getMarkets } from '../services/markets';
+import { getRealSyncRuns, getRealSyncStatus, runRealSync } from '../services/realSync';
 import type { DashboardStatCard } from '../types/dashboard';
 import type { MarketListItem, MarketSystemSummary } from '../types/markets';
+import type { RealSyncRun, RealSyncStatusResponse } from '../types/realSync';
 import type { SimulationActivityItem, SimulationObservation, SystemRuntimeInfo } from '../types/system';
 
 const ACTIVITY_MARKET_LIMIT = 5;
@@ -228,6 +230,11 @@ export function SystemPage() {
   const [marketsError, setMarketsError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [realSyncStatus, setRealSyncStatus] = useState<RealSyncStatusResponse | null>(null);
+  const [realSyncRuns, setRealSyncRuns] = useState<RealSyncRun[]>([]);
+  const [realSyncError, setRealSyncError] = useState<string | null>(null);
+  const [isRealSyncLoading, setIsRealSyncLoading] = useState(true);
+  const [realSyncTriggerState, setRealSyncTriggerState] = useState<'idle' | 'running'>('idle');
 
   useEffect(() => {
     let isMounted = true;
@@ -239,7 +246,12 @@ export function SystemPage() {
       setSummaryError(null);
       setMarketsError(null);
 
-      const [summaryResult, marketsResult] = await Promise.allSettled([getMarketSystemSummary(), getMarkets()]);
+      const [summaryResult, marketsResult, realSyncStatusResult, realSyncRunsResult] = await Promise.allSettled([
+        getMarketSystemSummary(),
+        getMarkets(),
+        getRealSyncStatus(),
+        getRealSyncRuns({ limit: 8 }),
+      ]);
 
       if (!isMounted) {
         return;
@@ -256,9 +268,17 @@ export function SystemPage() {
       } else {
         setMarketsError(getErrorMessage(marketsResult.reason, 'Could not load markets from the local catalog.'));
       }
+      if (realSyncStatusResult.status === 'fulfilled' && realSyncRunsResult.status === 'fulfilled') {
+        setRealSyncStatus(realSyncStatusResult.value);
+        setRealSyncRuns(realSyncRunsResult.value);
+        setRealSyncError(null);
+      } else {
+        setRealSyncError('Could not load real-data sync status from /api/real-sync/.');
+      }
 
       setSummaryLoading(false);
       setMarketsLoading(false);
+      setIsRealSyncLoading(false);
       setLastRefreshedAt(new Date().toISOString());
       setIsRefreshing(false);
     }
@@ -280,10 +300,12 @@ export function SystemPage() {
     setSummaryError(null);
     setMarketsError(null);
 
-    const [healthResult, summaryResult, marketsResult] = await Promise.allSettled([
+    const [healthResult, summaryResult, marketsResult, realSyncStatusResult, realSyncRunsResult] = await Promise.allSettled([
       refreshHealth(),
       getMarketSystemSummary(),
       getMarkets(),
+      getRealSyncStatus(),
+      getRealSyncRuns({ limit: 8 }),
     ]);
 
     void healthResult;
@@ -301,6 +323,13 @@ export function SystemPage() {
     } else {
       setMarketsError(getErrorMessage(marketsResult.reason, 'Could not refresh markets from the local catalog.'));
     }
+    if (realSyncStatusResult.status === 'fulfilled' && realSyncRunsResult.status === 'fulfilled') {
+      setRealSyncStatus(realSyncStatusResult.value);
+      setRealSyncRuns(realSyncRunsResult.value);
+      setRealSyncError(null);
+    } else {
+      setRealSyncError('Could not refresh real-data sync status.');
+    }
 
     setSummaryLoading(false);
     setMarketsLoading(false);
@@ -309,6 +338,12 @@ export function SystemPage() {
   }, [markets, refreshHealth, summary]);
 
   const summaryStats = useMemo(() => (summary ? buildSummaryStats(summary) : []), [summary]);
+  const providerStatusItems = useMemo(() => {
+    if (!realSyncStatus) {
+      return [];
+    }
+    return Object.values(realSyncStatus.providers);
+  }, [realSyncStatus]);
   const realMarketsCount = useMemo(
     () => markets.filter((market) => market.source_type === 'real_read_only').length,
     [markets],
@@ -341,6 +376,25 @@ export function SystemPage() {
     : summary && summary.total_markets > 0
       ? 'Demo catalog detected'
       : 'Checking catalog';
+
+  const handleTriggerRealSync = useCallback(
+    async (provider: 'kalshi' | 'polymarket') => {
+      setRealSyncTriggerState('running');
+      try {
+        await runRealSync({
+          provider,
+          sync_type: 'active_only',
+          active_only: true,
+          limit: 100,
+          triggered_from: 'system_page',
+        });
+        await handleRefresh();
+      } finally {
+        setRealSyncTriggerState('idle');
+      }
+    },
+    [handleRefresh],
+  );
 
   return (
     <div className="page-stack">
@@ -398,6 +452,57 @@ export function SystemPage() {
       </SectionCard>
 
       <SimulationActivityPanel items={activityItems} observations={observations} isLoading={marketsLoading} errorMessage={marketsError} />
+
+      <SectionCard
+        eyebrow="Read-only provider sync"
+        title="Real-data sync status"
+        description="Technical status of hardened Kalshi/Polymarket refresh runs for real read-only markets and snapshots."
+      >
+        <DataStateWrapper
+          isLoading={isRealSyncLoading}
+          isError={Boolean(realSyncError)}
+          errorMessage={realSyncError ?? undefined}
+          isEmpty={!isRealSyncLoading && !realSyncError && providerStatusItems.length === 0}
+          loadingTitle="Loading provider sync status"
+          loadingDescription="Fetching recent sync runs and provider health signals."
+          errorTitle="Could not load provider sync state"
+          emptyTitle="Run a real-data sync to populate fresh provider state."
+          emptyDescription="No sync runs exist yet for real read-only providers."
+        >
+          <div className="stack-md">
+            <div className="content-grid content-grid--two-columns">
+              {providerStatusItems.map((item) => (
+                <StatusCard
+                  key={item.provider}
+                  title={item.provider.toUpperCase()}
+                  status={item.availability === 'available' && !item.stale ? 'online' : 'degraded'}
+                  description={item.warning || `Latest status: ${item.latest_status ?? 'N/A'}`}
+                  details={[
+                    { label: 'Last success', value: formatTimestamp(item.last_success_at) },
+                    { label: 'Last failed', value: formatTimestamp(item.last_failed_at) },
+                    { label: 'Consecutive failures', value: String(item.consecutive_failures) },
+                  ]}
+                />
+              ))}
+            </div>
+            <div className="button-row">
+              <button type="button" className="secondary-button" disabled={realSyncTriggerState === 'running'} onClick={() => void handleTriggerRealSync('kalshi')}>
+                Sync Kalshi (active-only)
+              </button>
+              <button type="button" className="secondary-button" disabled={realSyncTriggerState === 'running'} onClick={() => void handleTriggerRealSync('polymarket')}>
+                Sync Polymarket (active-only)
+              </button>
+            </div>
+            <ul className="simple-list">
+              {realSyncRuns.map((run) => (
+                <li key={run.id}>
+                  <strong>#{run.id}</strong> {run.provider} · {run.sync_type} · <StatusBadge tone={run.status === 'SUCCESS' ? 'ready' : run.status === 'FAILED' ? 'offline' : 'pending'}>{run.status}</StatusBadge> · {run.summary}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </DataStateWrapper>
+      </SectionCard>
 
       <section className="content-grid content-grid--two-columns">
         <SectionCard

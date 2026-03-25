@@ -18,6 +18,7 @@ import {
   runGenerateTradeReviews,
   runRevaluePortfolio,
   runSimulationTick,
+  runSyncRealData,
   runSyncDemoState,
 } from '../../services/automation';
 import type { DemoAutomationActionType, DemoAutomationRun, DemoAutomationStatus } from '../../types/automation';
@@ -64,6 +65,13 @@ const actionDefinitions: Array<{
     description: 'Collect a lightweight backend summary without executing trades or autonomous behavior.',
     tone: 'secondary',
     run: () => runSyncDemoState('automation_page'),
+  },
+  {
+    actionType: 'sync_real_data',
+    label: 'Sync real data (read-only)',
+    description: 'Run a conservative active-only refresh for Kalshi and Polymarket without enabling any real trading.',
+    tone: 'secondary',
+    run: () => runSyncRealData('automation_page'),
   },
   {
     actionType: 'run_demo_cycle',

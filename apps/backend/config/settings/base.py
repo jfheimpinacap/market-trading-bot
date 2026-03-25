@@ -79,6 +79,7 @@ LOCAL_APPS = [
     'apps.safety_guard',
     'apps.evaluation_lab',
     'apps.learning_memory',
+    'apps.real_data_sync',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

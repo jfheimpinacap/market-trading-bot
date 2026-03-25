@@ -6,7 +6,8 @@ export type DemoAutomationActionType =
   | 'sync_demo_state'
   | 'run_demo_cycle'
   | 'rebuild_learning_memory'
-  | 'run_full_learning_cycle';
+  | 'run_full_learning_cycle'
+  | 'sync_real_data';
 
 export type DemoAutomationStatus = 'RUNNING' | 'SUCCESS' | 'PARTIAL' | 'FAILED';
 export type DemoAutomationStepStatus = 'SUCCESS' | 'FAILED' | 'SKIPPED';

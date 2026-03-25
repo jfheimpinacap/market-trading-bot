@@ -19,6 +19,7 @@ class IngestionResult:
     markets_created: int = 0
     markets_updated: int = 0
     snapshots_created: int = 0
+    errors: list[str] | None = None
 
 
 def ingest_provider_markets(
@@ -36,20 +37,23 @@ def ingest_provider_markets(
         query=query,
         provider_market_id=provider_market_id,
     )
-    result = IngestionResult(provider=provider_slug, fetched=len(records))
+    result = IngestionResult(provider=provider_slug, fetched=len(records), errors=[])
     provider = _upsert_provider(provider_slug)
 
     with transaction.atomic():
         for record in records:
-            event, event_created = _upsert_event(provider, record)
-            market, market_created = _upsert_market(provider, event, record)
-            snapshot_created = _create_snapshot(market, record)
+            try:
+                event, event_created = _upsert_event(provider, record)
+                market, market_created = _upsert_market(provider, event, record)
+                snapshot_created = _create_snapshot(market, record)
 
-            result.events_created += int(event_created)
-            result.events_updated += int(not event_created)
-            result.markets_created += int(market_created)
-            result.markets_updated += int(not market_created)
-            result.snapshots_created += int(snapshot_created)
+                result.events_created += int(event_created)
+                result.events_updated += int(not event_created)
+                result.markets_created += int(market_created)
+                result.markets_updated += int(not market_created)
+                result.snapshots_created += int(snapshot_created)
+            except Exception as exc:  # noqa: BLE001
+                result.errors.append(f'{record.provider_market_id}: {exc}')
 
     return result
 

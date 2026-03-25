@@ -782,3 +782,28 @@ Jerarquía operativa explícita:
 - safety limita/puede frenar
 
 Fuera de alcance: ML real, LLM local, ejecución real o dinero real.
+
+## Real data refresh pipeline hardening (new)
+
+A dedicated backend boundary now exists at `apps.real_data_sync` for hardened read-only provider refresh runs.
+
+What it adds:
+- persisted `ProviderSyncRun` audit model (`SUCCESS/PARTIAL/FAILED/RUNNING`)
+- sync orchestration service that reuses existing provider adapters + normalization (`apps.markets.services.real_data_ingestion`)
+- provider health/status view (`last_success`, `last_failed`, `consecutive_failures`, stale warning)
+- API endpoints:
+  - `POST /api/real-sync/run/`
+  - `GET /api/real-sync/runs/`
+  - `GET /api/real-sync/runs/<id>/`
+  - `GET /api/real-sync/status/`
+  - `GET /api/real-sync/summary/`
+- management command:
+  - `python manage.py sync_real_markets --provider kalshi`
+  - `python manage.py sync_real_markets --provider polymarket --active-only --limit 100`
+  - `python manage.py sync_real_markets --provider kalshi --market-id <id>`
+
+Scope remains intentionally strict:
+- read-only market-data refresh only
+- no real exchange auth
+- no real order execution
+- no websocket/streaming sync

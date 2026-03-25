@@ -65,6 +65,10 @@ class ContinuousDemoControlRequestSerializer(serializers.Serializer):
     learning_rebuild_enabled = serializers.BooleanField(required=False)
     learning_rebuild_every_n_cycles = serializers.IntegerField(required=False, min_value=2, max_value=500)
     learning_rebuild_after_reviews = serializers.BooleanField(required=False)
+    real_data_refresh_enabled = serializers.BooleanField(required=False)
+    real_data_refresh_every_n_cycles = serializers.IntegerField(required=False, min_value=2, max_value=500)
+    real_data_refresh_active_only = serializers.BooleanField(required=False)
+    real_data_refresh_limit = serializers.IntegerField(required=False, min_value=1, max_value=500)
 
 
 class ContinuousDemoStatusSerializer(serializers.Serializer):
