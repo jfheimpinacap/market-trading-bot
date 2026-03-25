@@ -59,7 +59,7 @@ export function RealOpsPage() {
         eyebrow="Autonomous real-market scope"
         title="Real Ops"
         description="Autonomous evaluation and paper execution only for eligible real markets in read-only data mode. No real exchange auth. No real money execution."
-        actions={<button type="button" className="secondary-button" onClick={() => navigate('/continuous-demo')}>Open Continuous Demo</button>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/allocation')}>Open Allocation</button><button type="button" className="secondary-button" onClick={() => navigate('/continuous-demo')}>Open Continuous Demo</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
@@ -84,6 +84,13 @@ export function RealOpsPage() {
           <div className="button-row">
             <button type="button" className="secondary-button" disabled={busy} onClick={() => void handleEvaluate()}>Evaluate real-market scope</button>
             <button type="button" className="primary-button" disabled={busy || !status?.enabled} onClick={() => void handleRun()}>Run real-market paper cycle</button>
+          </div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Allocation bridge" title="Execution prioritization status" description="Real Ops uses allocation prioritization before paper auto-execution when multiple proposals compete.">
+          <div className="button-row">
+            <StatusBadge tone="ready">ALLOCATION ACTIVE</StatusBadge>
+            <StatusBadge tone="neutral">PAPER/DEMO ONLY</StatusBadge>
           </div>
         </SectionCard>
 

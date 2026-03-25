@@ -5,6 +5,7 @@ import { EvaluationPage } from '../pages/EvaluationPage';
 import { LearningPage } from '../pages/LearningPage';
 import { RealOpsPage } from '../pages/RealOpsPage';
 import { ContinuousDemoPage } from '../pages/ContinuousDemoPage';
+import { AllocationPage } from '../pages/AllocationPage';
 import { MarketDetailPage } from '../pages/MarketDetailPage';
 import { MarketsPage } from '../pages/MarketsPage';
 import { PortfolioPage } from '../pages/PortfolioPage';
@@ -86,6 +87,13 @@ export const appRoutes: AppRoute[] = [
     path: '/automation',
     description: 'Guided demo controls for simulation, signals, portfolio revalue, and review refresh runs.',
     component: AutomationPage,
+  },
+
+  {
+    label: 'Allocation',
+    path: '/allocation',
+    description: 'Portfolio-aware capital allocation and execution prioritization for paper/demo proposals.',
+    component: AllocationPage,
   },
   {
     label: 'Portfolio',

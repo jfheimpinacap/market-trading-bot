@@ -280,3 +280,15 @@ It focuses on operator visibility and controlled triggers:
 - audit recent run outcomes.
 
 This complements (does not replace) `/continuous-demo` and `/automation`.
+
+## Allocation route (`/allocation`)
+
+Nueva ruta frontend orientada a operación técnica:
+- consume `services/allocation.ts`
+- muestra cards de resumen + tabla de ranking/decisión + historial de runs
+- estado loading/error/empty explícito para flujo local-first
+- enfatiza que toda ejecución sigue en modo paper/demo
+
+Integración ligera:
+- dashboard quick link
+- botones desde Real Ops y Continuous Demo hacia `/allocation`

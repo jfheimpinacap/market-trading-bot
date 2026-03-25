@@ -490,3 +490,13 @@ Still explicitly out of scope:
 - API endpoints: `/api/real-ops/evaluate/`, `/api/real-ops/run/`, `/api/real-ops/runs/`, `/api/real-ops/status/`.
 - Frontend route `/real-ops` provides controls for evaluation/run, scope summary, provider-sync awareness, and recent run audit table.
 - Explicitly out of scope: real exchange auth, real execution adapters, websockets/streaming, and real-money trading.
+
+### Portfolio-aware allocation demo (new)
+
+El sistema ahora incluye una capa explícita de **portfolio-aware capital allocation / execution prioritization** en modo paper/demo:
+- ranking heurístico y auditable de propuestas competidoras
+- asignación conservadora de cantidad final según cash/exposición/límites
+- historial de corridas y decisiones (`AllocationRun`, `AllocationDecision`)
+- integración con `semi_auto_demo` y `real_market_ops` antes de autoejecución paper
+
+Se mantiene fuera de alcance: optimización cuantitativa avanzada, Kelly, ML/LLM, y dinero real.

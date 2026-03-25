@@ -40,6 +40,12 @@ export const dashboardQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Allocation',
+    description: 'Prioritize and size competing proposals with conservative portfolio-aware caps before paper execution.',
+    path: '/allocation',
+    availability: 'live',
+  },
+  {
     title: 'Semi-Auto',
     description: 'Run evaluate-only or conservative paper-only semi-auto cycles with explicit pending approvals.',
     path: '/semi-auto',
