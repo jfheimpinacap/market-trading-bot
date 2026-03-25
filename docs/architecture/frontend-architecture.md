@@ -402,3 +402,14 @@ Integraciones ligeras:
 - `/alerts` incluye enlace rápido a `/notifications`
 - `/alerts` muestra estado de última notificación por alerta
 - `/system` muestra bloque de salud de delivery
+
+## Notifications automation UI architecture (new)
+
+The `/notifications` route now acts as the local automation control surface.
+
+Integration split:
+- `services/notifications.ts`: automation status/control + dispatch/digest run endpoints + escalation feed
+- `types/notifications.ts`: automation and escalation types + trigger-source typing
+- `pages/notifications/NotificationsPage.tsx`: cards + control actions + delivery/escalation tables with explicit loading/error/empty states
+
+This keeps automation operator-visible and auditable without introducing realtime sockets or heavy client state.

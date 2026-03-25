@@ -1,6 +1,12 @@
 from rest_framework import serializers
 
-from apps.notification_center.models import NotificationChannel, NotificationDelivery, NotificationRule
+from apps.notification_center.models import (
+    NotificationAutomationState,
+    NotificationChannel,
+    NotificationDelivery,
+    NotificationEscalationEvent,
+    NotificationRule,
+)
 
 
 class NotificationChannelSerializer(serializers.ModelSerializer):
@@ -40,3 +46,18 @@ class NotificationDeliverySerializer(serializers.ModelSerializer):
 
 class TriggerSendSerializer(serializers.Serializer):
     force = serializers.BooleanField(required=False, default=False)
+
+
+class NotificationAutomationStateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NotificationAutomationState
+        fields = '__all__'
+
+
+class NotificationEscalationEventSerializer(serializers.ModelSerializer):
+    alert_source = serializers.CharField(source='alert.source', read_only=True)
+    alert_title = serializers.CharField(source='alert.title', read_only=True)
+
+    class Meta:
+        model = NotificationEscalationEvent
+        fields = '__all__'

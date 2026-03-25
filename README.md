@@ -619,3 +619,15 @@ Se agregó una capa explícita de **notification delivery / escalation routing**
 - Frontend nuevo: ruta `/notifications` con canales, reglas, historial, resumen y acciones manuales.
 
 Fuera de alcance por diseño: ejecución real, dinero real, LLM local, campañas masivas, orquestación enterprise de mensajería.
+
+### Automatic notification dispatch + digest automation (new)
+
+`notification_center` now supports local-first automation without real-money execution:
+
+- automatic immediate dispatch for relevant/open alerts (rule-driven, dedupe+cooldown preserved)
+- automatic digest cycles with conservative cadence (`cycle_window` digests)
+- persistence escalation for stale critical/high alerts and repeated warnings
+- auditable delivery trace via `NotificationDelivery.trigger_source` (`manual`, `automatic`, `digest_automation`, `escalation`)
+- automation state controls via API and `/notifications` UI
+
+Still out of scope: real trading, distributed schedulers, websocket push, and complex multi-tenant notification campaigns.
