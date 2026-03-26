@@ -1206,3 +1206,26 @@ Backend endpoints:
 - `GET /api/postmortem-board/summary/`
 
 LLM-local usage is optional and bounded: reviewers always start from structured context and degrade gracefully when Ollama is unavailable.
+
+## Research universe scanner / triage board (new)
+
+`apps.research_agent` now separates three backend responsibilities:
+
+- `services/universe_scan.py`: explicit universe run orchestration + persisted run stats.
+- `services/market_triage.py`: transparent eligibility/triage rules and profile thresholds.
+- `services/pursuit_board.py`: board summary + pursuit candidate query surface.
+
+New core entities:
+- `MarketUniverseScanRun`
+- `MarketTriageDecision`
+- `PursuitCandidate`
+
+New endpoints:
+- `POST /api/research/run-universe-scan/`
+- `GET /api/research/universe-scans/`
+- `GET /api/research/universe-scans/<id>/`
+- `GET /api/research/pursuit-candidates/`
+- `GET /api/research/board-summary/`
+- `POST /api/research/run-triage-to-prediction/`
+
+Design boundary: no real-money paths and no real order execution are introduced.

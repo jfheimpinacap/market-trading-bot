@@ -647,3 +647,17 @@ Service split:
 - `services/board.py`: run orchestration and persistence
 
 This keeps postmortem multi-agent behavior explicit/auditable and avoids free-form autonomous planning.
+
+## Research universe scan architecture (new)
+
+The research boundary now has a dedicated **universe triage** layer on top of narrative ingestion/analysis:
+
+1. Universe load (`Market` scope by provider/source/activity).
+2. Transparent triage scoring (liquidity, volume, timing, status, freshness, narrative boost/caution).
+3. Persisted decisions (`MarketTriageDecision`) per market.
+4. Persisted pursuit board output (`PursuitCandidate`) for shortlist/watch.
+5. Run-level audit envelope (`MarketUniverseScanRun`) with aggregated reasons and counters.
+
+This keeps views thin and makes triage auditable and replayable.
+
+Out of scope (unchanged): real execution, real-money ops, opaque optimizers, and LLM-final-authority flows.

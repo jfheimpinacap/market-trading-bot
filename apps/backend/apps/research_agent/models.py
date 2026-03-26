@@ -41,6 +41,25 @@ class ResearchScanRunStatus(models.TextChoices):
     FAILED = 'failed', 'Failed'
 
 
+class MarketUniverseScanRunStatus(models.TextChoices):
+    RUNNING = 'running', 'Running'
+    SUCCESS = 'success', 'Success'
+    PARTIAL = 'partial', 'Partial'
+    FAILED = 'failed', 'Failed'
+
+
+class TriageStatus(models.TextChoices):
+    SHORTLISTED = 'shortlisted', 'Shortlisted'
+    WATCH = 'watch', 'Watch'
+    FILTERED_OUT = 'filtered_out', 'Filtered out'
+
+
+class ResearchFilterProfile(models.TextChoices):
+    CONSERVATIVE = 'conservative_scan', 'Conservative scan'
+    BALANCED = 'balanced_scan', 'Balanced scan'
+    BROAD = 'broad_scan', 'Broad scan'
+
+
 class NarrativeSource(TimeStampedModel):
     name = models.CharField(max_length=120)
     slug = models.SlugField(max_length=120, unique=True)
@@ -155,3 +174,63 @@ class ResearchScanRun(TimeStampedModel):
 
     class Meta:
         ordering = ['-started_at', '-id']
+
+
+class MarketUniverseScanRun(TimeStampedModel):
+    status = models.CharField(max_length=12, choices=MarketUniverseScanRunStatus.choices, default=MarketUniverseScanRunStatus.RUNNING)
+    triggered_by = models.CharField(max_length=32, default='manual')
+    filter_profile = models.CharField(max_length=32, choices=ResearchFilterProfile.choices, default=ResearchFilterProfile.BALANCED)
+    provider_scope = models.JSONField(default=list, blank=True)
+    source_scope = models.JSONField(default=list, blank=True)
+    markets_considered = models.PositiveIntegerField(default=0)
+    markets_filtered_out = models.PositiveIntegerField(default=0)
+    markets_shortlisted = models.PositiveIntegerField(default=0)
+    markets_watchlist = models.PositiveIntegerField(default=0)
+    started_at = models.DateTimeField()
+    finished_at = models.DateTimeField(null=True, blank=True)
+    summary = models.CharField(max_length=255, blank=True)
+    details = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class MarketTriageDecision(TimeStampedModel):
+    run = models.ForeignKey(MarketUniverseScanRun, on_delete=models.CASCADE, related_name='triage_decisions')
+    market = models.ForeignKey('markets.Market', on_delete=models.CASCADE, related_name='triage_decisions')
+    triage_status = models.CharField(max_length=16, choices=TriageStatus.choices)
+    triage_score = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('0.00'))
+    exclusion_reasons = models.JSONField(default=list, blank=True)
+    flags = models.JSONField(default=list, blank=True)
+    narrative_coverage = models.PositiveIntegerField(default=0)
+    narrative_relevance = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    narrative_confidence = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    source_mix = models.CharField(max_length=24, default='none')
+    rationale = models.CharField(max_length=255, blank=True)
+    details = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-triage_score', '-created_at', '-id']
+        constraints = [models.UniqueConstraint(fields=['run', 'market'], name='research_unique_run_market_triage_decision')]
+
+
+class PursuitCandidate(TimeStampedModel):
+    run = models.ForeignKey(MarketUniverseScanRun, on_delete=models.CASCADE, related_name='pursuit_candidates')
+    triage_decision = models.OneToOneField(MarketTriageDecision, on_delete=models.CASCADE, related_name='pursuit_candidate')
+    market = models.ForeignKey('markets.Market', on_delete=models.CASCADE, related_name='pursuit_candidates')
+    provider_slug = models.CharField(max_length=64)
+    liquidity = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
+    volume_24h = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
+    time_to_resolution_hours = models.IntegerField(null=True, blank=True)
+    market_probability = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    narrative_coverage = models.PositiveIntegerField(default=0)
+    narrative_direction = models.CharField(max_length=16, choices=NarrativeSentiment.choices, default=NarrativeSentiment.UNCERTAIN)
+    source_mix = models.CharField(max_length=24, default='none')
+    triage_score = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('0.00'))
+    triage_status = models.CharField(max_length=16, choices=TriageStatus.choices)
+    rationale = models.CharField(max_length=255, blank=True)
+    details = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-triage_score', '-created_at', '-id']
+        constraints = [models.UniqueConstraint(fields=['run', 'market'], name='research_unique_run_market_pursuit_candidate')]

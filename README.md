@@ -757,3 +757,16 @@ The platform now includes a local-first **postmortem board / loss review committ
 - integrates into learning memory with conservative handoff
 - adds an explicit agent pipeline: `postmortem_board_cycle`
 - remains strictly paper/demo only with no real-money or real-execution path
+
+## Research universe scanner / triage board (new)
+
+`research_agent` now includes a formal **universe scanner + market triage board** layer:
+
+- explicit `MarketUniverseScanRun` runs with auditable counters (considered, filtered, shortlisted, watchlist)
+- transparent `MarketTriageDecision` records with score, status, reasons, and flags
+- explicit `PursuitCandidate` outputs for markets worth pursuing (`shortlisted` / `watch`)
+- profile-based thresholds (`conservative_scan`, `balanced_scan`, `broad_scan`)
+- narrative remains a contextual boost/caution signal (not a mandatory gate)
+- handoff path from triage board to prediction pipeline (`run-triage-to-prediction`)
+
+Scope remains local-first and **paper/demo only**: no real money, no real execution, no opaque optimizer/planner.

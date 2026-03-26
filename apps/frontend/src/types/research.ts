@@ -95,6 +95,65 @@ export type ResearchScanRun = {
   updated_at: string;
 };
 
+export type MarketUniverseScanRun = {
+  id: number;
+  status: 'running' | 'success' | 'partial' | 'failed';
+  triggered_by: string;
+  filter_profile: 'conservative_scan' | 'balanced_scan' | 'broad_scan' | string;
+  provider_scope: string[];
+  source_scope: string[];
+  markets_considered: number;
+  markets_filtered_out: number;
+  markets_shortlisted: number;
+  markets_watchlist: number;
+  started_at: string;
+  finished_at: string | null;
+  summary: string;
+  details: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PursuitCandidate = {
+  id: number;
+  run: number;
+  triage_decision: number;
+  market: number;
+  market_slug: string;
+  market_title: string;
+  provider_slug: string;
+  liquidity: string | null;
+  volume_24h: string | null;
+  time_to_resolution_hours: number | null;
+  market_probability: string | null;
+  narrative_coverage: number;
+  narrative_direction: NarrativeSentiment;
+  source_mix: string;
+  triage_score: string;
+  triage_status: 'shortlisted' | 'watch' | 'filtered_out';
+  rationale: string;
+  details: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ResearchBoardSummary = {
+  latest_scan: {
+    id: number;
+    status: string;
+    filter_profile: string;
+    started_at: string;
+    finished_at: string | null;
+    summary: string;
+  } | null;
+  markets_considered: number;
+  markets_filtered_out: number;
+  markets_shortlisted: number;
+  markets_watchlist: number;
+  top_exclusion_reasons: [string, number][];
+  status_breakdown: Record<string, number>;
+};
+
 export type ResearchSummary = {
   source_count: number;
   rss_source_count: number;
@@ -109,4 +168,6 @@ export type ResearchSummary = {
   candidate_count: number;
   mixed_candidate_count: number;
   latest_run: ResearchScanRun | null;
+  latest_universe_scan: MarketUniverseScanRun | null;
+  pursuit_candidate_count: number;
 };

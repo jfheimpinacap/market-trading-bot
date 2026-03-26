@@ -542,3 +542,15 @@ Frontend adds `/postmortem-board` with dedicated service/type boundaries:
 - `src/pages/PostmortemBoardPage.tsx`
 
 The screen is intentionally operational and auditable (run control, run history, per-perspective panels, final conclusion), and keeps clear empty/loading/error states (including "Generate trade reviews first" guidance).
+
+## Research triage board frontend extension (new)
+
+The `/research` route now combines narrative scan and universe triage board in one operator workspace:
+
+- narrative ingest/analysis controls remain intact
+- universe scan controls are added (profile-driven)
+- board summary and pursuit candidates are fetched via `services/research.ts`
+- triage status badges (`SHORTLISTED`, `WATCH`, `FILTERED_OUT`) and rationale are shown in-table
+- prediction handoff action is visible from the board
+
+This avoids adding another route/module while keeping scan → triage → prediction flow explicit.

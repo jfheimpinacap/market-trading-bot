@@ -1,10 +1,14 @@
 from rest_framework import serializers
 
 from apps.research_agent.models import (
+    MarketTriageDecision,
+    MarketUniverseScanRun,
     NarrativeAnalysis,
     NarrativeItem,
     NarrativeSource,
+    PursuitCandidate,
     ResearchCandidate,
+    ResearchFilterProfile,
     ResearchScanRun,
 )
 
@@ -166,3 +170,97 @@ class ResearchScanRunSerializer(serializers.ModelSerializer):
             'updated_at',
         )
         read_only_fields = fields
+
+
+class UniverseScanRunRequestSerializer(serializers.Serializer):
+    filter_profile = serializers.ChoiceField(choices=ResearchFilterProfile.choices, required=False)
+    provider_scope = serializers.ListField(child=serializers.CharField(max_length=64), required=False)
+    source_scope = serializers.ListField(child=serializers.CharField(max_length=24), required=False)
+
+
+class MarketUniverseScanRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MarketUniverseScanRun
+        fields = (
+            'id',
+            'status',
+            'triggered_by',
+            'filter_profile',
+            'provider_scope',
+            'source_scope',
+            'markets_considered',
+            'markets_filtered_out',
+            'markets_shortlisted',
+            'markets_watchlist',
+            'started_at',
+            'finished_at',
+            'summary',
+            'details',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+
+class MarketTriageDecisionSerializer(serializers.ModelSerializer):
+    market_slug = serializers.CharField(source='market.slug', read_only=True)
+    market_title = serializers.CharField(source='market.title', read_only=True)
+
+    class Meta:
+        model = MarketTriageDecision
+        fields = (
+            'id',
+            'run',
+            'market',
+            'market_slug',
+            'market_title',
+            'triage_status',
+            'triage_score',
+            'exclusion_reasons',
+            'flags',
+            'narrative_coverage',
+            'narrative_relevance',
+            'narrative_confidence',
+            'source_mix',
+            'rationale',
+            'details',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+
+class PursuitCandidateSerializer(serializers.ModelSerializer):
+    market_slug = serializers.CharField(source='market.slug', read_only=True)
+    market_title = serializers.CharField(source='market.title', read_only=True)
+
+    class Meta:
+        model = PursuitCandidate
+        fields = (
+            'id',
+            'run',
+            'triage_decision',
+            'market',
+            'market_slug',
+            'market_title',
+            'provider_slug',
+            'liquidity',
+            'volume_24h',
+            'time_to_resolution_hours',
+            'market_probability',
+            'narrative_coverage',
+            'narrative_direction',
+            'source_mix',
+            'triage_score',
+            'triage_status',
+            'rationale',
+            'details',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+
+class TriageToPredictionRequestSerializer(serializers.Serializer):
+    run_id = serializers.IntegerField(min_value=1)
+    limit = serializers.IntegerField(min_value=1, max_value=50, required=False, default=10)
