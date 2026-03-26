@@ -145,6 +145,9 @@ export function SignalsPage() {
               Run to proposal
             </button>
           ) : null}
+          <button className="secondary-button" type="button" onClick={() => navigate('/opportunities')}>
+            Open opportunities supervisor
+          </button>
           {actionMessage ? <span className="muted-text">{actionMessage}</span> : null}
         </div>
       </SectionCard>

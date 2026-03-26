@@ -26,6 +26,7 @@ import { SettingsPage } from '../pages/SettingsPage';
 import { SafetyPage } from '../pages/SafetyPage';
 import { SemiAutoPage } from '../pages/SemiAutoPage';
 import { SignalsPage } from '../pages/SignalsPage';
+import { OpportunitiesPage } from '../pages/OpportunitiesPage';
 import { SystemPage } from '../pages/SystemPage';
 import type { NavRoute } from '../types/system';
 
@@ -61,6 +62,12 @@ export const appRoutes: AppRoute[] = [
     path: '/signals',
     description: 'Signal fusion opportunity board with composite ranking, proposal gating, and paper/demo-only execution boundaries.',
     component: SignalsPage,
+  },
+  {
+    label: 'Opportunities',
+    path: '/opportunities',
+    description: 'End-to-end autonomous opportunity supervisor from signal fusion through proposal/allocation and final paper execution path.',
+    component: OpportunitiesPage,
   },
   {
     label: 'Proposals',

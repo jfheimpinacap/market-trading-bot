@@ -51,6 +51,18 @@ const PIPELINE_OPTIONS: Array<{ key: AgentPipelineRun['pipeline_type']; label: s
     description: 'Read-only real-market scope through research→prediction→risk in paper/demo mode.',
     payload: { market_limit: 5, quantity: '1.0000' },
   },
+  {
+    key: 'opportunity_cycle_pipeline',
+    label: 'Run Opportunity Cycle Pipeline',
+    description: 'research→prediction→risk handoffs plus opportunity supervisor cycle (signal→proposal→allocation→path).',
+    payload: { profile_slug: 'balanced_supervisor' },
+  },
+  {
+    key: 'signal_to_proposal_execution_cycle',
+    label: 'Run Signal→Proposal→Execution Cycle',
+    description: 'Shortcut pipeline for end-to-end signal-to-execution-path supervision in paper/demo mode.',
+    payload: { profile_slug: 'balanced_supervisor' },
+  },
 ];
 
 export function AgentsPage() {

@@ -565,3 +565,15 @@ The `/signals` route now acts as a true opportunity board instead of a passive s
 - recent fusion run history
 
 This keeps the existing visual language (technical, sober, desktop-first) while improving handoff quality into prediction, market detail, proposals, and operator decisions.
+
+## Opportunities page architecture (new)
+
+`/opportunities` is a thin operational page backed by `services/opportunities.ts`.
+
+It intentionally avoids global state and only composes:
+- summary fetch
+- cycles fetch
+- latest-cycle items fetch
+- run-cycle mutation
+
+The page visualizes governance outcomes rather than recomputing them client-side.
