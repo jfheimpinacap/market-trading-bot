@@ -66,3 +66,54 @@ export type PredictionSummary = {
   avg_confidence: string | null;
   latest_score: PredictionScore | null;
 };
+
+export type PredictionDatasetRun = {
+  id: number;
+  name: string;
+  status: string;
+  label_definition: string;
+  feature_set_version: string;
+  rows_built: number;
+  positive_rows: number;
+  negative_rows: number;
+  snapshot_horizon_hours: number;
+  summary: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PredictionTrainingRun = {
+  id: number;
+  status: string;
+  model_type: string;
+  rows_used: number;
+  artifact_created: boolean;
+  validation_summary: Record<string, unknown>;
+  summary: string;
+  started_at: string;
+  finished_at: string | null;
+  dataset_run: PredictionDatasetRun;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PredictionModelArtifact = {
+  id: number;
+  name: string;
+  version: string;
+  model_type: string;
+  label_definition: string;
+  feature_set_version: string;
+  is_active: boolean;
+  validation_metrics: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PredictionTrainingSummary = {
+  latest_dataset: PredictionDatasetRun | null;
+  active_model: PredictionModelArtifact | null;
+  training_runs_by_status: Record<string, number>;
+  models_total: number;
+};

@@ -7,14 +7,27 @@ import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
 import { getMarkets } from '../services/markets';
 import {
+  activatePredictionModel,
+  buildPredictionDataset,
+  getPredictionModels,
   getPredictionProfiles,
   getPredictionScores,
   getPredictionSummary,
+  getPredictionTrainingRuns,
+  getPredictionTrainingSummary,
   scoreMarketPrediction,
+  trainPredictionModel,
 } from '../services/prediction';
 import { getLlmStatus } from '../services/llm';
 import type { MarketListItem } from '../types/markets';
-import type { PredictionProfile, PredictionScore, PredictionSummary } from '../types/prediction';
+import type {
+  PredictionModelArtifact,
+  PredictionProfile,
+  PredictionScore,
+  PredictionSummary,
+  PredictionTrainingRun,
+  PredictionTrainingSummary,
+} from '../types/prediction';
 
 function fmtPct(value?: string | null) {
   if (!value) return '—';
@@ -44,6 +57,9 @@ export function PredictionPage() {
   const [profiles, setProfiles] = useState<PredictionProfile[]>([]);
   const [scores, setScores] = useState<PredictionScore[]>([]);
   const [summary, setSummary] = useState<PredictionSummary | null>(null);
+  const [trainingSummary, setTrainingSummary] = useState<PredictionTrainingSummary | null>(null);
+  const [trainingRuns, setTrainingRuns] = useState<PredictionTrainingRun[]>([]);
+  const [models, setModels] = useState<PredictionModelArtifact[]>([]);
   const [markets, setMarkets] = useState<MarketListItem[]>([]);
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(initialMarketId);
   const [selectedProfile, setSelectedProfile] = useState<string>('heuristic_baseline');
@@ -52,21 +68,30 @@ export function PredictionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scoring, setScoring] = useState(false);
+  const [buildingDataset, setBuildingDataset] = useState(false);
+  const [training, setTraining] = useState(false);
+  const [activatingModelId, setActivatingModelId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [profilesRes, scoresRes, summaryRes, marketsRes, llmRes] = await Promise.all([
+      const [profilesRes, scoresRes, summaryRes, marketsRes, llmRes, trainingSummaryRes, trainingRunsRes, modelsRes] = await Promise.all([
         getPredictionProfiles(),
         getPredictionScores(),
         getPredictionSummary(),
         getMarkets({ ordering: '-updated_at' }),
         getLlmStatus(),
+        getPredictionTrainingSummary(),
+        getPredictionTrainingRuns(),
+        getPredictionModels(),
       ]);
       setProfiles(profilesRes);
       setScores(scoresRes);
       setSummary(summaryRes);
+      setTrainingSummary(trainingSummaryRes);
+      setTrainingRuns(trainingRunsRes.slice(0, 20));
+      setModels(modelsRes.slice(0, 20));
       setMarkets(marketsRes.slice(0, 200));
       setLlmReachable(Boolean(llmRes.reachable));
       if (!selectedMarketId && marketsRes.length > 0) {
@@ -108,6 +133,49 @@ export function PredictionPage() {
     }
   };
 
+  const runBuildDataset = async () => {
+    setBuildingDataset(true);
+    setError(null);
+    try {
+      await buildPredictionDataset({ name: 'ui_dataset', horizon_hours: 24 });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Dataset build failed.');
+    } finally {
+      setBuildingDataset(false);
+    }
+  };
+
+  const runTraining = async () => {
+    if (!trainingSummary?.latest_dataset?.id) {
+      setError('Build dataset first.');
+      return;
+    }
+    setTraining(true);
+    setError(null);
+    try {
+      await trainPredictionModel({ dataset_run_id: trainingSummary.latest_dataset.id, model_name: 'xgboost_baseline' });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Training failed.');
+    } finally {
+      setTraining(false);
+    }
+  };
+
+  const runActivateModel = async (id: number) => {
+    setActivatingModelId(id);
+    setError(null);
+    try {
+      await activatePredictionModel(id);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Activation failed.');
+    } finally {
+      setActivatingModelId(null);
+    }
+  };
+
   const recentScores = useMemo(() => scores.slice(0, 25), [scores]);
 
   return (
@@ -120,32 +188,55 @@ export function PredictionPage() {
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
-        <SectionCard eyebrow="Overview" title="Prediction summary" description="MVP foundation: feature snapshot → profile scoring → basic calibration → edge/confidence output.">
+        <SectionCard eyebrow="Overview" title="Prediction summary" description="MVP foundation: feature snapshot → profile scoring → calibrated trained model (if active) → fallback heuristic.">
           <div className="system-metadata-grid">
             <div><strong>Profiles:</strong> {summary?.profile_count ?? 0}</div>
             <div><strong>Total scores:</strong> {summary?.total_scores ?? 0}</div>
             <div><strong>Average edge:</strong> {fmtPct(summary?.avg_edge)}</div>
             <div><strong>Average confidence:</strong> {fmtPct(summary?.avg_confidence)}</div>
           </div>
+          <p style={{ marginTop: '0.75rem' }}>
+            <strong>Active runtime model:</strong>{' '}
+            {trainingSummary?.active_model ? `${trainingSummary.active_model.name} (${trainingSummary.active_model.version})` : 'Heuristic fallback (no active trained model)'}
+          </p>
           {llmReachable === false ? (
             <p style={{ marginTop: '0.75rem' }}><strong>Degraded narrative mode:</strong> prediction scoring still runs using market/momentum features if LLM-backed narrative refresh is unavailable.</p>
           ) : null}
         </SectionCard>
 
-        <SectionCard eyebrow="Profiles" title="Model profiles" description="Switch profile to compare baseline vs narrative/momentum emphasis.">
-          {profiles.length === 0 ? (
-            <EmptyState eyebrow="No profiles" title="No prediction profiles available" description="Prediction profiles will auto-seed after backend initialization." />
+        <SectionCard eyebrow="Training" title="Dataset + training controls" description="Offline-only local pipeline. Build reproducible dataset, run XGBoost + sigmoid calibration, activate model.">
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button type="button" className="secondary-button" onClick={() => void runBuildDataset()} disabled={buildingDataset}>{buildingDataset ? 'Building dataset...' : 'Build dataset'}</button>
+            <button type="button" className="secondary-button" onClick={() => void runTraining()} disabled={training || !trainingSummary?.latest_dataset}>{training ? 'Training...' : 'Train model'}</button>
+          </div>
+          <div className="system-metadata-grid" style={{ marginTop: '0.75rem' }}>
+            <div><strong>Latest dataset rows:</strong> {trainingSummary?.latest_dataset?.rows_built ?? 0}</div>
+            <div><strong>Label:</strong> {trainingSummary?.latest_dataset?.label_definition ?? '—'}</div>
+            <div><strong>Feature set:</strong> {trainingSummary?.latest_dataset?.feature_set_version ?? '—'}</div>
+            <div><strong>Models total:</strong> {trainingSummary?.models_total ?? 0}</div>
+          </div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Model registry" title="Model artifacts" description="Activate one model at a time for prediction runtime. Risk/policy/safety are unchanged.">
+          {models.length === 0 ? (
+            <EmptyState eyebrow="No models" title="No trained model artifacts yet" description="Build dataset and run training to register the first XGBoost artifact." />
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
-                <thead><tr><th>Slug</th><th>Description</th><th>Narrative</th><th>Learning</th></tr></thead>
+                <thead><tr><th>Name</th><th>Type</th><th>Version</th><th>Accuracy</th><th>Active</th><th /></tr></thead>
                 <tbody>
-                  {profiles.map((profile) => (
-                    <tr key={profile.id}>
-                      <td>{profile.slug}</td>
-                      <td>{profile.description}</td>
-                      <td>{profile.use_narrative ? 'on' : 'off'}</td>
-                      <td>{profile.use_learning ? 'on' : 'off'}</td>
+                  {models.map((model) => (
+                    <tr key={model.id}>
+                      <td>{model.name}</td>
+                      <td>{model.model_type}</td>
+                      <td>{model.version}</td>
+                      <td>{String(model.validation_metrics?.accuracy ?? '—')}</td>
+                      <td>{model.is_active ? 'yes' : 'no'}</td>
+                      <td>
+                        <button type="button" className="link-button" disabled={model.is_active || activatingModelId === model.id} onClick={() => void runActivateModel(model.id)}>
+                          {activatingModelId === model.id ? 'Activating...' : model.is_active ? 'Active' : 'Activate'}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -154,7 +245,31 @@ export function PredictionPage() {
           )}
         </SectionCard>
 
-        <SectionCard eyebrow="Score market" title="Run prediction scoring" description="Select a market + profile to compute system probability and edge.">
+        <SectionCard eyebrow="Training runs" title="Recent training runs" description="Validation metrics (accuracy, log loss, brier score) and calibration status.">
+          {trainingRuns.length === 0 ? (
+            <EmptyState eyebrow="No runs" title="No training runs yet" description="Train a model to see validation reports and artifact creation events." />
+          ) : (
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>ID</th><th>Status</th><th>Rows</th><th>Accuracy</th><th>Log loss</th><th>Finished</th></tr></thead>
+                <tbody>
+                  {trainingRuns.map((run) => (
+                    <tr key={run.id}>
+                      <td>{run.id}</td>
+                      <td>{run.status}</td>
+                      <td>{run.rows_used}</td>
+                      <td>{String(run.validation_summary?.accuracy ?? '—')}</td>
+                      <td>{String(run.validation_summary?.log_loss ?? '—')}</td>
+                      <td>{run.finished_at ? new Date(run.finished_at).toLocaleString() : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard eyebrow="Score market" title="Run prediction scoring" description="Select a market + profile to compute calibrated system probability and edge.">
           <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: '2fr 1fr auto' }}>
             <select value={selectedMarketId ?? ''} onChange={(e) => setSelectedMarketId(Number(e.target.value))}>
               {markets.map((market) => <option key={market.id} value={market.id}>{market.title}</option>)}
@@ -176,11 +291,11 @@ export function PredictionPage() {
               <div className="system-metadata-grid">
                 <div><strong>Market:</strong> <button type="button" className="link-button" onClick={() => navigate(`/markets/${result.market_slug}`)}>{result.market_title}</button></div>
                 <div><strong>Profile:</strong> {result.profile_slug}</div>
+                <div><strong>Model used:</strong> {result.model_profile_used}</div>
                 <div><strong>System probability:</strong> {fmtPct(result.system_probability)}</div>
                 <div><strong>Market probability:</strong> {fmtPct(result.market_probability)}</div>
                 <div><strong>Edge:</strong> <StatusBadge tone={edgeTone(result.edge_label)}>{fmtPct(result.edge)} ({result.edge_label})</StatusBadge></div>
                 <div><strong>Confidence:</strong> <StatusBadge tone={confidenceTone(result.confidence_level)}>{fmtPct(result.confidence)} ({result.confidence_level})</StatusBadge></div>
-                <div><strong>Narrative contribution:</strong> {fmtPct(result.narrative_contribution)}</div>
               </div>
               <p style={{ marginTop: '0.75rem' }}><strong>Rationale:</strong> {result.rationale}</p>
             </>

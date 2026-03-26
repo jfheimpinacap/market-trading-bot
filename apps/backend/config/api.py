@@ -30,4 +30,5 @@ urlpatterns = [
     path('llm/', include(('apps.llm_local.urls', 'llm_local'), namespace='llm_local')),
     path('research/', include(('apps.research_agent.urls', 'research_agent'), namespace='research_agent')),
     path('prediction/', include(('apps.prediction_agent.urls', 'prediction_agent'), namespace='prediction_agent')),
+    path('prediction/', include(('apps.prediction_training.urls', 'prediction_training'), namespace='prediction_training')),
 ]
