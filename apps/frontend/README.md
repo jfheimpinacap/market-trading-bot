@@ -14,6 +14,21 @@ El frontend ya no se siente como un conjunto de módulos separados. La UX ahora 
 6. **Portfolio** para ver impacto en equity, posiciones y trades.
 7. **Post-mortem** para revisar outcome, lecciones y volver al market o portfolio.
 
+## Prediction model governance en `/prediction`
+
+La pantalla `/prediction` ahora incluye una capa de gobernanza de modelo (sin auto-switch):
+
+- **Active model card** con estado actual del runtime (o fallback heurístico)
+- **Comparison panel** para ejecutar comparaciones baseline vs candidate por scope y evaluation profile
+- **Comparison runs table** con winner + recommendation + trazabilidad temporal
+- **Recommendation block** con códigos auditables:
+  - `KEEP_HEURISTIC`
+  - `KEEP_ACTIVE_MODEL`
+  - `ACTIVATE_CANDIDATE`
+  - `CAUTION_REVIEW_MANUALLY`
+
+Todo sigue local-first y paper/demo only.
+
 ## Exploración de mercados reales (read-only) en frontend
 
 La vista de mercados ahora soporta dos orígenes de datos sin ambigüedad visual:

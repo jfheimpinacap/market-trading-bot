@@ -1,5 +1,9 @@
 import { requestJson } from './api/client';
 import type {
+  ActiveModelRecommendation,
+  ModelComparisonRun,
+  ModelEvaluationProfile,
+  ModelGovernanceSummary,
   PredictionModelArtifact,
   PredictionProfile,
   PredictionScore,
@@ -59,4 +63,33 @@ export function activatePredictionModel(id: number) {
     method: 'POST',
     body: JSON.stringify({}),
   });
+}
+
+export function getModelProfiles() {
+  return requestJson<ModelEvaluationProfile[]>('/api/prediction/model-profiles/');
+}
+
+export function compareModels(payload: {
+  baseline_key: string;
+  candidate_key: string;
+  profile_slug: string;
+  scope: 'demo_only' | 'real_only' | 'mixed';
+  dataset_run_id?: number;
+}) {
+  return requestJson<ModelComparisonRun>('/api/prediction/compare-models/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getModelComparisons() {
+  return requestJson<ModelComparisonRun[]>('/api/prediction/comparisons/');
+}
+
+export function getActiveModelRecommendation() {
+  return requestJson<ActiveModelRecommendation>('/api/prediction/active-model-recommendation/');
+}
+
+export function getModelGovernanceSummary() {
+  return requestJson<ModelGovernanceSummary>('/api/prediction/model-governance-summary/');
 }

@@ -259,6 +259,23 @@ Nueva capa backend `apps.learning_memory`:
 - Integración: proposal/risk reciben solo nudges conservadores y auditable metadata
 - Rebuild explícito: command + endpoint
 
+## Prediction model governance layer
+
+`apps.prediction_training` now includes a conservative model-governance boundary:
+
+- `ModelEvaluationProfile`: metric weights + minimum thresholds.
+- `ModelComparisonRun` + `ModelComparisonResult`: auditable predictor comparison history.
+- services split:
+  - `services/comparison.py`: executes offline/scope-aware comparison.
+  - `services/evaluation.py`: profile registry/defaults.
+  - `services/recommendation.py`: recommendation decisioning.
+  - `services/governance.py`: active-summary aggregation.
+
+Runtime boundary remains explicit:
+- `prediction_agent` keeps runtime scoring.
+- no automatic model activation occurs.
+- operator must call activate endpoint manually.
+
 
 ## Controlled learning loop integration
 

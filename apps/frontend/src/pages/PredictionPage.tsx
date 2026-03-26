@@ -9,6 +9,11 @@ import { getMarkets } from '../services/markets';
 import {
   activatePredictionModel,
   buildPredictionDataset,
+  compareModels,
+  getActiveModelRecommendation,
+  getModelComparisons,
+  getModelGovernanceSummary,
+  getModelProfiles,
   getPredictionModels,
   getPredictionProfiles,
   getPredictionScores,
@@ -21,6 +26,10 @@ import {
 import { getLlmStatus } from '../services/llm';
 import type { MarketListItem } from '../types/markets';
 import type {
+  ActiveModelRecommendation,
+  ModelComparisonRun,
+  ModelEvaluationProfile,
+  ModelGovernanceSummary,
   PredictionModelArtifact,
   PredictionProfile,
   PredictionScore,
@@ -61,8 +70,16 @@ export function PredictionPage() {
   const [trainingRuns, setTrainingRuns] = useState<PredictionTrainingRun[]>([]);
   const [models, setModels] = useState<PredictionModelArtifact[]>([]);
   const [markets, setMarkets] = useState<MarketListItem[]>([]);
+  const [modelProfiles, setModelProfiles] = useState<ModelEvaluationProfile[]>([]);
+  const [comparisonRuns, setComparisonRuns] = useState<ModelComparisonRun[]>([]);
+  const [recommendation, setRecommendation] = useState<ActiveModelRecommendation | null>(null);
+  const [governanceSummary, setGovernanceSummary] = useState<ModelGovernanceSummary | null>(null);
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(initialMarketId);
   const [selectedProfile, setSelectedProfile] = useState<string>('heuristic_baseline');
+  const [comparisonBaselineKey, setComparisonBaselineKey] = useState<string>('heuristic_baseline');
+  const [comparisonCandidateKey, setComparisonCandidateKey] = useState<string>('active_model');
+  const [comparisonProfileSlug, setComparisonProfileSlug] = useState<string>('balanced_model_eval');
+  const [comparisonScope, setComparisonScope] = useState<'demo_only' | 'real_only' | 'mixed'>('mixed');
   const [result, setResult] = useState<PredictionScore | null>(null);
   const [llmReachable, setLlmReachable] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,12 +88,13 @@ export function PredictionPage() {
   const [buildingDataset, setBuildingDataset] = useState(false);
   const [training, setTraining] = useState(false);
   const [activatingModelId, setActivatingModelId] = useState<number | null>(null);
+  const [comparingModels, setComparingModels] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [profilesRes, scoresRes, summaryRes, marketsRes, llmRes, trainingSummaryRes, trainingRunsRes, modelsRes] = await Promise.all([
+      const [profilesRes, scoresRes, summaryRes, marketsRes, llmRes, trainingSummaryRes, trainingRunsRes, modelsRes, modelProfilesRes, comparisonRunsRes, recommendationRes, governanceSummaryRes] = await Promise.all([
         getPredictionProfiles(),
         getPredictionScores(),
         getPredictionSummary(),
@@ -85,6 +103,10 @@ export function PredictionPage() {
         getPredictionTrainingSummary(),
         getPredictionTrainingRuns(),
         getPredictionModels(),
+        getModelProfiles(),
+        getModelComparisons(),
+        getActiveModelRecommendation(),
+        getModelGovernanceSummary(),
       ]);
       setProfiles(profilesRes);
       setScores(scoresRes);
@@ -92,6 +114,10 @@ export function PredictionPage() {
       setTrainingSummary(trainingSummaryRes);
       setTrainingRuns(trainingRunsRes.slice(0, 20));
       setModels(modelsRes.slice(0, 20));
+      setModelProfiles(modelProfilesRes);
+      setComparisonRuns(comparisonRunsRes.slice(0, 20));
+      setRecommendation(recommendationRes);
+      setGovernanceSummary(governanceSummaryRes);
       setMarkets(marketsRes.slice(0, 200));
       setLlmReachable(Boolean(llmRes.reachable));
       if (!selectedMarketId && marketsRes.length > 0) {
@@ -176,6 +202,29 @@ export function PredictionPage() {
     }
   };
 
+  const runCompareModels = async () => {
+    if (comparisonCandidateKey === 'active_model' && !trainingSummary?.active_model) {
+      setError('Train and activate a candidate model first.');
+      return;
+    }
+    setComparingModels(true);
+    setError(null);
+    try {
+      await compareModels({
+        baseline_key: comparisonBaselineKey,
+        candidate_key: comparisonCandidateKey,
+        profile_slug: comparisonProfileSlug,
+        scope: comparisonScope,
+        dataset_run_id: trainingSummary?.latest_dataset?.id,
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Model comparison failed.');
+    } finally {
+      setComparingModels(false);
+    }
+  };
+
   const recentScores = useMemo(() => scores.slice(0, 25), [scores]);
 
   return (
@@ -202,6 +251,15 @@ export function PredictionPage() {
           {llmReachable === false ? (
             <p style={{ marginTop: '0.75rem' }}><strong>Degraded narrative mode:</strong> prediction scoring still runs using market/momentum features if LLM-backed narrative refresh is unavailable.</p>
           ) : null}
+        </SectionCard>
+
+        <SectionCard eyebrow="Active model governance" title="Active model recommendation" description="Auditable recommendation only. Runtime model does not switch automatically.">
+          <div className="system-metadata-grid">
+            <div><strong>Active model:</strong> {governanceSummary?.active_model ? `${governanceSummary.active_model.name} (${governanceSummary.active_model.version})` : 'Heuristic fallback remains active.'}</div>
+            <div><strong>Recommendation:</strong> <StatusBadge tone={recommendation?.recommendation_code === 'ACTIVATE_CANDIDATE' ? 'ready' : recommendation?.recommendation_code?.startsWith('KEEP') ? 'pending' : 'neutral'}>{recommendation?.recommendation_code ?? 'CAUTION_REVIEW_MANUALLY'}</StatusBadge></div>
+            <div><strong>Latest winner:</strong> {recommendation?.winner ?? 'INCONCLUSIVE'}</div>
+            <div><strong>Reasons:</strong> {(recommendation?.recommendation_reasons ?? []).join(', ') || 'No comparison run yet.'}</div>
+          </div>
         </SectionCard>
 
         <SectionCard eyebrow="Training" title="Dataset + training controls" description="Offline-only local pipeline. Build reproducible dataset, run XGBoost + sigmoid calibration, activate model.">
@@ -261,6 +319,63 @@ export function PredictionPage() {
                       <td>{String(run.validation_summary?.accuracy ?? '—')}</td>
                       <td>{String(run.validation_summary?.log_loss ?? '—')}</td>
                       <td>{run.finished_at ? new Date(run.finished_at).toLocaleString() : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard eyebrow="Model comparison" title="Heuristic vs XGBoost comparison" description="Compare baseline predictor vs candidate by profile + scope to decide activation with evidence.">
+          <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: '1fr 1fr 1fr 1fr auto' }}>
+            <select value={comparisonBaselineKey} onChange={(e) => setComparisonBaselineKey(e.target.value)}>
+              <option value="heuristic_baseline">heuristic_baseline</option>
+              <option value="narrative_weighted">narrative_weighted</option>
+              <option value="market_momentum_weighted">market_momentum_weighted</option>
+              <option value="active_model">active_model</option>
+            </select>
+            <select value={comparisonCandidateKey} onChange={(e) => setComparisonCandidateKey(e.target.value)}>
+              <option value="active_model">active_model</option>
+              <option value="heuristic_baseline">heuristic_baseline</option>
+              <option value="narrative_weighted">narrative_weighted</option>
+              <option value="market_momentum_weighted">market_momentum_weighted</option>
+              {models.map((model) => <option key={model.id} value={`artifact:${model.id}`}>artifact:{model.id} {model.name}:{model.version}</option>)}
+            </select>
+            <select value={comparisonProfileSlug} onChange={(e) => setComparisonProfileSlug(e.target.value)}>
+              {modelProfiles.map((profile) => <option key={profile.id} value={profile.slug}>{profile.slug}</option>)}
+            </select>
+            <select value={comparisonScope} onChange={(e) => setComparisonScope(e.target.value as 'demo_only' | 'real_only' | 'mixed')}>
+              <option value="mixed">mixed</option>
+              <option value="demo_only">demo_only</option>
+              <option value="real_only">real_only</option>
+            </select>
+            <button type="button" className="secondary-button" onClick={() => void runCompareModels()} disabled={comparingModels}>
+              {comparingModels ? 'Comparing...' : 'Compare models'}
+            </button>
+          </div>
+          {!models.length ? (
+            <p style={{ marginTop: '0.75rem' }}>Train and activate a candidate model first.</p>
+          ) : null}
+        </SectionCard>
+
+        <SectionCard eyebrow="Recent comparisons" title="Recent model comparison runs" description="Metrics side-by-side, winner badge, recommendation and rationale for activation governance.">
+          {comparisonRuns.length === 0 ? (
+            <EmptyState eyebrow="No comparisons" title="No model comparisons yet." description="Run Compare models to generate auditable governance evidence." />
+          ) : (
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>ID</th><th>Status</th><th>Scope</th><th>Compared</th><th>Winner</th><th>Recommendation</th><th>Created</th></tr></thead>
+                <tbody>
+                  {comparisonRuns.map((run) => (
+                    <tr key={run.id}>
+                      <td>{run.id}</td>
+                      <td>{run.status}</td>
+                      <td>{run.scope}</td>
+                      <td>{run.baseline_key} vs {run.candidate_key}</td>
+                      <td><StatusBadge tone={run.winner === 'CANDIDATE_BETTER' ? 'ready' : run.winner === 'BASELINE_BETTER' ? 'offline' : 'neutral'}>{run.winner}</StatusBadge></td>
+                      <td><StatusBadge tone={run.recommendation_code === 'ACTIVATE_CANDIDATE' ? 'ready' : run.recommendation_code.startsWith('KEEP') ? 'pending' : 'neutral'}>{run.recommendation_code}</StatusBadge></td>
+                      <td>{new Date(run.created_at).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
