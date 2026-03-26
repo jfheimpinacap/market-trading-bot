@@ -70,6 +70,7 @@ LOCAL_APPS = [
     'apps.risk_agent',
     'apps.signals',
     'apps.postmortem_demo',
+    'apps.postmortem_agents',
     'apps.agents',
     'apps.audit',
     'apps.automation_demo',

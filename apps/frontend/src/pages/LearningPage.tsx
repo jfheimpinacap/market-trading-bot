@@ -86,6 +86,7 @@ export function LearningPage() {
         actions={(
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>Open Evaluation</button>
+            <button type="button" className="secondary-button" onClick={() => navigate('/postmortem-board')}>Open Postmortem Board</button>
             <button type="button" className="secondary-button" disabled={isRebuilding} onClick={() => void handleRebuild()}>
               {isRebuilding ? 'Rebuilding learning memory...' : 'Rebuild learning memory'}
             </button>

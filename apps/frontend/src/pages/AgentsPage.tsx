@@ -40,6 +40,12 @@ const PIPELINE_OPTIONS: Array<{ key: AgentPipelineRun['pipeline_type']; label: s
     payload: { review_limit: 25 },
   },
   {
+    key: 'postmortem_board_cycle',
+    label: 'Run Postmortem Board Cycle',
+    description: 'Runs postmortem board committee (narrative/prediction/risk/runtime/learning) with explicit handoffs.',
+    payload: { review_limit: 25, force_learning_rebuild: true },
+  },
+  {
     key: 'real_market_agent_cycle',
     label: 'Run Real-Market Agent Cycle',
     description: 'Read-only real-market scope through research→prediction→risk in paper/demo mode.',
@@ -111,6 +117,7 @@ export function AgentsPage() {
             <button type="button" className="secondary-button" onClick={() => navigate('/prediction')}>Open Prediction</button>
             <button type="button" className="secondary-button" onClick={() => navigate('/runtime')}>Open Runtime</button>
             <button type="button" className="secondary-button" onClick={() => navigate('/risk-agent')}>Open Risk Agent</button>
+            <button type="button" className="secondary-button" onClick={() => navigate('/postmortem-board')}>Open Postmortem Board</button>
           </div>
         )}
       />

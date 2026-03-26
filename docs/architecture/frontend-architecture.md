@@ -521,3 +521,12 @@ A dedicated `/agents` route now provides orchestration visibility as a first-cla
 - API endpoints: `POST /api/risk-agent/assess/`, `POST /api/risk-agent/size/`, `POST /api/risk-agent/run-watch/`, `GET /api/risk-agent/assessments/`, `GET /api/risk-agent/watch-events/`, `GET /api/risk-agent/summary/`.
 - Frontend route `/risk-agent` provides assessment, sizing, watch loop, and audit history panels.
 - Out of scope remains unchanged: no real money, no real execution, no production-grade Kelly optimizer, no exchange stop-loss automation.
+
+## Postmortem board frontend module (new)
+
+Frontend adds `/postmortem-board` with dedicated service/type boundaries:
+- `src/services/postmortemBoard.ts`
+- `src/types/postmortemBoard.ts`
+- `src/pages/PostmortemBoardPage.tsx`
+
+The screen is intentionally operational and auditable (run control, run history, per-perspective panels, final conclusion), and keeps clear empty/loading/error states (including "Generate trade reviews first" guidance).

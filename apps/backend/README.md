@@ -1179,3 +1179,29 @@ This remains paper/demo only and does not replace `risk_demo`, `policy_engine`, 
 - API endpoints: `POST /api/risk-agent/assess/`, `POST /api/risk-agent/size/`, `POST /api/risk-agent/run-watch/`, `GET /api/risk-agent/assessments/`, `GET /api/risk-agent/watch-events/`, `GET /api/risk-agent/summary/`.
 - Frontend route `/risk-agent` provides assessment, sizing, watch loop, and audit history panels.
 - Out of scope remains unchanged: no real money, no real execution, no production-grade Kelly optimizer, no exchange stop-loss automation.
+
+## Postmortem board committee (new)
+
+`apps.postmortem_agents` adds a structured, auditable multi-perspective postmortem layer on top of existing `postmortem_demo` reviews.
+
+Perspectives in v1:
+- narrative/research
+- prediction
+- risk/sizing
+- runtime/safety/operator context
+- learning synthesis
+
+Key entities:
+- `PostmortemBoardRun`
+- `PostmortemAgentReview`
+- `PostmortemBoardConclusion`
+
+Backend endpoints:
+- `POST /api/postmortem-board/run/`
+- `GET /api/postmortem-board/runs/`
+- `GET /api/postmortem-board/runs/<id>/`
+- `GET /api/postmortem-board/reviews/`
+- `GET /api/postmortem-board/conclusions/`
+- `GET /api/postmortem-board/summary/`
+
+LLM-local usage is optional and bounded: reviewers always start from structured context and degrade gracefully when Ollama is unavailable.

@@ -31,6 +31,13 @@ DEFAULT_AGENT_DEFINITIONS = [
         'agent_type': 'postmortem',
         'description': 'Generates trade outcome reviews with structured lessons for learning loops.',
     },
+
+    {
+        'name': 'Postmortem Board Agent',
+        'slug': 'postmortem_board_agent',
+        'agent_type': 'postmortem_board',
+        'description': 'Runs structured multi-perspective postmortem board review and outputs auditable board conclusions.',
+    },
     {
         'name': 'Learning Agent',
         'slug': 'learning_agent',

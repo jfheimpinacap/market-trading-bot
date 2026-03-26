@@ -146,6 +146,13 @@ export function PostMortemPage() {
 
   const contextLinks = useMemo<ContextLinkItem[]>(() => [
     {
+      title: 'Open postmortem board',
+      description: 'Run a multi-perspective board cycle to enrich loss analysis and structured learning handoff.',
+      href: '/postmortem-board',
+      actionLabel: 'Open board',
+      tone: 'primary',
+    },
+    {
       title: 'Back to portfolio',
       description: 'Compare review conclusions against current equity, open positions, and trade history.',
       href: '/portfolio',

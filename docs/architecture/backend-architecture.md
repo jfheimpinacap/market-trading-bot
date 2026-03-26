@@ -634,3 +634,15 @@ without replacing those modules all at once.
 - API endpoints: `POST /api/risk-agent/assess/`, `POST /api/risk-agent/size/`, `POST /api/risk-agent/run-watch/`, `GET /api/risk-agent/assessments/`, `GET /api/risk-agent/watch-events/`, `GET /api/risk-agent/summary/`.
 - Frontend route `/risk-agent` provides assessment, sizing, watch loop, and audit history panels.
 - Out of scope remains unchanged: no real money, no real execution, no production-grade Kelly optimizer, no exchange stop-loss automation.
+
+## Postmortem board architecture (new)
+
+`apps.postmortem_agents` is a thin orchestration/synthesis boundary that reuses existing domains (`postmortem_demo`, `research_agent`, `prediction_agent`, `risk_agent`, `runtime_governor`, `safety_guard`, `operator_queue`, `learning_memory`) without duplicating their core logic.
+
+Service split:
+- `services/context.py`: gathers evidence from existing structured models
+- `services/reviewers.py`: perspective-level structured reviews (optional local LLM)
+- `services/conclusion.py`: final failure-mode synthesis + learning handoff
+- `services/board.py`: run orchestration and persistence
+
+This keeps postmortem multi-agent behavior explicit/auditable and avoids free-form autonomous planning.

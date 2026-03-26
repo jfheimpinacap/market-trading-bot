@@ -8,6 +8,7 @@ urlpatterns = [
     path('risk-agent/', include(('apps.risk_agent.urls', 'risk_agent'), namespace='risk_agent')),
     path('signals/', include(('apps.signals.urls', 'signals'), namespace='signals')),
     path('reviews/', include(('apps.postmortem_demo.urls', 'postmortem_demo'), namespace='postmortem_demo')),
+    path('postmortem-board/', include(('apps.postmortem_agents.urls', 'postmortem_agents'), namespace='postmortem_agents')),
     path('agents/', include(('apps.agents.urls', 'agents'), namespace='agents')),
     path('audit/', include(('apps.audit.urls', 'audit'), namespace='audit')),
     path('automation/', include(('apps.automation_demo.urls', 'automation_demo'), namespace='automation_demo')),
