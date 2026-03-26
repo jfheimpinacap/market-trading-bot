@@ -3,7 +3,7 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.research_agent.models import NarrativeItem, NarrativeSource, ResearchCandidate, ResearchScanRun
+from apps.research_agent.models import NarrativeItem, NarrativeSource, NarrativeSourceType, ResearchCandidate, ResearchScanRun
 from apps.research_agent.serializers import (
     NarrativeItemSerializer,
     NarrativeSourceCreateSerializer,
@@ -13,7 +13,7 @@ from apps.research_agent.serializers import (
     ResearchScanRunSerializer,
 )
 from apps.research_agent.services.analyze import run_narrative_analysis
-from apps.research_agent.services.scan import run_research_scan
+from apps.research_agent.services.scan import run_full_research_scan, run_research_scan
 
 
 class ResearchSourceListCreateView(generics.ListCreateAPIView):
@@ -40,6 +40,17 @@ class ResearchRunIngestView(APIView):
             source_ids=serializer.validated_data.get('source_ids'),
             run_analysis=serializer.validated_data.get('run_analysis', True),
         )
+        return Response(ResearchScanRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class ResearchRunFullScanView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = ResearchRunRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_full_research_scan(source_ids=serializer.validated_data.get('source_ids'))
         return Response(ResearchScanRunSerializer(run).data, status=status.HTTP_200_OK)
 
 
@@ -87,9 +98,14 @@ class ResearchSummaryView(APIView):
         latest_run = ResearchScanRun.objects.order_by('-started_at', '-id').first()
         payload = {
             'source_count': NarrativeSource.objects.filter(is_enabled=True).count(),
+            'rss_source_count': NarrativeSource.objects.filter(is_enabled=True, source_type=NarrativeSourceType.RSS).count(),
+            'reddit_source_count': NarrativeSource.objects.filter(is_enabled=True, source_type=NarrativeSourceType.REDDIT).count(),
             'item_count': NarrativeItem.objects.count(),
+            'rss_item_count': NarrativeItem.objects.filter(source__source_type=NarrativeSourceType.RSS).count(),
+            'reddit_item_count': NarrativeItem.objects.filter(source__source_type=NarrativeSourceType.REDDIT).count(),
             'analyzed_count': NarrativeItem.objects.filter(analysis__isnull=False).count(),
             'candidate_count': ResearchCandidate.objects.count(),
+            'mixed_candidate_count': ResearchCandidate.objects.filter(source_mix__in=['mixed', 'social_heavy', 'news_confirmed']).count(),
             'latest_run': ResearchScanRunSerializer(latest_run).data if latest_run else None,
         }
         return Response(payload, status=status.HTTP_200_OK)

@@ -12,13 +12,15 @@ from apps.research_agent.models import NarrativeAnalysis, NarrativeAnalysisStatu
 SYSTEM_PROMPT = (
     'You are a narrative research extractor for prediction markets. Return strict JSON with keys: '
     'summary (string), sentiment (bullish|bearish|neutral|mixed|uncertain), confidence (0..1 number), '
-    'entities (array of strings), topics (array of strings), market_relevance_score (0..1 number), market_implication (string).'
+    'entities (array of strings), topics (array of strings), market_relevance_score (0..1 number), '
+    'social_signal_strength (0..1 number), hype_risk (0..1 number), noise_risk (0..1 number), market_implication (string).'
 )
 
 
 @dataclass
 class AnalysisResult:
     analyzed: int = 0
+    degraded: int = 0
     errors: list[str] | None = None
 
     def __post_init__(self):
@@ -50,6 +52,9 @@ def _normalize_payload(payload: dict, text: str) -> dict:
     topics = [str(value).strip() for value in (payload.get('topics') or []) if str(value).strip()][:12]
     summary = str(payload.get('summary') or text[:220]).strip()
     implication = str(payload.get('market_implication') or '').strip()
+    social_signal_strength = min(max(float(payload.get('social_signal_strength', 0.3)), 0.0), 1.0)
+    hype_risk = min(max(float(payload.get('hype_risk', 0.25)), 0.0), 1.0)
+    noise_risk = min(max(float(payload.get('noise_risk', 0.25)), 0.0), 1.0)
     return {
         'summary': summary,
         'sentiment': sentiment,
@@ -58,6 +63,9 @@ def _normalize_payload(payload: dict, text: str) -> dict:
         'topics': topics,
         'market_relevance_score': Decimal(f'{relevance:.4f}'),
         'market_implication': implication,
+        'social_signal_strength': Decimal(f'{social_signal_strength:.4f}'),
+        'hype_risk': Decimal(f'{hype_risk:.4f}'),
+        'noise_risk': Decimal(f'{noise_risk:.4f}'),
     }
 
 
@@ -104,12 +112,22 @@ def run_narrative_analysis(*, item_ids: list[int] | None = None) -> AnalysisResu
                 'entities': [],
                 'topics': [],
                 'market_relevance_score': 0.2,
+                'social_signal_strength': 0.22,
+                'hype_risk': 0.28,
+                'noise_risk': 0.3,
             }
 
         normalized = _normalize_payload(payload, text)
-        metadata = {'market_implication': normalized['market_implication']}
+        metadata = {
+            'market_implication': normalized['market_implication'],
+            'social_signal_strength': float(normalized['social_signal_strength']),
+            'hype_risk': float(normalized['hype_risk']),
+            'noise_risk': float(normalized['noise_risk']),
+            'source_type': item.source.source_type,
+        }
         if error_note:
             metadata['degraded_reason'] = error_note
+            result.degraded += 1
 
         try:
             vector = embed_text(f"{item.title}\n{normalized['summary']}")

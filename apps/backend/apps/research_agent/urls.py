@@ -7,6 +7,7 @@ from apps.research_agent.views import (
     NarrativeItemListView,
     ResearchCandidateListView,
     ResearchRunAnalysisView,
+    ResearchRunFullScanView,
     ResearchRunIngestView,
     ResearchSourceListCreateView,
     ResearchSummaryView,
@@ -15,6 +16,7 @@ from apps.research_agent.views import (
 urlpatterns = [
     path('sources/', ResearchSourceListCreateView.as_view(), name='source-list-create'),
     path('run-ingest/', ResearchRunIngestView.as_view(), name='run-ingest'),
+    path('run-full-scan/', ResearchRunFullScanView.as_view(), name='run-full-scan'),
     path('run-analysis/', ResearchRunAnalysisView.as_view(), name='run-analysis'),
     path('items/', NarrativeItemListView.as_view(), name='item-list'),
     path('items/<int:pk>/', NarrativeItemDetailView.as_view(), name='item-detail'),

@@ -53,6 +53,7 @@ apps/backend/
 - `apps.semi_auto_demo`: conservative semi-autonomous demo orchestration layer for evaluate-only, guarded paper auto-execution, and pending manual approvals.
 - `apps.experiment_lab`: strategy profile persistence plus experiment run orchestration across replay and evaluation, with normalized comparison outputs.
 - `apps.prediction_training`: offline prediction dataset/training/model-registry plus model governance (heuristic-vs-artifact comparison + recommendation).
+- `apps.research_agent`: narrative scan/research layer with RSS + Reddit ingestion, local LLM structured analysis, heuristic market linking, and shortlist candidate generation for paper/demo workflows.
 
 ## Markets app summary
 The `apps.markets` app now provides a practical local catalog for prediction-market development without adding trading workflows or provider integrations.
