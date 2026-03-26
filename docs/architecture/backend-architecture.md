@@ -557,3 +557,13 @@ Se deja separado el contrato de features/scoring/profile para permitir luego:
 - exportar datasets de `PredictionFeatureSnapshot` + labels
 - cargar scorer entrenado en un profile dedicado
 - mantener APIs y consumers sin ruptura
+
+## Prediction training architecture boundary
+
+The backend keeps `apps.prediction_agent` focused on runtime scoring/inference and introduces `apps.prediction_training` for offline model lifecycle:
+
+- `PredictionDatasetRun`: reproducible dataset metadata + artifact path
+- `PredictionTrainingRun`: training execution status + validation summary
+- `PredictionModelArtifact`: versioned model registry + active flag
+
+`prediction_agent.services.scoring` checks for an active model artifact at runtime. If unavailable or inference fails, it automatically falls back to the existing heuristic profile path and records runtime mode in score details.

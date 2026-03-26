@@ -1120,3 +1120,16 @@ Boundary:
 - paper/demo only
 - no ejecución real
 - no XGBoost entrenado todavía (solo contrato y placeholder de perfil)
+
+## Prediction training pipeline (new)
+
+A new `apps.prediction_training` module provides an offline-first trained-model foundation without changing governance boundaries:
+
+- dataset construction from historical `MarketSnapshot` rows
+- initial label: `future_probability_up_24h` (binary direction at +24h horizon)
+- reproducible train/validation split and persisted training runs
+- XGBoost model training + explicit sigmoid calibration
+- model artifact registry with active model switching
+- prediction runtime fallback to heuristic scorer whenever no active trained model exists or inference fails
+
+This remains paper/demo only and does not replace `risk_demo`, `policy_engine`, or `safety_guard`.

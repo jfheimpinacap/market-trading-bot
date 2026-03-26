@@ -23,6 +23,8 @@ from apps.prediction_agent.services.calibration import (
 )
 from apps.prediction_agent.services.features import build_prediction_features
 from apps.prediction_agent.services.profiles import get_prediction_profile
+from apps.prediction_training.services.dataset import FEATURE_COLUMNS
+from apps.prediction_training.services.registry import get_active_model_artifact, predict_probability
 
 
 @dataclass
@@ -33,6 +35,10 @@ class ScoringResult:
 
 def _safe_decimal(snapshot: dict, key: str, default: str = '0.0000') -> Decimal:
     return Decimal(str(snapshot.get(key, default)))
+
+
+def _build_model_feature_vector(snapshot: dict) -> list[float]:
+    return [float(snapshot.get(column, 0.0) or 0.0) for column in FEATURE_COLUMNS]
 
 
 def score_market_prediction(*, market: Market, profile_slug: str | None = None, triggered_by: str = 'api') -> ScoringResult:
@@ -81,11 +87,35 @@ def score_market_prediction(*, market: Market, profile_slug: str | None = None, 
         + (relevance * relevance_weight)
         + ((market_probability + learning_confidence_delta) * learning_weight)
     )
-    system_probability = apply_linear_calibration(
+    heuristic_system_probability = apply_linear_calibration(
         probability=clamp_probability(raw_probability),
         alpha=profile.calibration_alpha,
         beta=profile.calibration_beta,
     )
+
+    system_probability = heuristic_system_probability
+    model_profile_used = profile.slug
+    model_details = {
+        'runtime_mode': 'heuristic_fallback',
+    }
+    active_artifact = get_active_model_artifact()
+    if active_artifact is not None:
+        try:
+            trained_prediction = predict_probability(artifact=active_artifact, features=_build_model_feature_vector(snapshot))
+            system_probability = clamp_probability(trained_prediction.probability)
+            model_profile_used = f'trained:{trained_prediction.artifact.name}:{trained_prediction.artifact.version}'
+            model_details = {
+                'runtime_mode': 'trained_model',
+                'artifact_id': trained_prediction.artifact.id,
+                'artifact_name': trained_prediction.artifact.name,
+                'artifact_version': trained_prediction.artifact.version,
+                'artifact_model_type': trained_prediction.artifact.model_type,
+            }
+        except Exception as exc:
+            model_details = {
+                'runtime_mode': 'heuristic_fallback_model_error',
+                'error': str(exc),
+            }
 
     edge = q4(system_probability - market_probability)
 
@@ -99,8 +129,9 @@ def score_market_prediction(*, market: Market, profile_slug: str | None = None, 
     conf_level = confidence_level(confidence)
 
     rationale = (
-        f"Profile={profile.slug}. system_probability={system_probability}, market_probability={market_probability}, edge={edge}. "
-        f"Inputs: momentum_delta={momentum_delta}, narrative_probability={narrative_probability if profile.use_narrative else 'disabled'}, "
+        f"Mode={model_details.get('runtime_mode')}. system_probability={system_probability}, market_probability={market_probability}, edge={edge}. "
+        f"Heuristic_baseline={heuristic_system_probability}. Inputs: momentum_delta={momentum_delta}, "
+        f"narrative_probability={narrative_probability if profile.use_narrative else 'disabled'}, "
         f"narrative_confidence={narrative_confidence if profile.use_narrative else 'disabled'}, stale_market_data={feature_result.stale_market_data}."
     )
 
@@ -117,7 +148,7 @@ def score_market_prediction(*, market: Market, profile_slug: str | None = None, 
         edge_label=edge_label,
         rationale=rationale,
         narrative_contribution=q4((narrative_probability - market_probability) * narrative_weight),
-        model_profile_used=profile.slug,
+        model_profile_used=model_profile_used,
         details={
             'weights': weights,
             'market_anchor_weight': str(market_anchor_weight),
@@ -126,6 +157,7 @@ def score_market_prediction(*, market: Market, profile_slug: str | None = None, 
             'relevance_weight': str(relevance_weight),
             'learning_weight': str(learning_weight),
             'triggered_by': triggered_by,
+            'model_runtime': model_details,
         },
     )
 

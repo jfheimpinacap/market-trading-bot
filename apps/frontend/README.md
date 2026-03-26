@@ -576,3 +576,15 @@ También se agregó integración ligera desde `/research`:
 - acción por candidate: `Score in prediction agent`
 
 Todo sigue en modo local-first paper/demo.
+
+## Prediction page enhancements (training + registry)
+
+`/prediction` now includes a technical training panel to support local model lifecycle operations:
+
+- build historical dataset
+- trigger XGBoost training run
+- inspect recent training runs and validation summary
+- inspect model artifacts and activate an artifact for runtime
+- clear runtime message when heuristic fallback is in use
+
+The page remains desktop-first, auditable, and aligned with paper/demo constraints.

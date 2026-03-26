@@ -691,3 +691,15 @@ Fuera de alcance (intencional en esta fase):
 - modelo XGBoost entrenado final
 - autoentrenamiento opaco
 - reemplazo de guardrails por LLM o por el prediction layer
+
+## Prediction trained-model foundation (new)
+
+The prediction stack now includes an offline training foundation for calibrated tabular models:
+
+- historical dataset build from market snapshots
+- initial binary label definition (`future_probability_up_24h`)
+- XGBoost training + sigmoid calibration
+- model artifact registry + active model switching
+- runtime integration with heuristic fallback
+
+Still out of scope: real execution, real money, continuous auto-training loops, AutoML, and replacing risk/policy/safety governance.

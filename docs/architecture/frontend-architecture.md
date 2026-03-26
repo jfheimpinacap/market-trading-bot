@@ -464,3 +464,15 @@ Funciones:
 - tabla de histórico reciente
 - estados loading/error/empty explícitos
 - degradación clara cuando la capa narrativa basada en LLM no está disponible
+
+## Prediction UI technical panel
+
+`/prediction` now combines runtime scoring and model lifecycle controls:
+
+- runtime summary cards and score flow
+- dataset build / train controls
+- training runs table
+- model registry table with activate action
+- explicit fallback messaging when no active trained artifact is available
+
+The UI continues to consume backend APIs as a thin client; training logic remains backend-only.
