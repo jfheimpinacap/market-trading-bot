@@ -12,7 +12,8 @@ El frontend ya no se siente como un conjunto de módulos separados. La UX ahora 
 4. **Market detail** para revisar señal, generar proposal demo, evaluar riesgo, evaluar policy engine y ejecutar paper trade sólo cuando la gobernanza demo lo permite.
 5. **Proposals** para ver la bandeja de propuestas demo y validar direction, quantity, risk/policy y actionability.
 6. **Portfolio** para ver impacto en equity, posiciones y trades.
-7. **Post-mortem** para revisar outcome, lecciones y volver al market o portfolio.
+7. **Positions** para gobernanza de ciclo de vida de posiciones abiertas (hold/reduce/close/review, paper only).
+8. **Post-mortem** para revisar outcome, lecciones y volver al market o portfolio.
 
 ## Research scan workspace en `/research` (RSS + Reddit + X/Twitter adapter)
 
@@ -231,6 +232,13 @@ Query params de markets usados por frontend (sin cliente HTTP paralelo):
 - `GET /api/paper/snapshots/`
 - `GET /api/reviews/`
 
+### Positions lifecycle
+- `POST /api/positions/run-lifecycle/`
+- `GET /api/positions/lifecycle-runs/`
+- `GET /api/positions/lifecycle-runs/<id>/`
+- `GET /api/positions/decisions/`
+- `GET /api/positions/summary/`
+
 ### Post-mortem
 - `GET /api/reviews/`
 - `GET /api/reviews/<id>/`
@@ -258,6 +266,7 @@ Con esto la experiencia queda más consistente sin introducir websockets, pollin
 - `/proposals` — Trade proposal inbox demo
 - `/agents` — Agents placeholder
 - `/portfolio` — Paper trading portfolio summary
+- `/positions` — Position lifecycle manager (hold/reduce/close/review)
 - `/postmortem` — Post-mortem trade review queue
 - `/postmortem/:reviewId` — Post-mortem review detail
 - `/settings` — Settings placeholder

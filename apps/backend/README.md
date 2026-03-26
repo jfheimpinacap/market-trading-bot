@@ -54,6 +54,7 @@ apps/backend/
 - `apps.experiment_lab`: strategy profile persistence plus experiment run orchestration across replay and evaluation, with normalized comparison outputs.
 - `apps.prediction_training`: offline prediction dataset/training/model-registry plus model governance (heuristic-vs-artifact comparison + recommendation).
 - `apps.research_agent`: narrative scan/research layer with RSS + Reddit + optional X/Twitter adapter ingestion, local LLM structured analysis, social normalization, heuristic market linking, and shortlist candidate generation for paper/demo workflows.
+- `apps.position_manager`: position lifecycle manager / exit decision engine that governs open paper positions with HOLD/REDUCE/CLOSE/REVIEW_REQUIRED decisions and auditable exit plans.
 
 ## Markets app summary
 The `apps.markets` app now provides a practical local catalog for prediction-market development without adding trading workflows or provider integrations.
@@ -258,6 +259,27 @@ Current semi-auto endpoints:
 Out of scope by design:
 - real trading execution
 - exchange auth
+
+## Position lifecycle manager summary
+The `apps.position_manager` app closes the paper lifecycle loop after entry:
+
+- consumes open paper positions + latest risk watch events + prediction/research drift context
+- emits explicit lifecycle decisions per position (`HOLD`, `REDUCE`, `CLOSE`, `REVIEW_REQUIRED`, `BLOCK_ADD`)
+- produces one `PositionExitPlan` per decision with queue/auto-execute path and final recommended action
+- honors runtime and safety authority before any paper close/reduce action
+- routes constrained actions into operator queue for review
+
+Endpoints:
+- `/api/positions/run-lifecycle/`
+- `/api/positions/lifecycle-runs/`
+- `/api/positions/lifecycle-runs/<id>/`
+- `/api/positions/decisions/`
+- `/api/positions/summary/`
+
+Explicit non-goals remain:
+- no real-money execution
+- no real exchange orders/stops
+- no opaque planner/LLM as final authority
 - autonomous background schedulers/workers
 - websockets or complex concurrency
 

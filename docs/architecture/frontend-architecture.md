@@ -13,6 +13,7 @@ In the current phase it focuses on these responsibilities:
 5. connect discovery, signals, proposals, risk, policy, paper execution, portfolio, and post-mortem into one coherent demo flow
 6. keep the architecture intentionally simple: no websockets, no global state framework, no realtime orchestration, no new heavy routing model
 7. support read-only exploration of real provider markets without blurring the boundary with demo/paper execution
+8. include explicit post-entry position lifecycle governance via `/positions` (hold/reduce/close/review with paper-only execution paths)
 
 ## Current UX narrative
 
@@ -72,6 +73,7 @@ Instead, each page coordinates a small set of explicit service calls.
 - `services/signals.ts` for legacy signals + fusion runs + opportunity board + proposal-gate actions
 - `services/proposals.ts` for trade proposal list, detail, and generation endpoints
 - `services/paperTrading.ts` for account, positions, trades, snapshots, summary, and revalue
+- `services/positions.ts` for lifecycle runs, lifecycle decisions, summary cards, and run triggers
 - `services/reviews.ts` for review summary, list, and detail
 - `services/riskDemo.ts` for pre-trade assessment
 - `services/policy.ts` for trade approval evaluation and policy decision summaries

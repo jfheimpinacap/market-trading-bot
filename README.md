@@ -6,6 +6,7 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 
 - **Frontend:** React + Vite + TypeScript local-first operator workspace with dashboard, markets, signals, risk, policy approval flow, paper trading, portfolio, post-mortem, automation, semi-auto demo, and system views.
 - **Backend:** Django + Django REST Framework modular API with markets demo, signals demo, risk demo, policy engine demo, paper trading, post-mortem, automation, and health endpoints.
+- **Position lifecycle:** new `position_manager` layer for open paper holding governance (HOLD/REDUCE/CLOSE/REVIEW_REQUIRED), auditable exit plans, mission-control integration, and operator-queue routing.
 - **Research scan:** `research_agent` with RSS + Reddit + optional X/Twitter adapter ingestion, local LLM structured narrative analysis, social normalization, market linking, and mixed-source shortlist generation.
 - **Infrastructure:** Docker Compose services for PostgreSQL and Redis.
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.

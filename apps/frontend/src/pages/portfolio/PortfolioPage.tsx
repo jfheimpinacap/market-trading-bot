@@ -248,6 +248,13 @@ export function PortfolioPage() {
       actionLabel: 'Open reviews',
       tone: 'neutral',
     },
+    {
+      title: 'Govern open positions',
+      description: 'Review hold/reduce/close lifecycle decisions for active paper exposure.',
+      href: '/positions',
+      actionLabel: 'Open positions',
+      tone: 'secondary',
+    },
   ], []);
 
   return (

@@ -146,6 +146,7 @@ export function RiskAgentPage() {
         </SectionCard>
 
         <SectionCard eyebrow="Position watch" title="Recent watch events" description="Detect deterioration and emit monitor/caution/review events for open paper positions.">
+          <p style={{ marginBottom: '0.75rem' }}>Need lifecycle actions after watch events? Open <a href="/positions">/positions</a> for hold/reduce/close/review governance.</p>
           {lastWatch?.watched_positions === 0 ? <p>No open positions detected in paper mode.</p> : null}
           {events.length === 0 ? <EmptyState title="No watch events yet" description="Run watch loop to generate monitoring events." /> : (
             <div className="table-wrapper">

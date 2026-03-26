@@ -50,6 +50,12 @@ DEFAULT_AGENT_DEFINITIONS = [
         'agent_type': 'opportunity_supervisor',
         'description': 'Runs end-to-end opportunity cycle from signal fusion to proposal/allocation execution path resolution.',
     },
+    {
+        'name': 'Position Manager Agent',
+        'slug': 'position_manager_agent',
+        'agent_type': 'position_manager',
+        'description': 'Runs position lifecycle governance to decide hold/reduce/close/review for open paper positions.',
+    },
 ]
 
 
