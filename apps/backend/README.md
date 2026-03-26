@@ -1134,3 +1134,40 @@ A new `apps.prediction_training` module provides an offline-first trained-model 
 - prediction runtime fallback to heuristic scorer whenever no active trained model exists or inference fails
 
 This remains paper/demo only and does not replace `risk_demo`, `policy_engine`, or `safety_guard`.
+
+## Agents orchestration app (`apps.agents`)
+
+`apps.agents` is now the explicit orchestration boundary for local-first, paper/demo-only agent workflows.
+
+### Data model
+- `AgentDefinition`: registry for enabled/disabled agents and schema versions
+- `AgentRun`: per-agent execution trace
+- `AgentPipelineRun`: end-to-end pipeline execution trace
+- `AgentHandoff`: structured transfer record between agent runs
+
+### Services
+- `services/registry.py`: default agent registration bootstrap
+- `services/orchestrator.py`: controlled pipeline runner + run lifecycle
+- `services/pipelines.py`: pipeline implementations reusing existing domain services
+- `services/handoffs.py`: handoff creation helper
+
+### API
+- `GET /api/agents/`
+- `GET /api/agents/runs/`
+- `GET /api/agents/runs/<id>/`
+- `POST /api/agents/run-pipeline/`
+- `GET /api/agents/pipelines/`
+- `GET /api/agents/pipelines/<id>/`
+- `GET /api/agents/handoffs/`
+- `GET /api/agents/summary/`
+
+### Current pipeline integration
+- `research_to_prediction`: uses `research_agent` candidate outputs and `prediction_agent` scoring
+- `postmortem_to_learning`: uses `postmortem_demo` review generation and `learning_memory` rebuild
+- `real_market_agent_cycle`: uses read-only real markets through research → prediction → risk (paper/demo assessments only)
+
+### Explicit scope guardrails
+- no real money
+- no real execution
+- no opaque planner
+- no autonomous black-box agent authority
