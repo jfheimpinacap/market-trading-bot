@@ -65,6 +65,7 @@ export function OpportunitiesPage() {
     { label: 'Queued', value: summary?.queued ?? 0 },
     { label: 'Auto executable', value: summary?.auto_executable ?? 0 },
     { label: 'Blocked', value: summary?.blocked ?? 0 },
+    { label: 'Throttle', value: summary?.portfolio_throttle_state ?? 'NORMAL' },
   ], [summary]);
 
   return (
@@ -84,7 +85,7 @@ export function OpportunitiesPage() {
           </label>
           <button className="primary-button" type="button" disabled={running} onClick={() => void runCycle()}>{running ? 'Running…' : 'Run opportunity cycle'}</button>
           <button className="secondary-button" type="button" onClick={() => navigate('/operator-queue')}>Open queue</button>
-          <button className="secondary-button" type="button" onClick={() => navigate('/proposals')}>Open proposals</button><button className="secondary-button" type="button" onClick={() => navigate('/mission-control')}>Open mission control</button>
+          <button className="secondary-button" type="button" onClick={() => navigate('/proposals')}>Open proposals</button><button className="secondary-button" type="button" onClick={() => navigate('/mission-control')}>Open mission control</button><button className="secondary-button" type="button" onClick={() => navigate('/portfolio-governor')}>Open portfolio governor</button>
           {actionMessage ? <span className="muted-text">{actionMessage}</span> : null}
         </div>
       </SectionCard>
@@ -98,6 +99,7 @@ export function OpportunitiesPage() {
         errorTitle="Could not load opportunities"
       >
         <SectionCard eyebrow="Summary" title="Supervisor outcomes" description="Paper/demo cycle outputs and execution path counts.">
+          {summary?.portfolio_new_entries_blocked ? <p><strong>Portfolio governor is blocking new entries.</strong> Opportunities will remain blocked or queued.</p> : null}
           <div className="dashboard-stat-grid">{cards.map((c) => <article key={c.label} className="dashboard-stat-card"><span>{c.label}</span><strong>{c.value}</strong></article>)}</div>
         </SectionCard>
 

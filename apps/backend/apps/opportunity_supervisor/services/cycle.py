@@ -22,6 +22,7 @@ from apps.opportunity_supervisor.models import (
 )
 from apps.opportunity_supervisor.services.execution_path import resolve_execution_path
 from apps.opportunity_supervisor.services.profiles import get_profile
+from apps.portfolio_governor.services import get_latest_throttle_decision, run_portfolio_governance
 
 
 def _create_queue_item(*, item: OpportunityCycleItem, quantity: Decimal, explanation: str) -> OperatorQueueItem:
@@ -65,6 +66,9 @@ def run_opportunity_cycle(*, profile_slug: str | None = None, triggered_by: str 
             'real_execution_enabled': False,
         },
     )
+
+    governance_run = run_portfolio_governance(triggered_by='opportunity_supervisor')
+    throttle = governance_run.throttle_decision or get_latest_throttle_decision()
 
     fusion_run = run_signal_fusion(profile_slug=profile.fusion_profile_slug, triggered_by='opportunity_supervisor')
     opportunities = list(
@@ -135,6 +139,8 @@ def run_opportunity_cycle(*, profile_slug: str | None = None, triggered_by: str 
             decision = allocation_result['details'][0] if allocation_result['details'] else None
             if decision and decision['decision'] in {'SELECTED', 'REDUCED'}:
                 allocation_quantity = decision['final_allocated_quantity']
+                if throttle and throttle.recommended_max_size_multiplier is not None:
+                    allocation_quantity = Decimal(str(allocation_quantity)) * Decimal(str(throttle.recommended_max_size_multiplier))
                 allocation_status = decision['decision']
                 cycle.allocation_ready_count += 1
             else:
@@ -156,6 +162,8 @@ def run_opportunity_cycle(*, profile_slug: str | None = None, triggered_by: str 
             blocked_reasons=blocked_reasons,
             risk_level=opp.risk_level,
             has_allocation=bool(allocation_quantity and allocation_quantity > 0),
+            portfolio_throttle_state=throttle.state if throttle else None,
+            portfolio_size_multiplier=str(throttle.recommended_max_size_multiplier) if throttle else None,
         )
 
         queue_item = None
@@ -193,6 +201,7 @@ def run_opportunity_cycle(*, profile_slug: str | None = None, triggered_by: str 
             explanation=path_decision.explanation,
             metadata={
                 'runtime_status': runtime_state.status,
+                'portfolio_throttle_state': throttle.state if throttle else None,
                 'paper_demo_only': True,
                 'real_execution_enabled': False,
             },
@@ -211,6 +220,8 @@ def run_opportunity_cycle(*, profile_slug: str | None = None, triggered_by: str 
         **cycle.details,
         'fusion_run_id': fusion_run.id,
         'fusion_profile': fusion_run.profile_slug,
+        'portfolio_governance_run_id': governance_run.id,
+        'portfolio_throttle_state': throttle.state if throttle else None,
     }
     cycle.save()
     return cycle

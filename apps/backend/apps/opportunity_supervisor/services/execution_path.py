@@ -13,8 +13,17 @@ class ExecutionPathDecision:
     explanation: str
 
 
-def resolve_execution_path(*, policy_decision: str, runtime_mode: str, safety_status: str, blocked_reasons: list[str], risk_level: str, has_allocation: bool) -> ExecutionPathDecision:
+def resolve_execution_path(*, policy_decision: str, runtime_mode: str, safety_status: str, blocked_reasons: list[str], risk_level: str, has_allocation: bool, portfolio_throttle_state: str | None = None, portfolio_size_multiplier: str | float | None = None) -> ExecutionPathDecision:
     runtime_caps = get_capabilities_for_current_mode()
+
+    if portfolio_throttle_state == 'BLOCK_NEW_ENTRIES':
+        return ExecutionPathDecision(
+            path=OpportunityExecutionPath.BLOCKED,
+            queue_required=False,
+            auto_execute_allowed=False,
+            explanation='Portfolio governor blocked new entries for this cycle.',
+        )
+
     if blocked_reasons or safety_status in {'KILL_SWITCH', 'HARD_STOP', 'PAUSED'}:
         reason = '; '.join(blocked_reasons) if blocked_reasons else f'Safety status {safety_status} blocks progression.'
         return ExecutionPathDecision(path=OpportunityExecutionPath.BLOCKED, queue_required=False, auto_execute_allowed=False, explanation=reason)
@@ -29,6 +38,14 @@ def resolve_execution_path(*, policy_decision: str, runtime_mode: str, safety_st
 
     if policy_decision == ApprovalDecisionType.HARD_BLOCK:
         return ExecutionPathDecision(path=OpportunityExecutionPath.BLOCKED, queue_required=False, auto_execute_allowed=False, explanation='Policy hard block.')
+
+    if portfolio_throttle_state == 'THROTTLED' and portfolio_size_multiplier not in {None, '0', 0}:
+        return ExecutionPathDecision(
+            path=OpportunityExecutionPath.PROPOSAL_ONLY,
+            queue_required=False,
+            auto_execute_allowed=False,
+            explanation='Portfolio governor throttled entries; keep as proposal-only for conservative flow.',
+        )
 
     if (not runtime_caps['allow_auto_execution']) or runtime_caps['require_operator_for_all_trades']:
         return ExecutionPathDecision(

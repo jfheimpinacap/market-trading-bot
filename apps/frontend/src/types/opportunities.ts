@@ -64,5 +64,7 @@ export type OpportunitySummary = {
   watch: number;
   paper_demo_only: boolean;
   real_execution_enabled: boolean;
+  portfolio_throttle_state: string;
+  portfolio_new_entries_blocked: boolean;
   profiles: Array<{ slug: string; label: string }>;
 };

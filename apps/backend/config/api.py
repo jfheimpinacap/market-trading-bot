@@ -36,4 +36,5 @@ urlpatterns = [
     path('prediction/', include(('apps.prediction_training.urls', 'prediction_training'), namespace='prediction_training')),
     path('opportunities/', include(('apps.opportunity_supervisor.urls', 'opportunity_supervisor'), namespace='opportunity_supervisor')),
     path('mission-control/', include(('apps.mission_control.urls', 'mission_control'), namespace='mission_control')),
+    path('portfolio-governor/', include(('apps.portfolio_governor.urls', 'portfolio_governor'), namespace='portfolio_governor')),
 ]

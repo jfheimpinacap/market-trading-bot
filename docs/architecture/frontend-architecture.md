@@ -591,3 +591,14 @@ Responsibilities:
 - connect operators quickly with `/runtime`, `/opportunities`, `/alerts`, `/notifications`
 
 This route intentionally preserves the existing technical, sober UX style and keeps autonomy transparent (no opaque planner UX).
+
+## Portfolio governor UI boundary
+
+Se incorpora `/portfolio-governor` como vista técnica de gobernanza agregada:
+
+- consume `services/portfolioGovernor.ts`
+- prioriza trazabilidad (summary cards + throttle block + exposure table + run history)
+- mantiene estilo existente (sobrio/técnico/desktop-first)
+- refuerza decisiones aguas arriba en `/opportunities` y coordinación con `/mission-control` y `/portfolio`
+
+Esta capa no sustituye la UI de riesgo o lifecycle por posición; complementa la decisión a nivel cartera.

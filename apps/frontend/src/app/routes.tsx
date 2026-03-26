@@ -29,6 +29,7 @@ import { SemiAutoPage } from '../pages/SemiAutoPage';
 import { SignalsPage } from '../pages/SignalsPage';
 import { OpportunitiesPage } from '../pages/OpportunitiesPage';
 import { MissionControlPage } from '../pages/MissionControlPage';
+import { PortfolioGovernorPage } from '../pages/PortfolioGovernorPage';
 import { SystemPage } from '../pages/SystemPage';
 import type { NavRoute } from '../types/system';
 
@@ -193,6 +194,12 @@ export const appRoutes: AppRoute[] = [
     component: ReadinessPage,
   },
 
+  {
+    label: 'Portfolio Governor',
+    path: '/portfolio-governor',
+    description: 'Aggregate portfolio exposure governance, concentration checks, and regime-aware throttling for paper/demo entries.',
+    component: PortfolioGovernorPage,
+  },
   {
     label: 'Mission Control',
     path: '/mission-control',

@@ -20,6 +20,7 @@ from apps.opportunity_supervisor.services import run_opportunity_cycle
 from apps.postmortem_agents.services.board import run_postmortem_board
 from apps.postmortem_demo.models import TradeReview
 from apps.position_manager.services import run_position_lifecycle
+from apps.portfolio_governor.services import run_portfolio_governance
 from apps.research_agent.services.scan import run_full_research_scan
 from apps.research_agent.services.universe_scan import run_universe_scan
 from apps.risk_agent.services import run_position_watch
@@ -114,6 +115,8 @@ def run_mission_control_cycle(*, session: MissionControlSession, settings: dict)
 
     if _should_run(cycle.cycle_number, run_every_universe):
         _record_step(cycle, step_type='universe_scan', fn=lambda: run_universe_scan(filter_profile=settings.get('universe_filter_profile', 'balanced_scan')))
+
+    _record_step(cycle, step_type='portfolio_governance_check', fn=lambda: run_portfolio_governance(triggered_by='mission_control'))
 
     opportunity_step = _record_step(
         cycle,

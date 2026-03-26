@@ -219,6 +219,14 @@ export function PortfolioPage() {
       linkLabel: 'Open post-mortem',
     },
     {
+      label: 'Portfolio governor',
+      value: 'Aggregate exposure checks',
+      helperText: 'Run governance to refresh concentration and throttling before adding new entries.',
+      tone: 'neutral',
+      href: '/portfolio-governor',
+      linkLabel: 'Open portfolio governor',
+    },
+    {
       label: 'Snapshot history',
       value: `${snapshots.length} snapshots`,
       helperText: snapshots.length > 1 ? 'The equity chart below should now reflect revalue runs and recent portfolio changes.' : 'Run revalue or simulation steps to build more history for the equity chart.',

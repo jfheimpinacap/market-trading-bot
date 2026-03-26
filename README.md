@@ -821,3 +821,16 @@ The platform now includes a formal **mission control** layer (`/mission-control`
 - no real-money execution and no real trading path
 
 Out of scope remains unchanged: distributed schedulers, cluster orchestration, and real execution.
+
+## Portfolio governor / exposure manager (new)
+
+Se añadió una capa formal de gobernanza de cartera (`apps/backend/apps/portfolio_governor`) para paper/demo only:
+
+- snapshot agregado de exposición (equity, cash, exposure total, concentración por market/provider/category, drawdown proxy)
+- señales de régimen auditables (`normal`, `concentrated`, `drawdown_caution`, `capital_tight`, etc.)
+- decisión de throttling global (`NORMAL`, `CAUTION`, `THROTTLED`, `BLOCK_NEW_ENTRIES`)
+- integración con `opportunity_supervisor`, `mission_control`, `runtime_governor` y `safety_guard`
+
+Scope explícito:
+- sí: throttling transparente por reglas
+- no: dinero real, ejecución real, hedging complejo, optimizador institucional, planner opaco

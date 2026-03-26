@@ -1306,3 +1306,32 @@ What it does not add:
 - real-money execution
 - real exchange auth/order routing
 - distributed enterprise scheduling
+
+## Portfolio governor app summary
+
+Nueva app `apps.portfolio_governor` para gobernanza agregada de cartera:
+
+- Modelos:
+  - `PortfolioExposureSnapshot`
+  - `PortfolioThrottleDecision`
+  - `PortfolioGovernanceRun`
+- Servicios:
+  - `services/exposure.py`
+  - `services/regime.py`
+  - `services/throttle.py`
+  - `services/governance.py`
+  - `services/profiles.py`
+- Endpoints:
+  - `POST /api/portfolio-governor/run-governance/`
+  - `GET /api/portfolio-governor/runs/`
+  - `GET /api/portfolio-governor/runs/<id>/`
+  - `GET /api/portfolio-governor/exposure/`
+  - `GET /api/portfolio-governor/throttle/`
+  - `GET /api/portfolio-governor/summary/`
+
+Diferencias de responsabilidades:
+- `risk_agent`: riesgo/sizing por oportunidad/posición.
+- `position_manager`: lifecycle por posición (hold/reduce/close/review).
+- `portfolio_governor`: contexto agregado de cartera + gating/throttling de nuevas entradas.
+
+Out of scope (todavía): real money, real execution, optimizer institucional, correlaciones de producción, hedging complejo.

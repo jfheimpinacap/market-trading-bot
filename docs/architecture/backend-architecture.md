@@ -701,3 +701,20 @@ Primary entities:
 - `MissionControlSession`: lifecycle scope for one autonomous operation window.
 - `MissionControlCycle`: one auditable control-plane turn.
 - `MissionControlStep`: explicit step-level trace within a cycle.
+
+## Portfolio governor architecture boundary
+
+`apps.portfolio_governor` agrega una frontera de gobernanza de cartera completa sin reemplazar capas existentes:
+
+- **Exposure analysis:** cálculo de snapshot agregado desde `paper_trading`.
+- **Regime signals:** señales simples y auditables por concentración, drawdown, capital, runtime/safety y presión operativa.
+- **Throttle decision:** regla explícita de estado + multiplicador global + máximo de nuevas entradas.
+- **Governance run:** traza formal persistida para auditoría y consumo por otros módulos.
+
+Integración:
+- `opportunity_supervisor` consulta throttle vigente para bloquear/degradar paths y escalar conservadurismo.
+- `mission_control` incorpora `portfolio_governance_check` como paso explícito del ciclo.
+- `agents` agrega `portfolio_governor_agent` y handoffs `risk -> portfolio_governor -> opportunity_supervisor`.
+
+No implementado:
+- execution real, optimizer institucional, hedging/correlación cuant compleja, decisiones opacas por LLM.
