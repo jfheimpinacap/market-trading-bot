@@ -513,3 +513,11 @@ A dedicated `/agents` route now provides orchestration visibility as a first-cla
 - explicit loading/error/empty states
 - explicit paper/demo-only messaging
 - no autonomous execution controls
+
+
+## Risk agent refinement (paper/demo only)
+- New `apps/backend/apps/risk_agent/` module introduces structured `RiskAssessment`, `RiskSizingDecision`, `PositionWatchRun`, and `PositionWatchEvent`.
+- Separation of concerns is explicit: prediction estimates; risk evaluates/sizes; policy authorizes; safety limits; runtime governs mode.
+- API endpoints: `POST /api/risk-agent/assess/`, `POST /api/risk-agent/size/`, `POST /api/risk-agent/run-watch/`, `GET /api/risk-agent/assessments/`, `GET /api/risk-agent/watch-events/`, `GET /api/risk-agent/summary/`.
+- Frontend route `/risk-agent` provides assessment, sizing, watch loop, and audit history panels.
+- Out of scope remains unchanged: no real money, no real execution, no production-grade Kelly optimizer, no exchange stop-loss automation.

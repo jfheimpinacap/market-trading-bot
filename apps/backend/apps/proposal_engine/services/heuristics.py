@@ -10,6 +10,7 @@ from apps.policy_engine.models import ApprovalDecision, ApprovalDecisionType, Po
 from apps.policy_engine.services import evaluate_trade_policy
 from apps.proposal_engine.models import ProposalDirection
 from apps.proposal_engine.services.context import ProposalContext
+from apps.risk_agent.services import run_risk_assessment, run_risk_sizing
 from apps.risk_demo.models import TradeRiskAssessment, TradeRiskDecision
 from apps.risk_demo.services.assessment import assess_trade
 
@@ -204,6 +205,27 @@ def evaluate_proposal_heuristics(*, context: ProposalContext, triggered_from: st
     elif risk_assessment.decision == TradeRiskDecision.BLOCK:
         suggested_quantity = Decimal('0.0000')
 
+    risk_agent_assessment = run_risk_assessment(
+        market=context.market,
+        prediction_score=context.latest_prediction_score,
+        metadata={'triggered_from': triggered_from, 'from': 'proposal_engine'},
+    )
+    risk_agent_sizing = run_risk_sizing(
+        risk_assessment=risk_agent_assessment,
+        base_quantity=suggested_quantity if suggested_quantity > ZERO else Decimal('0.0000'),
+        metadata={
+            'source': 'proposal_engine',
+            'reference_price': str(suggested_price_reference or Decimal('1.0'))
+        },
+    )
+    suggested_quantity = risk_agent_sizing.adjusted_quantity
+    risk_assessment.metadata = {
+        **(risk_assessment.metadata or {}),
+        'risk_agent_assessment_id': risk_agent_assessment.id,
+        'risk_agent_sizing_id': risk_agent_sizing.id,
+    }
+    risk_assessment.save(update_fields=['metadata', 'updated_at'])
+
     normalized_triggered_from = triggered_from
     if normalized_triggered_from == 'signals':
         normalized_triggered_from = PolicyTriggeredFrom.SIGNAL
@@ -249,6 +271,8 @@ def evaluate_proposal_heuristics(*, context: ProposalContext, triggered_from: st
 
     if learning_influence.reasons and 'cautela' not in recommendation.lower():
         recommendation = f"{recommendation} Ajuste conservador aplicado por learning memory heurístico."
+
+    recommendation = f"{recommendation} Risk agent sizing_mode={risk_agent_sizing.sizing_mode} adjusted_qty={risk_agent_sizing.adjusted_quantity}."
 
     return HeuristicResult(
         direction=direction,

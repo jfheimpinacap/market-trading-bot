@@ -5,6 +5,7 @@ urlpatterns = [
     path('markets/', include(('apps.markets.urls', 'markets'), namespace='markets')),
     path('paper/', include(('apps.paper_trading.urls', 'paper_trading'), namespace='paper_trading')),
     path('risk/', include(('apps.risk_demo.urls', 'risk_demo'), namespace='risk_demo')),
+    path('risk-agent/', include(('apps.risk_agent.urls', 'risk_agent'), namespace='risk_agent')),
     path('signals/', include(('apps.signals.urls', 'signals'), namespace='signals')),
     path('reviews/', include(('apps.postmortem_demo.urls', 'postmortem_demo'), namespace='postmortem_demo')),
     path('agents/', include(('apps.agents.urls', 'agents'), namespace='agents')),

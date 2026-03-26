@@ -12,6 +12,7 @@ from apps.markets.models import MarketSourceType
 from apps.paper_trading.services.portfolio import get_active_account
 from apps.policy_engine.models import ApprovalDecisionType
 from apps.proposal_engine.models import ProposalStatus, TradeProposal
+from apps.risk_agent.models import RiskSizingDecision
 
 
 @dataclass
@@ -77,6 +78,12 @@ def evaluate_allocation(*, scope_type: str = AllocationScopeType.MIXED, triggere
         proposal = item.proposal
         rationale = list(item.penalties)
         requested_qty = proposal.suggested_quantity or Decimal('0.0000')
+        risk_sizing_id = (proposal.metadata or {}).get('risk_agent_sizing_id')
+        if risk_sizing_id:
+            risk_sizing = RiskSizingDecision.objects.filter(id=risk_sizing_id).only('adjusted_quantity').first()
+            if risk_sizing is not None:
+                requested_qty = min(requested_qty, risk_sizing.adjusted_quantity)
+                rationale.append(f'risk_agent_sizing_cap:{risk_sizing_id}')
         if requested_qty <= Decimal('0.0000'):
             decisions.append({'proposal': proposal, 'rank': idx, 'decision': AllocationDecisionType.REJECTED, 'final_allocated_quantity': Decimal('0.0000'), 'rationale': rationale + ['invalid_quantity'], 'rank_score': item.rank_score})
             rejected_count += 1

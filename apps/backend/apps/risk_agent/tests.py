@@ -1,0 +1,70 @@
+from decimal import Decimal
+
+from django.test import TestCase
+from django.urls import reverse
+from rest_framework.test import APIClient
+
+from apps.agents.services.orchestrator import run_agent_pipeline
+from apps.markets.demo_data import seed_demo_markets
+from apps.markets.models import Market
+from apps.paper_trading.services.execution import execute_paper_trade
+from apps.paper_trading.services.portfolio import ensure_demo_account
+from apps.prediction_agent.services.scoring import score_market_prediction
+from apps.risk_agent.models import PositionWatchEvent, RiskLevel
+from apps.risk_agent.services import run_position_watch, run_risk_assessment, run_risk_sizing
+
+
+class RiskAgentServiceTests(TestCase):
+    def setUp(self):
+        seed_demo_markets()
+        self.account, _ = ensure_demo_account()
+        self.market = Market.objects.filter(is_active=True).order_by('id').first()
+        self.prediction = score_market_prediction(market=self.market, triggered_by='risk_agent_tests').score
+
+    def test_assessment_and_sizing_basic(self):
+        assessment = run_risk_assessment(market=self.market, prediction_score=self.prediction)
+        self.assertIn(assessment.risk_level, {RiskLevel.LOW, RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.BLOCKED})
+        sizing = run_risk_sizing(risk_assessment=assessment, base_quantity=Decimal('10.0000'))
+        self.assertGreaterEqual(sizing.adjusted_quantity, Decimal('0.0000'))
+
+    def test_blocked_assessment_produces_zero_quantity(self):
+        self.market.is_active = False
+        self.market.save(update_fields=['is_active', 'updated_at'])
+        assessment = run_risk_assessment(market=self.market, prediction_score=self.prediction)
+        self.assertEqual(assessment.risk_level, RiskLevel.BLOCKED)
+        sizing = run_risk_sizing(risk_assessment=assessment, base_quantity=Decimal('10.0000'))
+        self.assertEqual(sizing.adjusted_quantity, Decimal('0.0000'))
+
+    def test_watch_detects_deterioration(self):
+        execute_paper_trade(market=self.market, trade_type='BUY', side='YES', quantity=Decimal('5.0000'), account=self.account)
+        position = self.account.positions.get(market=self.market, side='YES')
+        position.unrealized_pnl = Decimal('-200.00')
+        position.save(update_fields=['unrealized_pnl', 'updated_at'])
+        run = run_position_watch()
+        self.assertEqual(run.watched_positions, 1)
+        self.assertGreaterEqual(PositionWatchEvent.objects.count(), 1)
+
+
+class RiskAgentApiTests(TestCase):
+    def setUp(self):
+        seed_demo_markets()
+        ensure_demo_account()
+        self.client = APIClient()
+        self.market = Market.objects.filter(is_active=True).order_by('id').first()
+        self.prediction = score_market_prediction(market=self.market, triggered_by='risk_agent_tests').score
+
+    def test_endpoints(self):
+        assess = self.client.post(reverse('risk_agent:assess'), {'market_id': self.market.id, 'prediction_score_id': self.prediction.id}, format='json')
+        self.assertEqual(assess.status_code, 201)
+        assessment_id = assess.json()['assessment']['id']
+        size = self.client.post(reverse('risk_agent:size'), {'risk_assessment_id': assessment_id, 'base_quantity': '8.0000'}, format='json')
+        self.assertEqual(size.status_code, 201)
+        watch = self.client.post(reverse('risk_agent:run-watch'), {}, format='json')
+        self.assertEqual(watch.status_code, 201)
+        self.assertEqual(self.client.get(reverse('risk_agent:assessments')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('risk_agent:watch-events')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('risk_agent:summary')).status_code, 200)
+
+    def test_agents_pipeline_integration(self):
+        run = run_agent_pipeline(pipeline_type='real_market_agent_cycle', payload={'market_limit': 1, 'quantity': '2.0000'})
+        self.assertIn(run.status, ['SUCCESS', 'PARTIAL'])

@@ -53,6 +53,8 @@ def generate_trade_proposal(*, market: Market, paper_account: PaperAccount | Non
                 'market_exposure_value': str(context.market_exposure_value),
             },
             'risk_assessment_id': result.risk_assessment.id,
+            'risk_agent_assessment_id': result.risk_assessment.metadata.get('risk_agent_assessment_id'),
+            'risk_agent_sizing_id': result.risk_assessment.metadata.get('risk_agent_sizing_id'),
             'policy_decision_id': result.policy_decision.id,
             'prediction': {
                 'id': context.latest_prediction_score.id if context.latest_prediction_score else None,

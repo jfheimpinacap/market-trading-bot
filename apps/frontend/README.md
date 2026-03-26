@@ -629,3 +629,11 @@ The frontend now includes a real orchestration workspace at `/agents`.
 - clear empty states (e.g. “Run a pipeline to see agent handoffs.”)
 - conservative technical styling aligned with research/prediction/runtime pages
 - quick links between `/research`, `/prediction`, and `/agents`
+
+
+## Risk agent refinement (paper/demo only)
+- New `apps/backend/apps/risk_agent/` module introduces structured `RiskAssessment`, `RiskSizingDecision`, `PositionWatchRun`, and `PositionWatchEvent`.
+- Separation of concerns is explicit: prediction estimates; risk evaluates/sizes; policy authorizes; safety limits; runtime governs mode.
+- API endpoints: `POST /api/risk-agent/assess/`, `POST /api/risk-agent/size/`, `POST /api/risk-agent/run-watch/`, `GET /api/risk-agent/assessments/`, `GET /api/risk-agent/watch-events/`, `GET /api/risk-agent/summary/`.
+- Frontend route `/risk-agent` provides assessment, sizing, watch loop, and audit history panels.
+- Out of scope remains unchanged: no real money, no real execution, no production-grade Kelly optimizer, no exchange stop-loss automation.
