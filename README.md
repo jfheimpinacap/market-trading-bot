@@ -61,6 +61,20 @@ The platform now includes an **experiment runner** for profile-based comparison 
 - frontend route `/experiments` with profile cards, run launcher, run history, and side-by-side comparison table
 - strict scope remains paper/demo only: no real money, no real execution, no ML/LLM tuning
 
+### Prediction model governance (new)
+
+Prediction training now includes a formal governance layer for predictor comparison:
+
+- heuristic-vs-heuristic and heuristic-vs-XGBoost comparisons on offline datasets
+- scope-aware evaluation (`demo_only`, `real_only`, `mixed`)
+- evaluation profiles (`conservative_model_eval`, `balanced_model_eval`, `strict_calibration_eval`)
+- auditable recommendation output:
+  - `KEEP_HEURISTIC`
+  - `KEEP_ACTIVE_MODEL`
+  - `ACTIVATE_CANDIDATE`
+  - `CAUTION_REVIEW_MANUALLY`
+- explicit non-goal: no automatic model switching at runtime
+
 
 The platform now also includes a controlled **autonomous continuous demo loop** (`/continuous-demo` + `/api/continuous-demo/*`):
 

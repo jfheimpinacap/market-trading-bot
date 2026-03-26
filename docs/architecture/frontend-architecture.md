@@ -213,6 +213,22 @@ The next reasonable frontend steps can still build on this architecture:
 
 The frontend now includes an `/automation` route backed by `services/automation.ts` and `types/automation.ts`. This page acts as a guided demo control center: it calls the backend automation endpoints through the shared API client, shows loading and error states, renders recent automation runs, and surfaces step-level results for the full demo cycle. The UX is intentionally explicit and operator-driven so the broader end-to-end workflow can move faster without becoming an autonomous system.
 
+## Prediction governance UX extension
+
+The `/prediction` route now includes a dedicated governance section:
+
+- active model status card
+- model comparison controls (baseline/candidate/profile/scope)
+- side-by-side comparison history with winner/recommendation badges
+- explicit no-auto-switch messaging
+
+Data sources are intentionally thin service calls (`services/prediction.ts`) to:
+- `/api/prediction/model-profiles/`
+- `/api/prediction/compare-models/`
+- `/api/prediction/comparisons/`
+- `/api/prediction/active-model-recommendation/`
+- `/api/prediction/model-governance-summary/`
+
 ## Policy approval UX boundary
 
 The market detail route now makes an explicit distinction between analysis and governance:

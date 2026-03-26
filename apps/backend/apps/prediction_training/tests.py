@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 
 from apps.markets.models import Event, Market, MarketSnapshot, Provider
 from apps.prediction_agent.services.scoring import score_market_prediction
-from apps.prediction_training.models import PredictionDatasetRun, PredictionModelArtifact, PredictionTrainingRun
+from apps.prediction_training.models import ModelComparisonRun, PredictionDatasetRun, PredictionModelArtifact, PredictionTrainingRun
 from apps.prediction_training.services.dataset import build_prediction_dataset
 from apps.prediction_training.services.registry import activate_model, get_active_model_artifact
 from apps.research_agent.models import ResearchCandidate
@@ -172,3 +172,97 @@ class PredictionTrainingTests(TestCase):
         active_response = self.client.get(reverse('prediction_training:model-active'))
         self.assertEqual(active_response.status_code, 200)
         self.assertEqual(active_response.json()['active_model']['id'], artifact.id)
+
+
+class PredictionModelGovernanceTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.provider = Provider.objects.create(name='Demo Provider', slug='demo-provider')
+        self.event = Event.objects.create(provider=self.provider, title='Governance Event', slug='governance-event')
+        self.market = Market.objects.create(
+            provider=self.provider,
+            event=self.event,
+            title='Model governance market',
+            slug='model-governance-market',
+            current_market_probability=Decimal('0.5000'),
+            source_type='demo',
+            resolution_time=timezone.now() + timezone.timedelta(days=7),
+        )
+        self.dataset = PredictionDatasetRun.objects.create(
+            name='manual_compare_dataset',
+            status='success',
+            label_definition='future_probability_up_24h',
+            feature_set_version='prediction_features_v1',
+            started_at=timezone.now(),
+            finished_at=timezone.now(),
+            rows_built=4,
+            artifact_path='/tmp/prediction_training_compare_dataset.csv',
+        )
+        Path(self.dataset.artifact_path).write_text(
+            '\\n'.join(
+                [
+                    'market_id,snapshot_id,captured_at,label,market_probability,recent_snapshot_delta,time_to_resolution_hours,volume_24h,liquidity,narrative_sentiment_probability,narrative_confidence,divergence_score,future_probability',
+                    f'{self.market.id},1,2026-01-01T00:00:00+00:00,1,0.45,0.02,20,100,1000,0.61,0.40,0.10,0.51',
+                    f'{self.market.id},2,2026-01-01T06:00:00+00:00,0,0.60,-0.02,19,120,1100,0.42,0.30,-0.08,0.53',
+                    f'{self.market.id},3,2026-01-01T12:00:00+00:00,1,0.49,0.01,18,130,1200,0.57,0.50,0.12,0.56',
+                    f'{self.market.id},4,2026-01-01T18:00:00+00:00,0,0.58,-0.03,17,135,1300,0.39,0.20,-0.11,0.48',
+                ]
+            ),
+            encoding='utf-8',
+        )
+
+    def tearDown(self):
+        if Path(self.dataset.artifact_path).exists():
+            Path(self.dataset.artifact_path).unlink()
+
+    def test_compare_models_persists_run_and_results(self):
+        response = self.client.post(
+            reverse('prediction_training:compare-models'),
+            {
+                'baseline_key': 'heuristic_baseline',
+                'candidate_key': 'narrative_weighted',
+                'profile_slug': 'balanced_model_eval',
+                'scope': 'mixed',
+                'dataset_run_id': self.dataset.id,
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        run_id = response.json()['id']
+        run = ModelComparisonRun.objects.get(id=run_id)
+        self.assertEqual(run.status, 'success')
+        self.assertEqual(run.results.count(), 2)
+
+    def test_compare_models_fallback_when_artifact_not_available(self):
+        response = self.client.post(
+            reverse('prediction_training:compare-models'),
+            {
+                'baseline_key': 'heuristic_baseline',
+                'candidate_key': 'artifact:999999',
+                'profile_slug': 'balanced_model_eval',
+                'dataset_run_id': self.dataset.id,
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('not found', response.json()['detail'].lower())
+
+    def test_active_model_recommendation_and_governance_summary_endpoints(self):
+        self.client.post(
+            reverse('prediction_training:compare-models'),
+            {
+                'baseline_key': 'heuristic_baseline',
+                'candidate_key': 'market_momentum_weighted',
+                'profile_slug': 'conservative_model_eval',
+                'scope': 'demo_only',
+                'dataset_run_id': self.dataset.id,
+            },
+            format='json',
+        )
+        recommendation_response = self.client.get(reverse('prediction_training:active-model-recommendation'))
+        self.assertEqual(recommendation_response.status_code, 200)
+        self.assertIsNotNone(recommendation_response.json().get('recommendation_code'))
+
+        summary_response = self.client.get(reverse('prediction_training:model-governance-summary'))
+        self.assertEqual(summary_response.status_code, 200)
+        self.assertIn('latest_comparison', summary_response.json())

@@ -117,3 +117,53 @@ export type PredictionTrainingSummary = {
   training_runs_by_status: Record<string, number>;
   models_total: number;
 };
+
+export type ModelEvaluationProfile = {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  is_active: boolean;
+  config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ModelComparisonResult = {
+  id: number;
+  predictor_key: string;
+  predictor_label: string;
+  predictor_type: string;
+  profile_slug: string;
+  metrics: Record<string, number>;
+  failures: number;
+  coverage: string;
+};
+
+export type ModelComparisonRun = {
+  id: number;
+  status: string;
+  scope: 'demo_only' | 'real_only' | 'mixed' | string;
+  baseline_key: string;
+  candidate_key: string;
+  winner: string;
+  recommendation_code: string;
+  recommendation_reasons: string[];
+  metrics_summary: Record<string, number>;
+  created_at: string;
+  evaluation_profile: ModelEvaluationProfile;
+  results: ModelComparisonResult[];
+};
+
+export type ActiveModelRecommendation = {
+  recommendation_code: string;
+  recommendation_reasons: string[];
+  comparison_run_id: number | null;
+  winner?: string;
+};
+
+export type ModelGovernanceSummary = {
+  active_model: { id: number; name: string; version: string; model_type: string } | null;
+  latest_comparison: Record<string, unknown> | null;
+  recent_recommendations: Array<Record<string, unknown>>;
+};
