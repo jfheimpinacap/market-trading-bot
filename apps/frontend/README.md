@@ -562,3 +562,17 @@ Data bindings:
 - `src/services/research.ts`
 - `src/types/research.ts`
 - route page: `src/pages/ResearchPage.tsx`
+
+## Prediction UI (`/prediction`)
+
+Se agregó una ruta técnica `/prediction` con:
+- panel de profiles
+- scoring form (market + profile)
+- result card (`system_probability`, `market_probability`, `edge`, `confidence`, `rationale`)
+- tabla de recent scores
+
+También se agregó integración ligera desde `/research`:
+- quick link a `/prediction`
+- acción por candidate: `Score in prediction agent`
+
+Todo sigue en modo local-first paper/demo.

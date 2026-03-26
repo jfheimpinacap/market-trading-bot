@@ -8,6 +8,7 @@ import { ExperimentsPage } from '../pages/ExperimentsPage';
 import { ReadinessPage } from '../pages/ReadinessPage';
 import { RuntimePage } from '../pages/RuntimePage';
 import { ResearchPage } from '../pages/ResearchPage';
+import { PredictionPage } from '../pages/PredictionPage';
 import { ReplayPage } from '../pages/ReplayPage';
 import { LearningPage } from '../pages/LearningPage';
 import { RealOpsPage } from '../pages/RealOpsPage';
@@ -180,6 +181,12 @@ export const appRoutes: AppRoute[] = [
     path: '/research',
     description: 'RSS-first narrative ingestion and local LLM scan-to-shortlist workflow linked to read-only market probabilities.',
     component: ResearchPage,
+  },
+  {
+    label: 'Prediction',
+    path: '/prediction',
+    description: 'Prediction agent MVP with system probability, market implied probability, edge scoring, and confidence output.',
+    component: PredictionPage,
   },
   {
     label: 'Learning',

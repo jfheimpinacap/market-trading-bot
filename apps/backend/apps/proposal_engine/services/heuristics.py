@@ -94,10 +94,24 @@ def _build_trade_idea(context: ProposalContext) -> tuple[str, str, str, str, str
         score = Decimal('35.00')
         confidence = Decimal('0.38')
 
+    if context.latest_prediction_score is not None:
+        prediction = context.latest_prediction_score
+        edge = Decimal(str(prediction.edge))
+        edge_confidence = Decimal(str(prediction.confidence))
+        score += edge * Decimal('120')
+        confidence += max(Decimal('-0.10'), min(edge * Decimal('0.60'), Decimal('0.10')))
+        confidence += max(Decimal('-0.05'), min((edge_confidence - Decimal('0.50')) * Decimal('0.30'), Decimal('0.05')))
+
     thesis = (
         f'Señales demo recientes: bullish={bullish}, bearish={bearish}, '
         f'actionable={actionable}. Probabilidad actual={market.current_market_probability}.'
     )
+    if context.latest_prediction_score is not None:
+        thesis = (
+            f'{thesis} Prediction agent: system={context.latest_prediction_score.system_probability}, '
+            f'market={context.latest_prediction_score.market_probability}, edge={context.latest_prediction_score.edge}, '
+            f'confidence={context.latest_prediction_score.confidence}.'
+        )
     rationale = (
         'La propuesta usa una heurística local-first: si señales accionables se alinean se sugiere BUY, '
         'si están mezcladas se sugiere HOLD, y sin claridad se sugiere AVOID.'

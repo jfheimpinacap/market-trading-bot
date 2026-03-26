@@ -675,3 +675,19 @@ Out of scope remains unchanged:
 - no complex X/Twitter/Reddit crawling
 - no vector DB/RAG stack
 - no LLM authority over risk/policy/safety
+
+## Prediction agent MVP (new)
+
+Se agregó un `prediction_agent` local-first orientado a paper/demo:
+
+- calcula `system_probability`, `market_probability`, `edge`, `confidence` y `rationale`
+- persiste `PredictionRun` + `PredictionFeatureSnapshot` + `PredictionScore` para auditoría
+- expone API en `/api/prediction/*` y UI en `/prediction`
+- integra narrativa (`research_agent`) y ajustes conservadores (`learning_memory`) como señales auxiliares
+- alimenta `proposal_engine` como contexto adicional, sin reemplazar risk/policy/safety
+
+Fuera de alcance (intencional en esta fase):
+- dinero real / ejecución real
+- modelo XGBoost entrenado final
+- autoentrenamiento opaco
+- reemplazo de guardrails por LLM o por el prediction layer

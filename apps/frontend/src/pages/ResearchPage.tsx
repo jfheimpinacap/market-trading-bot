@@ -104,6 +104,7 @@ export function ResearchPage() {
         actions={(
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button type="button" className="secondary-button" onClick={() => navigate('/markets')}>Open Markets</button>
+            <button type="button" className="secondary-button" onClick={() => navigate('/prediction')}>Open Prediction</button>
             <button type="button" className="secondary-button" disabled={actionLoading === 'analysis'} onClick={() => void runAnalysisOnly()}>
               {actionLoading === 'analysis' ? 'Running analysis...' : 'Run analysis'}
             </button>
@@ -185,7 +186,7 @@ export function ResearchPage() {
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
-                <thead><tr><th>Market</th><th>Narrative direction</th><th>Implied direction</th><th>Relation</th><th>Priority</th><th>Thesis</th></tr></thead>
+                <thead><tr><th>Market</th><th>Narrative direction</th><th>Implied direction</th><th>Relation</th><th>Priority</th><th>Thesis</th><th>Actions</th></tr></thead>
                 <tbody>
                   {candidates.map((candidate) => (
                     <tr key={candidate.id}>
@@ -195,6 +196,7 @@ export function ResearchPage() {
                       <td><StatusBadge tone={relationTone(candidate.relation)}>{candidate.relation}</StatusBadge></td>
                       <td>{candidate.priority}</td>
                       <td>{candidate.short_thesis}</td>
+                      <td><button type="button" className="link-button" onClick={() => navigate(`/prediction?market_id=${candidate.market}`)}>Score in prediction agent</button></td>
                     </tr>
                   ))}
                 </tbody>

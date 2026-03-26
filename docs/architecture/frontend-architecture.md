@@ -439,3 +439,28 @@ Integration notes:
 - uses `services/research.ts` with the shared API client
 - links shortlist rows back to market detail routes
 - surfaces degraded-mode messaging when `/api/llm/status/` reports unavailable local LLM
+
+## Prediction route architecture (`/prediction`)
+
+Nueva ruta técnica integrada al shell actual, sin rediseñar routing ni estado global.
+
+### Frontend service boundary
+
+- `services/prediction.ts`
+- `types/prediction.ts`
+
+Funciones:
+- `getPredictionProfiles`
+- `scoreMarketPrediction`
+- `getPredictionScores`
+- `getPredictionScore`
+- `getPredictionSummary`
+
+### UX objetivo
+
+- profiles visibles
+- score on-demand por market
+- card de resultado con edge/confidence auditable
+- tabla de histórico reciente
+- estados loading/error/empty explícitos
+- degradación clara cuando la capa narrativa basada en LLM no está disponible

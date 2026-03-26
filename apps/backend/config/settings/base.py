@@ -91,6 +91,7 @@ LOCAL_APPS = [
     'apps.notification_center',
     'apps.llm_local',
     'apps.research_agent',
+    'apps.prediction_agent',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
