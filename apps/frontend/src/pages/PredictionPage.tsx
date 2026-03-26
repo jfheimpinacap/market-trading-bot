@@ -233,7 +233,12 @@ export function PredictionPage() {
         eyebrow="Prediction agent"
         title="Prediction"
         description="System probability + market implied probability + auditable edge scoring for paper/demo proposals only. No real-money and no real execution."
-        actions={<button type="button" className="secondary-button" onClick={() => navigate('/proposals')}>Open Proposals</button>}
+        actions={(
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button type="button" className="secondary-button" onClick={() => navigate('/proposals')}>Open Proposals</button>
+            <button type="button" className="secondary-button" onClick={() => navigate('/agents')}>Open Agents</button>
+          </div>
+        )}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>

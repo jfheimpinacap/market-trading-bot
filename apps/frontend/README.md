@@ -603,3 +603,29 @@ Todo sigue en modo local-first paper/demo.
 - clear runtime message when heuristic fallback is in use
 
 The page remains desktop-first, auditable, and aligned with paper/demo constraints.
+
+## Agents route (`/agents`)
+
+The frontend now includes a real orchestration workspace at `/agents`.
+
+### Includes
+- orchestration header with explicit paper/demo-only boundary
+- registered agents panel
+- pipeline controls:
+  - Research → Prediction
+  - Postmortem → Learning
+  - Real-market agent cycle (read-only scope + paper/demo risk outputs)
+- recent agent runs table
+- recent handoffs table
+- recent pipeline runs table
+
+### Data/services
+- `src/services/agents.ts`
+- `src/types/agents.ts`
+- backend endpoints under `/api/agents/*`
+
+### UX behavior
+- explicit loading/error states
+- clear empty states (e.g. “Run a pipeline to see agent handoffs.”)
+- conservative technical styling aligned with research/prediction/runtime pages
+- quick links between `/research`, `/prediction`, and `/agents`

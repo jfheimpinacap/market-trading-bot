@@ -584,3 +584,45 @@ The backend keeps `apps.prediction_agent` focused on runtime scoring/inference a
 - `PredictionModelArtifact`: versioned model registry + active flag
 
 `prediction_agent.services.scoring` checks for an active model artifact at runtime. If unavailable or inference fails, it automatically falls back to the existing heuristic profile path and records runtime mode in score details.
+
+## Agent orchestration boundary
+
+A dedicated orchestration boundary now exists in `apps/backend/apps/agents`.
+
+### Goals
+- make agent execution explicit and auditable
+- preserve existing domain services as the execution engines
+- add structured handoffs and pipeline-level traceability
+
+### Core entities
+- `AgentDefinition`
+- `AgentRun`
+- `AgentPipelineRun`
+- `AgentHandoff`
+
+### Service boundaries
+- `registry.py`: default agent registration
+- `orchestrator.py`: run lifecycle + pipeline execution wrapper
+- `pipelines.py`: pipeline implementations that call existing research/prediction/risk/postmortem/learning services
+- `handoffs.py`: structured handoff persistence helper
+
+### Initial pipelines
+1. `research_to_prediction`
+2. `postmortem_to_learning`
+3. `real_market_agent_cycle`
+
+### Integration intent
+This boundary is intentionally prepared for deeper integration with:
+- `continuous_demo`
+- `real_market_ops`
+- `operator_queue`
+- `runtime_governor`
+
+without replacing those modules all at once.
+
+### Explicit non-goals (current stage)
+- real-money execution
+- real order routing
+- opaque multi-agent planner
+- autonomous black-box LLM control
+- distributed orchestration complexity

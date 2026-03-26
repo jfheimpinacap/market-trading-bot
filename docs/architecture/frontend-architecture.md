@@ -492,3 +492,24 @@ Funciones:
 - explicit fallback messaging when no active trained artifact is available
 
 The UI continues to consume backend APIs as a thin client; training logic remains backend-only.
+
+## Agents orchestration UX route
+
+A dedicated `/agents` route now provides orchestration visibility as a first-class technical workspace.
+
+### UI composition
+- summary card (counts + latest status)
+- registered agents table
+- pipeline control panel (manual triggers)
+- recent runs / handoffs / pipeline runs tables
+
+### Integration
+- new service boundary: `src/services/agents.ts`
+- typed contracts: `src/types/agents.ts`
+- links between `/research`, `/prediction`, and `/agents`
+
+### UX constraints
+- desktop-first technical layout
+- explicit loading/error/empty states
+- explicit paper/demo-only messaging
+- no autonomous execution controls

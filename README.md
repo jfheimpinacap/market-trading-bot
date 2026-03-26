@@ -717,3 +717,24 @@ The prediction stack now includes an offline training foundation for calibrated 
 - runtime integration with heuristic fallback
 
 Still out of scope: real execution, real money, continuous auto-training loops, AutoML, and replacing risk/policy/safety governance.
+
+## Agent orchestration layer (new)
+
+The platform now includes an explicit **agent orchestration layer** under `/api/agents/*` and frontend `/agents`.
+
+What is included:
+- registered agents (scan, research, prediction, risk, postmortem, learning)
+- auditable `AgentRun`, `AgentPipelineRun`, and `AgentHandoff` records
+- controlled pipelines:
+  - `research_to_prediction`
+  - `postmortem_to_learning`
+  - `real_market_agent_cycle`
+- structured handoff payload summaries for traceability
+
+What is intentionally not included yet:
+- real-money trading
+- real execution routing
+- opaque autonomous multi-agent planners
+- black-box LLM authority over system decisions
+
+This layer reuses existing modules (research/prediction/risk/postmortem/learning) and does not replace their internal domain logic.
