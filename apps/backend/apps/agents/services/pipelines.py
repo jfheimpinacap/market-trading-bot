@@ -11,7 +11,7 @@ from apps.postmortem_demo.services import generate_trade_reviews
 from apps.prediction_agent.services.scoring import score_market_prediction
 from apps.research_agent.models import ResearchCandidate
 from apps.research_agent.services.scan import run_research_scan
-from apps.risk_demo.services.assessment import assess_trade
+from apps.risk_agent.services import run_risk_assessment, run_risk_sizing
 
 
 @dataclass
@@ -35,6 +35,7 @@ def run_research_to_prediction(*, context, payload: dict) -> PipelineExecutionRe
     scan_agent = context.agents_by_slug['scan_agent']
     research_agent = context.agents_by_slug['research_agent']
     prediction_agent = context.agents_by_slug['prediction_agent']
+    risk_agent = context.agents_by_slug['risk_agent']
 
     run_scan = bool(payload.get('run_scan', False))
     if run_scan:
@@ -122,11 +123,38 @@ def run_research_to_prediction(*, context, payload: dict) -> PipelineExecutionRe
         details={'scores': scores},
     )
 
-    status = AgentStatus.SUCCESS if scores else AgentStatus.PARTIAL
+    create_handoff(
+        from_agent_run=prediction_run,
+        to_agent_definition=risk_agent,
+        pipeline_run=context.pipeline_run,
+        handoff_type='prediction_to_risk',
+        payload_summary=f'{len(scores)} prediction outputs sent for risk assessment.',
+        payload_ref={'score_count': len(scores)},
+    )
+    context.handoffs_count += 1
+
+    risk_run = context.start_agent_run(agent=risk_agent)
+    risk_outputs = []
+    for score in scores:
+        market = Market.objects.filter(id=score['market_id']).first()
+        if market is None:
+            continue
+        assessment = run_risk_assessment(market=market)
+        sizing = run_risk_sizing(risk_assessment=assessment, base_quantity=Decimal('3.0000'))
+        risk_outputs.append({'market_id': market.id, 'risk_assessment_id': assessment.id, 'risk_level': assessment.risk_level, 'adjusted_quantity': str(sizing.adjusted_quantity)})
+
+    context.finish_agent_run(
+        risk_run,
+        status=AgentStatus.SUCCESS if risk_outputs else AgentStatus.PARTIAL,
+        summary=f'Risk agent assessed {len(risk_outputs)} opportunities.',
+        details={'risk_outputs': risk_outputs},
+    )
+
+    status = AgentStatus.SUCCESS if risk_outputs else AgentStatus.PARTIAL
     return PipelineExecutionResult(
         status=status,
-        summary=f'Research→Prediction pipeline finished with {len(scores)} prediction scores.',
-        details={'candidate_count': len(candidate_payload), 'score_count': len(scores), 'scores': scores},
+        summary=f'Research→Prediction→Risk pipeline finished with {len(risk_outputs)} risk outputs.',
+        details={'candidate_count': len(candidate_payload), 'score_count': len(scores), 'risk_count': len(risk_outputs)},
         agent_runs_count=context.agent_runs_count,
         handoffs_count=context.handoffs_count,
     )
@@ -246,21 +274,22 @@ def run_real_market_agent_cycle(*, context, payload: dict) -> PipelineExecutionR
         market = Market.objects.filter(id=score['market_id']).first()
         if market is None:
             continue
-        direction = _get_market_direction(Decimal(score['system_probability']))
-        assessment = assess_trade(
+        assessment = run_risk_assessment(
             market=market,
-            trade_type='BUY',
-            side=direction,
-            quantity=Decimal(str(payload.get('quantity', '1.0000'))),
             metadata={'origin': 'real_market_agent_cycle', 'prediction_score_id': score['prediction_score_id']},
+        )
+        sizing = run_risk_sizing(
+            risk_assessment=assessment,
+            base_quantity=Decimal(str(payload.get('quantity', '1.0000'))),
+            metadata={'origin': 'real_market_agent_cycle'},
         )
         assessments.append(
             {
                 'risk_assessment_id': assessment.id,
                 'market_id': market.id,
-                'decision': assessment.decision,
-                'suggested_quantity': str(assessment.suggested_quantity),
-                'summary': assessment.summary,
+                'risk_level': assessment.risk_level,
+                'adjusted_quantity': str(sizing.adjusted_quantity),
+                'summary': assessment.narrative_risk_summary,
             }
         )
 
@@ -268,7 +297,7 @@ def run_real_market_agent_cycle(*, context, payload: dict) -> PipelineExecutionR
     context.finish_agent_run(
         risk_run,
         status=risk_status,
-        summary=f'Risk agent produced {len(assessments)} conservative paper/demo assessments.',
+        summary=f'Risk agent produced {len(assessments)} structured paper/demo assessments + sizing.',
         details={'assessments': assessments},
     )
 

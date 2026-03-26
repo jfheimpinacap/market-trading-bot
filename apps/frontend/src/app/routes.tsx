@@ -9,6 +9,7 @@ import { ReadinessPage } from '../pages/ReadinessPage';
 import { RuntimePage } from '../pages/RuntimePage';
 import { ResearchPage } from '../pages/ResearchPage';
 import { PredictionPage } from '../pages/PredictionPage';
+import { RiskAgentPage } from '../pages/RiskAgentPage';
 import { ReplayPage } from '../pages/ReplayPage';
 import { LearningPage } from '../pages/LearningPage';
 import { RealOpsPage } from '../pages/RealOpsPage';
@@ -181,6 +182,12 @@ export const appRoutes: AppRoute[] = [
     path: '/research',
     description: 'RSS-first narrative ingestion and local LLM scan-to-shortlist workflow linked to read-only market probabilities.',
     component: ResearchPage,
+  },
+  {
+    label: 'Risk Agent',
+    path: '/risk-agent',
+    description: 'Formal risk agent: structured assessment, conservative sizing engine, and open-position watch loop in paper/demo mode.',
+    component: RiskAgentPage,
   },
   {
     label: 'Prediction',

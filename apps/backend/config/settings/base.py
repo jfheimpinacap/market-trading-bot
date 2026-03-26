@@ -67,6 +67,7 @@ LOCAL_APPS = [
     'apps.markets',
     'apps.paper_trading',
     'apps.risk_demo',
+    'apps.risk_agent',
     'apps.signals',
     'apps.postmortem_demo',
     'apps.agents',

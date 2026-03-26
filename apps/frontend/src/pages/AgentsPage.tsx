@@ -110,6 +110,7 @@ export function AgentsPage() {
             <button type="button" className="secondary-button" onClick={() => navigate('/research')}>Open Research</button>
             <button type="button" className="secondary-button" onClick={() => navigate('/prediction')}>Open Prediction</button>
             <button type="button" className="secondary-button" onClick={() => navigate('/runtime')}>Open Runtime</button>
+            <button type="button" className="secondary-button" onClick={() => navigate('/risk-agent')}>Open Risk Agent</button>
           </div>
         )}
       />
