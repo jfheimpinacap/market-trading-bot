@@ -395,6 +395,10 @@ def run_real_market_agent_cycle(*, context, payload: dict) -> PipelineExecutionR
 def execute_pipeline(*, context, pipeline_type: str, payload: dict) -> PipelineExecutionResult:
     if pipeline_type == AgentPipelineType.RESEARCH_TO_PREDICTION:
         return run_research_to_prediction(context=context, payload=payload)
+    if pipeline_type == AgentPipelineType.RESEARCH_PREDICTION_RISK_SIGNAL_CYCLE:
+        return run_research_to_prediction(context=context, payload=payload)
+    if pipeline_type == AgentPipelineType.SIGNAL_TO_PROPOSAL_CYCLE:
+        return run_research_to_prediction(context=context, payload=payload)
     if pipeline_type == AgentPipelineType.POSTMORTEM_TO_LEARNING:
         return run_postmortem_to_learning(context=context, payload=payload)
     if pipeline_type == AgentPipelineType.REAL_MARKET_AGENT_CYCLE:

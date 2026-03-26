@@ -83,3 +83,40 @@ Supported list filters:
 - builds on `apps.markets` as the source of current market fields and historical snapshots
 - complements `apps.paper_trading` by surfacing demo ideas before a user chooses to place a paper trade
 - stays local-first and demo-only so future agent architecture can evolve without rewriting these boundaries
+
+
+## Signal fusion / opportunity board (new)
+
+Besides legacy demo `MarketSignal` heuristics, this app now includes a formal paper/demo-only fusion layer:
+
+- `SignalFusionRun`: one auditable fusion pass across research + prediction + risk (+ runtime/safety context)
+- `OpportunitySignal`: composite per-market output with score, rank, status and rationale
+- `ProposalGateDecision`: explicit pre-proposal gate (`should_generate_proposal`, `proposal_priority`, `blocked_reason`)
+
+Statuses are intentionally simple:
+- `WATCH`
+- `CANDIDATE`
+- `PROPOSAL_READY`
+- `BLOCKED`
+
+Signal profiles are explicit and configurable in code:
+- `conservative_signal`
+- `balanced_signal`
+- `aggressive_light_signal`
+
+### New API endpoints
+
+- `POST /api/signals/run-fusion/`
+- `GET /api/signals/runs/`
+- `GET /api/signals/runs/<id>/`
+- `GET /api/signals/opportunities/`
+- `GET /api/signals/board-summary/`
+- `POST /api/signals/run-to-proposal/`
+
+### Scope boundaries (still enforced)
+
+- local-first, paper/demo only
+- no real money
+- no real order execution
+- no opaque planner/optimizer
+- no LLM authority for final trade decisions

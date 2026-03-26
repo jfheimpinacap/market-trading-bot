@@ -44,7 +44,7 @@ apps/backend/
 - `apps.markets`: provider, event, market, market snapshot, and market rule models plus demo seeding, simulation, admin tooling, and read-only API endpoints.
 - `apps.paper_trading`: demo-only paper account, positions, trades, portfolio snapshots, valuation services, admin tooling, and basic write APIs for local investing flows.
 - `apps.risk_demo`: demo-only trade guard layer that evaluates proposed paper trades with explainable heuristics before execution.
-- `apps.signals`: demo-only signals and mock-agent layer that generates local insights from market snapshots and exposes read-only endpoints for the frontend.
+- `apps.signals`: demo-only signals + formal signal-fusion layer that consolidates research/prediction/risk into ranked opportunity board outputs and proposal gating.
 - `apps.postmortem_demo`: demo-only trade review layer that generates post-trade reviews for executed paper trades using deterministic heuristics.
 - `apps.agents`: placeholder app for future agent domain work.
 - `apps.audit`: placeholder app for future audit and post-mortem work.
@@ -1229,3 +1229,17 @@ New endpoints:
 - `POST /api/research/run-triage-to-prediction/`
 
 Design boundary: no real-money paths and no real order execution are introduced.
+
+
+## Signal fusion agent / opportunity board
+
+The backend now adds a formal fusion boundary (`apps.signals`) that *reuses* research, prediction, and risk outputs instead of replacing them.
+
+Flow:
+- research triage/pursuit candidate -> prediction score -> risk assessment/sizing -> signal fusion -> proposal gate
+
+Key properties:
+- transparent weighted fusion with explicit profiles
+- auditable status assignment (`WATCH`, `CANDIDATE`, `PROPOSAL_READY`, `BLOCKED`)
+- explicit proposal gating before `proposal_engine`
+- paper/demo-only invariants preserved (no real execution path added)

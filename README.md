@@ -770,3 +770,20 @@ The platform now includes a local-first **postmortem board / loss review committ
 - handoff path from triage board to prediction pipeline (`run-triage-to-prediction`)
 
 Scope remains local-first and **paper/demo only**: no real money, no real execution, no opaque optimizer/planner.
+
+
+### Signal fusion agent / opportunity board (new)
+
+A formal signal fusion layer now exists inside `apps.signals` to consolidate:
+- research triage/pursuit output
+- prediction scores (system probability, edge, confidence)
+- risk assessment/sizing
+- runtime + safety constraints
+
+This layer produces ranked `OpportunitySignal` records and explicit `ProposalGateDecision` outputs before proposal generation.
+
+Still out of scope:
+- real-money trading
+- real execution
+- opaque planners/optimizers
+- LLM final authority
