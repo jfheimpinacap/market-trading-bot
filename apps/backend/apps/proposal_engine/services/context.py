@@ -6,6 +6,7 @@ from decimal import Decimal
 from apps.markets.models import Market, MarketSnapshot
 from apps.paper_trading.models import PaperAccount, PaperPositionStatus
 from apps.paper_trading.services.portfolio import get_active_account
+from apps.prediction_agent.models import PredictionScore
 from apps.signals.models import MarketSignal, MarketSignalStatus, SignalDirection
 
 ZERO = Decimal('0')
@@ -24,6 +25,7 @@ class ProposalContext:
     actionable_signal_count: int
     avg_signal_score: Decimal
     avg_signal_confidence: Decimal
+    latest_prediction_score: PredictionScore | None
     market_exposure_quantity: Decimal
     market_exposure_value: Decimal
     cash_balance: Decimal
@@ -58,6 +60,7 @@ def build_proposal_context(*, market: Market, paper_account: PaperAccount | None
 
     avg_signal_score = _average([signal.score for signal in latest_signals])
     avg_signal_confidence = _average([signal.confidence for signal in latest_signals])
+    latest_prediction_score = PredictionScore.objects.filter(market=market).order_by('-created_at', '-id').first()
 
     market_exposure_quantity = ZERO
     market_exposure_value = ZERO
@@ -85,6 +88,7 @@ def build_proposal_context(*, market: Market, paper_account: PaperAccount | None
         actionable_signal_count=actionable_signal_count,
         avg_signal_score=avg_signal_score,
         avg_signal_confidence=avg_signal_confidence,
+        latest_prediction_score=latest_prediction_score,
         market_exposure_quantity=market_exposure_quantity,
         market_exposure_value=market_exposure_value,
         cash_balance=cash_balance,

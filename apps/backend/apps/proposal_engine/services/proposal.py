@@ -54,5 +54,13 @@ def generate_trade_proposal(*, market: Market, paper_account: PaperAccount | Non
             },
             'risk_assessment_id': result.risk_assessment.id,
             'policy_decision_id': result.policy_decision.id,
+            'prediction': {
+                'id': context.latest_prediction_score.id if context.latest_prediction_score else None,
+                'system_probability': str(context.latest_prediction_score.system_probability) if context.latest_prediction_score else None,
+                'market_probability': str(context.latest_prediction_score.market_probability) if context.latest_prediction_score else None,
+                'edge': str(context.latest_prediction_score.edge) if context.latest_prediction_score else None,
+                'confidence': str(context.latest_prediction_score.confidence) if context.latest_prediction_score else None,
+                'profile': context.latest_prediction_score.model_profile_used if context.latest_prediction_score else None,
+            },
         },
     )

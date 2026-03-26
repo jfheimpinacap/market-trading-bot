@@ -525,3 +525,35 @@ Design constraints:
 - risk/policy/safety stay authoritative in their own modules
 - read-only real market data reused for implied probability comparison
 - extensible source model keeps room for future Reddit/Twitter connectors without changing current API boundary
+
+## Prediction agent boundary (MVP)
+
+Nuevo módulo backend `apps.prediction_agent` para separar explícitamente:
+1. feature construction
+2. profile selection
+3. scoring/calibration
+4. edge/confidence output
+
+### Contrato de salida
+
+Cada score persiste y expone:
+- `system_probability`
+- `market_probability`
+- `edge = system_probability - market_probability`
+- `confidence` + `confidence_level`
+- `rationale`
+- `model_profile_used`
+
+### Integración con flujo existente
+
+- Upstream natural: `research_agent` (sentimiento/presión/divergencia narrativos)
+- Ajuste conservador: `learning_memory`
+- Downstream inicial: `proposal_engine` (solo contexto adicional)
+- No reemplaza `risk_demo`, `policy_engine`, ni `safety_guard`
+
+### Preparación para XGBoost
+
+Se deja separado el contrato de features/scoring/profile para permitir luego:
+- exportar datasets de `PredictionFeatureSnapshot` + labels
+- cargar scorer entrenado en un profile dedicado
+- mantener APIs y consumers sin ruptura

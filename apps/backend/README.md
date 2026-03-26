@@ -1085,3 +1085,38 @@ API endpoints:
 - `GET /api/research/summary/`
 
 Boundary: paper/demo research support only; no real execution path.
+
+## Prediction agent MVP (new)
+
+Nueva app: `apps.prediction_agent`.
+
+Responsabilidades:
+- feature building auditable (`services/features.py`)
+- profile registry (`services/profiles.py`)
+- scoring + edge (`services/scoring.py`)
+- calibración básica (`services/calibration.py`)
+
+Modelos principales:
+- `PredictionModelProfile`
+- `PredictionRun`
+- `PredictionFeatureSnapshot`
+- `PredictionScore`
+- `PredictionOutcomeLabel` (base para labels futuros)
+
+Endpoints:
+- `GET /api/prediction/profiles/`
+- `POST /api/prediction/score-market/`
+- `GET /api/prediction/scores/`
+- `GET /api/prediction/scores/<id>/`
+- `GET /api/prediction/summary/`
+- `POST /api/prediction/build-features/`
+
+Integración:
+- `research_agent` aporta señales narrativas agregadas
+- `learning_memory` aporta nudges conservadores
+- `proposal_engine` consume el último score como contexto adicional (metadata + thesis/rationale)
+
+Boundary:
+- paper/demo only
+- no ejecución real
+- no XGBoost entrenado todavía (solo contrato y placeholder de perfil)
