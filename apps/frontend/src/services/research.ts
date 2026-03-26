@@ -19,6 +19,13 @@ export function runResearchIngest(payload: { source_ids?: number[]; run_analysis
   });
 }
 
+export function runResearchFullScan(payload: { source_ids?: number[] } = {}) {
+  return requestJson<ResearchScanRun>('/api/research/run-full-scan/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function runResearchAnalysis() {
   return requestJson<{ analyzed: number; errors: string[] }>('/api/research/run-analysis/', {
     method: 'POST',

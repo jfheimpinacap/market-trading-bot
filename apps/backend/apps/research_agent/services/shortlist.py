@@ -8,8 +8,10 @@ from apps.research_agent.models import (
     MarketNarrativeLink,
     NarrativeMarketRelation,
     NarrativeSentiment,
+    NarrativeSourceType,
     ResearchCandidate,
 )
+from apps.research_agent.services.social_fusion import classify_source_mix, normalize_social_metrics, social_weight
 
 
 def _sentiment_to_pressure(sentiment: str) -> Decimal:
@@ -48,15 +50,39 @@ def generate_research_candidates() -> int:
         confidence_sum = Decimal('0.0000')
         best_summary = ''
         narrative_items = []
+        rss_count = 0
+        social_count = 0
+        social_strength_sum = Decimal('0.0000')
+        rss_contribution = Decimal('0.0000')
+        social_contribution = Decimal('0.0000')
+        source_direction_pressure = {'rss': Decimal('0.0000'), 'reddit': Decimal('0.0000')}
 
         for link in links:
             analysis = getattr(link.narrative_item, 'analysis', None)
             if not analysis:
                 continue
-            sentiment_pressure += (_sentiment_to_pressure(analysis.sentiment) * link.link_strength)
+            social_signal, hype_risk, noise_risk = normalize_social_metrics(analysis.metadata or {})
+            source_type = link.narrative_item.source.source_type
+            social_adj_weight = social_weight(
+                source_type=source_type,
+                hype_risk=float(hype_risk),
+                noise_risk=float(noise_risk),
+            )
+            weighted_strength = (link.link_strength * social_adj_weight).quantize(Decimal('0.0001'))
+            weighted_pressure = _sentiment_to_pressure(analysis.sentiment) * weighted_strength
+            sentiment_pressure += weighted_pressure
             confidence_sum += analysis.confidence
             best_summary = best_summary or analysis.summary
             narrative_items.append(link.narrative_item)
+            if source_type == NarrativeSourceType.REDDIT:
+                social_count += 1
+                social_contribution += abs(weighted_pressure)
+                social_strength_sum += social_signal
+                source_direction_pressure['reddit'] += weighted_pressure
+            else:
+                rss_count += 1
+                rss_contribution += abs(weighted_pressure)
+                source_direction_pressure['rss'] += weighted_pressure
 
         item_count = max(len(narrative_items), 1)
         narrative_pressure = (sentiment_pressure / Decimal(item_count)).quantize(Decimal('0.0001'))
@@ -67,6 +93,12 @@ def generate_research_candidates() -> int:
 
         relation = NarrativeMarketRelation.UNCERTAINTY
         divergence = Decimal('0.2500')
+        source_convergent = True
+        if rss_count and social_count:
+            source_convergent = source_direction_pressure['rss'] * source_direction_pressure['reddit'] >= Decimal('0.0')
+            if not source_convergent:
+                relation = NarrativeMarketRelation.UNCERTAINTY
+                divergence = Decimal('0.6200')
         if narrative_direction == implied_direction and narrative_direction != NarrativeSentiment.NEUTRAL:
             relation = NarrativeMarketRelation.ALIGNMENT
             divergence = Decimal('0.1500')
@@ -78,7 +110,22 @@ def generate_research_candidates() -> int:
         if market.liquidity:
             liquidity_factor = min(Decimal(market.liquidity) / Decimal('100000'), Decimal('0.5'))
 
-        priority = (Decimal(abs(narrative_pressure)) * Decimal('40') + divergence * Decimal('40') + avg_confidence * Decimal('20') + liquidity_factor * Decimal('10')).quantize(Decimal('0.01'))
+        source_mix = classify_source_mix(rss_count=rss_count, social_count=social_count, convergent=source_convergent)
+        social_confidence_boost = Decimal('0.0')
+        if rss_count and social_count and source_convergent:
+            social_confidence_boost = Decimal('0.08')
+        elif rss_count and social_count and not source_convergent:
+            social_confidence_boost = Decimal('-0.12')
+        elif social_count and not rss_count:
+            social_confidence_boost = Decimal('-0.08')
+        adjusted_confidence = min(max(avg_confidence + social_confidence_boost, Decimal('0.0500')), Decimal('0.9800')).quantize(Decimal('0.0001'))
+
+        priority = (
+            Decimal(abs(narrative_pressure)) * Decimal('40')
+            + divergence * Decimal('40')
+            + adjusted_confidence * Decimal('20')
+            + liquidity_factor * Decimal('10')
+        ).quantize(Decimal('0.01'))
         candidate, _ = ResearchCandidate.objects.update_or_create(
             market=market,
             defaults={
@@ -88,11 +135,19 @@ def generate_research_candidates() -> int:
                 'market_implied_direction': implied_direction,
                 'relation': relation,
                 'divergence_score': divergence,
+                'rss_narrative_contribution': rss_contribution.quantize(Decimal('0.0001')),
+                'social_narrative_contribution': social_contribution.quantize(Decimal('0.0001')),
+                'source_mix': source_mix,
                 'short_thesis': (best_summary or f'Narrative scan around {market.title}')[:255],
                 'priority': priority,
                 'metadata': {
                     'avg_link_strength': float(group['avg_strength'] or 0),
                     'linked_item_count': len(narrative_items),
+                    'rss_item_count': rss_count,
+                    'social_item_count': social_count,
+                    'combined_confidence': float(adjusted_confidence),
+                    'social_signal_strength_avg': float((social_strength_sum / Decimal(max(social_count, 1))).quantize(Decimal('0.0001'))),
+                    'source_convergent': source_convergent,
                 },
             },
         )

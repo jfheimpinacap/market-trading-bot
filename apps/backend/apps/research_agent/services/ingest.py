@@ -16,12 +16,21 @@ from apps.research_agent.models import NarrativeItem, NarrativeSource, Narrative
 class IngestResult:
     sources_scanned: int = 0
     items_created: int = 0
+    rss_items_created: int = 0
+    reddit_items_created: int = 0
     items_deduplicated: int = 0
     errors: list[str] | None = None
+    source_errors: dict[str, list[str]] | None = None
 
     def __post_init__(self):
         if self.errors is None:
             self.errors = []
+        if self.source_errors is None:
+            self.source_errors = {}
+
+    def add_error(self, source_slug: str, message: str):
+        self.errors.append(f'Source {source_slug}: {message}')
+        self.source_errors.setdefault(source_slug, []).append(message)
 
 
 def _safe_datetime(value: str | None):
@@ -99,7 +108,7 @@ def run_rss_ingest(*, source_ids: list[int] | None = None) -> IngestResult:
         try:
             parsed = fetch_rss(source)
         except Exception as exc:
-            result.errors.append(f'Source {source.slug}: {exc}')
+            result.add_error(source.slug, str(exc))
             continue
 
         for entry in parsed.get('entries', []):
@@ -138,5 +147,20 @@ def run_rss_ingest(*, source_ids: list[int] | None = None) -> IngestResult:
                 metadata={'rss_source_type': 'rss'},
             )
             result.items_created += 1
+            result.rss_items_created += 1
 
     return result
+
+
+def merge_ingest_results(*results: IngestResult) -> IngestResult:
+    merged = IngestResult()
+    for result in results:
+        merged.sources_scanned += result.sources_scanned
+        merged.items_created += result.items_created
+        merged.rss_items_created += result.rss_items_created
+        merged.reddit_items_created += result.reddit_items_created
+        merged.items_deduplicated += result.items_deduplicated
+        merged.errors.extend(result.errors)
+        for source_slug, source_errors in (result.source_errors or {}).items():
+            merged.source_errors.setdefault(source_slug, []).extend(source_errors)
+    return merged

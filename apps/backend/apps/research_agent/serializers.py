@@ -28,6 +28,16 @@ class NarrativeSourceSerializer(serializers.ModelSerializer):
 
 
 class NarrativeSourceCreateSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        source_type = attrs.get('source_type')
+        feed_url = attrs.get('feed_url', '')
+        metadata = attrs.get('metadata') or {}
+        if source_type == 'rss' and not feed_url:
+            raise serializers.ValidationError({'feed_url': 'RSS source requires feed_url.'})
+        if source_type == 'reddit' and not (metadata.get('subreddit') or attrs.get('category')):
+            raise serializers.ValidationError({'metadata': 'Reddit source requires metadata.subreddit or category.'})
+        return attrs
+
     class Meta:
         model = NarrativeSource
         fields = ('name', 'slug', 'source_type', 'feed_url', 'is_enabled', 'language', 'category', 'metadata')
@@ -55,6 +65,7 @@ class NarrativeAnalysisSerializer(serializers.ModelSerializer):
 
 class NarrativeItemSerializer(serializers.ModelSerializer):
     source_name = serializers.CharField(source='source.name', read_only=True)
+    source_type = serializers.CharField(source='source.source_type', read_only=True)
     analysis = NarrativeAnalysisSerializer(read_only=True)
     linked_market_count = serializers.IntegerField(read_only=True)
 
@@ -71,6 +82,7 @@ class NarrativeItemSerializer(serializers.ModelSerializer):
             'snippet',
             'author',
             'source_name',
+            'source_type',
             'dedupe_hash',
             'ingested_at',
             'metadata',
@@ -100,6 +112,9 @@ class ResearchCandidateSerializer(serializers.ModelSerializer):
             'market_implied_direction',
             'relation',
             'divergence_score',
+            'rss_narrative_contribution',
+            'social_narrative_contribution',
+            'source_mix',
             'short_thesis',
             'priority',
             'metadata',
@@ -124,12 +139,16 @@ class ResearchScanRunSerializer(serializers.ModelSerializer):
             'triggered_by',
             'sources_scanned',
             'items_created',
+            'rss_items_created',
+            'reddit_items_created',
             'items_deduplicated',
             'analyses_generated',
+            'analyses_degraded',
             'candidates_generated',
             'started_at',
             'finished_at',
             'errors',
+            'source_errors',
             'metadata',
             'created_at',
             'updated_at',
