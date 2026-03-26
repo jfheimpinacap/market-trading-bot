@@ -14,16 +14,16 @@ El frontend ya no se siente como un conjunto de módulos separados. La UX ahora 
 6. **Portfolio** para ver impacto en equity, posiciones y trades.
 7. **Post-mortem** para revisar outcome, lecciones y volver al market o portfolio.
 
-## Research scan workspace en `/research` (RSS + Reddit)
+## Research scan workspace en `/research` (RSS + Reddit + X/Twitter adapter)
 
-La vista `/research` ahora integra narrativa de noticias y narrativa social de Reddit en un solo flujo:
+La vista `/research` ahora integra narrativa de noticias y narrativa social multi-fuente en un solo flujo:
 
-- panel de fuentes con `RSS` y `REDDIT`
+- panel de fuentes con `RSS`, `REDDIT` y `TWITTER`
 - controles separados para `Run ingest`, `Run analysis`, y `Run full research scan`
 - tabla de narrative items con tipo de fuente y señal social
-- shortlist/candidates con `source_mix` (por ejemplo `NEWS_CONFIRMED`, `MIXED`, `SOCIAL_HEAVY`)
+- shortlist/candidates con `source_mix` (por ejemplo `NEWS_CONFIRMED`, `MIXED`, `SOCIAL_HEAVY`, `FULL_SIGNAL`)
 
-Todo sigue local-first, auditable y paper/demo only; X/Twitter queda fuera de alcance en esta fase.
+Todo sigue local-first, auditable y paper/demo only. La integración de X/Twitter es opcional y desacoplada (adapter reemplazable).
 
 ## Prediction model governance en `/prediction`
 

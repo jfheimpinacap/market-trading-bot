@@ -141,6 +141,8 @@ class ResearchScanRun(TimeStampedModel):
     items_created = models.PositiveIntegerField(default=0)
     rss_items_created = models.PositiveIntegerField(default=0)
     reddit_items_created = models.PositiveIntegerField(default=0)
+    twitter_items_created = models.PositiveIntegerField(default=0)
+    social_items_total = models.PositiveIntegerField(default=0)
     items_deduplicated = models.PositiveIntegerField(default=0)
     analyses_generated = models.PositiveIntegerField(default=0)
     analyses_degraded = models.PositiveIntegerField(default=0)

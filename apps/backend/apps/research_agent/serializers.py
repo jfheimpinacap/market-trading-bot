@@ -36,6 +36,16 @@ class NarrativeSourceCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'feed_url': 'RSS source requires feed_url.'})
         if source_type == 'reddit' and not (metadata.get('subreddit') or attrs.get('category')):
             raise serializers.ValidationError({'metadata': 'Reddit source requires metadata.subreddit or category.'})
+        if source_type == 'twitter' and not (
+            metadata.get('manual_items')
+            or metadata.get('endpoint_url')
+            or metadata.get('query')
+            or metadata.get('account')
+            or metadata.get('hashtag')
+        ):
+            raise serializers.ValidationError(
+                {'metadata': 'Twitter source requires metadata.manual_items or metadata.endpoint_url/query/account/hashtag.'}
+            )
         return attrs
 
     class Meta:
@@ -141,6 +151,8 @@ class ResearchScanRunSerializer(serializers.ModelSerializer):
             'items_created',
             'rss_items_created',
             'reddit_items_created',
+            'twitter_items_created',
+            'social_items_total',
             'items_deduplicated',
             'analyses_generated',
             'analyses_degraded',

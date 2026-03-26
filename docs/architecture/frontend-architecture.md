@@ -76,7 +76,7 @@ Instead, each page coordinates a small set of explicit service calls.
 - `services/riskDemo.ts` for pre-trade assessment
 - `services/policy.ts` for trade approval evaluation and policy decision summaries
 - `services/experiments.ts` for strategy profiles, experiment runs, and run comparisons
-- `services/research.ts` for mixed narrative source management (`RSS` + `REDDIT`), ingest/analysis/full-scan controls, and shortlist/candidate data.
+- `services/research.ts` for mixed narrative source management (`RSS` + `REDDIT` + optional `TWITTER`), ingest/analysis/full-scan controls, and shortlist/candidate data.
 
 This keeps data dependencies understandable and prevents the current demo phase from turning into a client-state rewrite.
 
@@ -180,12 +180,12 @@ The `/postmortem` route now closes the loop more clearly:
 
 The `/research` route acts as the scan/research operator console:
 
-- source panel differentiating RSS vs Reddit sources
+- source panel differentiating RSS, Reddit, and X/Twitter sources
 - run controls for ingest-only, analysis-only, and full research scan
 - narrative item table with source-type badges and sentiment/confidence signals
 - shortlist table with mixed-source metadata (`source_mix`, divergence, priority)
 
-Current non-goals remain explicit: no X/Twitter ingestion, no aggressive social scraping, no real execution.
+Current non-goals remain explicit: no aggressive social scraping/crawling, no real execution.
 
 ## UI principles for this stage
 

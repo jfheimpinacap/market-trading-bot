@@ -11,7 +11,8 @@ from apps.research_agent.models import (
     NarrativeSourceType,
     ResearchCandidate,
 )
-from apps.research_agent.services.social_fusion import classify_source_mix, normalize_social_metrics, social_weight
+from apps.research_agent.services.social_fusion import classify_source_mix, social_weight
+from apps.research_agent.services.social_normalization import compute_cross_source_agreement, normalize_social_metrics
 
 
 def _sentiment_to_pressure(sentiment: str) -> Decimal:
@@ -52,10 +53,12 @@ def generate_research_candidates() -> int:
         narrative_items = []
         rss_count = 0
         social_count = 0
+        reddit_count = 0
+        twitter_count = 0
         social_strength_sum = Decimal('0.0000')
         rss_contribution = Decimal('0.0000')
         social_contribution = Decimal('0.0000')
-        source_direction_pressure = {'rss': Decimal('0.0000'), 'reddit': Decimal('0.0000')}
+        source_direction_pressure = {'rss': Decimal('0.0000'), 'reddit': Decimal('0.0000'), 'twitter': Decimal('0.0000')}
 
         for link in links:
             analysis = getattr(link.narrative_item, 'analysis', None)
@@ -76,9 +79,16 @@ def generate_research_candidates() -> int:
             narrative_items.append(link.narrative_item)
             if source_type == NarrativeSourceType.REDDIT:
                 social_count += 1
+                reddit_count += 1
                 social_contribution += abs(weighted_pressure)
                 social_strength_sum += social_signal
                 source_direction_pressure['reddit'] += weighted_pressure
+            elif source_type == NarrativeSourceType.TWITTER:
+                social_count += 1
+                twitter_count += 1
+                social_contribution += abs(weighted_pressure)
+                social_strength_sum += social_signal
+                source_direction_pressure['twitter'] += weighted_pressure
             else:
                 rss_count += 1
                 rss_contribution += abs(weighted_pressure)
@@ -95,7 +105,8 @@ def generate_research_candidates() -> int:
         divergence = Decimal('0.2500')
         source_convergent = True
         if rss_count and social_count:
-            source_convergent = source_direction_pressure['rss'] * source_direction_pressure['reddit'] >= Decimal('0.0')
+            combined_social_pressure = source_direction_pressure['reddit'] + source_direction_pressure['twitter']
+            source_convergent = source_direction_pressure['rss'] * combined_social_pressure >= Decimal('0.0')
             if not source_convergent:
                 relation = NarrativeMarketRelation.UNCERTAINTY
                 divergence = Decimal('0.6200')
@@ -110,7 +121,13 @@ def generate_research_candidates() -> int:
         if market.liquidity:
             liquidity_factor = min(Decimal(market.liquidity) / Decimal('100000'), Decimal('0.5'))
 
-        source_mix = classify_source_mix(rss_count=rss_count, social_count=social_count, convergent=source_convergent)
+        source_mix = classify_source_mix(
+            rss_count=rss_count,
+            reddit_count=reddit_count,
+            twitter_count=twitter_count,
+            convergent=source_convergent,
+        )
+        cross_agreement, cross_divergence = compute_cross_source_agreement(source_direction_pressure)
         social_confidence_boost = Decimal('0.0')
         if rss_count and social_count and source_convergent:
             social_confidence_boost = Decimal('0.08')
@@ -144,10 +161,20 @@ def generate_research_candidates() -> int:
                     'avg_link_strength': float(group['avg_strength'] or 0),
                     'linked_item_count': len(narrative_items),
                     'rss_item_count': rss_count,
+                    'reddit_item_count': reddit_count,
+                    'twitter_item_count': twitter_count,
                     'social_item_count': social_count,
                     'combined_confidence': float(adjusted_confidence),
                     'social_signal_strength_avg': float((social_strength_sum / Decimal(max(social_count, 1))).quantize(Decimal('0.0001'))),
                     'source_convergent': source_convergent,
+                    'cross_source_agreement': float(cross_agreement),
+                    'cross_source_divergence': float(cross_divergence),
+                    'narrative_consistency': 'aligned' if cross_agreement >= Decimal('0.66') else 'conflicted' if cross_divergence >= Decimal('0.66') else 'mixed',
+                    'source_contribution': {
+                        'rss': float(rss_contribution.quantize(Decimal('0.0001'))),
+                        'reddit': float(abs(source_direction_pressure['reddit']).quantize(Decimal('0.0001'))),
+                        'twitter': float(abs(source_direction_pressure['twitter']).quantize(Decimal('0.0001'))),
+                    },
                 },
             },
         )

@@ -100,12 +100,19 @@ class ResearchSummaryView(APIView):
             'source_count': NarrativeSource.objects.filter(is_enabled=True).count(),
             'rss_source_count': NarrativeSource.objects.filter(is_enabled=True, source_type=NarrativeSourceType.RSS).count(),
             'reddit_source_count': NarrativeSource.objects.filter(is_enabled=True, source_type=NarrativeSourceType.REDDIT).count(),
+            'twitter_source_count': NarrativeSource.objects.filter(is_enabled=True, source_type=NarrativeSourceType.TWITTER).count(),
             'item_count': NarrativeItem.objects.count(),
             'rss_item_count': NarrativeItem.objects.filter(source__source_type=NarrativeSourceType.RSS).count(),
             'reddit_item_count': NarrativeItem.objects.filter(source__source_type=NarrativeSourceType.REDDIT).count(),
+            'twitter_item_count': NarrativeItem.objects.filter(source__source_type=NarrativeSourceType.TWITTER).count(),
+            'social_item_count': NarrativeItem.objects.filter(
+                source__source_type__in=[NarrativeSourceType.REDDIT, NarrativeSourceType.TWITTER]
+            ).count(),
             'analyzed_count': NarrativeItem.objects.filter(analysis__isnull=False).count(),
             'candidate_count': ResearchCandidate.objects.count(),
-            'mixed_candidate_count': ResearchCandidate.objects.filter(source_mix__in=['mixed', 'social_heavy', 'news_confirmed']).count(),
+            'mixed_candidate_count': ResearchCandidate.objects.filter(
+                source_mix__in=['mixed', 'social_heavy', 'news_confirmed', 'full_signal']
+            ).count(),
             'latest_run': ResearchScanRunSerializer(latest_run).data if latest_run else None,
         }
         return Response(payload, status=status.HTTP_200_OK)
