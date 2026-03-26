@@ -84,7 +84,7 @@ export function OpportunitiesPage() {
           </label>
           <button className="primary-button" type="button" disabled={running} onClick={() => void runCycle()}>{running ? 'Running…' : 'Run opportunity cycle'}</button>
           <button className="secondary-button" type="button" onClick={() => navigate('/operator-queue')}>Open queue</button>
-          <button className="secondary-button" type="button" onClick={() => navigate('/proposals')}>Open proposals</button>
+          <button className="secondary-button" type="button" onClick={() => navigate('/proposals')}>Open proposals</button><button className="secondary-button" type="button" onClick={() => navigate('/mission-control')}>Open mission control</button>
           {actionMessage ? <span className="muted-text">{actionMessage}</span> : null}
         </div>
       </SectionCard>

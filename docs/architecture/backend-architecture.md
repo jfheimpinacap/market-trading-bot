@@ -684,3 +684,19 @@ A dedicated backend module (`apps.opportunity_supervisor`) now orchestrates the 
 - operator queue / paper trading for final action sink
 
 The supervisor is **not** a replacement authority for policy/safety/runtime; it is a deterministic flow coordinator with persisted run/item/plan artifacts.
+
+## Mission control architecture boundary (new)
+
+A dedicated `apps/mission_control` boundary now orchestrates periodic closed-loop supervision without replacing existing domain engines.
+
+Design intent:
+- mission control orchestrates; it does not duplicate opportunity execution logic.
+- `opportunity_supervisor` remains the central scan→proposal→allocation→queue/auto paper path.
+- runtime governor and safety guard stay authoritative; mission control only adapts/degrades/skips based on their state.
+- each cycle stores auditable step traces with explicit status/summary/details.
+
+Primary entities:
+- `MissionControlState`: singleton runtime control state and active session pointer.
+- `MissionControlSession`: lifecycle scope for one autonomous operation window.
+- `MissionControlCycle`: one auditable control-plane turn.
+- `MissionControlStep`: explicit step-level trace within a cycle.

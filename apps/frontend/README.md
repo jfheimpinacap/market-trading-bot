@@ -699,3 +699,14 @@ Provides:
 - quick links to `/proposals` and `/operator-queue`
 
 The route is explicitly paper/demo-only and does not enable real-money execution.
+
+## Mission control UI (new)
+
+The frontend now includes `/mission-control` as the autonomous operations cockpit:
+- start/pause/resume/stop/run-cycle controls
+- runtime + safety influence visibility
+- latest cycle step breakdown (research/opportunity/watch/alerts/notifications/digest/...)
+- recent cycle outcomes table (queue/auto/blocked)
+- quick navigation links to Runtime, Opportunities, Alerts, and Notifications
+
+This route remains paper/demo only and intentionally operator-auditable.
