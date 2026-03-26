@@ -59,7 +59,7 @@ export const appRoutes: AppRoute[] = [
   {
     label: 'Signals',
     path: '/signals',
-    description: 'Demo signals workspace for mock-agent insights, scored opportunities, and local heuristics.',
+    description: 'Signal fusion opportunity board with composite ranking, proposal gating, and paper/demo-only execution boundaries.',
     component: SignalsPage,
   },
   {

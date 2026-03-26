@@ -1,300 +1,283 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
-import { navigate } from '../lib/router';
 import { SectionCard } from '../components/SectionCard';
-import { ContextLinksPanel } from '../components/flow/ContextLinksPanel';
-import { WorkflowStatusPanel } from '../components/flow/WorkflowStatusPanel';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
-import { SignalsFilters } from '../components/signals/SignalsFilters';
-import { SignalsSummaryCards } from '../components/signals/SignalsSummaryCards';
-import { SignalsTable } from '../components/signals/SignalsTable';
-import { useDemoFlowRefresh } from '../hooks/useDemoFlowRefresh';
-import { buildReviewLookupByTradeId, getLatestReviewForMarket, getLatestTradeForMarket, getOpenPositionsForMarket } from '../lib/demoFlow';
+import { formatDateTime, formatPercent, titleize } from '../components/markets/utils';
+import { navigate } from '../lib/router';
 import {
-  getPaperPositions,
-  getPaperTrades,
-} from '../services/paperTrading';
-import { getTradeReviews } from '../services/reviews';
-import { getSignalAgents, getSignals, getSignalsSummary } from '../services/signals';
-import type { ContextLinkItem, WorkflowStatusItem } from '../types/demoFlow';
-import type { PaperPosition, PaperTrade } from '../types/paperTrading';
-import type { TradeReview } from '../types/reviews';
-import type { MarketSignal, MockAgent, SignalFilters, SignalSummary } from '../types/signals';
+  getOpportunitySignals,
+  getSignalBoardSummary,
+  getSignalRuns,
+  runFusionToProposal,
+  runSignalFusion,
+} from '../services/signals';
+import type { OpportunitySignal, SignalBoardSummary, SignalFusionRun, SignalProfileSlug } from '../types/signals';
 
-const defaultFilters: SignalFilters = {
-  market: '',
-  agent: '',
-  signal_type: '',
-  status: '',
-  direction: '',
-  is_actionable: '',
-  ordering: '-created_at',
-};
+const profileOptions: Array<{ value: SignalProfileSlug; label: string }> = [
+  { value: 'conservative_signal', label: 'Conservative' },
+  { value: 'balanced_signal', label: 'Balanced' },
+  { value: 'aggressive_light_signal', label: 'Aggressive light' },
+];
 
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
+function getStatusClass(status: string) {
+  const normalized = status.toLowerCase();
+  if (normalized === 'proposal_ready') {
+    return 'signal-badge signal-badge--actionable';
+  }
+  if (normalized === 'candidate') {
+    return 'signal-badge signal-badge--monitor';
+  }
+  if (normalized === 'blocked') {
+    return 'signal-badge signal-badge--bearish';
+  }
+  return 'signal-badge signal-badge--muted';
+}
+
+function getLevelBadge(value: number) {
+  if (value >= 70) {
+    return <span className="signal-badge signal-badge--actionable">HIGH</span>;
+  }
+  if (value >= 45) {
+    return <span className="signal-badge signal-badge--monitor">MEDIUM</span>;
+  }
+  return <span className="signal-badge signal-badge--muted">LOW</span>;
 }
 
 export function SignalsPage() {
-  const [filters, setFilters] = useState<SignalFilters>(defaultFilters);
-  const [summary, setSummary] = useState<SignalSummary | null>(null);
-  const [agents, setAgents] = useState<MockAgent[]>([]);
-  const [signals, setSignals] = useState<MarketSignal[]>([]);
-  const [positions, setPositions] = useState<PaperPosition[]>([]);
-  const [trades, setTrades] = useState<PaperTrade[]>([]);
-  const [reviews, setReviews] = useState<TradeReview[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(true);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [signalsLoading, setSignalsLoading] = useState(true);
-  const [signalsError, setSignalsError] = useState<string | null>(null);
-  const [contextWarning, setContextWarning] = useState<string | null>(null);
+  const [profile, setProfile] = useState<SignalProfileSlug>('balanced_signal');
+  const [summary, setSummary] = useState<SignalBoardSummary | null>(null);
+  const [runs, setRuns] = useState<SignalFusionRun[]>([]);
+  const [opportunities, setOpportunities] = useState<OpportunitySignal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
-  const loadCatalog = useCallback(async () => {
-    setCatalogLoading(true);
-    setCatalogError(null);
-    setContextWarning(null);
-
-    const [summaryResult, agentsResult, positionsResult, tradesResult, reviewsResult] = await Promise.allSettled([
-      getSignalsSummary(),
-      getSignalAgents(),
-      getPaperPositions(),
-      getPaperTrades(),
-      getTradeReviews({ ordering: '-reviewed_at' }),
-    ]);
-
-    if (summaryResult.status === 'fulfilled') {
-      setSummary(summaryResult.value);
-    } else {
-      setSummary(null);
-      setCatalogError(getErrorMessage(summaryResult.reason, 'Could not load the signals summary.'));
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [summaryResponse, runsResponse, opportunitiesResponse] = await Promise.all([
+        getSignalBoardSummary(),
+        getSignalRuns(),
+        getOpportunitySignals(),
+      ]);
+      setSummary(summaryResponse);
+      setRuns(runsResponse);
+      setOpportunities(opportunitiesResponse);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Could not load the opportunity board.');
+    } finally {
+      setLoading(false);
     }
-
-    if (agentsResult.status === 'fulfilled') {
-      setAgents(agentsResult.value);
-    } else {
-      setAgents([]);
-      setCatalogError((current) => current ?? getErrorMessage(agentsResult.reason, 'Could not load the agent registry.'));
-    }
-
-    const warnings: string[] = [];
-
-    if (positionsResult.status === 'fulfilled') {
-      setPositions(positionsResult.value);
-    } else {
-      setPositions([]);
-      warnings.push(getErrorMessage(positionsResult.reason, 'Paper positions unavailable.'));
-    }
-
-    if (tradesResult.status === 'fulfilled') {
-      setTrades(tradesResult.value);
-    } else {
-      setTrades([]);
-      warnings.push(getErrorMessage(tradesResult.reason, 'Paper trades unavailable.'));
-    }
-
-    if (reviewsResult.status === 'fulfilled') {
-      setReviews(reviewsResult.value);
-    } else {
-      setReviews([]);
-      warnings.push(getErrorMessage(reviewsResult.reason, 'Trade reviews unavailable.'));
-    }
-
-    setContextWarning(warnings.length > 0 ? warnings.join(' ') : null);
-    setCatalogLoading(false);
   }, []);
 
-  const loadSignalsList = useCallback(async () => {
-    setSignalsLoading(true);
-    setSignalsError(null);
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
+  const handleRunFusion = useCallback(async () => {
+    setActionBusy(true);
+    setActionMessage(null);
     try {
-      const response = await getSignals(filters);
-      setSignals(response);
-    } catch (error) {
-      setSignalsError(getErrorMessage(error, 'Could not load demo signals for the selected filters.'));
+      const run = await runSignalFusion({ profile_slug: profile });
+      setActionMessage(`Signal fusion run #${run.id} completed.`);
+      await loadData();
+    } catch (runError) {
+      setActionMessage(runError instanceof Error ? runError.message : 'Signal fusion failed.');
     } finally {
-      setSignalsLoading(false);
+      setActionBusy(false);
     }
-  }, [filters]);
+  }, [loadData, profile]);
 
-  useEffect(() => {
-    void loadCatalog();
-  }, [loadCatalog]);
+  const handleRunToProposal = useCallback(async (runId: number) => {
+    setActionBusy(true);
+    setActionMessage(null);
+    try {
+      const result = await runFusionToProposal({ run_id: runId });
+      setActionMessage(`Generated ${result.proposals_created} proposal drafts from run #${runId}.`);
+    } catch (runError) {
+      setActionMessage(runError instanceof Error ? runError.message : 'Could not generate proposals from signal run.');
+    } finally {
+      setActionBusy(false);
+    }
+  }, []);
 
-  useEffect(() => {
-    void loadSignalsList();
-  }, [loadSignalsList]);
+  const hasOpportunities = opportunities.length > 0;
+  const latestRun = runs[0] ?? summary?.latest_run ?? null;
 
-  useDemoFlowRefresh(async () => {
-    await Promise.all([loadCatalog(), loadSignalsList()]);
-  });
-
-  const activeFilterCount = useMemo(
-    () => Object.entries(filters).filter(([key, value]) => key !== 'ordering' && value.trim().length > 0).length,
-    [filters],
-  );
-
-  const workflowItems = useMemo<WorkflowStatusItem[]>(() => {
-    const actionableSignals = summary?.actionable_signals ?? 0;
-    const openPositions = positions.filter((position) => position.status === 'OPEN' && Number(position.quantity) > 0).length;
-
-    return [
-      {
-        label: 'Signals ready',
-        value: `${summary?.total_signals ?? 0} total`,
-        helperText: 'Use the signal queue to identify which markets deserve a closer look before trading.',
-        tone: (summary?.total_signals ?? 0) > 0 ? 'ready' : 'warning',
-      },
-      {
-        label: 'Actionable now',
-        value: `${actionableSignals} actionable`,
-        helperText: 'These are the best candidates to open in market detail and evaluate with the risk panel.',
-        tone: actionableSignals > 0 ? 'ready' : 'neutral',
-        href: '/markets',
-        linkLabel: 'Browse markets',
-      },
-      {
-        label: 'Portfolio context',
-        value: `${openPositions} open positions`,
-        helperText: 'Signals now surface whether a market already has live paper exposure in the portfolio.',
-        tone: openPositions > 0 ? 'ready' : 'neutral',
-        href: '/portfolio',
-        linkLabel: 'Open portfolio',
-      },
-      {
-        label: 'Review coverage',
-        value: `${reviews.length} reviews linked`,
-        helperText: 'If a signal already led to a trade and review, you can jump directly into the learning loop.',
-        tone: reviews.length > 0 ? 'ready' : 'neutral',
-        href: '/postmortem',
-        linkLabel: 'Open post-mortem',
-      },
-    ];
-  }, [positions, reviews.length, summary?.actionable_signals, summary?.total_signals]);
-
-  const contextLinks = useMemo<ContextLinkItem[]>(() => [
-    {
-      title: 'Open the live catalog',
-      description: 'Move from the signal board into Markets when you want wider market context before focusing on one contract.',
-      href: '/markets',
-      actionLabel: 'Explore markets',
-      tone: 'neutral',
-    },
-    {
-      title: 'Evaluate a trade in market detail',
-      description: 'Use the risk demo and paper trade panel directly inside /markets/:marketId when a signal looks actionable.',
-      href: '/markets',
-      actionLabel: 'Go to market detail',
-      tone: 'primary',
-    },
-    {
-      title: 'Check existing exposure',
-      description: 'Open the portfolio to verify if this market already has a position or a recent execution worth reviewing.',
-      href: '/portfolio',
-      actionLabel: 'View portfolio',
-      tone: 'secondary',
-    },
-  ], []);
-
-  const workflowContextByMarket = useMemo(() => {
-    return Object.fromEntries(
-      signals.map((signal) => {
-        const openPositions = getOpenPositionsForMarket(positions, signal.market);
-        const latestTrade = getLatestTradeForMarket(trades, signal.market);
-        const latestReview = getLatestReviewForMarket(reviews, signal.market)
-          ?? (latestTrade ? buildReviewLookupByTradeId(reviews)[latestTrade.id] : null)
-          ?? null;
-
-        return [
-          signal.market,
-          {
-            hasOpenPosition: openPositions.length > 0,
-            latestTradeId: latestTrade?.id,
-            latestReviewId: latestReview?.id,
-            latestReviewOutcome: latestReview?.outcome,
-            latestReviewStatus: latestReview?.review_status,
-          },
-        ];
-      }),
-    );
-  }, [positions, reviews, signals, trades]);
+  const quickCards = useMemo(() => [
+    { label: 'Watch', value: String(summary?.watch_count ?? 0) },
+    { label: 'Candidate', value: String(summary?.candidate_count ?? 0) },
+    { label: 'Proposal ready', value: String(summary?.proposal_ready_count ?? 0) },
+    { label: 'Blocked', value: String(summary?.blocked_count ?? 0) },
+  ], [summary]);
 
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Decision support"
-        title="Signals"
-        description="Demo-only opportunity board powered by local heuristics, mock agents, and the existing market catalog. The page now acts as a stronger bridge into market detail, portfolio context, and post-mortem."
+        eyebrow="Signal fusion"
+        title="Opportunity board"
+        description="Paper/demo-only signal fusion board. Consolidates research + prediction + risk into ranked opportunities and explicit proposal gating."
       />
 
-      <WorkflowStatusPanel
-        title="How to use this board"
-        description="Review the queue, open a market when the thesis looks actionable, evaluate risk in market detail, then come back through portfolio and post-mortem to understand what happened."
-        items={workflowItems}
-      />
-
-      <ContextLinksPanel
-        title="Where to go next"
-        description="The signals page is intentionally lightweight, so the main UX improvement here is better navigation into the rest of the workflow."
-        links={contextLinks}
-      />
+      <SectionCard
+        eyebrow="Fusion controls"
+        title="Run a new signal fusion cycle"
+        description="Choose a profile and generate a transparent composite signal run. No real-money execution is performed."
+      >
+        <div className="markets-filters__grid">
+          <label className="field-group">
+            <span>Signal profile</span>
+            <select className="select-input" value={profile} onChange={(event) => setProfile(event.target.value as SignalProfileSlug)}>
+              {profileOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="markets-filters__actions" style={{ marginTop: 12 }}>
+          <button className="primary-button" type="button" onClick={() => void handleRunFusion()} disabled={actionBusy}>
+            {actionBusy ? 'Running fusion...' : 'Run signal fusion'}
+          </button>
+          {latestRun ? (
+            <button className="secondary-button" type="button" onClick={() => void handleRunToProposal(latestRun.id)} disabled={actionBusy}>
+              Run to proposal
+            </button>
+          ) : null}
+          {actionMessage ? <span className="muted-text">{actionMessage}</span> : null}
+        </div>
+      </SectionCard>
 
       <DataStateWrapper
-        isLoading={catalogLoading}
-        isError={Boolean(catalogError)}
-        errorMessage={catalogError ?? undefined}
-        loadingTitle="Loading signals workspace"
-        loadingDescription="Requesting the summary, agent registry, and cross-module workflow context from the local backend."
-        errorTitle="Could not load the signals workspace"
+        isLoading={loading}
+        isError={Boolean(error)}
+        errorMessage={error ?? undefined}
+        loadingTitle="Loading opportunity board"
+        loadingDescription="Collecting signal runs, opportunities, and summary counters from the backend."
+        errorTitle="Could not load opportunity board"
       >
-        {summary ? (
-          <SectionCard
-            eyebrow="Overview"
-            title="Demo signals summary"
-            description="These cards summarize the current local queue of scored opportunities, monitoring items, and risk-style observations."
-          >
-            <SignalsSummaryCards summary={summary} />
-            {summary.latest_run ? (
-              <p className="muted-text signals-run-note">
-                Latest generation run #{summary.latest_run.id} evaluated {summary.latest_run.markets_evaluated} markets and created {summary.latest_run.signals_created} signals.
-              </p>
-            ) : null}
-            {contextWarning ? <p className="paper-inline-notice">Cross-module context warning: {contextWarning}</p> : null}
-          </SectionCard>
-        ) : null}
-
-        <SignalsFilters filters={filters} agents={agents} onChange={setFilters} onReset={() => setFilters(defaultFilters)} />
+        <SectionCard
+          eyebrow="Summary"
+          title="Board status"
+          description="Counts by opportunity state for quick triage and proposal readiness tracking."
+        >
+          <div className="dashboard-stat-grid">
+            {quickCards.map((item) => (
+              <article key={item.label} className="dashboard-stat-card">
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </article>
+            ))}
+          </div>
+        </SectionCard>
 
         <SectionCard
-          eyebrow="Ideas queue"
-          title="Signal list"
-          description="Desktop-first table for scanning demo signals, their thesis, related market, context-aware workflow links, and actionability state."
-          aside={<span className="muted-text">{activeFilterCount} active filters</span>}
+          eyebrow="Opportunity board"
+          title="Ranked opportunities"
+          description="WATCH / CANDIDATE / PROPOSAL_READY / BLOCKED status with rationale and next actions."
         >
-          <DataStateWrapper
-            isLoading={signalsLoading}
-            isError={Boolean(signalsError)}
-            errorMessage={signalsError ?? undefined}
-            isEmpty={!signalsLoading && !signalsError && signals.length === 0}
-            loadingTitle="Loading demo signals"
-            loadingDescription="Querying the local backend for the current demo signals queue."
-            errorTitle="Could not load the signals list"
-            emptyTitle="No demo signals found"
-            emptyDescription="Generate demo signals locally with `cd apps/backend && python manage.py generate_demo_signals`, go to Markets to inspect the seeded catalog, or clear some filters to broaden the current view."
-            action={
-              activeFilterCount > 0 ? (
-                <button className="secondary-button" type="button" onClick={() => setFilters(defaultFilters)}>
-                  Clear filters
-                </button>
-              ) : (
-                <button className="secondary-button" type="button" onClick={() => navigate('/markets')}>
-                  Go to markets
-                </button>
-              )
-            }
-          >
-            <SignalsTable signals={signals} workflowContextByMarket={workflowContextByMarket} />
-          </DataStateWrapper>
+          {!hasOpportunities ? (
+            <p className="muted-text">Run signal fusion to build the opportunity board.</p>
+          ) : (
+            <div className="markets-table-wrapper">
+              <table className="markets-table signals-table">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Market</th>
+                    <th>Provider</th>
+                    <th>Narrative</th>
+                    <th>Edge</th>
+                    <th>Confidence</th>
+                    <th>Risk</th>
+                    <th>Score</th>
+                    <th>Status</th>
+                    <th>Rationale</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {opportunities.map((opportunity) => {
+                    const edgePct = Number(opportunity.edge) * 100;
+                    const confidencePct = Number(opportunity.prediction_confidence) * 100;
+                    return (
+                      <tr key={opportunity.id}>
+                        <td>{opportunity.rank}</td>
+                        <td>
+                          <strong>{opportunity.market_title}</strong>
+                        </td>
+                        <td>{opportunity.market_provider_slug || opportunity.provider_slug}</td>
+                        <td>{titleize(opportunity.narrative_direction || 'uncertain')}</td>
+                        <td>
+                          <div className="table-inline-stack">
+                            <span>{formatPercent(opportunity.edge)}</span>
+                            {getLevelBadge(Math.abs(edgePct) * 10)}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="table-inline-stack">
+                            <span>{Math.round(confidencePct)}%</span>
+                            {getLevelBadge(confidencePct)}
+                          </div>
+                        </td>
+                        <td><span className="signal-badge signal-badge--muted">{opportunity.risk_level}</span></td>
+                        <td>{opportunity.opportunity_score}</td>
+                        <td><span className={getStatusClass(opportunity.opportunity_status)}>{opportunity.opportunity_status}</span></td>
+                        <td>{opportunity.rationale}</td>
+                        <td>
+                          <div className="table-link-stack">
+                            <a href={`/prediction?market_id=${opportunity.market}`} onClick={(event) => { event.preventDefault(); navigate(`/prediction`); }} className="market-link">Open prediction</a>
+                            <a href={`/markets/${opportunity.market}`} onClick={(event) => { event.preventDefault(); navigate(`/markets/${opportunity.market}`); }} className="market-link">Open market</a>
+                            {opportunity.proposal_gate?.should_generate_proposal ? (
+                              <a href="/proposals" onClick={(event) => { event.preventDefault(); navigate('/proposals'); }} className="market-link">Generate proposal</a>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          eyebrow="Recent runs"
+          title="Signal fusion history"
+          description="Last fusion cycles with evaluated markets and proposal-ready counts."
+        >
+          {runs.length === 0 ? (
+            <p className="muted-text">No fusion runs yet.</p>
+          ) : (
+            <div className="markets-table-wrapper">
+              <table className="markets-table">
+                <thead>
+                  <tr>
+                    <th>Run</th>
+                    <th>Status</th>
+                    <th>Profile</th>
+                    <th>Markets evaluated</th>
+                    <th>Proposal ready</th>
+                    <th>Created at</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runs.map((run) => (
+                    <tr key={run.id}>
+                      <td>#{run.id}</td>
+                      <td>{run.status}</td>
+                      <td>{run.profile_slug}</td>
+                      <td>{run.markets_evaluated}</td>
+                      <td>{run.proposal_ready_count}</td>
+                      <td>{formatDateTime(run.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </SectionCard>
       </DataStateWrapper>
     </div>

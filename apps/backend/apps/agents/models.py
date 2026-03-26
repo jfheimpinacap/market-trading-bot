@@ -25,6 +25,8 @@ class AgentPipelineType(models.TextChoices):
     RESEARCH_UNIVERSE_SCAN_CYCLE = 'research_universe_scan_cycle', 'Research Universe Scan Cycle'
     RESEARCH_TRIAGE_TO_PREDICTION = 'research_triage_to_prediction', 'Research Triage to Prediction'
     RESEARCH_TO_PREDICTION = 'research_to_prediction', 'Research to Prediction'
+    RESEARCH_PREDICTION_RISK_SIGNAL_CYCLE = 'research_prediction_risk_signal_cycle', 'Research Prediction Risk Signal Cycle'
+    SIGNAL_TO_PROPOSAL_CYCLE = 'signal_to_proposal_cycle', 'Signal to Proposal Cycle'
     POSTMORTEM_TO_LEARNING = 'postmortem_to_learning', 'Postmortem to Learning'
     REAL_MARKET_AGENT_CYCLE = 'real_market_agent_cycle', 'Real-market Agent Cycle'
     POSTMORTEM_BOARD_CYCLE = 'postmortem_board_cycle', 'Postmortem Board Cycle'

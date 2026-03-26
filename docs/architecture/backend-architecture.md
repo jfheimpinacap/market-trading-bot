@@ -17,7 +17,7 @@ The backend is a local-first Django service inside the monorepo. Its current res
 - `apps.markets`: provider-agnostic prediction-market catalog with providers, events, markets, historical snapshots, rules, demo seed data, local simulation engine, admin tooling, and read-only endpoints for local UI work.
 - `apps.paper_trading`: demo-only portfolio domain with virtual cash, positions, trades, portfolio snapshots, execution services, valuation services, admin tooling, and simple DRF endpoints.
 - `apps.risk_demo`: demo-only pre-trade assessment domain that persists trade guard verdicts and keeps heuristic evaluation logic out of views.
-- `apps.signals`: demo-only signals domain with mock agents, signal runs, heuristic generation, admin tooling, and read-only DRF endpoints.
+- `apps.signals`: demo-only signals + signal-fusion domain with mock agents, legacy heuristic signals, fusion runs, opportunity board outputs, and proposal gating endpoints.
 - `apps.postmortem_demo`: demo-only trade review domain that evaluates executed paper trades after the fact and exposes read-only review endpoints.
 - `apps.agents`: reserved for later agent orchestration work.
 - `apps.audit`: reserved for later audit and post-mortem persistence.
@@ -661,3 +661,14 @@ The research boundary now has a dedicated **universe triage** layer on top of na
 This keeps views thin and makes triage auditable and replayable.
 
 Out of scope (unchanged): real execution, real-money ops, opaque optimizers, and LLM-final-authority flows.
+
+
+## Signal fusion architecture extension
+
+`apps.signals` now has a service split for the new board layer:
+- `services/fusion.py`: consolidates research + prediction + risk + runtime/safety context
+- `services/ranking.py`: deterministic opportunity ordering
+- `services/gating.py`: explicit proposal pre-gate decisions
+- `services/board.py`: summary aggregation for `/signals` UI
+
+Important: fusion does not reimplement research/prediction/risk internals; it consumes their latest outputs and generates auditable upstream context for `proposal_engine` and `allocation` workflows.

@@ -8,7 +8,7 @@ El frontend ya no se siente como un conjunto de módulos separados. La UX ahora 
 
 1. **Dashboard** para entender el estado general del sistema demo.
 2. **Markets** para descubrir contratos activos.
-3. **Signals** para detectar oportunidades demo y saltar al market correcto.
+3. **Signals** como opportunity board real: fusiona research + prediction + risk, rankea oportunidades y explicita proposal gating.
 4. **Market detail** para revisar señal, generar proposal demo, evaluar riesgo, evaluar policy engine y ejecutar paper trade sólo cuando la gobernanza demo lo permite.
 5. **Proposals** para ver la bandeja de propuestas demo y validar direction, quantity, risk/policy y actionability.
 6. **Portfolio** para ver impacto en equity, posiciones y trades.
@@ -673,3 +673,16 @@ The route is integrated with `/postmortem`, `/learning`, and `/agents` through q
 - explicit empty states: "Run a universe scan to triage markets."
 
 All behavior remains local-first and paper/demo only.
+
+
+## Opportunity board en `/signals` (nuevo foco)
+
+La ruta `/signals` ahora funciona como tablero operativo de oportunidades:
+
+- control de `Run signal fusion` con perfil (`conservative`, `balanced`, `aggressive light`)
+- summary cards por estado (`WATCH`, `CANDIDATE`, `PROPOSAL_READY`, `BLOCKED`)
+- tabla central con edge, confidence, risk, score, status, rationale y acciones
+- historial de runs recientes
+- degradación explícita para loading/error/empty states
+
+Todo se mantiene local-first y paper/demo only.

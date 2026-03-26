@@ -69,7 +69,7 @@ Instead, each page coordinates a small set of explicit service calls.
 ### Service boundaries
 
 - `services/markets.ts` for catalog and detail views
-- `services/signals.ts` for signals summary, list, and agents
+- `services/signals.ts` for legacy signals + fusion runs + opportunity board + proposal-gate actions
 - `services/proposals.ts` for trade proposal list, detail, and generation endpoints
 - `services/paperTrading.ts` for account, positions, trades, snapshots, summary, and revalue
 - `services/reviews.ts` for review summary, list, and detail
@@ -554,3 +554,14 @@ The `/research` route now combines narrative scan and universe triage board in o
 - prediction handoff action is visible from the board
 
 This avoids adding another route/module while keeping scan → triage → prediction flow explicit.
+
+
+## Signals opportunity board UX extension
+
+The `/signals` route now acts as a true opportunity board instead of a passive signal list:
+- fusion controls + profile selection
+- board summary cards by operational status
+- ranked opportunity table with rationale and proposal gating hints
+- recent fusion run history
+
+This keeps the existing visual language (technical, sober, desktop-first) while improving handoff quality into prediction, market detail, proposals, and operator decisions.
