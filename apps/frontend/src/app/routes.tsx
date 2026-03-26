@@ -21,6 +21,7 @@ import { MarketsPage } from '../pages/MarketsPage';
 import { PortfolioPage } from '../pages/PortfolioPage';
 import { ProposalsPage } from '../pages/ProposalsPage';
 import { PostMortemPage } from '../pages/PostMortemPage';
+import { PostmortemBoardPage } from '../pages/PostmortemBoardPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { SafetyPage } from '../pages/SafetyPage';
 import { SemiAutoPage } from '../pages/SemiAutoPage';
@@ -136,6 +137,12 @@ export const appRoutes: AppRoute[] = [
     description: 'Retrospectives, trade reviews, and learning loops for paper trades.',
     component: PostMortemPage,
     match: (pathname) => /^\/postmortem(\/[^/]+)?\/?$/.test(pathname),
+  },
+  {
+    label: 'Postmortem Board',
+    path: '/postmortem-board',
+    description: 'Multi-perspective postmortem committee with structured conclusions and learning handoff.',
+    component: PostmortemBoardPage,
   },
   {
     label: 'Settings',

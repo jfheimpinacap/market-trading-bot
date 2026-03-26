@@ -637,3 +637,16 @@ The frontend now includes a real orchestration workspace at `/agents`.
 - API endpoints: `POST /api/risk-agent/assess/`, `POST /api/risk-agent/size/`, `POST /api/risk-agent/run-watch/`, `GET /api/risk-agent/assessments/`, `GET /api/risk-agent/watch-events/`, `GET /api/risk-agent/summary/`.
 - Frontend route `/risk-agent` provides assessment, sizing, watch loop, and audit history panels.
 - Out of scope remains unchanged: no real money, no real execution, no production-grade Kelly optimizer, no exchange stop-loss automation.
+
+## Postmortem board route (new)
+
+New route: `/postmortem-board`.
+
+UI sections:
+- board summary cards
+- run board panel (select trade review + run)
+- recent board runs table
+- perspective review panels with status/confidence/action items
+- final structured board conclusion
+
+The route is integrated with `/postmortem`, `/learning`, and `/agents` through quick links and pipeline controls.

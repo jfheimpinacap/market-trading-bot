@@ -25,6 +25,7 @@ class AgentPipelineType(models.TextChoices):
     RESEARCH_TO_PREDICTION = 'research_to_prediction', 'Research to Prediction'
     POSTMORTEM_TO_LEARNING = 'postmortem_to_learning', 'Postmortem to Learning'
     REAL_MARKET_AGENT_CYCLE = 'real_market_agent_cycle', 'Real-market Agent Cycle'
+    POSTMORTEM_BOARD_CYCLE = 'postmortem_board_cycle', 'Postmortem Board Cycle'
 
 
 class AgentDefinition(TimeStampedModel):

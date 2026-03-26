@@ -8,6 +8,7 @@ from apps.agents.services.handoffs import create_handoff
 from apps.learning_memory.services import run_learning_rebuild
 from apps.markets.models import Market, MarketSourceType, MarketStatus
 from apps.postmortem_demo.services import generate_trade_reviews
+from apps.postmortem_agents.services.board import run_postmortem_board
 from apps.prediction_agent.services.scoring import score_market_prediction
 from apps.research_agent.models import ResearchCandidate
 from apps.research_agent.services.scan import run_research_scan
@@ -203,6 +204,86 @@ def run_postmortem_to_learning(*, context, payload: dict) -> PipelineExecutionRe
     )
 
 
+
+
+def run_postmortem_board_cycle(*, context, payload: dict) -> PipelineExecutionResult:
+    postmortem_agent = context.agents_by_slug['postmortem_agent']
+    board_agent = context.agents_by_slug['postmortem_board_agent']
+    learning_agent = context.agents_by_slug['learning_agent']
+
+    postmortem_run = context.start_agent_run(agent=postmortem_agent)
+    review_limit = payload.get('review_limit')
+    review_results = generate_trade_reviews(limit=int(review_limit) if review_limit else None, refresh_existing=True)
+    review_ids = [result.review.id for result in review_results]
+    context.finish_agent_run(
+        postmortem_run,
+        status=AgentStatus.SUCCESS if review_ids else AgentStatus.PARTIAL,
+        summary=f'Postmortem agent prepared {len(review_ids)} trade reviews for board cycle.',
+        details={'review_ids': review_ids[:100]},
+    )
+
+    selected_review_id = payload.get('related_trade_review_id') or (review_ids[0] if review_ids else None)
+    if not selected_review_id:
+        return PipelineExecutionResult(
+            status=AgentStatus.PARTIAL,
+            summary='Postmortem board cycle skipped because there are no trade reviews.',
+            details={'review_count': 0},
+            agent_runs_count=context.agent_runs_count,
+            handoffs_count=context.handoffs_count,
+        )
+
+    create_handoff(
+        from_agent_run=postmortem_run,
+        to_agent_definition=board_agent,
+        pipeline_run=context.pipeline_run,
+        handoff_type='postmortem_to_board',
+        payload_summary=f'Review #{selected_review_id} passed to postmortem board.',
+        payload_ref={'related_trade_review_id': selected_review_id},
+    )
+    context.handoffs_count += 1
+
+    board_run = context.start_agent_run(agent=board_agent)
+    board_result = run_postmortem_board(
+        related_trade_review_id=int(selected_review_id),
+        force_learning_rebuild=bool(payload.get('force_learning_rebuild', False)),
+    )
+    board = board_result.board_run
+    context.finish_agent_run(
+        board_run,
+        status=board.status,
+        summary=board.summary,
+        details={'board_run_id': board.id, 'conclusion_id': board.details.get('conclusion_id')},
+    )
+
+    create_handoff(
+        from_agent_run=board_run,
+        to_agent_definition=learning_agent,
+        pipeline_run=context.pipeline_run,
+        handoff_type='board_to_learning',
+        payload_summary='Board conclusion + learning handoff generated.',
+        payload_ref={'board_run_id': board.id, 'learning_handoff': board.details.get('learning_handoff')},
+    )
+    context.handoffs_count += 1
+
+    learning_run = context.start_agent_run(agent=learning_agent)
+    learning_handoff = board.details.get('learning_handoff') or {}
+    learning_status = learning_handoff.get('learning_rebuild_status') or AgentStatus.PARTIAL
+    context.finish_agent_run(
+        learning_run,
+        status=learning_status,
+        summary='Learning handoff received from postmortem board cycle.',
+        details=learning_handoff,
+    )
+
+    return PipelineExecutionResult(
+        status=board.status if board.status in {AgentStatus.SUCCESS, AgentStatus.PARTIAL} else AgentStatus.PARTIAL,
+        summary='Postmortem board cycle completed.',
+        details={'board_run_id': board.id, 'review_id': selected_review_id},
+        agent_runs_count=context.agent_runs_count,
+        handoffs_count=context.handoffs_count,
+    )
+
+
 def run_real_market_agent_cycle(*, context, payload: dict) -> PipelineExecutionResult:
     research_agent = context.agents_by_slug['research_agent']
     prediction_agent = context.agents_by_slug['prediction_agent']
@@ -318,4 +399,6 @@ def execute_pipeline(*, context, pipeline_type: str, payload: dict) -> PipelineE
         return run_postmortem_to_learning(context=context, payload=payload)
     if pipeline_type == AgentPipelineType.REAL_MARKET_AGENT_CYCLE:
         return run_real_market_agent_cycle(context=context, payload=payload)
+    if pipeline_type == AgentPipelineType.POSTMORTEM_BOARD_CYCLE:
+        return run_postmortem_board_cycle(context=context, payload=payload)
     raise PipelineExecutionError(f'Unsupported pipeline type: {pipeline_type}')

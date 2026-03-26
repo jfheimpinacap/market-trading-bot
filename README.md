@@ -746,3 +746,13 @@ This layer reuses existing modules (research/prediction/risk/postmortem/learning
 - API endpoints: `POST /api/risk-agent/assess/`, `POST /api/risk-agent/size/`, `POST /api/risk-agent/run-watch/`, `GET /api/risk-agent/assessments/`, `GET /api/risk-agent/watch-events/`, `GET /api/risk-agent/summary/`.
 - Frontend route `/risk-agent` provides assessment, sizing, watch loop, and audit history panels.
 - Out of scope remains unchanged: no real money, no real execution, no production-grade Kelly optimizer, no exchange stop-loss automation.
+
+## Postmortem multi-agent board (new)
+
+The platform now includes a local-first **postmortem board / loss review committee**:
+
+- runs explicit perspective reviewers (narrative, prediction, risk, runtime, learning)
+- stores auditable per-perspective records and a final structured conclusion
+- integrates into learning memory with conservative handoff
+- adds an explicit agent pipeline: `postmortem_board_cycle`
+- remains strictly paper/demo only with no real-money or real-execution path
