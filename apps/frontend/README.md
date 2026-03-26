@@ -719,3 +719,17 @@ The frontend now includes `/mission-control` as the autonomous operations cockpi
 - quick navigation links to Runtime, Opportunities, Alerts, and Notifications
 
 This route remains paper/demo only and intentionally operator-auditable.
+
+## Portfolio governor route
+
+Nueva ruta `/portfolio-governor`:
+
+- ejecutar governance review con profile selector
+- ver summary cards de exposición/concentración/throttle/drawdown
+- inspeccionar exposición por market/provider/category
+- ver bloque de throttle decision con rationale y reason codes
+- revisar historial de governance runs
+
+Integraciones ligeras:
+- quick links desde `/portfolio`, `/mission-control` y `/opportunities`
+- `/opportunities` muestra estado de throttle actual y alerta visible cuando hay `BLOCK_NEW_ENTRIES`

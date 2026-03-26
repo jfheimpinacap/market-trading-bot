@@ -1,6 +1,7 @@
 from django.db.models import Count
 
 from apps.opportunity_supervisor.models import OpportunityCycleItem, OpportunityCycleRun, OpportunityExecutionPath
+from apps.portfolio_governor.services import get_latest_throttle_decision
 
 
 def build_summary() -> dict:
@@ -9,6 +10,7 @@ def build_summary() -> dict:
         row['execution_path']: row['total']
         for row in OpportunityCycleItem.objects.values('execution_path').annotate(total=Count('id'))
     }
+    throttle = get_latest_throttle_decision()
     return {
         'total_cycles': OpportunityCycleRun.objects.count(),
         'latest_cycle': latest_run.id if latest_run else None,
@@ -20,4 +22,6 @@ def build_summary() -> dict:
         'watch': by_path.get(OpportunityExecutionPath.WATCH, 0),
         'paper_demo_only': True,
         'real_execution_enabled': False,
+        'portfolio_throttle_state': throttle.state if throttle else 'NORMAL',
+        'portfolio_new_entries_blocked': bool(throttle and throttle.state == 'BLOCK_NEW_ENTRIES'),
     }

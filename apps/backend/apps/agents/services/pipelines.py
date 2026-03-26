@@ -8,6 +8,7 @@ from apps.agents.services.handoffs import create_handoff
 from apps.learning_memory.services import run_learning_rebuild
 from apps.markets.models import Market, MarketSourceType, MarketStatus
 from apps.opportunity_supervisor.services import run_opportunity_cycle
+from apps.portfolio_governor.services import run_portfolio_governance
 from apps.postmortem_demo.services import generate_trade_reviews
 from apps.postmortem_agents.services.board import run_postmortem_board
 from apps.prediction_agent.services.scoring import score_market_prediction
@@ -398,6 +399,7 @@ def run_opportunity_cycle_pipeline(*, context, payload: dict) -> PipelineExecuti
     prediction_agent = context.agents_by_slug['prediction_agent']
     risk_agent = context.agents_by_slug['risk_agent']
     supervisor_agent = context.agents_by_slug['opportunity_supervisor_agent']
+    portfolio_agent = context.agents_by_slug['portfolio_governor_agent']
 
     research_run = context.start_agent_run(agent=research_agent)
     context.finish_agent_run(
@@ -442,6 +444,25 @@ def run_opportunity_cycle_pipeline(*, context, payload: dict) -> PipelineExecuti
     )
     create_handoff(
         from_agent_run=risk_run,
+        to_agent_definition=portfolio_agent,
+        pipeline_run=context.pipeline_run,
+        handoff_type='risk_to_portfolio_governor',
+        payload_summary='Risk outputs handed to portfolio governor for aggregate throttling.',
+        payload_ref={'origin': 'opportunity_cycle_pipeline'},
+    )
+    context.handoffs_count += 1
+
+    portfolio_run = context.start_agent_run(agent=portfolio_agent)
+    governance_run = run_portfolio_governance(triggered_by='agent_orchestrator')
+    context.finish_agent_run(
+        portfolio_run,
+        status=AgentStatus.SUCCESS if governance_run.status == 'COMPLETED' else AgentStatus.PARTIAL,
+        summary=governance_run.summary,
+        details={'portfolio_governance_run_id': governance_run.id},
+    )
+
+    create_handoff(
+        from_agent_run=portfolio_run,
         to_agent_definition=supervisor_agent,
         pipeline_run=context.pipeline_run,
         handoff_type='risk_to_signal',
@@ -459,13 +480,13 @@ def run_opportunity_cycle_pipeline(*, context, payload: dict) -> PipelineExecuti
         supervisor_run,
         status=AgentStatus.SUCCESS if cycle.status == 'COMPLETED' else AgentStatus.PARTIAL,
         summary=cycle.summary,
-        details={'opportunity_cycle_run_id': cycle.id},
+        details={'opportunity_cycle_run_id': cycle.id, 'portfolio_governance_run_id': governance_run.id},
     )
 
     return PipelineExecutionResult(
         status=AgentStatus.SUCCESS if cycle.status == 'COMPLETED' else AgentStatus.PARTIAL,
         summary='Opportunity cycle pipeline completed.',
-        details={'opportunity_cycle_run_id': cycle.id},
+        details={'opportunity_cycle_run_id': cycle.id, 'portfolio_governance_run_id': governance_run.id},
         agent_runs_count=context.agent_runs_count,
         handoffs_count=context.handoffs_count,
     )

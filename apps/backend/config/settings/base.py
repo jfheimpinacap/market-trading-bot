@@ -98,6 +98,7 @@ LOCAL_APPS = [
     'apps.prediction_training',
     'apps.opportunity_supervisor',
     'apps.mission_control',
+    'apps.portfolio_governor',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

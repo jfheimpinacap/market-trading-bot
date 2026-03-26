@@ -51,6 +51,12 @@ DEFAULT_AGENT_DEFINITIONS = [
         'description': 'Runs end-to-end opportunity cycle from signal fusion to proposal/allocation execution path resolution.',
     },
     {
+        'name': 'Portfolio Governor Agent',
+        'slug': 'portfolio_governor_agent',
+        'agent_type': 'portfolio_governor',
+        'description': 'Computes aggregate portfolio exposure and emits regime-aware throttling decisions for new entries.',
+    },
+    {
         'name': 'Position Manager Agent',
         'slug': 'position_manager_agent',
         'agent_type': 'position_manager',
