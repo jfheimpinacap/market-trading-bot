@@ -577,3 +577,15 @@ It intentionally avoids global state and only composes:
 - run-cycle mutation
 
 The page visualizes governance outcomes rather than recomputing them client-side.
+
+## Mission control frontend boundary (new)
+
+The frontend adds `/mission-control` as an explicit operations layer above existing routes.
+
+Responsibilities:
+- expose mission loop controls (start/pause/resume/stop/run-cycle)
+- surface runtime/safety influence as first-class context
+- provide latest-cycle step visibility and recent-cycle KPI table
+- connect operators quickly with `/runtime`, `/opportunities`, `/alerts`, `/notifications`
+
+This route intentionally preserves the existing technical, sober UX style and keeps autonomy transparent (no opaque planner UX).

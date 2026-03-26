@@ -27,6 +27,7 @@ import { SafetyPage } from '../pages/SafetyPage';
 import { SemiAutoPage } from '../pages/SemiAutoPage';
 import { SignalsPage } from '../pages/SignalsPage';
 import { OpportunitiesPage } from '../pages/OpportunitiesPage';
+import { MissionControlPage } from '../pages/MissionControlPage';
 import { SystemPage } from '../pages/SystemPage';
 import type { NavRoute } from '../types/system';
 
@@ -183,6 +184,13 @@ export const appRoutes: AppRoute[] = [
     path: '/readiness',
     description: 'Go-live readiness and promotion gates audit layer for paper/demo operations.',
     component: ReadinessPage,
+  },
+
+  {
+    label: 'Mission Control',
+    path: '/mission-control',
+    description: 'Closed-loop autonomous paper/demo scheduler that orchestrates opportunity cycles, watch, alerts and notifications.',
+    component: MissionControlPage,
   },
   {
     label: 'Runtime',

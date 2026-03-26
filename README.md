@@ -807,3 +807,16 @@ Explicitly still out of scope:
 - real-money execution
 - exchange auth/order routing
 - opaque free-form planner
+
+### Mission control loop (new)
+
+The platform now includes a formal **mission control** layer (`/mission-control`, `/api/mission-control/*`) to run periodic autonomous paper/demo operations with explicit loop governance:
+
+- persistent mission sessions, cycles, and step-level traces
+- explicit start/pause/resume/stop/run-cycle controls
+- cadence-based optional steps (research/universe scan, risk watch, digest, postmortem refresh, learning rebuild)
+- `opportunity_supervisor` remains the central execution-path engine inside each cycle
+- runtime governor + safety guard remain authoritative (mission control degrades/skips when blocked)
+- no real-money execution and no real trading path
+
+Out of scope remains unchanged: distributed schedulers, cluster orchestration, and real execution.

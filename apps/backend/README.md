@@ -1266,3 +1266,21 @@ Governance authority remains unchanged:
 - safety guard still controls overrides/blocking
 
 No real execution was added.
+
+## Mission control app (new)
+
+`apps.mission_control` adds a transparent autonomous operations control plane on top of existing modules.
+
+What it adds:
+- `MissionControlState`, `MissionControlSession`, `MissionControlCycle`, `MissionControlStep`
+- service boundaries:
+  - `services/controller.py` for start/pause/resume/stop/status and loop threading
+  - `services/cycle_runner.py` for explicit cycle sequencing and step audit records
+  - `services/state.py` for singleton runtime state control
+  - `services/profiles.py` for conservative cadence profiles
+- API endpoints under `/api/mission-control/` for status, controls, sessions, cycles, and summary
+
+What it does not add:
+- real-money execution
+- real exchange auth/order routing
+- distributed enterprise scheduling
