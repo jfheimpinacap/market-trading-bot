@@ -22,6 +22,8 @@ class AgentTriggeredFrom(models.TextChoices):
 
 
 class AgentPipelineType(models.TextChoices):
+    RESEARCH_UNIVERSE_SCAN_CYCLE = 'research_universe_scan_cycle', 'Research Universe Scan Cycle'
+    RESEARCH_TRIAGE_TO_PREDICTION = 'research_triage_to_prediction', 'Research Triage to Prediction'
     RESEARCH_TO_PREDICTION = 'research_to_prediction', 'Research to Prediction'
     POSTMORTEM_TO_LEARNING = 'postmortem_to_learning', 'Postmortem to Learning'
     REAL_MARKET_AGENT_CYCLE = 'real_market_agent_cycle', 'Real-market Agent Cycle'

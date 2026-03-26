@@ -1,5 +1,14 @@
 import { requestJson } from './api/client';
-import type { NarrativeItem, ResearchCandidate, ResearchScanRun, ResearchSource, ResearchSummary } from '../types/research';
+import type {
+  MarketUniverseScanRun,
+  NarrativeItem,
+  PursuitCandidate,
+  ResearchBoardSummary,
+  ResearchCandidate,
+  ResearchScanRun,
+  ResearchSource,
+  ResearchSummary,
+} from '../types/research';
 
 export function getResearchSources() {
   return requestJson<ResearchSource[]>('/api/research/sources/');
@@ -31,6 +40,40 @@ export function runResearchAnalysis() {
     method: 'POST',
     body: JSON.stringify({}),
   });
+}
+
+export function runUniverseScan(payload: { filter_profile?: string; provider_scope?: string[]; source_scope?: string[] } = {}) {
+  return requestJson<MarketUniverseScanRun>('/api/research/run-universe-scan/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getUniverseScans() {
+  return requestJson<MarketUniverseScanRun[]>('/api/research/universe-scans/');
+}
+
+export function getUniverseScan(id: number | string) {
+  return requestJson<MarketUniverseScanRun>(`/api/research/universe-scans/${id}/`);
+}
+
+export function getPursuitCandidates(status?: 'shortlisted' | 'watch' | 'filtered_out') {
+  const query = status ? `?status=${status}` : '';
+  return requestJson<PursuitCandidate[]>(`/api/research/pursuit-candidates/${query}`);
+}
+
+export function getResearchBoardSummary() {
+  return requestJson<ResearchBoardSummary>('/api/research/board-summary/');
+}
+
+export function runTriageToPrediction(payload: { run_id: number; limit?: number }) {
+  return requestJson<{ pipeline_run_id: number; pipeline_status: string; pipeline_summary: string }>(
+    '/api/research/run-triage-to-prediction/',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function getResearchItems() {

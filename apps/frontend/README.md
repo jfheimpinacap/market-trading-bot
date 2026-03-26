@@ -661,3 +661,15 @@ UI sections:
 - final structured board conclusion
 
 The route is integrated with `/postmortem`, `/learning`, and `/agents` through quick links and pipeline controls.
+
+## Triage board UX in `/research` (new)
+
+`/research` now includes a universe scanner + triage board without creating a new route:
+
+- universe scan controls (`profile` + `Run universe scan`)
+- board summary cards (considered / filtered / shortlisted / watchlist + top exclusions)
+- pursuit candidates table with triage status, score, tradability metrics, narrative context, and actions
+- triage-to-prediction action that bridges to agent orchestration
+- explicit empty states: "Run a universe scan to triage markets."
+
+All behavior remains local-first and paper/demo only.

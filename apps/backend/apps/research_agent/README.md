@@ -24,3 +24,31 @@
 - ❌ No Reddit comment crawling or aggressive scraping.
 - ❌ No vector DB/RAG system.
 - ❌ LLM is never authoritative for risk/policy/safety.
+
+## Universe scanner / market triage board (new)
+
+This module now formalizes the second research block: scan broad market universe, triage, and surface worth-pursuing markets.
+
+### New persisted entities
+- `MarketUniverseScanRun`: explicit run envelope with counters and top exclusion reasons.
+- `MarketTriageDecision`: per-market score/status/reasons/flags.
+- `PursuitCandidate`: formal board output (`shortlisted` or `watch`) for downstream prediction/risk.
+
+### Services
+- `services/market_triage.py`: profile thresholds + auditable triage scoring.
+- `services/universe_scan.py`: run orchestration + persistence + triage-to-prediction handoff.
+- `services/pursuit_board.py`: board summary + candidate retrieval.
+
+### API surface
+- `POST /api/research/run-universe-scan/`
+- `GET /api/research/universe-scans/`
+- `GET /api/research/universe-scans/<id>/`
+- `GET /api/research/pursuit-candidates/`
+- `GET /api/research/board-summary/`
+- `POST /api/research/run-triage-to-prediction/`
+
+### Operational boundaries
+- narrative is contextual boost/caution, not a mandatory hard gate
+- no real-money flow
+- no real execution path
+- no opaque optimizer/planner

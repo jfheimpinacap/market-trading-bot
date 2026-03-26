@@ -1,12 +1,16 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.markets.demo_data import seed_demo_markets
-from apps.research_agent.models import NarrativeAnalysis, NarrativeItem, NarrativeSource
+from apps.markets.models import Market, MarketStatus
+from apps.research_agent.models import NarrativeAnalysis, NarrativeItem, NarrativeSource, ResearchCandidate
 from apps.research_agent.services.scan import run_research_scan
+from apps.research_agent.services.universe_scan import run_universe_scan
 
 RSS_PAYLOAD = {
     'feed': {'title': 'Demo Feed'},
@@ -147,3 +151,60 @@ class ResearchAgentTests(TestCase):
         if candidate_payload:
             self.assertIn('source_mix', candidate_payload[0])
             self.assertIn('cross_source_agreement', candidate_payload[0]['metadata'])
+
+    def test_universe_scan_filters_and_board_endpoints(self):
+        market_open = Market.objects.filter(status=MarketStatus.OPEN).first()
+        market_low_liq = Market.objects.exclude(id=market_open.id).first()
+        stale_market = Market.objects.exclude(id__in=[market_open.id, market_low_liq.id]).first()
+
+        market_open.liquidity = 200000
+        market_open.volume_24h = 35000
+        market_open.resolution_time = timezone.now() + timedelta(days=20)
+        market_open.updated_at = timezone.now()
+        market_open.save(update_fields=['liquidity', 'volume_24h', 'resolution_time', 'updated_at'])
+
+        market_low_liq.liquidity = 100
+        market_low_liq.volume_24h = 50
+        market_low_liq.status = MarketStatus.CLOSED
+        market_low_liq.resolution_time = timezone.now() + timedelta(hours=1)
+        market_low_liq.updated_at = timezone.now() - timedelta(days=3)
+        market_low_liq.save(update_fields=['liquidity', 'volume_24h', 'status', 'resolution_time', 'updated_at'])
+
+        stale_market.liquidity = 50000
+        stale_market.volume_24h = 10000
+        stale_market.status = MarketStatus.OPEN
+        stale_market.resolution_time = timezone.now() + timedelta(days=10)
+        stale_market.updated_at = timezone.now() - timedelta(days=10)
+        stale_market.save(update_fields=['liquidity', 'volume_24h', 'status', 'resolution_time', 'updated_at'])
+
+        ResearchCandidate.objects.create(
+            market=market_open,
+            narrative_pressure='0.8000',
+            sentiment_direction='bullish',
+            source_mix='mixed',
+            priority='75.00',
+            metadata={'linked_item_count': 6, 'combined_confidence': 0.8, 'cross_source_agreement': 0.8},
+        )
+
+        run = run_universe_scan(filter_profile='balanced_scan')
+        self.assertGreater(run.markets_considered, 0)
+        self.assertGreaterEqual(run.markets_filtered_out, 1)
+        self.assertGreaterEqual(run.markets_shortlisted, 1)
+        self.assertTrue(run.details.get('top_exclusion_reasons'))
+
+        run_response = self.client.post(reverse('research_agent:run-universe-scan'), {'filter_profile': 'balanced_scan'}, format='json')
+        self.assertEqual(run_response.status_code, 200)
+
+        list_response = self.client.get(reverse('research_agent:universe-scan-list'))
+        detail_response = self.client.get(reverse('research_agent:universe-scan-detail', args=[run.id]))
+        board_response = self.client.get(reverse('research_agent:board-summary'))
+        pursuit_response = self.client.get(reverse('research_agent:pursuit-candidate-list'))
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(board_response.status_code, 200)
+        self.assertEqual(pursuit_response.status_code, 200)
+
+        pursuit_payload = pursuit_response.json()
+        self.assertTrue(any(item['triage_status'] in {'shortlisted', 'watch'} for item in pursuit_payload))
+        self.assertTrue(any(item['triage_score'] for item in pursuit_payload))

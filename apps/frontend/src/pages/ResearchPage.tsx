@@ -6,6 +6,8 @@ import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
 import {
+  getPursuitCandidates,
+  getResearchBoardSummary,
   getResearchCandidates,
   getResearchItems,
   getResearchSources,
@@ -13,9 +15,18 @@ import {
   runResearchAnalysis,
   runResearchFullScan,
   runResearchIngest,
+  runTriageToPrediction,
+  runUniverseScan,
 } from '../services/research';
 import { getLlmStatus } from '../services/llm';
-import type { NarrativeItem, ResearchCandidate, ResearchSource, ResearchSummary } from '../types/research';
+import type {
+  NarrativeItem,
+  PursuitCandidate,
+  ResearchBoardSummary,
+  ResearchCandidate,
+  ResearchSource,
+  ResearchSummary,
+} from '../types/research';
 import type { LlmStatusResponse } from '../types/llm';
 
 function fmtDate(value?: string | null) {
@@ -45,38 +56,49 @@ function sourceBadge(sourceType: string) {
 }
 
 function sourceMixBadge(sourceMix: string) {
-  if (sourceMix === 'full_signal') return 'ready';
-  if (sourceMix === 'news_confirmed') return 'ready';
-  if (sourceMix === 'social_heavy') return 'pending';
-  if (sourceMix === 'mixed') return 'pending';
+  if (sourceMix === 'full_signal' || sourceMix === 'news_confirmed') return 'ready';
+  if (sourceMix === 'social_heavy' || sourceMix === 'mixed') return 'pending';
+  return 'neutral';
+}
+
+function triageTone(status: string) {
+  if (status === 'shortlisted') return 'ready';
+  if (status === 'watch') return 'pending';
   return 'neutral';
 }
 
 export function ResearchPage() {
   const [summary, setSummary] = useState<ResearchSummary | null>(null);
+  const [boardSummary, setBoardSummary] = useState<ResearchBoardSummary | null>(null);
   const [sources, setSources] = useState<ResearchSource[]>([]);
   const [items, setItems] = useState<NarrativeItem[]>([]);
   const [candidates, setCandidates] = useState<ResearchCandidate[]>([]);
+  const [pursuitCandidates, setPursuitCandidates] = useState<PursuitCandidate[]>([]);
   const [llmStatus, setLlmStatus] = useState<LlmStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<'ingest' | 'analysis' | 'full_scan' | null>(null);
+  const [actionLoading, setActionLoading] = useState<'ingest' | 'analysis' | 'full_scan' | 'universe_scan' | 'triage_to_prediction' | null>(null);
+  const [profile, setProfile] = useState<'conservative_scan' | 'balanced_scan' | 'broad_scan'>('balanced_scan');
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [summaryRes, sourcesRes, itemsRes, candidatesRes, llmRes] = await Promise.all([
+      const [summaryRes, boardRes, sourcesRes, itemsRes, candidatesRes, pursuitRes, llmRes] = await Promise.all([
         getResearchSummary(),
+        getResearchBoardSummary(),
         getResearchSources(),
         getResearchItems(),
         getResearchCandidates(),
+        getPursuitCandidates(),
         getLlmStatus(),
       ]);
       setSummary(summaryRes);
+      setBoardSummary(boardRes);
       setSources(sourcesRes);
       setItems(itemsRes);
       setCandidates(candidatesRes);
+      setPursuitCandidates(pursuitRes);
       setLlmStatus(llmRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load research data.');
@@ -119,6 +141,28 @@ export function ResearchPage() {
     }
   };
 
+  const runUniverse = async () => {
+    setActionLoading('universe_scan');
+    try {
+      await runUniverseScan({ filter_profile: profile });
+      await load();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const triggerTriageToPrediction = async () => {
+    if (!boardSummary?.latest_scan) return;
+    setActionLoading('triage_to_prediction');
+    try {
+      await runTriageToPrediction({ run_id: boardSummary.latest_scan.id, limit: 10 });
+      await load();
+      navigate('/agents');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const topItems = useMemo(() => items.slice(0, 20), [items]);
 
   return (
@@ -126,9 +170,9 @@ export function ResearchPage() {
       <PageHeader
         eyebrow="Narrative scan + research"
         title="Research"
-        description="Mixed narrative ingestion (RSS + Reddit + X/Twitter), structured local LLM analysis, and read-only market linking for paper/demo research candidates only."
+        description="Narrative ingestion + local analysis + universe scanner/triage board for paper/demo-only market pursuit decisions."
         actions={(
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             <button type="button" className="secondary-button" onClick={() => navigate('/markets')}>Open Markets</button>
             <button type="button" className="secondary-button" onClick={() => navigate('/prediction')}>Open Prediction</button>
             <button type="button" className="secondary-button" onClick={() => navigate('/agents')}>Open Agents</button>
@@ -146,6 +190,83 @@ export function ResearchPage() {
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
+        <SectionCard eyebrow="Universe scanner" title="Market triage board" description="Scan a broad market universe and triage by tradability + timing + narrative context.">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+            <label htmlFor="scan_profile"><strong>Profile:</strong></label>
+            <select id="scan_profile" value={profile} onChange={(event) => setProfile(event.target.value as typeof profile)}>
+              <option value="conservative_scan">conservative_scan</option>
+              <option value="balanced_scan">balanced_scan</option>
+              <option value="broad_scan">broad_scan</option>
+            </select>
+            <button type="button" className="secondary-button" disabled={actionLoading === 'universe_scan'} onClick={() => void runUniverse()}>
+              {actionLoading === 'universe_scan' ? 'Running universe scan...' : 'Run universe scan'}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={!boardSummary?.latest_scan || actionLoading === 'triage_to_prediction'}
+              onClick={() => void triggerTriageToPrediction()}
+            >
+              {actionLoading === 'triage_to_prediction' ? 'Handing off...' : 'Run triage → prediction'}
+            </button>
+          </div>
+          {boardSummary?.latest_scan ? (
+            <div className="system-metadata-grid">
+              <div><strong>Latest scan:</strong> #{boardSummary.latest_scan.id}</div>
+              <div><strong>Status:</strong> <StatusBadge tone={triageTone(boardSummary.latest_scan.status)}>{boardSummary.latest_scan.status.toUpperCase()}</StatusBadge></div>
+              <div><strong>Profile:</strong> {boardSummary.latest_scan.filter_profile}</div>
+              <div><strong>Finished:</strong> {fmtDate(boardSummary.latest_scan.finished_at)}</div>
+            </div>
+          ) : (
+            <p>Run a universe scan to triage markets.</p>
+          )}
+          <div className="system-metadata-grid" style={{ marginTop: '0.75rem' }}>
+            <div><strong>Markets considered:</strong> {boardSummary?.markets_considered ?? 0}</div>
+            <div><strong>Filtered out:</strong> {boardSummary?.markets_filtered_out ?? 0}</div>
+            <div><strong>Shortlisted:</strong> {boardSummary?.markets_shortlisted ?? 0}</div>
+            <div><strong>Watchlist:</strong> {boardSummary?.markets_watchlist ?? 0}</div>
+          </div>
+          <div style={{ marginTop: '0.75rem' }}>
+            <strong>Top exclusion reasons:</strong>{' '}
+            {(boardSummary?.top_exclusion_reasons?.length ?? 0) > 0
+              ? boardSummary?.top_exclusion_reasons.map(([reason, count]) => `${reason} (${count})`).join(', ')
+              : 'No exclusions yet.'}
+          </div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Pursuit board" title="Markets worth pursuing" description="SHORTLISTED/WATCH triage outputs that can feed prediction and risk pipelines.">
+          {pursuitCandidates.length === 0 ? (
+            <EmptyState eyebrow="No pursuit candidates" title="No triaged markets yet" description="Run a universe scan to triage markets." />
+          ) : (
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>Market</th><th>Provider</th><th>Liquidity</th><th>Volume24h</th><th>Time to resolution</th><th>Narrative</th><th>Source mix</th><th>Triage score</th><th>Status</th><th>Rationale</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {pursuitCandidates.map((candidate) => (
+                    <tr key={candidate.id}>
+                      <td>{candidate.market_title}</td>
+                      <td>{candidate.provider_slug}</td>
+                      <td>{candidate.liquidity ?? '—'}</td>
+                      <td>{candidate.volume_24h ?? '—'}</td>
+                      <td>{candidate.time_to_resolution_hours != null ? `${candidate.time_to_resolution_hours}h` : '—'}</td>
+                      <td><StatusBadge tone={sentimentTone(candidate.narrative_direction)}>{candidate.narrative_direction}</StatusBadge></td>
+                      <td>{candidate.source_mix}</td>
+                      <td>{candidate.triage_score}</td>
+                      <td><StatusBadge tone={triageTone(candidate.triage_status)}>{candidate.triage_status.toUpperCase()}</StatusBadge></td>
+                      <td>{candidate.rationale}</td>
+                      <td>
+                        <button type="button" className="link-button" onClick={() => navigate(`/prediction?market_id=${candidate.market}`)}>Score in prediction</button>
+                        {' · '}
+                        <button type="button" className="link-button" onClick={() => navigate(`/markets/${candidate.market_slug}`)}>Open market</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+
         <SectionCard eyebrow="Status" title="Research scan summary" description="MVP pipeline: source ingest → analysis → market linking → shortlist.">
           <div className="system-metadata-grid">
             <div><strong>Enabled sources:</strong> {summary?.source_count ?? 0}</div>
@@ -154,36 +275,14 @@ export function ResearchPage() {
             <div><strong>Candidates:</strong> {summary?.candidate_count ?? 0}</div>
           </div>
           <div className="system-metadata-grid" style={{ marginTop: '0.8rem' }}>
-            <div><strong>RSS sources/items:</strong> {summary?.rss_source_count ?? 0} / {summary?.rss_item_count ?? 0}</div>
-            <div><strong>Reddit sources/items:</strong> {summary?.reddit_source_count ?? 0} / {summary?.reddit_item_count ?? 0}</div>
-            <div><strong>X/Twitter sources/items:</strong> {summary?.twitter_source_count ?? 0} / {summary?.twitter_item_count ?? 0}</div>
-            <div><strong>Mixed candidates:</strong> {summary?.mixed_candidate_count ?? 0}</div>
-            <div><strong>Social items total:</strong> {summary?.social_item_count ?? 0}</div>
-          </div>
-          <div className="system-metadata-grid" style={{ marginTop: '0.8rem' }}>
             <div><strong>Latest run:</strong> {summary?.latest_run ? `#${summary.latest_run.id} (${summary.latest_run.status})` : 'No run yet'}</div>
             <div><strong>Last run at:</strong> {fmtDate(summary?.latest_run?.finished_at ?? summary?.latest_run?.started_at)}</div>
             <div><strong>LLM status:</strong> {llmStatus?.status ?? 'unknown'}</div>
             <div><strong>LLM note:</strong> {llmStatus?.message ?? 'Unavailable.'}</div>
           </div>
-          <div className="system-metadata-grid" style={{ marginTop: '0.8rem' }}>
-            <div><strong>Latest dedupe:</strong> {summary?.latest_run?.items_deduplicated ?? 0}</div>
-            <div><strong>Latest social ingest:</strong> {summary?.latest_run?.social_items_total ?? 0}</div>
-            <div><strong>Latest twitter ingest:</strong> {summary?.latest_run?.twitter_items_created ?? 0}</div>
-            <div><strong>Latest degraded analyses:</strong> {summary?.latest_run?.analyses_degraded ?? 0}</div>
-          </div>
-          {llmStatus && !llmStatus.reachable ? (
-            <p style={{ marginTop: '0.75rem' }}><strong>Degraded mode:</strong> narrative analysis falls back to lightweight heuristics until local LLM is reachable.</p>
-          ) : null}
-          {summary?.latest_run?.errors?.length ? (
-            <p style={{ marginTop: '0.75rem' }}><strong>Source degradation:</strong> latest run completed with recoverable source errors; RSS/Reddit/Twitter ingest remains optional per source.</p>
-          ) : null}
         </SectionCard>
 
         <SectionCard eyebrow="Sources" title="Configured narrative sources" description="RSS/news, Reddit, and optional X/Twitter adapters.">
-          {summary && summary.twitter_source_count === 0 ? (
-            <p style={{ marginBottom: '0.75rem' }}><strong>Twitter adapter optional:</strong> no X/Twitter sources configured yet.</p>
-          ) : null}
           {sources.length === 0 ? (
             <EmptyState eyebrow="No sources" title="No narrative sources configured" description="Add an RSS, Reddit, or X/Twitter source and run ingest first." />
           ) : (
@@ -216,7 +315,7 @@ export function ResearchPage() {
                   {topItems.map((item) => (
                     <tr key={item.id}>
                       <td><a href={item.url} target="_blank" rel="noreferrer">{item.title}</a></td>
-                      <td>{item.source_type === 'reddit' ? String((item.metadata?.reddit as { subreddit?: string } | undefined)?.subreddit ?? item.source_name) : item.source_type === 'twitter' ? String((item.metadata?.twitter as { author?: string } | undefined)?.author ?? item.source_name) : item.source_name}</td>
+                      <td>{item.source_name}</td>
                       <td><StatusBadge tone={sourceBadge(item.source_type)}>{item.source_type.toUpperCase()}</StatusBadge></td>
                       <td>{fmtDate(item.published_at)}</td>
                       <td><StatusBadge tone={sentimentTone(item.analysis?.sentiment)}>{item.analysis?.sentiment ?? 'pending'}</StatusBadge></td>
@@ -236,17 +335,16 @@ export function ResearchPage() {
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
-                <thead><tr><th>Market</th><th>Narrative direction</th><th>Source mix</th><th>Relation</th><th>Priority</th><th>Thesis</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Market</th><th>Narrative direction</th><th>Source mix</th><th>Relation</th><th>Priority</th><th>Thesis</th></tr></thead>
                 <tbody>
                   {candidates.map((candidate) => (
                     <tr key={candidate.id}>
-                      <td><button type="button" className="link-button" onClick={() => navigate(`/markets/${candidate.market_slug}`)}>{candidate.market_title}</button></td>
+                      <td>{candidate.market_title}</td>
                       <td><StatusBadge tone={sentimentTone(candidate.sentiment_direction)}>{candidate.sentiment_direction}</StatusBadge></td>
                       <td><StatusBadge tone={sourceMixBadge(candidate.source_mix)}>{candidate.source_mix.toUpperCase()}</StatusBadge></td>
                       <td><StatusBadge tone={relationTone(candidate.relation)}>{candidate.relation}</StatusBadge></td>
                       <td>{candidate.priority}</td>
                       <td>{candidate.short_thesis}</td>
-                      <td><button type="button" className="link-button" onClick={() => navigate(`/prediction?market_id=${candidate.market}`)}>Score in prediction agent</button></td>
                     </tr>
                   ))}
                 </tbody>
