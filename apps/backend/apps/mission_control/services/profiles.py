@@ -5,6 +5,7 @@ DEFAULT_PROFILE = {
     'run_research_every_n_cycles': 2,
     'run_universe_scan_every_n_cycles': 2,
     'run_watch_every_cycle': True,
+    'run_position_lifecycle_every_cycle': True,
     'run_digest_every_n_cycles': 3,
     'run_postmortem_every_n_cycles': 5,
     'run_learning_rebuild_every_n_cycles': 8,

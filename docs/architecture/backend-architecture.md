@@ -24,6 +24,7 @@ The backend is a local-first Django service inside the monorepo. Its current res
 - `apps.policy_engine`: demo-only governance boundary that converts trade proposals into explicit approval outcomes.
 - `apps.experiment_lab`: profile-driven experiment orchestration layer that reuses replay/evaluation services and produces auditable run comparisons.
 - `apps.research_agent`: scan/research boundary for RSS + Reddit + optional X/Twitter adapter ingestion, local LLM structured analysis, social-signal normalization, heuristic market linking, and conservative mixed-source candidate fusion.
+- `apps.position_manager`: post-entry holding governance boundary that consumes risk watch + prediction/research drift context to produce auditable HOLD/REDUCE/CLOSE/REVIEW decisions and explicit paper-only exit plans.
 
 ## Market domain shape
 The current `apps.markets` app is intentionally provider-agnostic.

@@ -19,6 +19,7 @@ import { MarketDetailPage } from '../pages/MarketDetailPage';
 import { OperatorQueuePage } from '../pages/OperatorQueuePage';
 import { MarketsPage } from '../pages/MarketsPage';
 import { PortfolioPage } from '../pages/PortfolioPage';
+import { PositionsPage } from '../pages/PositionsPage';
 import { ProposalsPage } from '../pages/ProposalsPage';
 import { PostMortemPage } from '../pages/PostMortemPage';
 import { PostmortemBoardPage } from '../pages/PostmortemBoardPage';
@@ -138,6 +139,12 @@ export const appRoutes: AppRoute[] = [
     path: '/portfolio',
     description: 'Paper trading portfolio summary with account metrics, positions, trades, snapshots, and manual revaluation.',
     component: PortfolioPage,
+  },
+  {
+    label: 'Positions',
+    path: '/positions',
+    description: 'Lifecycle governance for open paper positions with explicit hold/reduce/close/review decisions, queue routing, and paper-only exit plans.',
+    component: PositionsPage,
   },
   {
     label: 'Post-Mortem',

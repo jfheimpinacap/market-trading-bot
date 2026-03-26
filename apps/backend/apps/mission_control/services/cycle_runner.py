@@ -19,6 +19,7 @@ from apps.operator_alerts.services import rebuild_operator_alerts
 from apps.opportunity_supervisor.services import run_opportunity_cycle
 from apps.postmortem_agents.services.board import run_postmortem_board
 from apps.postmortem_demo.models import TradeReview
+from apps.position_manager.services import run_position_lifecycle
 from apps.research_agent.services.scan import run_full_research_scan
 from apps.research_agent.services.universe_scan import run_universe_scan
 from apps.risk_agent.services import run_position_watch
@@ -129,6 +130,8 @@ def run_mission_control_cycle(*, session: MissionControlSession, settings: dict)
 
     if settings.get('run_watch_every_cycle', True):
         _record_step(cycle, step_type='risk_watch', fn=lambda: run_position_watch(metadata={'triggered_from': 'mission_control'}))
+    if settings.get('run_position_lifecycle_every_cycle', True):
+        _record_step(cycle, step_type='position_lifecycle_check', fn=lambda: run_position_lifecycle(metadata={'triggered_from': 'mission_control'}))
 
     _record_step(cycle, step_type='alerts_rebuild', fn=rebuild_operator_alerts)
     _record_step(cycle, step_type='notifications_dispatch', fn=run_automatic_dispatch)
