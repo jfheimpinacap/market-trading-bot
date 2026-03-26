@@ -686,3 +686,16 @@ La ruta `/signals` ahora funciona como tablero operativo de oportunidades:
 - degradación explícita para loading/error/empty states
 
 Todo se mantiene local-first y paper/demo only.
+
+## Opportunities supervisor UI (new)
+
+New route: `/opportunities`
+
+Provides:
+- run controls for the opportunity cycle (with profile selection)
+- summary cards for built/queued/auto/block/proposal-ready counts
+- latest cycle item trace table from signal context to final execution path
+- recent cycle history
+- quick links to `/proposals` and `/operator-queue`
+
+The route is explicitly paper/demo-only and does not enable real-money execution.

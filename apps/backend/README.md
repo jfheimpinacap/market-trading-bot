@@ -1243,3 +1243,26 @@ Key properties:
 - auditable status assignment (`WATCH`, `CANDIDATE`, `PROPOSAL_READY`, `BLOCKED`)
 - explicit proposal gating before `proposal_engine`
 - paper/demo-only invariants preserved (no real execution path added)
+
+## Opportunity supervisor app (new)
+
+`apps.opportunity_supervisor` introduces a formal supervisor boundary for scan-to-proposal-to-execution-path orchestration in paper/demo mode.
+
+Main persisted entities:
+- `OpportunityCycleRun`
+- `OpportunityCycleItem`
+- `OpportunityExecutionPlan`
+
+Main API endpoints:
+- `POST /api/opportunities/run-cycle/`
+- `GET /api/opportunities/cycles/`
+- `GET /api/opportunities/cycles/<id>/`
+- `GET /api/opportunities/items/`
+- `GET /api/opportunities/summary/`
+
+Governance authority remains unchanged:
+- runtime governor still controls auto-execution capabilities
+- policy engine still controls approval class
+- safety guard still controls overrides/blocking
+
+No real execution was added.

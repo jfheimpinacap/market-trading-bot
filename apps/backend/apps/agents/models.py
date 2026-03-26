@@ -30,6 +30,8 @@ class AgentPipelineType(models.TextChoices):
     POSTMORTEM_TO_LEARNING = 'postmortem_to_learning', 'Postmortem to Learning'
     REAL_MARKET_AGENT_CYCLE = 'real_market_agent_cycle', 'Real-market Agent Cycle'
     POSTMORTEM_BOARD_CYCLE = 'postmortem_board_cycle', 'Postmortem Board Cycle'
+    OPPORTUNITY_CYCLE_PIPELINE = 'opportunity_cycle_pipeline', 'Opportunity Cycle Pipeline'
+    SIGNAL_TO_PROPOSAL_EXECUTION_CYCLE = 'signal_to_proposal_execution_cycle', 'Signal to Proposal Execution Cycle'
 
 
 class AgentDefinition(TimeStampedModel):

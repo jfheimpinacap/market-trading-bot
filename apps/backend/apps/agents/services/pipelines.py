@@ -7,6 +7,7 @@ from apps.agents.models import AgentPipelineType, AgentStatus
 from apps.agents.services.handoffs import create_handoff
 from apps.learning_memory.services import run_learning_rebuild
 from apps.markets.models import Market, MarketSourceType, MarketStatus
+from apps.opportunity_supervisor.services import run_opportunity_cycle
 from apps.postmortem_demo.services import generate_trade_reviews
 from apps.postmortem_agents.services.board import run_postmortem_board
 from apps.prediction_agent.services.scoring import score_market_prediction
@@ -392,6 +393,84 @@ def run_real_market_agent_cycle(*, context, payload: dict) -> PipelineExecutionR
     )
 
 
+def run_opportunity_cycle_pipeline(*, context, payload: dict) -> PipelineExecutionResult:
+    research_agent = context.agents_by_slug['research_agent']
+    prediction_agent = context.agents_by_slug['prediction_agent']
+    risk_agent = context.agents_by_slug['risk_agent']
+    supervisor_agent = context.agents_by_slug['opportunity_supervisor_agent']
+
+    research_run = context.start_agent_run(agent=research_agent)
+    context.finish_agent_run(
+        research_run,
+        status=AgentStatus.SUCCESS,
+        summary='Research stage acknowledged for opportunity cycle pipeline.',
+        details={'handoff': 'research_to_prediction'},
+    )
+    create_handoff(
+        from_agent_run=research_run,
+        to_agent_definition=prediction_agent,
+        pipeline_run=context.pipeline_run,
+        handoff_type='research_to_prediction',
+        payload_summary='Research shortlist context forwarded.',
+        payload_ref={'origin': 'opportunity_cycle_pipeline'},
+    )
+    context.handoffs_count += 1
+
+    prediction_run = context.start_agent_run(agent=prediction_agent)
+    context.finish_agent_run(
+        prediction_run,
+        status=AgentStatus.SUCCESS,
+        summary='Prediction stage acknowledged for opportunity cycle pipeline.',
+        details={'handoff': 'prediction_to_risk'},
+    )
+    create_handoff(
+        from_agent_run=prediction_run,
+        to_agent_definition=risk_agent,
+        pipeline_run=context.pipeline_run,
+        handoff_type='prediction_to_risk',
+        payload_summary='Prediction context forwarded to risk.',
+        payload_ref={'origin': 'opportunity_cycle_pipeline'},
+    )
+    context.handoffs_count += 1
+
+    risk_run = context.start_agent_run(agent=risk_agent)
+    context.finish_agent_run(
+        risk_run,
+        status=AgentStatus.SUCCESS,
+        summary='Risk stage acknowledged for opportunity cycle pipeline.',
+        details={'handoff': 'risk_to_signal'},
+    )
+    create_handoff(
+        from_agent_run=risk_run,
+        to_agent_definition=supervisor_agent,
+        pipeline_run=context.pipeline_run,
+        handoff_type='risk_to_signal',
+        payload_summary='Risk outputs handed to opportunity supervisor.',
+        payload_ref={'origin': 'opportunity_cycle_pipeline'},
+    )
+    context.handoffs_count += 1
+
+    supervisor_run = context.start_agent_run(agent=supervisor_agent)
+    cycle = run_opportunity_cycle(
+        profile_slug=payload.get('profile_slug'),
+        triggered_by='agent_orchestrator',
+    )
+    context.finish_agent_run(
+        supervisor_run,
+        status=AgentStatus.SUCCESS if cycle.status == 'COMPLETED' else AgentStatus.PARTIAL,
+        summary=cycle.summary,
+        details={'opportunity_cycle_run_id': cycle.id},
+    )
+
+    return PipelineExecutionResult(
+        status=AgentStatus.SUCCESS if cycle.status == 'COMPLETED' else AgentStatus.PARTIAL,
+        summary='Opportunity cycle pipeline completed.',
+        details={'opportunity_cycle_run_id': cycle.id},
+        agent_runs_count=context.agent_runs_count,
+        handoffs_count=context.handoffs_count,
+    )
+
+
 def execute_pipeline(*, context, pipeline_type: str, payload: dict) -> PipelineExecutionResult:
     if pipeline_type == AgentPipelineType.RESEARCH_TO_PREDICTION:
         return run_research_to_prediction(context=context, payload=payload)
@@ -405,4 +484,8 @@ def execute_pipeline(*, context, pipeline_type: str, payload: dict) -> PipelineE
         return run_real_market_agent_cycle(context=context, payload=payload)
     if pipeline_type == AgentPipelineType.POSTMORTEM_BOARD_CYCLE:
         return run_postmortem_board_cycle(context=context, payload=payload)
+    if pipeline_type == AgentPipelineType.OPPORTUNITY_CYCLE_PIPELINE:
+        return run_opportunity_cycle_pipeline(context=context, payload=payload)
+    if pipeline_type == AgentPipelineType.SIGNAL_TO_PROPOSAL_EXECUTION_CYCLE:
+        return run_opportunity_cycle_pipeline(context=context, payload=payload)
     raise PipelineExecutionError(f'Unsupported pipeline type: {pipeline_type}')

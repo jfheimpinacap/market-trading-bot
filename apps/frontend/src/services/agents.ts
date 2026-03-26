@@ -14,7 +14,13 @@ export function getAgentRun(id: number | string) {
 }
 
 export function runAgentPipeline(payload: {
-  pipeline_type: 'research_to_prediction' | 'postmortem_to_learning' | 'real_market_agent_cycle' | 'postmortem_board_cycle';
+  pipeline_type:
+    | 'research_to_prediction'
+    | 'postmortem_to_learning'
+    | 'real_market_agent_cycle'
+    | 'postmortem_board_cycle'
+    | 'opportunity_cycle_pipeline'
+    | 'signal_to_proposal_execution_cycle';
   triggered_from?: 'manual' | 'automation' | 'continuous_demo' | 'real_ops' | 'replay' | 'experiment';
   payload?: Record<string, unknown>;
 }) {

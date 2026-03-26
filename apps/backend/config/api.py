@@ -33,4 +33,5 @@ urlpatterns = [
     path('research/', include(('apps.research_agent.urls', 'research_agent'), namespace='research_agent')),
     path('prediction/', include(('apps.prediction_agent.urls', 'prediction_agent'), namespace='prediction_agent')),
     path('prediction/', include(('apps.prediction_training.urls', 'prediction_training'), namespace='prediction_training')),
+    path('opportunities/', include(('apps.opportunity_supervisor.urls', 'opportunity_supervisor'), namespace='opportunity_supervisor')),
 ]

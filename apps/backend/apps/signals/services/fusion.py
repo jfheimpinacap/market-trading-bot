@@ -85,6 +85,10 @@ def run_signal_fusion(*, profile_slug: str | None = None, market_ids: list[int] 
 
     runtime_state = RuntimeModeState.objects.order_by('-effective_at', '-id').first()
     safety_config = SafetyPolicyConfig.objects.order_by('-updated_at', '-id').first()
+    runtime_status = runtime_state.status if runtime_state else 'ACTIVE'
+    runtime_mode = runtime_state.current_mode if runtime_state else 'OBSERVE_ONLY'
+    runtime_allows_proposals = runtime_mode in {'PAPER_ASSIST', 'PAPER_SEMI_AUTO', 'PAPER_AUTO'} and runtime_status == 'ACTIVE'
+    safety_status = safety_config.status if safety_config else 'HEALTHY'
 
     latest_universe_run = MarketUniverseScanRun.objects.order_by('-started_at', '-id').first()
     candidates_qs = PursuitCandidate.objects.select_related('market', 'market__provider').order_by('-created_at', '-id')
@@ -120,11 +124,6 @@ def run_signal_fusion(*, profile_slug: str | None = None, market_ids: list[int] 
 
         risk_level = assessment.risk_level if assessment else RiskLevel.MEDIUM
         risk_score = _normalize_score_0_100(RISK_SCORES.get(risk_level, Decimal('0.50')) * Decimal('100'))
-
-        runtime_status = runtime_state.status if runtime_state else 'ACTIVE'
-        runtime_mode = runtime_state.current_mode if runtime_state else 'OBSERVE_ONLY'
-        runtime_allows_proposals = runtime_mode in {'PAPER_ASSIST', 'PAPER_SEMI_AUTO', 'PAPER_AUTO'} and runtime_status == 'ACTIVE'
-        safety_status = safety_config.status if safety_config else 'HEALTHY'
 
         opportunity_score = (
             research_score * profile.research_weight

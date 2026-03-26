@@ -787,3 +787,23 @@ Still out of scope:
 - real execution
 - opaque planners/optimizers
 - LLM final authority
+
+## Opportunity supervisor cycle (new)
+
+A new backend+frontend layer now provides an auditable **end-to-end autonomous opportunity cycle** in **paper/demo mode only**.
+
+- Backend module: `apps/backend/apps/opportunity_supervisor/`
+- API base: `/api/opportunities/*`
+- Frontend route: `/opportunities`
+
+Cycle flow:
+1. signal-fusion run (research + prediction + risk context)
+2. proposal generation for proposal-ready opportunities
+3. allocation pre-check per generated proposal
+4. governance path resolution using runtime + policy + safety
+5. final path persistence (`WATCH`, `PROPOSAL_ONLY`, `QUEUE`, `AUTO_EXECUTE_PAPER`, `BLOCKED`)
+
+Explicitly still out of scope:
+- real-money execution
+- exchange auth/order routing
+- opaque free-form planner

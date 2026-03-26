@@ -31,7 +31,13 @@ export type AgentRun = {
 
 export type AgentPipelineRun = {
   id: number;
-  pipeline_type: 'research_to_prediction' | 'postmortem_to_learning' | 'real_market_agent_cycle' | 'postmortem_board_cycle';
+  pipeline_type:
+    | 'research_to_prediction'
+    | 'postmortem_to_learning'
+    | 'real_market_agent_cycle'
+    | 'postmortem_board_cycle'
+    | 'opportunity_cycle_pipeline'
+    | 'signal_to_proposal_execution_cycle';
   status: AgentStatus;
   triggered_from: string;
   started_at: string;

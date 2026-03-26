@@ -672,3 +672,15 @@ Out of scope (unchanged): real execution, real-money ops, opaque optimizers, and
 - `services/board.py`: summary aggregation for `/signals` UI
 
 Important: fusion does not reimplement research/prediction/risk internals; it consumes their latest outputs and generates auditable upstream context for `proposal_engine` and `allocation` workflows.
+
+## Opportunity supervisor architecture (new)
+
+A dedicated backend module (`apps.opportunity_supervisor`) now orchestrates the last-mile opportunity lifecycle using existing domain services:
+
+- signal fusion for research/prediction/risk convergence
+- proposal engine for proposal drafts
+- allocation engine for pre-execution sizing checks
+- runtime governor + policy + safety for final path governance
+- operator queue / paper trading for final action sink
+
+The supervisor is **not** a replacement authority for policy/safety/runtime; it is a deterministic flow coordinator with persisted run/item/plan artifacts.

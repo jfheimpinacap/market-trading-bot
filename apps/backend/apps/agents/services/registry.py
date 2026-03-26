@@ -44,6 +44,12 @@ DEFAULT_AGENT_DEFINITIONS = [
         'agent_type': 'learning',
         'description': 'Rebuilds learning memory adjustments from postmortem, evaluation, and safety history.',
     },
+    {
+        'name': 'Opportunity Supervisor Agent',
+        'slug': 'opportunity_supervisor_agent',
+        'agent_type': 'opportunity_supervisor',
+        'description': 'Runs end-to-end opportunity cycle from signal fusion to proposal/allocation execution path resolution.',
+    },
 ]
 
 
