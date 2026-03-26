@@ -109,5 +109,6 @@ def run_reddit_ingest(*, source_ids: list[int] | None = None) -> IngestResult:
             )
             result.items_created += 1
             result.reddit_items_created += 1
+            result.social_items_total += 1
 
     return result

@@ -47,12 +47,27 @@ class ResearchAgentTests(TestCase):
             is_enabled=True,
             metadata={'subreddit': 'wallstreetbets', 'listing': 'new', 'fetch_limit': 10},
         )
+        self.twitter_source = NarrativeSource.objects.create(
+            name='Demo Twitter',
+            slug='demo-twitter',
+            source_type='twitter',
+            is_enabled=True,
+            metadata={'query': 'fed cuts', 'fetch_limit': 5, 'manual_items': []},
+        )
 
     @patch('apps.research_agent.services.ingest.fetch_rss')
     @patch('apps.research_agent.services.reddit_ingest._fetch_reddit_listing')
+    @patch('apps.research_agent.services.twitter_ingest.TwitterSourceAdapter.fetch')
     @patch('apps.research_agent.services.analyze.embed_text', return_value=[0.1, 0.2, 0.3])
     @patch('apps.research_agent.services.analyze.OllamaChatClient.chat_json')
-    def test_ingest_dedupe_analyze_link_candidate_and_endpoints(self, chat_json_mock, _embed_mock, fetch_reddit_mock, fetch_rss_mock):
+    def test_ingest_dedupe_analyze_link_candidate_and_endpoints(
+        self,
+        chat_json_mock,
+        _embed_mock,
+        fetch_twitter_mock,
+        fetch_reddit_mock,
+        fetch_rss_mock,
+    ):
         fetch_rss_mock.return_value = RSS_PAYLOAD
         fetch_reddit_mock.return_value = {
             'data': {
@@ -73,6 +88,18 @@ class ResearchAgentTests(TestCase):
                 ]
             }
         }
+        fetch_twitter_mock.return_value = [
+            {
+                'id': 'tw-1',
+                'text': 'Fed pivot odds rising quickly; macro traders expect risk-on momentum.',
+                'author': 'macro_demo',
+                'created_at': '2026-03-25T12:00:00Z',
+                'url': 'https://x.com/macro_demo/status/tw-1',
+                'like_count': 130,
+                'retweet_count': 22,
+                'reply_count': 8,
+            }
+        ]
         chat_json_mock.return_value = {
             'summary': 'Narrative suggests improving momentum for a yes outcome in election markets.',
             'sentiment': 'bullish',
@@ -89,12 +116,15 @@ class ResearchAgentTests(TestCase):
         first_run = run_research_scan()
         second_run = run_research_scan()
 
-        self.assertEqual(first_run.items_created, 3)
+        self.assertEqual(first_run.items_created, 4)
         self.assertEqual(first_run.rss_items_created, 2)
         self.assertEqual(first_run.reddit_items_created, 1)
-        self.assertGreaterEqual(second_run.items_deduplicated, 3)
+        self.assertEqual(first_run.twitter_items_created, 1)
+        self.assertEqual(first_run.social_items_total, 2)
+        self.assertGreaterEqual(second_run.items_deduplicated, 4)
         self.assertTrue(NarrativeAnalysis.objects.exists())
         self.assertTrue(NarrativeItem.objects.filter(source__source_type='reddit').exists())
+        self.assertTrue(NarrativeItem.objects.filter(source__source_type='twitter').exists())
 
         sources_response = self.client.get(reverse('research_agent:source-list-create'))
         run_response = self.client.post(reverse('research_agent:run-ingest'), {'run_analysis': True}, format='json')
@@ -112,6 +142,8 @@ class ResearchAgentTests(TestCase):
         summary_payload = summary_response.json()
         self.assertGreaterEqual(summary_payload['item_count'], 3)
         self.assertGreaterEqual(summary_payload['reddit_item_count'], 1)
+        self.assertGreaterEqual(summary_payload['twitter_item_count'], 1)
         candidate_payload = candidates_response.json()
         if candidate_payload:
             self.assertIn('source_mix', candidate_payload[0])
+            self.assertIn('cross_source_agreement', candidate_payload[0]['metadata'])

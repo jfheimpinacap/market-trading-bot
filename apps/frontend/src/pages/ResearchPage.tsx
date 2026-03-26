@@ -39,7 +39,16 @@ function relationTone(relation: string) {
 
 function sourceBadge(sourceType: string) {
   if (sourceType === 'reddit') return 'pending';
+  if (sourceType === 'twitter') return 'pending';
   if (sourceType === 'rss') return 'ready';
+  return 'neutral';
+}
+
+function sourceMixBadge(sourceMix: string) {
+  if (sourceMix === 'full_signal') return 'ready';
+  if (sourceMix === 'news_confirmed') return 'ready';
+  if (sourceMix === 'social_heavy') return 'pending';
+  if (sourceMix === 'mixed') return 'pending';
   return 'neutral';
 }
 
@@ -117,7 +126,7 @@ export function ResearchPage() {
       <PageHeader
         eyebrow="Narrative scan + research"
         title="Research"
-        description="Mixed narrative ingestion (RSS + Reddit), structured local LLM analysis, and read-only market linking for paper/demo research candidates only."
+        description="Mixed narrative ingestion (RSS + Reddit + X/Twitter), structured local LLM analysis, and read-only market linking for paper/demo research candidates only."
         actions={(
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button type="button" className="secondary-button" onClick={() => navigate('/markets')}>Open Markets</button>
@@ -147,8 +156,9 @@ export function ResearchPage() {
           <div className="system-metadata-grid" style={{ marginTop: '0.8rem' }}>
             <div><strong>RSS sources/items:</strong> {summary?.rss_source_count ?? 0} / {summary?.rss_item_count ?? 0}</div>
             <div><strong>Reddit sources/items:</strong> {summary?.reddit_source_count ?? 0} / {summary?.reddit_item_count ?? 0}</div>
+            <div><strong>X/Twitter sources/items:</strong> {summary?.twitter_source_count ?? 0} / {summary?.twitter_item_count ?? 0}</div>
             <div><strong>Mixed candidates:</strong> {summary?.mixed_candidate_count ?? 0}</div>
-            <div><strong>Deduped (latest):</strong> {summary?.latest_run?.items_deduplicated ?? 0}</div>
+            <div><strong>Social items total:</strong> {summary?.social_item_count ?? 0}</div>
           </div>
           <div className="system-metadata-grid" style={{ marginTop: '0.8rem' }}>
             <div><strong>Latest run:</strong> {summary?.latest_run ? `#${summary.latest_run.id} (${summary.latest_run.status})` : 'No run yet'}</div>
@@ -156,14 +166,26 @@ export function ResearchPage() {
             <div><strong>LLM status:</strong> {llmStatus?.status ?? 'unknown'}</div>
             <div><strong>LLM note:</strong> {llmStatus?.message ?? 'Unavailable.'}</div>
           </div>
+          <div className="system-metadata-grid" style={{ marginTop: '0.8rem' }}>
+            <div><strong>Latest dedupe:</strong> {summary?.latest_run?.items_deduplicated ?? 0}</div>
+            <div><strong>Latest social ingest:</strong> {summary?.latest_run?.social_items_total ?? 0}</div>
+            <div><strong>Latest twitter ingest:</strong> {summary?.latest_run?.twitter_items_created ?? 0}</div>
+            <div><strong>Latest degraded analyses:</strong> {summary?.latest_run?.analyses_degraded ?? 0}</div>
+          </div>
           {llmStatus && !llmStatus.reachable ? (
             <p style={{ marginTop: '0.75rem' }}><strong>Degraded mode:</strong> narrative analysis falls back to lightweight heuristics until local LLM is reachable.</p>
           ) : null}
+          {summary?.latest_run?.errors?.length ? (
+            <p style={{ marginTop: '0.75rem' }}><strong>Source degradation:</strong> latest run completed with recoverable source errors; RSS/Reddit/Twitter ingest remains optional per source.</p>
+          ) : null}
         </SectionCard>
 
-        <SectionCard eyebrow="Sources" title="Configured narrative sources" description="RSS/news and Reddit social sources. X/Twitter is intentionally out-of-scope in this phase.">
+        <SectionCard eyebrow="Sources" title="Configured narrative sources" description="RSS/news, Reddit, and optional X/Twitter adapters.">
+          {summary && summary.twitter_source_count === 0 ? (
+            <p style={{ marginBottom: '0.75rem' }}><strong>Twitter adapter optional:</strong> no X/Twitter sources configured yet.</p>
+          ) : null}
           {sources.length === 0 ? (
-            <EmptyState eyebrow="No sources" title="No narrative sources configured" description="Add an RSS or Reddit source and run ingest first." />
+            <EmptyState eyebrow="No sources" title="No narrative sources configured" description="Add an RSS, Reddit, or X/Twitter source and run ingest first." />
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
@@ -173,7 +195,7 @@ export function ResearchPage() {
                     <tr key={source.id}>
                       <td>{source.name}</td>
                       <td><StatusBadge tone={sourceBadge(source.source_type)}>{source.source_type.toUpperCase()}</StatusBadge></td>
-                      <td>{source.source_type === 'reddit' ? `r/${String(source.metadata?.subreddit ?? source.category ?? source.slug)}` : source.feed_url}</td>
+                      <td>{source.source_type === 'reddit' ? `r/${String(source.metadata?.subreddit ?? source.category ?? source.slug)}` : source.source_type === 'twitter' ? `${String(source.metadata?.query ?? source.metadata?.account ?? source.metadata?.hashtag ?? source.slug)}` : source.feed_url}</td>
                       <td><StatusBadge tone={source.is_enabled ? 'ready' : 'neutral'}>{source.is_enabled ? 'enabled' : 'disabled'}</StatusBadge></td>
                     </tr>
                   ))}
@@ -185,7 +207,7 @@ export function ResearchPage() {
 
         <SectionCard eyebrow="Narrative items" title="Recent ingested items" description="Structured summary/sentiment/topic extraction used for market linking.">
           {topItems.length === 0 ? (
-            <EmptyState eyebrow="No items" title="No narrative items yet" description="Add an RSS or Reddit source and run ingest first." />
+            <EmptyState eyebrow="No items" title="No narrative items yet" description="Add an RSS, Reddit, or X/Twitter source and run ingest first." />
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
@@ -194,7 +216,7 @@ export function ResearchPage() {
                   {topItems.map((item) => (
                     <tr key={item.id}>
                       <td><a href={item.url} target="_blank" rel="noreferrer">{item.title}</a></td>
-                      <td>{item.source_type === 'reddit' ? String((item.metadata?.reddit as { subreddit?: string } | undefined)?.subreddit ?? item.source_name) : item.source_name}</td>
+                      <td>{item.source_type === 'reddit' ? String((item.metadata?.reddit as { subreddit?: string } | undefined)?.subreddit ?? item.source_name) : item.source_type === 'twitter' ? String((item.metadata?.twitter as { author?: string } | undefined)?.author ?? item.source_name) : item.source_name}</td>
                       <td><StatusBadge tone={sourceBadge(item.source_type)}>{item.source_type.toUpperCase()}</StatusBadge></td>
                       <td>{fmtDate(item.published_at)}</td>
                       <td><StatusBadge tone={sentimentTone(item.analysis?.sentiment)}>{item.analysis?.sentiment ?? 'pending'}</StatusBadge></td>
@@ -220,7 +242,7 @@ export function ResearchPage() {
                     <tr key={candidate.id}>
                       <td><button type="button" className="link-button" onClick={() => navigate(`/markets/${candidate.market_slug}`)}>{candidate.market_title}</button></td>
                       <td><StatusBadge tone={sentimentTone(candidate.sentiment_direction)}>{candidate.sentiment_direction}</StatusBadge></td>
-                      <td><StatusBadge tone={sourceBadge(candidate.source_mix.includes('social') ? 'reddit' : 'rss')}>{candidate.source_mix.toUpperCase()}</StatusBadge></td>
+                      <td><StatusBadge tone={sourceMixBadge(candidate.source_mix)}>{candidate.source_mix.toUpperCase()}</StatusBadge></td>
                       <td><StatusBadge tone={relationTone(candidate.relation)}>{candidate.relation}</StatusBadge></td>
                       <td>{candidate.priority}</td>
                       <td>{candidate.short_thesis}</td>

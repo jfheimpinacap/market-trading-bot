@@ -63,7 +63,7 @@ export type ResearchCandidate = {
   divergence_score: string;
   rss_narrative_contribution: string;
   social_narrative_contribution: string;
-  source_mix: 'news_only' | 'social_only' | 'mixed' | 'social_heavy' | 'news_confirmed' | string;
+  source_mix: 'news_only' | 'social_only' | 'mixed' | 'social_heavy' | 'news_confirmed' | 'full_signal' | string;
   short_thesis: string;
   priority: string;
   metadata: Record<string, unknown>;
@@ -80,6 +80,8 @@ export type ResearchScanRun = {
   items_created: number;
   rss_items_created: number;
   reddit_items_created: number;
+  twitter_items_created: number;
+  social_items_total: number;
   items_deduplicated: number;
   analyses_generated: number;
   analyses_degraded: number;
@@ -97,9 +99,12 @@ export type ResearchSummary = {
   source_count: number;
   rss_source_count: number;
   reddit_source_count: number;
+  twitter_source_count: number;
   item_count: number;
   rss_item_count: number;
   reddit_item_count: number;
+  twitter_item_count: number;
+  social_item_count: number;
   analyzed_count: number;
   candidate_count: number;
   mixed_candidate_count: number;

@@ -18,6 +18,8 @@ class IngestResult:
     items_created: int = 0
     rss_items_created: int = 0
     reddit_items_created: int = 0
+    twitter_items_created: int = 0
+    social_items_total: int = 0
     items_deduplicated: int = 0
     errors: list[str] | None = None
     source_errors: dict[str, list[str]] | None = None
@@ -159,6 +161,8 @@ def merge_ingest_results(*results: IngestResult) -> IngestResult:
         merged.items_created += result.items_created
         merged.rss_items_created += result.rss_items_created
         merged.reddit_items_created += result.reddit_items_created
+        merged.twitter_items_created += result.twitter_items_created
+        merged.social_items_total += result.social_items_total
         merged.items_deduplicated += result.items_deduplicated
         merged.errors.extend(result.errors)
         for source_slug, source_errors in (result.source_errors or {}).items():
