@@ -30,6 +30,7 @@ import { SignalsPage } from '../pages/SignalsPage';
 import { OpportunitiesPage } from '../pages/OpportunitiesPage';
 import { MissionControlPage } from '../pages/MissionControlPage';
 import { PortfolioGovernorPage } from '../pages/PortfolioGovernorPage';
+import { ProfileManagerPage } from '../pages/ProfileManagerPage';
 import { SystemPage } from '../pages/SystemPage';
 import type { NavRoute } from '../types/system';
 
@@ -199,6 +200,13 @@ export const appRoutes: AppRoute[] = [
     path: '/portfolio-governor',
     description: 'Aggregate portfolio exposure governance, concentration checks, and regime-aware throttling for paper/demo entries.',
     component: PortfolioGovernorPage,
+  },
+
+  {
+    label: 'Profile Manager',
+    path: '/profile-manager',
+    description: 'Adaptive meta-governance that classifies regime and coordinates operating profiles under runtime/safety/readiness constraints.',
+    component: ProfileManagerPage,
   },
   {
     label: 'Mission Control',

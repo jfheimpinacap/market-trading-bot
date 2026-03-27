@@ -718,3 +718,27 @@ Integración:
 
 No implementado:
 - execution real, optimizer institucional, hedging/correlación cuant compleja, decisiones opacas por LLM.
+
+## Adaptive profile manager architecture
+
+`apps.profile_manager` introduces a transparent meta-governance boundary above operational profile consumers.
+
+Service split:
+- `services/state.py`: aggregate state snapshot from runtime/safety/readiness/portfolio/queue signals
+- `services/regime.py`: auditable rule-based regime classification
+- `services/decision.py`: profile recommendation decision payload
+- `services/apply.py`: explicit apply path (never bypasses runtime/safety/readiness)
+- `services/governance.py`: run orchestration + run/decision persistence
+
+Data model:
+- `ProfileGovernanceRun`
+- `ProfileDecision`
+- `ManagedProfileBinding`
+- enum `RegimeClassification`
+
+Integration points:
+- mission control cycle adds `profile_governance_check` step at cycle start
+- portfolio governor remains an input (not replaced)
+- runtime/safety/readiness remain higher-order authority
+
+Non-goals unchanged: real execution, opaque planner autonomy, RL/ML meta-controller.

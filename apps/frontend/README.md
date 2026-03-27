@@ -733,3 +733,14 @@ Nueva ruta `/portfolio-governor`:
 Integraciones ligeras:
 - quick links desde `/portfolio`, `/mission-control` y `/opportunities`
 - `/opportunities` muestra estado de throttle actual y alerta visible cuando hay `BLOCK_NEW_ENTRIES`
+
+## Meta-governance UI: `/profile-manager`
+
+New technical route `/profile-manager` adds an auditable adaptive profile control panel:
+
+- run governance (recommend/apply modes)
+- view current regime and blocking constraints
+- inspect current decision rationale + reason codes + target module profiles
+- inspect recent governance runs
+
+This route integrates with Portfolio Governor, Mission Control, Runtime, and Opportunities via quick links and keeps explicit paper/demo-only messaging.

@@ -21,6 +21,7 @@ from apps.postmortem_agents.services.board import run_postmortem_board
 from apps.postmortem_demo.models import TradeReview
 from apps.position_manager.services import run_position_lifecycle
 from apps.portfolio_governor.services import run_portfolio_governance
+from apps.profile_manager.services import get_effective_profile_targets, run_profile_governance
 from apps.research_agent.services.scan import run_full_research_scan
 from apps.research_agent.services.universe_scan import run_universe_scan
 from apps.risk_agent.services import run_position_watch
@@ -107,21 +108,38 @@ def run_mission_control_cycle(*, session: MissionControlSession, settings: dict)
         session.save(update_fields=['cycle_count', 'last_cycle_at', 'status', 'summary', 'updated_at'])
         return cycle
 
+    profile_governance_step = _record_step(
+        cycle,
+        step_type='profile_governance_check',
+        fn=lambda: run_profile_governance(triggered_by='mission_control'),
+    )
+    profile_result = (profile_governance_step.details or {}).get('result') or {}
+    current_targets = get_effective_profile_targets()
+
     run_every_research = settings.get('run_research_every_n_cycles')
     run_every_universe = settings.get('run_universe_scan_every_n_cycles')
+    research_profile = current_targets.get('target_research_profile') or settings.get('universe_filter_profile', 'balanced_scan')
+    opportunity_profile = current_targets.get('target_opportunity_supervisor_profile') or settings.get('opportunity_profile_slug')
+    portfolio_profile = current_targets.get('target_portfolio_governor_profile')
 
     if _should_run(cycle.cycle_number, run_every_research):
         _record_step(cycle, step_type='research_scan', fn=lambda: run_full_research_scan(source_ids=settings.get('research_source_ids')))
 
     if _should_run(cycle.cycle_number, run_every_universe):
-        _record_step(cycle, step_type='universe_scan', fn=lambda: run_universe_scan(filter_profile=settings.get('universe_filter_profile', 'balanced_scan')))
+        _record_step(cycle, step_type='universe_scan', fn=lambda: run_universe_scan(filter_profile=research_profile))
 
-    _record_step(cycle, step_type='portfolio_governance_check', fn=lambda: run_portfolio_governance(triggered_by='mission_control'))
+    _record_step(
+        cycle,
+        step_type='portfolio_governance_check',
+        fn=lambda: run_portfolio_governance(profile_slug=portfolio_profile, triggered_by='mission_control'),
+        details={'meta_governance': profile_result},
+    )
 
     opportunity_step = _record_step(
         cycle,
         step_type='opportunity_cycle',
-        fn=lambda: run_opportunity_cycle(profile_slug=settings.get('opportunity_profile_slug'), triggered_by='mission_control'),
+        fn=lambda: run_opportunity_cycle(profile_slug=opportunity_profile, triggered_by='mission_control'),
+        details={'meta_governance': profile_result},
     )
 
     result = (opportunity_step.details or {}).get('result') or {}

@@ -37,4 +37,5 @@ urlpatterns = [
     path('opportunities/', include(('apps.opportunity_supervisor.urls', 'opportunity_supervisor'), namespace='opportunity_supervisor')),
     path('mission-control/', include(('apps.mission_control.urls', 'mission_control'), namespace='mission_control')),
     path('portfolio-governor/', include(('apps.portfolio_governor.urls', 'portfolio_governor'), namespace='portfolio_governor')),
+    path('profile-manager/', include(('apps.profile_manager.urls', 'profile_manager'), namespace='profile_manager')),
 ]
