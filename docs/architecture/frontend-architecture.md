@@ -732,3 +732,21 @@ UX intent:
 - make empty/loading/error states explicit
 - expose resilient outcomes even when no incident is created (valid observation)
 
+
+## Certification board frontend integration
+
+New route: `/certification`.
+
+UI responsibilities:
+- display current certification level/recommendation
+- show consolidated evidence in one panel (not dispersed across many pages)
+- show explicit operating envelope constraints
+- show recent run audit trail
+- expose manual review trigger with clear loading/error/empty states
+
+Integration pattern:
+- new service module: `src/services/certification.ts`
+- new types module: `src/types/certification.ts`
+- lightweight cross-linking from readiness/chaos/promotion/mission-control/runtime pages
+
+Non-goals remain unchanged: no real execution, no opaque autonomous go-live.

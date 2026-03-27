@@ -867,3 +867,18 @@ The page includes:
 
 It is explicitly paper/demo only and links directly to `/incidents`, `/mission-control`, `/runtime`, and `/rollout`.
 
+
+## Operational certification UX (`/certification`)
+
+The frontend now includes `/certification` as the formal operational certification board for paper/demo autonomy.
+
+It provides:
+- current certification card (level, recommendation, confidence, rationale)
+- consolidated evidence panel (readiness, chaos, evaluation, incidents, rollout/promotion)
+- explicit operating envelope panel (autonomy, entries, sizing, profile constraints)
+- recent certification runs table
+- manual-first review trigger (`Run certification review`)
+
+Integration links were added from readiness, chaos, promotion, mission-control, and runtime pages.
+
+This remains paper/demo only and does not enable real execution.

@@ -1527,3 +1527,26 @@ Key endpoints:
 
 Out of scope (unchanged): real money, real execution, unrestricted destructive chaos, cluster orchestration, opaque planner control.
 
+
+## Operational certification board (paper-only)
+
+New app: `apps.certification_board`.
+
+Purpose:
+- Consolidate evidence from readiness, chaos/resilience, incidents, champion-challenger, promotion, rollout, execution-aware evaluation, runtime/safety, portfolio governor and profile manager.
+- Issue an auditable certification recommendation.
+- Materialize an explicit paper-only `OperatingEnvelope`.
+
+Key API endpoints:
+- `POST /api/certification/run-review/`
+- `GET /api/certification/runs/`
+- `GET /api/certification/runs/<id>/`
+- `GET /api/certification/current/`
+- `GET /api/certification/summary/`
+- `POST /api/certification/apply/<id>/` (optional manual safe apply)
+
+Scope boundaries:
+- manual-first and conservative
+- no real money
+- no real execution
+- no opaque auto go-live

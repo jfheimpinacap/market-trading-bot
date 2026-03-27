@@ -39,6 +39,7 @@ import { ChampionChallengerPage } from '../pages/ChampionChallengerPage';
 import { PromotionPage } from '../pages/PromotionPage';
 import { RolloutPage } from '../pages/RolloutPage';
 import { SystemPage } from '../pages/SystemPage';
+import { CertificationPage } from '../pages/CertificationPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -212,6 +213,13 @@ export const appRoutes: AppRoute[] = [
     path: '/experiments',
     description: 'Strategy profile runner and replay-vs-live paper comparison layer for technical experimentation.',
     component: ExperimentsPage,
+  },
+
+  {
+    label: 'Certification',
+    path: '/certification',
+    description: 'Operational certification board that consolidates readiness, resilience, incidents, rollout and execution realism into a paper-only operating envelope.',
+    component: CertificationPage,
   },
 
   {
