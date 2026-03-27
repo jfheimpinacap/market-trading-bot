@@ -103,6 +103,7 @@ LOCAL_APPS = [
     'apps.profile_manager',
     'apps.champion_challenger',
     'apps.memory_retrieval',
+    'apps.promotion_committee',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

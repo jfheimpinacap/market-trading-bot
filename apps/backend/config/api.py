@@ -41,4 +41,5 @@ urlpatterns = [
     path('portfolio-governor/', include(('apps.portfolio_governor.urls', 'portfolio_governor'), namespace='portfolio_governor')),
     path('profile-manager/', include(('apps.profile_manager.urls', 'profile_manager'), namespace='profile_manager')),
     path('champion-challenger/', include(('apps.champion_challenger.urls', 'champion_challenger'), namespace='champion_challenger')),
+    path('promotion/', include(('apps.promotion_committee.urls', 'promotion_committee'), namespace='promotion_committee')),
 ]

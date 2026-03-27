@@ -674,3 +674,18 @@ Design intent:
 - keep retrieval interactions explicit and auditable
 - cross-link with learning/postmortem/prediction/risk routes
 - preserve local-first, desktop-first demo ergonomics
+
+## Promotion committee frontend integration (new)
+
+A dedicated `/promotion` route was added using the existing page/service pattern:
+
+- `src/services/promotion.ts`: API boundary for review runs, summary, current recommendation, optional apply
+- `src/types/promotion.ts`: typed run/evidence/recommendation contracts
+- `src/pages/promotion/PromotionPage.tsx`: manual-first governance UX
+
+UX principles kept:
+- strong top recommendation card
+- explicit paper/demo-only framing
+- inconclusive evidence displayed as governance outcome (not runtime error)
+- clear empty/loading/error states
+- route-level integration links to champion-challenger, profile-manager, prediction, readiness
