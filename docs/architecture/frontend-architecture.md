@@ -866,3 +866,15 @@ Cockpit uses per-source fallback in `services/cockpit.ts`:
 - no multi-user orchestration
 - no heavy global state framework introduced
 
+
+
+## Runbooks UI
+
+The `/runbooks` page provides the operator workflow surface for runbook instances and templates.
+
+It consumes `/api/runbooks/*` and is integrated lightly with cockpit and incidents:
+- Cockpit shows runbook summary and links
+- Incidents includes quick link to runbooks
+- Runbooks detail links to trace/incidents/queue/mission-control
+
+The page does not duplicate module business logic; it orchestrates existing actions and records outcomes.

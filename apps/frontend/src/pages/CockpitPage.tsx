@@ -158,6 +158,17 @@ export function CockpitPage() {
                 <div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/broker-bridge')}>Open bridge</button><button className="secondary-button" type="button" onClick={() => navigate('/execution-venue')}>Open venue</button><button className="secondary-button" type="button" onClick={() => navigate('/venue-account')}>Open account</button></div>
               </SectionCard>
 
+
+              <SectionCard eyebrow="Runbooks" title="Guided remediation workflows" description="Manual-first playbook coverage for incidents, degradations and recurring operator procedures.">
+                <ul className="key-value-list">
+                  <li><span>Open</span><strong>{snapshot.runbookSummary?.counts.open ?? 0}</strong></li>
+                  <li><span>In progress</span><strong>{snapshot.runbookSummary?.counts.in_progress ?? 0}</strong></li>
+                  <li><span>Blocked</span><strong>{snapshot.runbookSummary?.counts.blocked ?? 0}</strong></li>
+                  <li><span>Completed</span><strong>{snapshot.runbookSummary?.counts.completed ?? 0}</strong></li>
+                </ul>
+                <div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/runbooks')}>Open runbooks</button></div>
+              </SectionCard>
+
               <SectionCard eyebrow="Change governance" title="Promotion, rollout and champion/challenger" description="Current promotion recommendations and rollout status.">
                 <ul className="key-value-list">
                   <li><span>Promotion recommendation</span><strong>{snapshot.promotionSummary?.latest_run?.recommendation_code ?? 'n/a'}</strong></li>

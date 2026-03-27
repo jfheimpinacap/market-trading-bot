@@ -1705,3 +1705,17 @@ Excluded:
 - live broker connectors
 - distributed graph infra
 - opaque autonomous planner behavior
+
+
+## runbook_engine
+
+`apps.runbook_engine` adds a formal runbook/playbook layer on top of existing operations modules.
+
+It provides:
+- Structured templates (`RunbookTemplate`)
+- Executable instances (`RunbookInstance`)
+- Ordered guided steps (`RunbookStep`)
+- Action evidence (`RunbookActionResult`)
+- Deterministic recommendation matching
+
+Key rule: manual-first orchestration with auditability. It reuses existing services and does not enable real/live execution.

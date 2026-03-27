@@ -52,4 +52,5 @@ urlpatterns = [
     path('venue-account/', include(('apps.venue_account.urls', 'venue_account'), namespace='venue_account')),
     path('connectors/', include(('apps.connector_lab.urls', 'connector_lab'), namespace='connector_lab')),
     path('trace/', include(('apps.trace_explorer.urls', 'trace_explorer'), namespace='trace_explorer')),
+    path('runbooks/', include(('apps.runbook_engine.urls', 'runbook_engine'), namespace='runbook_engine')),
 ]

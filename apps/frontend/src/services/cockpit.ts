@@ -12,6 +12,7 @@ import { getProfileGovernanceSummary, runProfileGovernance } from './profileMana
 import { getPromotionSummary } from './promotion';
 import { rollbackRollout, pauseRollout, getRolloutSummary } from './rollout';
 import { getRuntimeStatus } from './runtime';
+import { getRunbookSummary } from './runbooks';
 import { getTraceQueryRuns, getTraceSummary } from './trace';
 import { getVenueSummary } from './executionVenue';
 import { getVenueAccountSummary } from './venueAccount';
@@ -63,6 +64,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     traceRuns,
     promotionSummary,
     championChallengerSummary,
+    runbookSummary,
   ] = await Promise.all([
     withFallback('runtime', () => getRuntimeStatus(), failures, null, 'Runtime status unavailable.'),
     withFallback('incidents', () => getIncidentCurrentState(), failures, null, 'Incident posture unavailable.'),
@@ -87,6 +89,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     withFallback('traceRuns', () => getTraceQueryRuns(), failures, [], 'Trace runs unavailable.'),
     withFallback('promotionSummary', () => getPromotionSummary(), failures, null, 'Promotion summary unavailable.'),
     withFallback('championChallengerSummary', () => getChampionChallengerSummary(), failures, null, 'Champion/challenger summary unavailable.'),
+    withFallback('runbookSummary', () => getRunbookSummary(), failures, null, 'Runbook summary unavailable.'),
   ]);
 
   return {
@@ -113,6 +116,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     traceRuns,
     promotionSummary,
     championChallengerSummary,
+    runbookSummary,
     failures,
     lastUpdatedAt: new Date().toISOString(),
   };
@@ -209,6 +213,17 @@ export function getCockpitAttention(snapshot: CockpitSnapshot): CockpitAttention
     });
   }
 
+
+  if ((snapshot.runbookSummary?.counts.blocked ?? 0) > 0) {
+    items.push({
+      id: 'runbook-blocked',
+      severity: 'HIGH',
+      title: 'Blocked runbooks need operator resolution',
+      summary: `${snapshot.runbookSummary?.counts.blocked ?? 0} runbook(s) are in BLOCKED state.`,
+      route: '/runbooks',
+    });
+  }
+
   if (snapshot.missionControl?.state.status === 'PAUSED' && snapshot.incidents?.degraded_mode.state !== 'ACTIVE') {
     items.push({
       id: 'mission-paused',
@@ -232,6 +247,7 @@ export function getCockpitQuickLinks() {
     { label: 'Certification', path: '/certification' },
     { label: 'Rollout manager', path: '/rollout' },
     { label: 'Operator queue', path: '/operator-queue' },
+    { label: 'Runbooks', path: '/runbooks' },
     { label: 'Trace explorer', path: '/trace' },
     { label: 'Execution venue', path: '/execution-venue' },
     { label: 'Venue account', path: '/venue-account' },
