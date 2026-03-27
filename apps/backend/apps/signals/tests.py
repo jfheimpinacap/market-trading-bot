@@ -1,6 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 from io import StringIO
+from unittest.mock import patch
 
 from django.core.management import call_command
 from django.test import TestCase
@@ -10,6 +11,7 @@ from rest_framework.test import APIClient
 
 from apps.markets.demo_data import seed_demo_markets
 from apps.markets.models import Market
+from apps.memory_retrieval.models import MemoryDocument
 from apps.prediction_agent.models import PredictionModelProfile, PredictionRun, PredictionScore
 from apps.research_agent.models import MarketTriageDecision, MarketUniverseScanRun, PursuitCandidate, TriageStatus
 from apps.risk_agent.models import RiskAssessment, RiskLevel, RiskSizingDecision
@@ -132,6 +134,17 @@ class SignalFusionTests(TestCase):
         self.client = APIClient()
         self.market = Market.objects.order_by('id').first()
         self._seed_research_prediction_risk_inputs()
+        MemoryDocument.objects.create(
+            document_type='risk_assessment_snapshot',
+            source_app='risk_agent',
+            source_object_id='sig-1',
+            title='Adverse signal precedent',
+            text_content='similar opportunity moved from proposal-ready to watch',
+            tags=['negative'],
+            structured_summary={'primary_failure_mode': 'late_regime_shift'},
+            embedding=[1.0, 0.0, 0.0],
+            embedding_model='mock',
+        )
 
     def _seed_research_prediction_risk_inputs(self):
         run = MarketUniverseScanRun.objects.create(
@@ -211,7 +224,8 @@ class SignalFusionTests(TestCase):
         )
         SafetyPolicyConfig.objects.create(name='default', status=SafetyStatus.HEALTHY)
 
-    def test_run_signal_fusion_creates_opportunity_and_gate(self):
+    @patch('apps.memory_retrieval.services.retrieval.embed_text', return_value=[1.0, 0.0, 0.0])
+    def test_run_signal_fusion_creates_opportunity_and_gate(self, _retrieval_embed):
         run = run_signal_fusion(profile_slug='balanced_signal')
 
         self.assertEqual(run.status, 'COMPLETED')
@@ -220,6 +234,7 @@ class SignalFusionTests(TestCase):
         self.assertEqual(opportunity.market_id, self.market.id)
         self.assertGreater(opportunity.opportunity_score, Decimal('0.00'))
         self.assertIn(opportunity.opportunity_status, {OpportunityStatus.CANDIDATE, OpportunityStatus.PROPOSAL_READY, OpportunityStatus.WATCH})
+        self.assertIn('precedent_context', opportunity.metadata)
 
         gate = ProposalGateDecision.objects.get(opportunity=opportunity)
         self.assertIsNotNone(gate.proposal_reason)

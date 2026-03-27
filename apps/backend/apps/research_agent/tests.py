@@ -8,6 +8,7 @@ from rest_framework.test import APIClient
 
 from apps.markets.demo_data import seed_demo_markets
 from apps.markets.models import Market, MarketStatus
+from apps.memory_retrieval.models import MemoryDocument
 from apps.research_agent.models import NarrativeAnalysis, NarrativeItem, NarrativeSource, ResearchCandidate
 from apps.research_agent.services.scan import run_research_scan
 from apps.research_agent.services.universe_scan import run_universe_scan
@@ -62,16 +63,29 @@ class ResearchAgentTests(TestCase):
     @patch('apps.research_agent.services.ingest.fetch_rss')
     @patch('apps.research_agent.services.reddit_ingest._fetch_reddit_listing')
     @patch('apps.research_agent.services.twitter_ingest.TwitterSourceAdapter.fetch')
+    @patch('apps.memory_retrieval.services.retrieval.embed_text', return_value=[1.0, 0.0, 0.0])
     @patch('apps.research_agent.services.analyze.embed_text', return_value=[0.1, 0.2, 0.3])
     @patch('apps.research_agent.services.analyze.OllamaChatClient.chat_json')
     def test_ingest_dedupe_analyze_link_candidate_and_endpoints(
         self,
         chat_json_mock,
         _embed_mock,
+        _retrieval_embed,
         fetch_twitter_mock,
         fetch_reddit_mock,
         fetch_rss_mock,
     ):
+        MemoryDocument.objects.create(
+            document_type='learning_note',
+            source_app='learning_memory',
+            source_object_id='r1',
+            title='Hype failure precedent',
+            text_content='hype-driven narratives had weak follow-through',
+            tags=['negative'],
+            structured_summary={'primary_failure_mode': 'hype_follow_through_failure'},
+            embedding=[1.0, 0.0, 0.0],
+            embedding_model='mock',
+        )
         fetch_rss_mock.return_value = RSS_PAYLOAD
         fetch_reddit_mock.return_value = {
             'data': {
@@ -151,6 +165,7 @@ class ResearchAgentTests(TestCase):
         if candidate_payload:
             self.assertIn('source_mix', candidate_payload[0])
             self.assertIn('cross_source_agreement', candidate_payload[0]['metadata'])
+            self.assertIn('precedent_context', candidate_payload[0]['metadata'])
 
     def test_universe_scan_filters_and_board_endpoints(self):
         market_open = Market.objects.filter(status=MarketStatus.OPEN).first()

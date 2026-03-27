@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import patch
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -6,6 +7,7 @@ from rest_framework.test import APIClient
 from apps.agents.models import AgentHandoff, AgentPipelineRun, AgentRun
 from apps.markets.demo_data import seed_demo_markets
 from apps.markets.models import Market
+from apps.memory_retrieval.models import MemoryDocument
 from apps.paper_trading.models import PaperAccount, PaperTrade, PaperTradeType
 from apps.postmortem_agents.models import PostmortemAgentReview, PostmortemBoardConclusion, PostmortemBoardRun
 from apps.postmortem_demo.services.review import generate_trade_review
@@ -44,8 +46,20 @@ class PostmortemBoardApiTests(TestCase):
         score = score_market_prediction(market=self.market, triggered_by='test').score
         assessment = run_risk_assessment(market=self.market, prediction_score=score)
         run_risk_sizing(risk_assessment=assessment, base_quantity=Decimal('3.0000'))
+        MemoryDocument.objects.create(
+            document_type='postmortem_conclusion',
+            source_app='postmortem_agents',
+            source_object_id='pm-1',
+            title='Similar prior failure',
+            text_content='similar position had execution drag and failed',
+            tags=['failed', 'negative'],
+            structured_summary={'primary_failure_mode': 'execution_drag'},
+            embedding=[1.0, 0.0, 0.0],
+            embedding_model='mock',
+        )
 
-    def test_board_run_generates_reviews_and_conclusion(self):
+    @patch('apps.memory_retrieval.services.retrieval.embed_text', return_value=[1.0, 0.0, 0.0])
+    def test_board_run_generates_reviews_and_conclusion(self, _retrieval_embed):
         response = self.client.post(
             reverse('postmortem_agents:run'),
             {'related_trade_review_id': self.review.id, 'force_learning_rebuild': True},
@@ -59,6 +73,7 @@ class PostmortemBoardApiTests(TestCase):
         self.assertEqual(board_run.related_trade_review_id, self.review.id)
         self.assertEqual(board_run.perspective_reviews.count(), 5)
         self.assertTrue(PostmortemBoardConclusion.objects.filter(board_run=board_run).exists())
+        self.assertIn('precedent_context', board_run.details)
 
     def test_endpoints_return_board_state(self):
         self.client.post(reverse('postmortem_agents:run'), {'related_trade_review_id': self.review.id}, format='json')

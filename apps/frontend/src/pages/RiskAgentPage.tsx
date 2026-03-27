@@ -131,6 +131,12 @@ export function RiskAgentPage() {
               <p><StatusBadge tone={riskTone(lastAssessment.risk_level)}>{lastAssessment.risk_level}</StatusBadge> · score={lastAssessment.risk_score ?? '—'}</p>
               <p>{lastAssessment.narrative_risk_summary}</p>
               <p>Main factors: {(lastAssessment.key_risk_factors ?? []).slice(0, 4).map((item: any) => item.factor || item.reason).join(', ') || '—'}</p>
+              {lastAssessment.metadata?.precedent_context ? (
+                <p>
+                  <StatusBadge tone="pending">PRECEDENT_AWARE</StatusBadge>{' '}
+                  {String(lastAssessment.metadata.precedent_context.rationale_note ?? 'No strong precedents found for this case.')}
+                </p>
+              ) : null}
             </>
           ) : (
             <EmptyState title="No assessment yet" description="Run assessment to see structured risk factors." />

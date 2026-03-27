@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from django.utils import timezone
 
 from apps.learning_memory.services import run_learning_rebuild
+from apps.memory_retrieval.services import run_indexing
 from apps.champion_challenger.services import run_shadow_benchmark
 from apps.execution_simulator.services import run_execution_lifecycle
 from apps.mission_control.models import (
@@ -97,6 +98,7 @@ def run_mission_control_cycle(*, session: MissionControlSession, settings: dict)
             'runtime': {'mode': get_runtime_state().current_mode},
             'safety': get_safety_status(),
             'gating_reason': decision.reason,
+            'precedent_aware_mode': True,
         },
     )
     if decision.status == MissionControlCycleStatus.SKIPPED:
@@ -129,6 +131,8 @@ def run_mission_control_cycle(*, session: MissionControlSession, settings: dict)
 
     if _should_run(cycle.cycle_number, run_every_universe):
         _record_step(cycle, step_type='universe_scan', fn=lambda: run_universe_scan(filter_profile=research_profile))
+    if _should_run(cycle.cycle_number, settings.get('run_memory_index_refresh_every_n_cycles')):
+        _record_step(cycle, step_type='memory_index_refresh', fn=lambda: run_indexing(sources=['learning', 'postmortem'], force_reembed=False))
 
     _record_step(
         cycle,

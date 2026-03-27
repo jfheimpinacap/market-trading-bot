@@ -11,6 +11,7 @@ from apps.prediction_agent.models import PredictionScore
 from apps.proposal_engine.models import TradeProposal
 from apps.real_data_sync.models import ProviderSyncRun
 from apps.risk_agent.models import RiskAssessment, RiskAssessmentStatus, RiskLevel
+from apps.risk_agent.services.precedent_enrichment import apply_risk_precedents
 from apps.runtime_governor.services.state import get_runtime_state
 from apps.safety_guard.services.evaluation import get_safety_status
 
@@ -144,7 +145,7 @@ def run_risk_assessment(*, market: Market | None = None, proposal: TradeProposal
         f'portfolio_exposure={total_open_exposure}.'
     )
 
-    return RiskAssessment.objects.create(
+    assessment = RiskAssessment.objects.create(
         market=market,
         proposal=proposal,
         prediction_score=prediction_score,
@@ -174,3 +175,26 @@ def run_risk_assessment(*, market: Market | None = None, proposal: TradeProposal
             'reference_price': str(market.current_yes_price if market and market.current_yes_price else Decimal('1.0')),
         },
     )
+    precedent_context = apply_risk_precedents(assessment=assessment)
+    score_adjustment = Decimal(str(precedent_context.get('risk_score_adjustment') or '0.00'))
+    if score_adjustment:
+        assessment.risk_score = _q2(max(ZERO, assessment.risk_score + score_adjustment))
+        if assessment.risk_level != RiskLevel.BLOCKED:
+            if assessment.risk_score >= Decimal('72.00'):
+                assessment.risk_level = RiskLevel.LOW
+            elif assessment.risk_score >= Decimal('46.00'):
+                assessment.risk_level = RiskLevel.MEDIUM
+            else:
+                assessment.risk_level = RiskLevel.HIGH
+    if precedent_context.get('review_required'):
+        assessment.key_risk_factors = [
+            *(assessment.key_risk_factors or []),
+            {'factor': 'precedent_review_required', 'penalty': 'history', 'detail': 'Similar precedents had adverse outcomes.'},
+        ]
+    assessment.narrative_risk_summary = f"{assessment.narrative_risk_summary} Precedent context: {precedent_context.get('rationale_note')}"
+    assessment.metadata = {
+        **(assessment.metadata or {}),
+        'precedent_context': precedent_context,
+    }
+    assessment.save(update_fields=['risk_score', 'risk_level', 'key_risk_factors', 'narrative_risk_summary', 'metadata', 'updated_at'])
+    return assessment

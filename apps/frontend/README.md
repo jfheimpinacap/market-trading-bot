@@ -2,6 +2,18 @@
 
 Frontend local-first para `market-trading-bot`, construido con React + Vite + TypeScript.
 
+## Precedent-aware UX (new)
+
+La UI ahora expone señales de memoria histórica sin sobrecargar pantallas:
+
+- `/research`: shortlist con `PRECEDENT_AWARE` + warnings históricos.
+- `/prediction`: tabla de scores con contexto de precedente e influencia.
+- `/risk-agent`: latest assessment incluye cautela basada en historial.
+- `/postmortem-board`: muestra casos/fallos previos similares dentro de la conclusión.
+- `/memory`: audit trail de `precedent uses` + influencia reciente.
+
+Todo mantiene límites explícitos: paper/demo only, sin ejecución real, y sin LLM como autoridad final.
+
 ## Qué quedó refinado en esta etapa
 
 El frontend ya no se siente como un conjunto de módulos separados. La UX ahora enfatiza un recorrido demo coherente:

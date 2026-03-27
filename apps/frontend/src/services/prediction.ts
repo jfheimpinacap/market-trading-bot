@@ -93,3 +93,16 @@ export function getActiveModelRecommendation() {
 export function getModelGovernanceSummary() {
   return requestJson<ModelGovernanceSummary>('/api/prediction/model-governance-summary/');
 }
+
+export function runPredictionPrecedentAssist(payload: { query_text: string; market_id?: number; limit?: number }) {
+  return requestJson<{
+    retrieval_run_id: number;
+    result_count: number;
+    influence_mode: string;
+    precedent_confidence: number;
+    summary: Record<string, unknown>;
+  }>('/api/prediction/precedent-assist/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}

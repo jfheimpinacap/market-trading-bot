@@ -11,6 +11,7 @@ from apps.research_agent.models import (
     NarrativeSourceType,
     ResearchCandidate,
 )
+from apps.research_agent.services.precedent_enrichment import apply_research_precedents
 from apps.research_agent.services.social_fusion import classify_source_mix, social_weight
 from apps.research_agent.services.social_normalization import compute_cross_source_agreement, normalize_social_metrics
 
@@ -179,6 +180,17 @@ def generate_research_candidates() -> int:
             },
         )
         candidate.narrative_items.set(narrative_items)
+        precedent_context = apply_research_precedents(candidate=candidate)
+        if precedent_context.get('priority_adjustment'):
+            candidate.priority = max(Decimal('0.00'), candidate.priority + Decimal(str(precedent_context['priority_adjustment'])))
+        note = precedent_context.get('rationale_note') or ''
+        if note:
+            candidate.short_thesis = (f'{candidate.short_thesis} | {note}')[:255]
+        candidate.metadata = {
+            **(candidate.metadata or {}),
+            'precedent_context': precedent_context,
+        }
+        candidate.save(update_fields=['priority', 'short_thesis', 'metadata', 'updated_at'])
         count += 1
 
     return count

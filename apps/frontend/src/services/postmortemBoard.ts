@@ -35,3 +35,16 @@ export function getPostmortemBoardConclusions(boardRunId?: string | number) {
 export function getPostmortemBoardSummary() {
   return requestJson<PostmortemBoardSummary>('/api/postmortem-board/summary/');
 }
+
+export function runPostmortemPrecedentCompare(payload: { query_text: string; review_id?: number; limit?: number }) {
+  return requestJson<{
+    retrieval_run_id: number;
+    result_count: number;
+    influence_mode: string;
+    precedent_confidence: number;
+    summary: Record<string, unknown>;
+  }>('/api/postmortem-board/precedent-compare/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}

@@ -13,6 +13,7 @@ from apps.postmortem_agents.models import (
 )
 from apps.postmortem_agents.services.conclusion import apply_learning_handoff, build_board_conclusion
 from apps.postmortem_agents.services.context import build_board_context
+from apps.postmortem_agents.services.precedent_enrichment import build_postmortem_precedent_context
 from apps.postmortem_agents.services.reviewers import (
     run_learning_review,
     run_narrative_review,
@@ -39,6 +40,7 @@ def run_postmortem_board(*, related_trade_review_id: int, force_learning_rebuild
     )
 
     context = build_board_context(review)
+    precedent_context = build_postmortem_precedent_context(board_run=board_run)
     review_payloads: list[dict] = []
 
     ordered_reviewers = [
@@ -50,6 +52,11 @@ def run_postmortem_board(*, related_trade_review_id: int, force_learning_rebuild
 
     for perspective, fn in ordered_reviewers:
         payload = fn(context)
+        payload['key_findings'] = {
+            **(payload.get('key_findings') or {}),
+            'precedent_context': precedent_context,
+        }
+        payload['conclusion'] = f"{payload.get('conclusion', '')} {precedent_context.get('rationale_note')}".strip()
         model = PostmortemAgentReview.objects.create(
             board_run=board_run,
             perspective_type=perspective,
@@ -58,6 +65,10 @@ def run_postmortem_board(*, related_trade_review_id: int, force_learning_rebuild
         review_payloads.append({'perspective_type': perspective, 'status': model.status})
 
     learning_payload = run_learning_review(context, review_payloads)
+    learning_payload['key_findings'] = {
+        **(learning_payload.get('key_findings') or {}),
+        'precedent_context': precedent_context,
+    }
     learning_review = PostmortemAgentReview.objects.create(
         board_run=board_run,
         perspective_type=PostmortemPerspectiveType.LEARNING,
@@ -90,6 +101,7 @@ def run_postmortem_board(*, related_trade_review_id: int, force_learning_rebuild
         'conclusion_id': conclusion.id,
         'learning_handoff': learning_handoff,
         'learning_review_id': learning_review.id,
+        'precedent_context': precedent_context,
     }
     board_run.save(
         update_fields=[

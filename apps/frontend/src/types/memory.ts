@@ -63,3 +63,25 @@ export type MemoryRunResponse = {
   run: MemoryRetrievalRun;
   summary: MemoryPrecedentSummary;
 };
+
+export type AgentPrecedentUse = {
+  id: number;
+  agent_name: string;
+  source_app: string;
+  source_object_id: string;
+  retrieval_run: MemoryRetrievalRun;
+  precedent_count: number;
+  influence_mode: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MemoryInfluenceSummary = {
+  retrieval_run_id: number;
+  influence_mode: string;
+  precedent_confidence: number;
+  caution_flags: string[];
+  summary: MemoryPrecedentSummary;
+  agent_use_id: number | null;
+};

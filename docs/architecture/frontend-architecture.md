@@ -82,6 +82,15 @@ Instead, each page coordinates a small set of explicit service calls.
 
 This keeps data dependencies understandable and prevents the current demo phase from turning into a client-state rewrite.
 
+### Precedent-aware data surfaces (new)
+
+- `services/memory.ts` now includes precedent-use and influence-summary audit calls.
+- Existing pages consume precedent context from existing payload metadata/details instead of adding heavyweight new routes.
+- UX pattern:
+  - show concise badges (`PRECEDENT_AWARE`, caution/history labels)
+  - show explicit empty valid result (`No strong precedents found for this case.`)
+  - keep manual operator control and avoid autonomous opaque behavior
+
 ## Lightweight cross-page refresh strategy
 
 One of the most important refinements in this phase was improving consistency after actions.
