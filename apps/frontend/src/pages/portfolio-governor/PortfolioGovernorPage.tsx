@@ -73,7 +73,7 @@ export function PortfolioGovernorPage() {
         eyebrow="Portfolio governor"
         title="/portfolio-governor"
         description="Aggregate portfolio governance and regime-aware throttling for paper/demo only operation. No real-money execution."
-        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/portfolio')}>Open Portfolio</button><button className="secondary-button" type="button" onClick={() => navigate('/mission-control')}>Open Mission Control</button><button className="secondary-button" type="button" onClick={() => navigate('/opportunities')}>Open Opportunities</button></div>}
+        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/portfolio')}>Open Portfolio</button><button className="secondary-button" type="button" onClick={() => navigate('/mission-control')}>Open Mission Control</button><button className="secondary-button" type="button" onClick={() => navigate('/opportunities')}>Open Opportunities</button><button className="secondary-button" type="button" onClick={() => navigate('/profile-manager')}>Open Profile Manager</button></div>}
       />
 
       <SectionCard eyebrow="Governance controls" title="Run governance review" description="Run aggregate exposure analysis and refresh throttle decision.">

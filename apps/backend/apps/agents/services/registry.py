@@ -57,6 +57,12 @@ DEFAULT_AGENT_DEFINITIONS = [
         'description': 'Computes aggregate portfolio exposure and emits regime-aware throttling decisions for new entries.',
     },
     {
+        'name': 'Profile Manager Agent',
+        'slug': 'profile_manager_agent',
+        'agent_type': 'profile_manager',
+        'description': 'Adaptive meta-governance layer that classifies regime and coordinates operating profiles across modules.',
+    },
+    {
         'name': 'Position Manager Agent',
         'slug': 'position_manager_agent',
         'agent_type': 'position_manager',

@@ -834,3 +834,15 @@ Se añadió una capa formal de gobernanza de cartera (`apps/backend/apps/portfol
 Scope explícito:
 - sí: throttling transparente por reglas
 - no: dinero real, ejecución real, hedging complejo, optimizador institucional, planner opaco
+
+## Adaptive profile manager / meta-governance (new)
+
+A formal paper/demo-only `profile_manager` layer now coordinates adaptive operating profiles across research, signals, opportunity supervisor, mission control, and portfolio governor.
+
+- classifies regime (`NORMAL`, `CAUTION`, `STRESSED`, `CONCENTRATED`, `DRAWDOWN_MODE`, `DEFENSIVE`, `BLOCKED`)
+- emits auditable `ProfileDecision` records with reason codes and constraints
+- separates recommendation vs application (`RECOMMEND_ONLY`, `APPLY_SAFE`, `APPLY_FORCED`)
+- treats runtime/safety/readiness as higher authority and never bypasses them
+- exposes `/profile-manager` UI + `/api/profile-manager/*` endpoints
+
+Still out of scope: real-money execution, opaque planner behavior, RL/ML meta-controller, and LLM final authority.

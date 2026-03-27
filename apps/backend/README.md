@@ -1335,3 +1335,23 @@ Diferencias de responsabilidades:
 - `portfolio_governor`: contexto agregado de cartera + gating/throttling de nuevas entradas.
 
 Out of scope (todavía): real money, real execution, optimizer institucional, correlaciones de producción, hedging complejo.
+
+## Profile manager (adaptive meta-governance)
+
+New app: `apps.profile_manager`.
+
+Purpose:
+- aggregate runtime/safety/readiness + portfolio governor inputs
+- classify operational regime
+- recommend/apply module profile bundle in auditable form
+- keep runtime/safety/readiness as top-level constraints
+
+Key endpoints:
+- `POST /api/profile-manager/run-governance/`
+- `GET /api/profile-manager/runs/`
+- `GET /api/profile-manager/runs/<id>/`
+- `GET /api/profile-manager/current/`
+- `GET /api/profile-manager/summary/`
+- `POST /api/profile-manager/apply-decision/<id>/`
+
+Scope remains strictly local-first, single-user, paper/demo only.

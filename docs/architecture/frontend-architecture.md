@@ -602,3 +602,15 @@ Se incorpora `/portfolio-governor` como vista técnica de gobernanza agregada:
 - refuerza decisiones aguas arriba en `/opportunities` y coordinación con `/mission-control` y `/portfolio`
 
 Esta capa no sustituye la UI de riesgo o lifecycle por posición; complementa la decisión a nivel cartera.
+
+## Adaptive profile manager route
+
+The frontend now includes `/profile-manager` as a dedicated meta-governance page.
+
+Responsibilities:
+- trigger backend profile governance runs in explicit modes
+- render current regime/decision/constraints with badges and audit context
+- provide apply action as explicit operator action (no silent auto-change)
+- show recent run history for traceability
+
+Integration is lightweight and uses existing routing + shared API client patterns (`services/profileManager.ts`).
