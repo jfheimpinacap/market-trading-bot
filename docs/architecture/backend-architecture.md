@@ -835,3 +835,31 @@ Scope guardrails:
 - local-first, paper/demo only
 - no real-money execution
 - no external enterprise vector DB requirement
+
+## Promotion committee architecture (new)
+
+The new `apps.promotion_committee` app is a governance layer that **consumes** evidence from existing subsystems and does not replace them.
+
+Key design points:
+- champion/challenger remains comparative evidence producer
+- readiness remains strong gate input
+- profile manager + portfolio governor remain regime/throttle sources
+- prediction training remains model registry authority
+- memory retrieval contributes precedent warnings
+
+Data model:
+- `StackEvidenceSnapshot`
+- `PromotionReviewRun`
+- `PromotionDecisionLog`
+
+Service layering:
+- `evidence.py`: cross-app synthesis
+- `recommendation.py`: explicit recommendation rules
+- `review.py`: run orchestration + persistence
+- `apply.py`: limited manual apply only
+- `state.py`: current/staleness summary
+
+Non-goals preserved:
+- no real-money execution
+- no automatic opaque stack switching
+- no enterprise committee workflow complexity

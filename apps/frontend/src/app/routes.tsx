@@ -34,6 +34,7 @@ import { MissionControlPage } from '../pages/MissionControlPage';
 import { PortfolioGovernorPage } from '../pages/PortfolioGovernorPage';
 import { ProfileManagerPage } from '../pages/ProfileManagerPage';
 import { ChampionChallengerPage } from '../pages/ChampionChallengerPage';
+import { PromotionPage } from '../pages/PromotionPage';
 import { SystemPage } from '../pages/SystemPage';
 import type { NavRoute } from '../types/system';
 
@@ -218,6 +219,13 @@ export const appRoutes: AppRoute[] = [
     component: ChampionChallengerPage,
   },
 
+
+  {
+    label: 'Promotion Committee',
+    path: '/promotion',
+    description: 'Controlled evolution pipeline that consolidates execution-aware evidence and emits auditable stack change recommendations.',
+    component: PromotionPage,
+  },
   {
     label: 'Profile Manager',
     path: '/profile-manager',

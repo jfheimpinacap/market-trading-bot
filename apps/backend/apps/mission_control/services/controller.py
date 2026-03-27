@@ -192,6 +192,20 @@ def run_cycle_now(*, profile_slug: str | None = None) -> MissionControlCycle:
 def status_snapshot() -> dict:
     state = get_or_create_state()
     latest_cycle = MissionControlCycle.objects.filter(session=state.active_session).order_by('-cycle_number').first() if state.active_session else MissionControlCycle.objects.order_by('-started_at').first()
+    promotion_summary = None
+    try:
+        from apps.promotion_committee.services.state import build_promotion_summary
+
+        summary = build_promotion_summary()
+        latest = summary.get('latest_run')
+        promotion_summary = {
+            'latest_recommendation': latest.recommendation_code if latest else None,
+            'latest_review_at': latest.created_at.isoformat() if latest else None,
+            'is_recommendation_stale': summary.get('is_recommendation_stale', False),
+        }
+    except Exception:
+        promotion_summary = {'latest_recommendation': None, 'latest_review_at': None, 'is_recommendation_stale': False}
+
     return {
         'state': MissionControlStateSerializer(state).data,
         'active_session': MissionControlSessionSerializer(state.active_session).data if state.active_session else None,
@@ -199,4 +213,5 @@ def status_snapshot() -> dict:
         'profiles': list_profiles(),
         'runtime': {'current_mode': get_runtime_state().current_mode, 'status': get_runtime_state().status},
         'safety': get_safety_status(),
+        'promotion': promotion_summary,
     }

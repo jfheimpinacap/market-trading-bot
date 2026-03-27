@@ -928,3 +928,24 @@ Integrated assist endpoints:
 - `POST /api/postmortem-board/precedent-compare/`
 
 Out of scope remains unchanged: real money, real execution, heavy enterprise RAG stack, opaque planners.
+
+### Stack promotion committee / controlled evolution pipeline (new)
+
+A formal `promotion_committee` layer now provides conservative and auditable stack-change governance in paper/demo mode:
+
+- consolidates evidence from champion-challenger, readiness, execution-aware deltas, profile governance, portfolio governor context, model governance, and precedent warnings
+- emits clear recommendation codes:
+  - `KEEP_CURRENT_CHAMPION`
+  - `PROMOTE_CHALLENGER`
+  - `EXTEND_SHADOW_TEST`
+  - `REVERT_TO_CONSERVATIVE_STACK`
+  - `MANUAL_REVIEW_REQUIRED`
+- distinguishes recommendation-only vs explicit manual apply
+- stores review runs + decision logs for traceability
+- exposes `/promotion` UI route and `/api/promotion/*` API endpoints
+
+Still out of scope:
+- real money
+- real execution
+- opaque auto-promotion or auto-switching
+- RL/auto-optimization

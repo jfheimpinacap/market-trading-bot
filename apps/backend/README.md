@@ -1437,3 +1437,31 @@ Design choices:
 - no mandatory external vector DB
 - no view-layer business logic (services split across documents/embeddings/indexing/retrieval/precedents)
 - retrieval enriches decision context; it does not become final decision authority
+
+## Promotion committee (new)
+
+`apps.promotion_committee` introduces a formal stack-governance boundary above champion/challenger and readiness:
+
+- `StackEvidenceSnapshot`: normalized evidence synthesis
+- `PromotionReviewRun`: auditable recommendation run
+- `PromotionDecisionLog`: recommendation/apply event trail
+
+Services are intentionally split to keep logic out of views:
+- `services/evidence.py`
+- `services/recommendation.py`
+- `services/review.py`
+- `services/apply.py`
+- `services/state.py`
+
+API endpoints:
+- `POST /api/promotion/run-review/`
+- `GET /api/promotion/runs/`
+- `GET /api/promotion/runs/<id>/`
+- `GET /api/promotion/current-recommendation/`
+- `GET /api/promotion/summary/`
+- `POST /api/promotion/apply/<id>/`
+
+Boundaries:
+- paper/demo only
+- manual-first
+- no opaque auto-switching

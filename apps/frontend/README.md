@@ -810,3 +810,20 @@ Integración operativa:
 - enlaces directos a `/learning`, `/postmortem-board`, `/prediction` y `/risk-agent`
 - mensaje explícito cuando falta indexado inicial: “Index learning and review documents first.”
 - “no good match” tratado como resultado válido y no como error
+
+## Promotion committee UI (new)
+
+New route: `/promotion`
+
+The page provides:
+- current recommendation card (code, confidence, rationale, blockers)
+- consolidated evidence summary (execution-aware metrics, readiness, governance context)
+- run-review panel with recommendation-only default
+- explicit manual apply control (only when allowed by backend)
+- recent review run audit table
+
+Integration links were added from:
+- `/champion-challenger`
+- `/profile-manager`
+
+All remains local-first, single-user, and paper/demo only.
