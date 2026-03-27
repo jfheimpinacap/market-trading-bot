@@ -5,6 +5,7 @@ import { PageHeader } from '../components/PageHeader';
 import { SectionCard } from '../components/SectionCard';
 import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
+import { navigate } from '../lib/router';
 import {
   getVenueAccountBalances,
   getVenueAccountCurrent,
@@ -85,6 +86,7 @@ export function VenueAccountPage() {
         eyebrow="External state parity"
         title="Venue Account Mirror"
         description="Sandbox-only external account/order/position mirror and reconciliation layer. No real credentials, no live account connectivity, no real execution."
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Open Trace Explorer</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>

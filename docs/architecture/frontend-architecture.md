@@ -818,3 +818,21 @@ A new `/connectors` route exposes adapter qualification and readiness in a sober
 - recent run history for auditability
 
 The page intentionally links (but does not merge) with `/execution-venue`, `/venue-account`, `/go-live`, and `/certification` to preserve modular boundaries.
+
+## Trace explorer UI boundary (new)
+
+The frontend adds a dedicated `/trace` route to operationalize end-to-end provenance.
+
+Design characteristics:
+- snapshot-first audit UX
+- explicit query controls by root type/id
+- timeline/table readability over heavy graph tooling
+- evidence panel unifying precedents/incidents/profile/certification/venue context
+- robust loading/error/empty/partial states
+
+Integration style:
+- lightweight links from execution/opportunities/venue-account/incidents/memory/mission-control
+- no redesign of existing pages
+- shared API client and typed service wrapper (`services/trace.ts`)
+
+Scope boundary is unchanged: local-first, single-user, paper/sandbox only.

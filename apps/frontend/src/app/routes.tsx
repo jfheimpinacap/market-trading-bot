@@ -45,6 +45,7 @@ import { GoLivePage } from '../pages/GoLivePage';
 import { ExecutionVenuePage } from '../pages/ExecutionVenuePage';
 import { VenueAccountPage } from '../pages/VenueAccountPage';
 import { ConnectorsPage } from '../pages/ConnectorsPage';
+import { TracePage } from '../pages/TracePage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -195,6 +196,13 @@ export const appRoutes: AppRoute[] = [
     path: '/connectors',
     description: 'Venue connector certification suite and adapter qualification harness for sandbox-only readiness toward a future read-only phase.',
     component: ConnectorsPage,
+  },
+
+  {
+    label: 'Trace Explorer',
+    path: '/trace',
+    description: 'Unified end-to-end decision provenance and audit graph across orchestrator, memory, execution, venue and incidents.',
+    component: TracePage,
   },
 
   {

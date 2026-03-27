@@ -1079,3 +1079,25 @@ A new sandbox-only **connector_lab** boundary is now available to certify future
 - Readiness outputs include recommendation codes such as `SANDBOX_CERTIFIED`, `READ_ONLY_PREPARED`, `INCOMPLETE_MAPPING`, `RECONCILIATION_GAPS`, and `NOT_READY`.
 - Frontend route `/connectors` provides qualification controls, readiness card, case results table, and recent runs.
 - This does **not** add real broker connectivity, credentials, live routing, real orders, or real money.
+
+## Unified trace explorer / decision provenance (new)
+
+The platform now includes a dedicated local-first provenance layer for end-to-end auditing without rewriting existing modules:
+
+- Backend app: `apps/backend/apps/trace_explorer`
+- API base: `/api/trace/*`
+- Frontend route: `/trace`
+
+What it adds:
+- trace roots (`market`, `opportunity`, `proposal`, `paper_order`, `venue_order_snapshot`, `incident`, `mission_cycle`)
+- trace nodes and causal edges across research → prediction → risk → signals → proposal → allocation → execution → venue → incidents
+- unified inclusion of agent orchestrator runs/handoffs and memory precedent use
+- compact provenance snapshot for operator/debug/audit workflows
+- auditable query history (`TraceQueryRun`)
+
+Still out of scope:
+- real money
+- live broker execution
+- distributed enterprise graph infrastructure
+- opaque planner authority
+- multi-user enterprise tenancy
