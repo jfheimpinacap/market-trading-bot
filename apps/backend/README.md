@@ -1355,3 +1355,7 @@ Key endpoints:
 - `POST /api/profile-manager/apply-decision/<id>/`
 
 Scope remains strictly local-first, single-user, paper/demo only.
+
+## Execution simulator
+- New paper-only execution realism layer under `apps/backend/apps/execution_simulator` with explicit order lifecycle, attempts, and fills.
+- Mission control, opportunity supervisor, and position manager can feed orders into this layer before portfolio impact is applied.

@@ -614,3 +614,8 @@ Responsibilities:
 - show recent run history for traceability
 
 Integration is lightweight and uses existing routing + shared API client patterns (`services/profileManager.ts`).
+
+
+### Execution UI surface
+- Added `/execution` route for order lifecycle visibility and control.
+- UI consumes `/api/execution/*` to show order/fill status, partials, no-fill outcomes, and summary cards.

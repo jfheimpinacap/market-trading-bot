@@ -38,7 +38,7 @@ class ExecutionResult:
 
 
 @transaction.atomic
-def execute_paper_trade(*, market: Market, trade_type: str, side: str, quantity, account: PaperAccount | None = None, notes: str = '', metadata: dict | None = None) -> ExecutionResult:
+def execute_paper_trade(*, market: Market, trade_type: str, side: str, quantity, account: PaperAccount | None = None, notes: str = '', metadata: dict | None = None, execution_price: Decimal | None = None) -> ExecutionResult:
     if account is None:
         account = get_active_account()
 
@@ -56,7 +56,7 @@ def execute_paper_trade(*, market: Market, trade_type: str, side: str, quantity,
 
     validate_market_for_trading(market)
     price_resolution = resolve_market_price(market=market, side=side)
-    price = get_market_price(market=market, side=side)
+    price = execution_price if execution_price is not None else get_market_price(market=market, side=side)
     gross_amount = quantize_money(quantity * price)
     fees = quantize_money(Decimal('0'))
 
@@ -129,6 +129,7 @@ def execute_paper_trade(*, market: Market, trade_type: str, side: str, quantity,
             'market_data_source': market.source_type,
             'is_real_data': market.source_type == 'real_read_only',
             'price_source': price_resolution.source,
+            'execution_price_override': str(execution_price) if execution_price is not None else None,
             **metadata,
         },
     )

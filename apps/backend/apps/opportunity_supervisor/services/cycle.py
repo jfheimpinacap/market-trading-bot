@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from apps.allocation_engine.services.allocation import evaluate_allocation
 from apps.operator_queue.models import OperatorQueueItem, OperatorQueuePriority, OperatorQueueSource, OperatorQueueType
-from apps.paper_trading.services.execution import execute_paper_trade
+from apps.execution_simulator.services import create_order, run_execution_lifecycle
 from apps.proposal_engine.services.proposal import generate_trade_proposal
 from apps.runtime_governor.services import get_runtime_state
 from apps.safety_guard.services.evaluation import get_safety_status
@@ -173,16 +173,20 @@ def run_opportunity_cycle(*, profile_slug: str | None = None, triggered_by: str 
             queue_item = _create_queue_item(item=item, quantity=allocation_quantity, explanation=path_decision.explanation)
             cycle.queued_count += 1
         elif path_decision.path == OpportunityExecutionPath.AUTO_EXECUTE_PAPER and allocation_quantity:
-            executed_trade = execute_paper_trade(
+            order = create_order(
                 market=proposal.market,
-                trade_type=proposal.suggested_trade_type,
-                side=proposal.suggested_side or 'YES',
-                quantity=allocation_quantity,
-                account=proposal.paper_account,
-                notes='Auto executed by opportunity supervisor cycle (paper/demo only).',
+                side=f"{proposal.suggested_trade_type}_{proposal.suggested_side or 'YES'}",
+                requested_quantity=allocation_quantity,
+                created_from='opportunity_supervisor',
+                paper_account=proposal.paper_account,
                 metadata={'origin': 'opportunity_supervisor', 'cycle_run_id': cycle.id, 'cycle_item_id': item.id},
-            ).trade
-            cycle.auto_executed_count += 1
+            )
+            lifecycle_run = run_execution_lifecycle(
+                open_only=True,
+                metadata={'triggered_from': 'opportunity_supervisor', 'paper_order_id': order.id, 'cycle_run_id': cycle.id},
+            )
+            executed_trade = order.paper_account.trades.order_by('-executed_at', '-id').first()
+            cycle.auto_executed_count += 1 if lifecycle_run.orders_filled or lifecycle_run.orders_partial else 0
         elif path_decision.path == OpportunityExecutionPath.BLOCKED:
             cycle.blocked_count += 1
 

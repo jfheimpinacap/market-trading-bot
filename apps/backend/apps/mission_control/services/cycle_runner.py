@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from django.utils import timezone
 
 from apps.learning_memory.services import run_learning_rebuild
+from apps.execution_simulator.services import run_execution_lifecycle
 from apps.mission_control.models import (
     MissionControlCycle,
     MissionControlCycleStatus,
@@ -153,6 +154,9 @@ def run_mission_control_cycle(*, session: MissionControlSession, settings: dict)
         _record_step(cycle, step_type='risk_watch', fn=lambda: run_position_watch(metadata={'triggered_from': 'mission_control'}))
     if settings.get('run_position_lifecycle_every_cycle', True):
         _record_step(cycle, step_type='position_lifecycle_check', fn=lambda: run_position_lifecycle(metadata={'triggered_from': 'mission_control'}))
+
+    _record_step(cycle, step_type='execution_lifecycle_step', fn=lambda: run_execution_lifecycle(open_only=True, metadata={'triggered_from': 'mission_control'}))
+    _record_step(cycle, step_type='pending_order_review_step', fn=lambda: run_execution_lifecycle(open_only=True, metadata={'triggered_from': 'mission_control', 'pending_review': True}))
 
     _record_step(cycle, step_type='alerts_rebuild', fn=rebuild_operator_alerts)
     _record_step(cycle, step_type='notifications_dispatch', fn=run_automatic_dispatch)
