@@ -218,6 +218,20 @@ This phase intentionally does **not** introduce:
 
 The next reasonable frontend steps can still build on this architecture:
 
+## Execution realism UI integration (new)
+
+Execution realism is integrated by extending existing views instead of creating a new frontend subsystem:
+
+- `/replay` adds execution mode/profile controls and execution-aware result cards.
+- `/evaluation` surfaces execution-adjusted snapshot metrics from backend metadata.
+- `/experiments` compares naive and execution-aware runs, including execution drag context.
+- `/readiness` shows execution realism impact and readiness penalty context.
+
+This keeps UI coupling low:
+- existing services/types (`replay`, `evaluation`, `experiments`, `readiness`) were extended
+- no centralized state rewrite
+- no new routing architecture
+
 - richer review context if backend heuristics expand
 - more nuanced market-to-portfolio linking if execution history becomes denser
 - optional refresh controls or lightweight polling only if manual/focus refresh becomes insufficient

@@ -70,6 +70,7 @@ export function EvaluationPage() {
 
   const latestRun = summary?.latest_run ?? null;
   const latestMetrics = latestRun?.metric_set;
+  const executionAdjusted = latestRun?.metadata?.execution_adjusted_snapshot;
 
   const guidance = useMemo(() => {
     if (!latestRun?.guidance?.length) return ['Run continuous demo or semi-auto sessions first to build evaluation data.'];
@@ -108,6 +109,26 @@ export function EvaluationPage() {
                 <div><strong>Total PnL:</strong> {formatMoney(latestMetrics.total_pnl)}</div>
                 <div><strong>Safety events:</strong> {latestMetrics.safety_events_count}</div>
               </div>
+            </SectionCard>
+            <SectionCard eyebrow="Execution realism" title="Execution-aware impact" description="How execution realism changes naive assumptions.">
+              {executionAdjusted ? (
+                <div className="system-metadata-grid">
+                  <div><strong>Fill rate:</strong> {formatPercent(executionAdjusted.fill_rate)}</div>
+                  <div><strong>Partial-fill rate:</strong> {formatPercent(executionAdjusted.partial_fill_rate)}</div>
+                  <div><strong>No-fill rate:</strong> {formatPercent(executionAdjusted.no_fill_rate)}</div>
+                  <div><strong>Avg slippage:</strong> {executionAdjusted.avg_slippage_bps} bps</div>
+                  <div><strong>Execution-adjusted PnL:</strong> {formatMoney(executionAdjusted.execution_adjusted_pnl)}</div>
+                  <div><strong>Execution drag:</strong> {formatMoney(executionAdjusted.execution_drag)}</div>
+                  <div><strong>Realism score:</strong> {formatPercent(executionAdjusted.execution_realism_score)}</div>
+                  <div><strong>Quality bucket:</strong> {executionAdjusted.execution_quality_bucket}</div>
+                </div>
+              ) : (
+                <EmptyState
+                  eyebrow="Execution-aware data missing"
+                  title="No execution-aware metrics for this evaluation snapshot."
+                  description="Run replay with execution-aware mode to measure fill realism."
+                />
+              )}
             </SectionCard>
 
             <SectionCard eyebrow="Runs" title="Recent evaluation runs" description="Comparable run snapshots for session-level review.">

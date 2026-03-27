@@ -1359,3 +1359,18 @@ Scope remains strictly local-first, single-user, paper/demo only.
 ## Execution simulator
 - New paper-only execution realism layer under `apps/backend/apps/execution_simulator` with explicit order lifecycle, attempts, and fills.
 - Mission control, opportunity supervisor, and position manager can feed orders into this layer before portfolio impact is applied.
+
+## Execution-aware replay / evaluation realism / readiness impact
+
+The backend now integrates execution realism into historical and readiness workflows without enabling real execution.
+
+- Replay (`/api/replay/run/`) accepts:
+  - `execution_mode`: `naive` or `execution_aware`
+  - `execution_profile`: `optimistic_paper`, `balanced_paper`, `conservative_paper`
+- In `execution_aware` mode replay routes intent through `execution_simulator` order lifecycle (full/partial/no-fill, cancel/expire, slippage).
+- Replay run `details` include `execution_impact_summary` (fill/no-fill/partial rates, slippage, execution-adjusted pnl, execution drag, realism score).
+- Evaluation runs store `metadata.execution_adjusted_snapshot` so snapshots include execution realism impact.
+- Experiment normalized metrics and comparison deltas now include execution-aware fields and naive-vs-aware drag where available.
+- Readiness assessments include `details.execution_impact_summary` and apply a bounded execution realism penalty to avoid perfect-fill optimism.
+
+Still out of scope: real money, exchange routing, institutional microstructure, and complex hedging.

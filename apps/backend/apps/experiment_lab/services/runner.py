@@ -38,6 +38,7 @@ def _normalize_replay_metrics(run: ReplayRun) -> dict:
     auto_execution_rate = Decimal(auto_executions) / Decimal(trades) if trades else Decimal('0')
 
     details = run.details or {}
+    execution_impact = details.get('execution_impact_summary', {})
 
     return {
         'proposals_generated': proposals,
@@ -54,6 +55,15 @@ def _normalize_replay_metrics(run: ReplayRun) -> dict:
         'allocation_efficiency': str(details.get('allocation_efficiency', '0')),
         'block_rate': str(block_rate),
         'auto_execution_rate': str(auto_execution_rate),
+        'execution_mode': details.get('execution_mode', 'naive'),
+        'execution_profile': details.get('execution_profile'),
+        'fill_rate': execution_impact.get('fill_rate', 0),
+        'partial_fill_rate': execution_impact.get('partial_fill_rate', 0),
+        'no_fill_rate': execution_impact.get('no_fill_rate', 0),
+        'avg_slippage_bps': execution_impact.get('avg_slippage_bps', 0),
+        'execution_adjusted_pnl': execution_impact.get('execution_adjusted_pnl', str(run.total_pnl)),
+        'execution_drag': execution_impact.get('execution_drag', '0'),
+        'execution_realism_score': execution_impact.get('execution_realism_score', 0),
     }
 
 
@@ -63,6 +73,7 @@ def _normalize_evaluation_metrics(run: EvaluationRun) -> dict:
         return {}
 
     allocation_efficiency = Decimal(metrics.total_pnl) / Decimal(metrics.proposals_generated) if metrics.proposals_generated else Decimal('0')
+    execution_adjusted = (run.metadata or {}).get('execution_adjusted_snapshot', {})
     return {
         'proposals_generated': metrics.proposals_generated,
         'trades_executed': metrics.trades_executed_count,
@@ -78,6 +89,15 @@ def _normalize_evaluation_metrics(run: EvaluationRun) -> dict:
         'allocation_efficiency': str(allocation_efficiency),
         'block_rate': str(metrics.block_rate),
         'auto_execution_rate': str(metrics.auto_execution_rate),
+        'execution_mode': run.metadata.get('execution_mode', 'naive') if run.metadata else 'naive',
+        'execution_profile': run.metadata.get('execution_profile') if run.metadata else None,
+        'fill_rate': execution_adjusted.get('fill_rate', 0),
+        'partial_fill_rate': execution_adjusted.get('partial_fill_rate', 0),
+        'no_fill_rate': execution_adjusted.get('no_fill_rate', 0),
+        'avg_slippage_bps': execution_adjusted.get('avg_slippage_bps', 0),
+        'execution_adjusted_pnl': execution_adjusted.get('execution_adjusted_pnl', str(metrics.total_pnl)),
+        'execution_drag': execution_adjusted.get('execution_drag', '0'),
+        'execution_realism_score': execution_adjusted.get('execution_realism_score', 0),
     }
 
 
@@ -116,6 +136,8 @@ def execute_experiment(*, profile: StrategyProfile, payload: dict) -> Experiment
                 'auto_execute_allowed': profile.config.get('replay', {}).get('auto_execute_allowed', True),
                 'treat_approval_required_as_skip': profile.config.get('replay', {}).get('treat_approval_required_as_skip', True),
                 'stop_on_error': payload.get('stop_on_error', False),
+                'execution_mode': payload.get('execution_mode', 'naive'),
+                'execution_profile': payload.get('execution_profile', 'balanced_paper'),
             }
             replay_result = run_replay(config=replay_payload)
             replay_run = replay_result.run

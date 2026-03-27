@@ -63,6 +63,22 @@ The platform now includes an **experiment runner** for profile-based comparison 
 - frontend route `/experiments` with profile cards, run launcher, run history, and side-by-side comparison table
 - strict scope remains paper/demo only: no real money, no real execution, no ML/LLM tuning
 
+### Execution-aware replay / evaluation realism / readiness impact (new)
+
+The platform now supports a practical execution realism bridge across replay, evaluation, experiments, and readiness:
+
+- replay runs accept `execution_mode=naive|execution_aware` and `execution_profile=optimistic_paper|balanced_paper|conservative_paper`
+- execution-aware replay routes orders through `execution_simulator` (paper orders, attempts, fills, partial/no-fill, slippage, cancel/expire)
+- replay stores `execution_impact_summary` for auditable metrics:
+  - `fill_rate`, `partial_fill_rate`, `no_fill_rate`
+  - `avg_slippage_bps`, `execution_adjusted_pnl`, `execution_drag`
+  - `execution_realism_score`, `execution_quality_bucket`
+- evaluation snapshots include execution-adjusted metadata so historical snapshots are less optimistic than perfect-fill assumptions
+- experiments can compare naive vs execution-aware metrics and expose execution drag deltas
+- readiness now applies an explicit execution-realism penalty when evidence is weak or fill realism is poor
+
+Still out of scope: real money, real routing, institutional microstructure modeling, complex hedging, and opaque planner authority.
+
 ### Prediction model governance (new)
 
 Prediction training now includes a formal governance layer for predictor comparison:

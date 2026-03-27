@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 
 from django.utils import timezone
 
@@ -11,6 +12,12 @@ from apps.policy_engine.models import ApprovalDecisionType
 from apps.proposal_engine.services import generate_trade_proposal
 from apps.replay_lab.models import ReplayRun, ReplayRunStatus, ReplayStep
 from apps.replay_lab.services.execution import activate_replay_account, create_replay_account, snapshot_replay_account, summarize_account
+from apps.replay_lab.services.execution_replay import (
+    REPLAY_EXECUTION_MODE_AWARE,
+    REPLAY_EXECUTION_MODE_NAIVE,
+    build_execution_impact_summary,
+    execute_replay_trade_with_execution_layer,
+)
 from apps.replay_lab.services.timeline import build_replay_timeline
 from apps.safety_guard.models import SafetyEventSource
 from apps.safety_guard.services.evaluation import evaluate_auto_execution
@@ -32,6 +39,9 @@ def _json_safe_config(config: dict) -> dict:
 
 
 def run_replay(*, config: dict) -> ReplayResult:
+    execution_mode = config.get('execution_mode', REPLAY_EXECUTION_MODE_NAIVE)
+    execution_profile = config.get('execution_profile', 'balanced_paper')
+
     run = ReplayRun.objects.create(
         status=ReplayRunStatus.RUNNING,
         source_scope=config['source_scope'],
@@ -39,7 +49,7 @@ def run_replay(*, config: dict) -> ReplayResult:
         replay_start_at=config['start_timestamp'],
         replay_end_at=config['end_timestamp'],
         started_at=timezone.now(),
-        details={'config': _json_safe_config(config), 'errors': []},
+        details={'config': _json_safe_config(config), 'errors': [], 'execution_mode': execution_mode, 'execution_profile': execution_profile},
     )
 
     account = create_replay_account(replay_run_id=run.id)
@@ -56,6 +66,15 @@ def run_replay(*, config: dict) -> ReplayResult:
         return ReplayResult(run=run)
 
     try:
+        execution_stats = {
+            'orders_total': 0,
+            'filled_orders': 0,
+            'partial_orders': 0,
+            'no_fill_orders': 0,
+            'cancelled_orders': 0,
+            'expired_orders': 0,
+            'slippage_sum_bps': Decimal('0'),
+        }
         with activate_replay_account(account):
             for index, step in enumerate(timeline, start=1):
                 proposals = []
@@ -121,17 +140,49 @@ def run_replay(*, config: dict) -> ReplayResult:
 
                     quantity = allocation_item['final_allocated_quantity'] if allocation_item else proposal.suggested_quantity
                     try:
-                        execute_paper_trade(
-                            market=proposal.market,
-                            trade_type=proposal.suggested_trade_type,
-                            side=proposal.suggested_side,
-                            quantity=quantity,
-                            account=account,
-                            notes='Historical replay demo execution.',
-                            metadata={'replay_run_id': run.id, 'replay_step': index},
-                        )
-                        trades_executed += 1
-                        run.trades_executed += 1
+                        if execution_mode == REPLAY_EXECUTION_MODE_AWARE:
+                            execution_stats['orders_total'] += 1
+                            replay_trade = execute_replay_trade_with_execution_layer(
+                                replay_run_id=run.id,
+                                replay_step=index,
+                                market=proposal.market,
+                                trade_type=proposal.suggested_trade_type,
+                                side=proposal.suggested_side,
+                                requested_quantity=quantity,
+                                paper_account=account,
+                                execution_profile=execution_profile,
+                            )
+                            execution_stats['slippage_sum_bps'] += replay_trade.slippage_bps_weighted
+                            if replay_trade.filled:
+                                execution_stats['filled_orders'] += 1
+                                trades_executed += 1
+                                run.trades_executed += 1
+                            elif replay_trade.partial:
+                                execution_stats['partial_orders'] += 1
+                                trades_executed += 1
+                                run.trades_executed += 1
+                            elif replay_trade.no_fill:
+                                execution_stats['no_fill_orders'] += 1
+                            if replay_trade.cancelled:
+                                execution_stats['cancelled_orders'] += 1
+                            if replay_trade.expired:
+                                execution_stats['expired_orders'] += 1
+                        else:
+                            execute_paper_trade(
+                                market=proposal.market,
+                                trade_type=proposal.suggested_trade_type,
+                                side=proposal.suggested_side,
+                                quantity=quantity,
+                                account=account,
+                                notes='Historical replay demo execution.',
+                                metadata={
+                                    'replay_run_id': run.id,
+                                    'replay_step': index,
+                                    'execution_mode': REPLAY_EXECUTION_MODE_NAIVE,
+                                },
+                            )
+                            trades_executed += 1
+                            run.trades_executed += 1
                     except Exception as exc:
                         errors.append(str(exc))
                         if config.get('stop_on_error', False):
@@ -151,18 +202,48 @@ def run_replay(*, config: dict) -> ReplayResult:
                     blocked_count=blocked,
                     estimated_equity=equity,
                     notes='Step completed.' if not errors else 'Step completed with non-fatal execution errors.',
-                    details={'errors': errors},
+                    details={
+                        'errors': errors,
+                        'execution_mode': execution_mode,
+                        'execution_profile': execution_profile if execution_mode == REPLAY_EXECUTION_MODE_AWARE else None,
+                    },
                 )
                 run.snapshots_considered += len(step.snapshots)
                 run.markets_considered += len(step.snapshots)
                 snapshot_replay_account(account, metadata={'replay_run_id': run.id, 'step_index': index})
 
         total_pnl, equity = summarize_account(account)
+        details = run.details or {}
+        details['execution_mode'] = execution_mode
+        details['execution_profile'] = execution_profile if execution_mode == REPLAY_EXECUTION_MODE_AWARE else None
+        details['execution_stats'] = execution_stats
+        details['naive_pnl'] = str(total_pnl)
+        details['execution_adjusted_pnl'] = str(total_pnl)
+        details['execution_drag'] = '0.00'
+        if execution_mode == REPLAY_EXECUTION_MODE_AWARE:
+            estimated_naive_fill_ratio = (
+                (execution_stats['filled_orders'] + execution_stats['partial_orders']) / execution_stats['orders_total']
+                if execution_stats['orders_total']
+                else 1.0
+            )
+            estimated_naive_pnl = total_pnl / estimated_naive_fill_ratio if estimated_naive_fill_ratio > 0 else total_pnl
+            details['naive_pnl'] = str(estimated_naive_pnl.quantize(Decimal('0.01')))
+            details['execution_drag'] = str((estimated_naive_pnl - total_pnl).quantize(Decimal('0.01')))
+        details['execution_impact_summary'] = build_execution_impact_summary(
+            stats={
+                **execution_stats,
+                'execution_adjusted_pnl': details['execution_adjusted_pnl'],
+                'naive_pnl': details['naive_pnl'],
+                'execution_drag': details['execution_drag'],
+            }
+        )
+
         run.total_pnl = total_pnl
         run.ending_equity = equity
         run.status = ReplayRunStatus.SUCCESS
+        run.details = details
         run.summary = (
-            f'Replay completed over {len(timeline)} steps with {run.trades_executed} trades, '
+            f'Replay ({execution_mode}) completed over {len(timeline)} steps with {run.trades_executed} trades, '
             f'{run.approvals_required} approval-required decisions, and {run.blocked_count} blocked decisions.'
         )
     except Exception as exc:

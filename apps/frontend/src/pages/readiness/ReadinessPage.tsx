@@ -62,6 +62,7 @@ export function ReadinessPage() {
   const latestRun = summary?.latest_run ?? null;
   const failedGates = (latestRun?.details.gates ?? []).filter((gate) => !gate.passed);
   const recommendations = latestRun?.details.recommendations ?? [];
+  const executionImpact = latestRun?.details.execution_impact_summary;
 
   const hasEvidence = useMemo(() => (summary?.total_runs ?? 0) > 0, [summary?.total_runs]);
 
@@ -186,6 +187,21 @@ export function ReadinessPage() {
                     </div>
                   </SectionCard>
                 ) : null}
+
+                <SectionCard eyebrow="Execution realism impact" title="Readiness penalty from execution quality" description="Readiness score now accounts for execution-aware replay realism.">
+                  {executionImpact ? (
+                    <div className="system-metadata-grid">
+                      <div><strong>Execution-aware runs:</strong> {executionImpact.execution_aware_runs}</div>
+                      <div><strong>Avg fill rate:</strong> {(executionImpact.avg_fill_rate * 100).toFixed(2)}%</div>
+                      <div><strong>Avg no-fill rate:</strong> {(executionImpact.avg_no_fill_rate * 100).toFixed(2)}%</div>
+                      <div><strong>Avg execution drag:</strong> {executionImpact.avg_execution_drag}</div>
+                      <div><strong>Realism score:</strong> {(executionImpact.avg_execution_realism_score * 100).toFixed(2)}%</div>
+                      <div><strong>Readiness penalty:</strong> {(executionImpact.readiness_penalty * 100).toFixed(2)}%</div>
+                    </div>
+                  ) : (
+                    <p>Run replay with execution-aware mode to measure fill realism.</p>
+                  )}
+                </SectionCard>
               </>
             )}
 

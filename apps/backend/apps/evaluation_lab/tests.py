@@ -90,3 +90,11 @@ class EvaluationLabTests(TestCase):
         payload = response.json()
         self.assertEqual(payload['id'], run.id)
         self.assertEqual(payload['metric_set']['favorable_reviews_count'], 1)
+
+    def test_summary_includes_execution_adjusted_metadata(self):
+        session = self._build_session_with_data()
+        run = build_run_for_continuous_session(session)
+        self.assertIn('execution_adjusted_snapshot', run.metadata)
+        snapshot = run.metadata['execution_adjusted_snapshot']
+        self.assertIn('execution_adjusted_pnl', snapshot)
+        self.assertIn('execution_drag', snapshot)

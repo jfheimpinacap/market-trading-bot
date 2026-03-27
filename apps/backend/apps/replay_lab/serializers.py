@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
+from apps.execution_simulator.models import ExecutionPolicyProfile
 from apps.replay_lab.models import ReplayRun, ReplaySourceScope, ReplayStep
+from apps.replay_lab.services.execution_replay import REPLAY_EXECUTION_MODE_AWARE, REPLAY_EXECUTION_MODE_NAIVE
 
 
 class ReplayStepSerializer(serializers.ModelSerializer):
@@ -28,6 +30,16 @@ class ReplayRunRequestSerializer(serializers.Serializer):
     treat_approval_required_as_skip = serializers.BooleanField(required=False, default=True)
     snapshot_sampling_interval = serializers.IntegerField(required=False, min_value=1, max_value=1440, allow_null=True)
     stop_on_error = serializers.BooleanField(required=False, default=False)
+    execution_mode = serializers.ChoiceField(
+        required=False,
+        choices=[REPLAY_EXECUTION_MODE_NAIVE, REPLAY_EXECUTION_MODE_AWARE],
+        default=REPLAY_EXECUTION_MODE_NAIVE,
+    )
+    execution_profile = serializers.ChoiceField(
+        required=False,
+        choices=ExecutionPolicyProfile.choices,
+        default=ExecutionPolicyProfile.BALANCED,
+    )
 
     def validate(self, attrs):
         if attrs['start_timestamp'] >= attrs['end_timestamp']:

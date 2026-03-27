@@ -209,6 +209,29 @@ This preserves auditability and avoids scattered conditional logic while keeping
 - Signals endpoints are read-only and intentionally simple, with manual filtering and ordering instead of heavier query infrastructure.
 - Post-mortem endpoints are also read-only and intentionally lightweight, with only list/detail/summary plus basic filters and ordering.
 
+## Execution-aware replay/evaluation/readiness architecture
+
+A lightweight execution realism bridge now connects replay, evaluation, experiments, and readiness without changing the local-first paper boundary.
+
+- `apps.replay_lab.services.execution_replay`:
+  - maps proposal intent to simulator paper orders
+  - runs order lifecycle attempts
+  - summarizes fill/no-fill/partial/slippage/drag metrics
+- `apps.evaluation_lab.services.execution_metrics`:
+  - builds execution-aware ratios from `PaperExecutionAttempt`
+  - injects execution-adjusted snapshot metadata into evaluation runs
+- `apps.experiment_lab.services.execution_comparison`:
+  - computes naive-vs-aware deltas for experiment comparisons
+- `apps.readiness_lab.services.execution_readiness`:
+  - aggregates execution-aware replay evidence
+  - applies bounded readiness penalty when fill realism is weak
+
+Design intent:
+- keep decision quality and execution quality distinguishable
+- preserve naive metrics for before/after comparison
+- avoid new heavyweight apps and avoid view-layer business logic
+- remain paper/demo only (no real routing, no real money)
+
 ## Admin strategy
 The admin is being treated as a practical local operations console.
 

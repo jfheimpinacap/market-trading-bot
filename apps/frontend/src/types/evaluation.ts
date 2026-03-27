@@ -51,7 +51,19 @@ export type EvaluationRun = {
   status: 'READY' | 'IN_PROGRESS' | 'FAILED';
   summary: string;
   guidance: string[];
-  metadata: Record<string, unknown>;
+  metadata: {
+    execution_adjusted_snapshot?: {
+      fill_rate: number;
+      partial_fill_rate: number;
+      no_fill_rate: number;
+      avg_slippage_bps: number;
+      execution_adjusted_pnl: string;
+      execution_drag: string;
+      execution_realism_score: number;
+      execution_quality_bucket: string;
+    };
+    [key: string]: unknown;
+  };
   metric_set?: EvaluationMetricSet;
   created_at: string;
   updated_at: string;

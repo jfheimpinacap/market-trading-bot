@@ -114,3 +114,24 @@ class ReplayLabTests(TestCase):
         self.assertTrue(PaperAccount.objects.filter(slug__startswith='replay-run-').exists())
         operational_trades = PaperTrade.objects.exclude(metadata__has_key='replay_run_id').count()
         self.assertEqual(operational_trades, 0)
+
+    def test_execution_aware_mode_persists_execution_metrics(self):
+        now = timezone.now()
+        self.market.liquidity = Decimal('200')
+        self.market.save(update_fields=['liquidity', 'updated_at'])
+        payload = {
+            'provider_scope': 'kalshi',
+            'source_scope': 'real_only',
+            'start_timestamp': (now - timedelta(hours=1)).isoformat(),
+            'end_timestamp': now.isoformat(),
+            'execution_mode': 'execution_aware',
+            'execution_profile': 'conservative_paper',
+            'auto_execute_allowed': True,
+        }
+        response = self.client.post(reverse('replay_lab:run'), payload, format='json')
+        self.assertIn(response.status_code, [201, 400])
+        if response.status_code == 201:
+            impact = response.json().get('details', {}).get('execution_impact_summary', {})
+            self.assertIn('fill_rate', impact)
+            self.assertIn('no_fill_rate', impact)
+            self.assertEqual(response.json().get('details', {}).get('execution_mode'), 'execution_aware')

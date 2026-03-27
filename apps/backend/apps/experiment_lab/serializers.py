@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
+from apps.execution_simulator.models import ExecutionPolicyProfile
 from apps.experiment_lab.models import ExperimentRun, ExperimentRunType, StrategyProfile
+from apps.replay_lab.services.execution_replay import REPLAY_EXECUTION_MODE_AWARE, REPLAY_EXECUTION_MODE_NAIVE
 
 
 class StrategyProfileSerializer(serializers.ModelSerializer):
@@ -27,6 +29,16 @@ class ExperimentRunRequestSerializer(serializers.Serializer):
     use_allocation = serializers.BooleanField(required=False, default=True)
     stop_on_error = serializers.BooleanField(required=False, default=False)
     related_continuous_session_id = serializers.IntegerField(required=False, min_value=1)
+    execution_mode = serializers.ChoiceField(
+        required=False,
+        choices=[REPLAY_EXECUTION_MODE_NAIVE, REPLAY_EXECUTION_MODE_AWARE],
+        default=REPLAY_EXECUTION_MODE_NAIVE,
+    )
+    execution_profile = serializers.ChoiceField(
+        required=False,
+        choices=ExecutionPolicyProfile.choices,
+        default=ExecutionPolicyProfile.BALANCED,
+    )
 
     def validate(self, attrs):
         start = attrs.get('start_timestamp')
