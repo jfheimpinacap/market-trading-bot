@@ -769,3 +769,30 @@ Non-goals unchanged: real execution, opaque planner autonomy, RL/ML meta-control
 ### Execution simulator
 - Added a dedicated backend app `execution_simulator` to separate trade intent from paper execution outcomes.
 - This app owns order lifecycle simulation (open/partial/filled/cancelled/expired/rejected), slippage, and no-fill handling.
+
+## Champion-challenger shadow benchmark architecture (new)
+
+`apps/champion_challenger` adds a conservative benchmark layer between model/profile governance and operational promotion decisions.
+
+### Responsibilities
+- define explicit champion/challenger stack bindings
+- run challenger stacks in shadow mode (paper/demo only)
+- compare champion vs challenger with execution-aware realism
+- emit recommendation + rationale without automatic switching
+
+### Why separate from experiment_lab?
+- `experiment_lab` is strategy/profile experiment orchestration
+- `champion_challenger` is continuous champion-baseline benchmarking for active-stack governance evidence
+- both can reuse replay/evaluation execution-aware metrics
+
+### Integration points
+- `prediction_training`: active model artifact used in binding snapshots
+- `profile_manager`: module profile defaults and runtime constraints snapshots
+- `mission_control`: optional trigger cadence (`run_shadow_benchmark_every_n_cycles`)
+- `readiness_lab` / governance workflows: consume evidence downstream (manual decision only)
+
+### Explicit non-goals
+- no real execution
+- no automatic champion promotion
+- no opaque planner authority
+- no distributed orchestration layer

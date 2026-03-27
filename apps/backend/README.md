@@ -1374,3 +1374,34 @@ The backend now integrates execution realism into historical and readiness workf
 - Readiness assessments include `details.execution_impact_summary` and apply a bounded execution realism penalty to avoid perfect-fill optimism.
 
 Still out of scope: real money, exchange routing, institutional microstructure, and complex hedging.
+
+## Champion-challenger app (new)
+
+A new backend module `apps.champion_challenger` provides a clear shadow-benchmark boundary for paper/demo operation.
+
+Core entities:
+- `StackProfileBinding`: explicit stack snapshot (prediction model/profile + research/signal/opportunity/mission/portfolio profiles + execution profile + runtime constraints snapshot)
+- `ChampionChallengerRun`: auditable run record for champion vs challenger
+- `ShadowComparisonResult`: normalized side-by-side metrics and deltas
+
+Service split:
+- `services/bindings.py`: champion/challenger binding construction and champion selection
+- `services/shadow_runner.py`: run shadow benchmark in isolated replay execution-aware mode
+- `services/comparison.py`: consolidate benchmark metrics and deltas
+- `services/recommendation.py`: recommendation code + reasons
+
+API endpoints:
+- `POST /api/champion-challenger/run/`
+- `GET /api/champion-challenger/runs/`
+- `GET /api/champion-challenger/runs/<id>/`
+- `GET /api/champion-challenger/current-champion/`
+- `GET /api/champion-challenger/summary/`
+- `POST /api/champion-challenger/set-champion-binding/`
+
+Integration notes:
+- uses `prediction_training` active model registry as optional binding input
+- uses `profile_manager` state/bindings for runtime-aware defaults
+- can be triggered by `mission_control` every N cycles (`run_shadow_benchmark_every_n_cycles`)
+- reuses execution-aware replay realism so comparison is not perfect-fill optimistic
+
+Out of scope remains explicit: real-money execution, automatic champion promotion, opaque meta-controller.

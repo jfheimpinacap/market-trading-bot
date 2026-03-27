@@ -32,6 +32,7 @@ import { OpportunitiesPage } from '../pages/OpportunitiesPage';
 import { MissionControlPage } from '../pages/MissionControlPage';
 import { PortfolioGovernorPage } from '../pages/PortfolioGovernorPage';
 import { ProfileManagerPage } from '../pages/ProfileManagerPage';
+import { ChampionChallengerPage } from '../pages/ChampionChallengerPage';
 import { SystemPage } from '../pages/SystemPage';
 import type { NavRoute } from '../types/system';
 
@@ -207,6 +208,13 @@ export const appRoutes: AppRoute[] = [
     path: '/portfolio-governor',
     description: 'Aggregate portfolio exposure governance, concentration checks, and regime-aware throttling for paper/demo entries.',
     component: PortfolioGovernorPage,
+  },
+
+  {
+    label: 'Champion Challenger',
+    path: '/champion-challenger',
+    description: 'Shadow benchmark supervisor to compare the active champion stack vs challenger stacks in paper/demo parallel mode.',
+    component: ChampionChallengerPage,
   },
 
   {

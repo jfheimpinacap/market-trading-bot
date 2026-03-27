@@ -768,3 +768,18 @@ This route integrates with Portfolio Governor, Mission Control, Runtime, and Opp
 ## Execution route
 - New `/execution` page provides paper execution realism visibility: order lifecycle states, fills, summary metrics, and lifecycle controls.
 - Uses `src/services/execution.ts` and remains paper/demo only.
+
+## Champion-Challenger route (new)
+
+The frontend now includes `/champion-challenger` as a technical benchmark workspace for shadow comparisons:
+
+- champion binding summary card
+- challenger run panel (lookback + execution profile)
+- key delta cards (opportunities/proposals/fill-rate/execution-adjusted pnl/recommendation)
+- side-by-side comparison table
+- recent run history with recommendation badges
+- clear empty/loading/error states with paper/demo-only messaging
+
+The page is integrated via quick links from `/prediction` and `/profile-manager`.
+
+This route is evidence-oriented only; it does not auto-switch active stack.

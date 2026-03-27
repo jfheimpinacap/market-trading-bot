@@ -633,3 +633,20 @@ Integration is lightweight and uses existing routing + shared API client pattern
 ### Execution UI surface
 - Added `/execution` route for order lifecycle visibility and control.
 - UI consumes `/api/execution/*` to show order/fill status, partials, no-fill outcomes, and summary cards.
+
+## Champion-challenger frontend integration (new)
+
+The `/champion-challenger` route extends existing architecture conventions:
+
+- page-local data loading through `services/championChallenger.ts`
+- strongly typed contracts in `types/championChallenger.ts`
+- no global state rewrite
+- same page sections/components used by prediction/profile/readiness pages
+
+UI flow:
+1. show current champion binding
+2. configure challenger shadow run
+3. render benchmark delta cards + side-by-side table
+4. show recent runs with recommendation badges
+
+The page is integrated with lightweight navigation links from `/prediction` and `/profile-manager`.

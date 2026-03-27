@@ -867,3 +867,25 @@ Still out of scope: real-money execution, opaque planner behavior, RL/ML meta-co
 ## Paper execution realism layer
 - Added `execution_simulator` to model paper order lifecycle (`PaperOrder`, `PaperExecutionAttempt`, `PaperFill`) with partial/no-fill, slippage, cancel/expire handling.
 - This layer is **paper/demo only** and intentionally excludes real routing/exchange execution.
+
+## Champion-Challenger shadow benchmark supervisor (new)
+
+The platform now includes a dedicated **champion-challenger shadow mode** (`/champion-challenger` + `/api/champion-challenger/*`) for continuous live-paper benchmarking:
+
+- explicit `StackProfileBinding` for champion and challenger stacks
+- shadow-only benchmark runs (`ChampionChallengerRun`) with no real-money and no real execution
+- execution-aware comparison metrics (fill rate, partial/no-fill, execution-adjusted pnl, execution drag)
+- decision-divergence and risk/review pressure deltas
+- recommendation output for governance follow-up:
+  - `KEEP_CHAMPION`
+  - `CHALLENGER_PROMISING`
+  - `CHALLENGER_UNDERPERFORMS`
+  - `REVIEW_MANUALLY`
+
+Design boundaries:
+- no automatic champion switching
+- no hidden planner authority
+- no RL auto-optimization
+- no real-money execution
+
+This complements prediction model governance and profile manager evidence without duplicating them.

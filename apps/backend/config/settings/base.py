@@ -101,6 +101,7 @@ LOCAL_APPS = [
     'apps.mission_control',
     'apps.portfolio_governor',
     'apps.profile_manager',
+    'apps.champion_challenger',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
