@@ -1592,3 +1592,22 @@ A new backend app `apps/go_live_gate` adds the final pre-live rehearsal boundary
   - explicit capital firewall that blocks all live transition paths
 
 This layer sits above `broker_bridge`: it does not remap orders and does not send anything live.
+
+## Execution venue app (new)
+
+`apps.execution_venue` introduces the canonical broker/exchange-facing contract while keeping the existing paper-only boundary:
+
+- `VenueOrderPayload`: stable external order schema mapped from `BrokerOrderIntent`
+- `VenueOrderResponse`: normalized response envelope (`ACCEPTED`, `REJECTED`, `HOLD`, `REQUIRES_CONFIRMATION`, `UNSUPPORTED`, `INVALID_PAYLOAD`)
+- `VenueCapabilityProfile`: adapter feature matrix + constraints, with `live_supported=false`
+- `VenueParityRun`: auditable parity checks across broker bridge dry-run, execution simulator context, and sandbox adapter output
+
+Default adapter is `NullSandboxVenueAdapter` (no real connectivity, no real order submission).
+
+New endpoints:
+- `GET /api/execution-venue/capabilities/`
+- `POST /api/execution-venue/build-payload/<intent_id>/`
+- `POST /api/execution-venue/dry-run/<intent_id>/`
+- `POST /api/execution-venue/run-parity/<intent_id>/`
+- `GET /api/execution-venue/parity-runs/`
+- `GET /api/execution-venue/summary/`

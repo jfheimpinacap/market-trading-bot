@@ -143,6 +143,9 @@ export function GoLivePage() {
             <StatusBadge tone={TONE_BY_STATE[state?.state ?? 'PAPER_ONLY_LOCKED'] ?? 'neutral'}>{state?.state ?? 'PAPER_ONLY_LOCKED'}</StatusBadge>
           </p>
           <p><strong>Policy blockers:</strong> {(state?.blockers ?? []).join(' · ') || 'None listed'}</p>
+          <p>
+            For canonical venue payload mapping and parity diagnostics, use <a href="/execution-venue">Execution Venue</a>.
+          </p>
         </SectionCard>
 
         <section className="stats-grid">
