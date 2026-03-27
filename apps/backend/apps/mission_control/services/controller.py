@@ -205,6 +205,30 @@ def status_snapshot() -> dict:
         }
     except Exception:
         promotion_summary = {'latest_recommendation': None, 'latest_review_at': None, 'is_recommendation_stale': False}
+    rollout_summary = None
+    try:
+        from apps.rollout_manager.services import build_rollout_summary
+
+        rollout = build_rollout_summary()
+        current = rollout.get('current_run')
+        latest = rollout.get('latest_run')
+        rollout_summary = {
+            'current_run_id': current.id if current else None,
+            'current_status': current.status if current else None,
+            'current_mode': current.plan.mode if current else None,
+            'canary_percentage': current.plan.canary_percentage if current else 0,
+            'latest_run_id': latest.id if latest else None,
+            'total_runs': rollout.get('total_runs', 0),
+        }
+    except Exception:
+        rollout_summary = {
+            'current_run_id': None,
+            'current_status': None,
+            'current_mode': None,
+            'canary_percentage': 0,
+            'latest_run_id': None,
+            'total_runs': 0,
+        }
 
     return {
         'state': MissionControlStateSerializer(state).data,
@@ -214,4 +238,5 @@ def status_snapshot() -> dict:
         'runtime': {'current_mode': get_runtime_state().current_mode, 'status': get_runtime_state().status},
         'safety': get_safety_status(),
         'promotion': promotion_summary,
+        'rollout': rollout_summary,
     }

@@ -863,3 +863,27 @@ Non-goals preserved:
 - no real-money execution
 - no automatic opaque stack switching
 - no enterprise committee workflow complexity
+
+
+## Rollout manager architecture (new)
+
+A new backend module `apps/rollout_manager` introduces a conservative operational layer after promotion recommendation.
+
+### Responsibilities
+- plan definition (`StackRolloutPlan`)
+- rollout execution state (`StackRolloutRun`)
+- deterministic canary routing (`services/routing.py`)
+- guardrail evaluation (`services/guardrails.py`)
+- decision recommendation (`services/decisions.py`)
+- explicit rollback (`services/rollback.py`)
+
+### Integrations
+- `promotion_committee`: source recommendation/evidence, not duplicated
+- `champion_challenger`: benchmark evidence before/after rollout
+- `opportunity_supervisor`: per-opportunity champion/canary route tagging + count updates
+- `mission_control`: cycle details include rollout state and recommendation snapshot
+
+### Explicit non-goals
+- no real execution
+- no enterprise/distributed rollout orchestration
+- no opaque autonomous full switching

@@ -60,6 +60,14 @@ export type MissionControlStatusResponse = {
   profiles: Array<{ slug: string; label: string }>;
   runtime: { current_mode: string; status: string };
   safety: { status: string; status_message?: string; kill_switch_enabled: boolean; hard_stop_active: boolean };
+  rollout?: {
+    current_run_id: number | null;
+    current_status: string | null;
+    current_mode: string | null;
+    canary_percentage: number;
+    latest_run_id: number | null;
+    total_runs: number;
+  };
 };
 
 export type MissionControlSummary = {

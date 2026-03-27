@@ -35,6 +35,7 @@ import { PortfolioGovernorPage } from '../pages/PortfolioGovernorPage';
 import { ProfileManagerPage } from '../pages/ProfileManagerPage';
 import { ChampionChallengerPage } from '../pages/ChampionChallengerPage';
 import { PromotionPage } from '../pages/PromotionPage';
+import { RolloutPage } from '../pages/RolloutPage';
 import { SystemPage } from '../pages/SystemPage';
 import type { NavRoute } from '../types/system';
 
@@ -225,6 +226,12 @@ export const appRoutes: AppRoute[] = [
     path: '/promotion',
     description: 'Controlled evolution pipeline that consolidates execution-aware evidence and emits auditable stack change recommendations.',
     component: PromotionPage,
+  },
+  {
+    label: 'Rollout Manager',
+    path: '/rollout',
+    description: 'Gradual canary rollout and rollback guardrail operations for paper/demo stack promotion.',
+    component: RolloutPage,
   },
   {
     label: 'Profile Manager',

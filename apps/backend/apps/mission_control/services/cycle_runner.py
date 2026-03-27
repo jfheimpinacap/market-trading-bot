@@ -30,6 +30,7 @@ from apps.research_agent.services.universe_scan import run_universe_scan
 from apps.risk_agent.services import run_position_watch
 from apps.runtime_governor.services import get_capabilities_for_current_mode, get_runtime_state
 from apps.safety_guard.services import get_safety_status
+from apps.rollout_manager.services import evaluate_guardrails, evaluate_rollout_decision, get_current_rollout_run
 
 
 @dataclass
@@ -154,6 +155,34 @@ def run_mission_control_cycle(*, session: MissionControlSession, settings: dict)
     cycle.queue_count = int(result.get('queued_count') or 0)
     cycle.auto_execute_count = int(result.get('auto_executed_count') or 0)
     cycle.blocked_count = int(result.get('blocked_count') or 0)
+    rollout_run = get_current_rollout_run()
+    if rollout_run:
+        canary_total = max(1, int(rollout_run.canary_count))
+        routed_total = max(1, int(rollout_run.routed_opportunities_count))
+        guardrail_metrics = {
+            'fill_rate_delta': float(result.get('auto_executed_count', 0) / canary_total) - 0.5,
+            'no_fill_rate_delta': float(result.get('blocked_count', 0) / routed_total),
+            'execution_adjusted_pnl_delta': float(result.get('auto_executed_count', 0) - result.get('blocked_count', 0)),
+            'execution_drag_delta': float(result.get('queued_count', 0) / routed_total),
+            'queue_pressure_delta': float(result.get('queued_count', 0) / routed_total),
+            'drawdown_delta': float(result.get('blocked_count', 0) / routed_total),
+            'runtime_blocked': decision.status == MissionControlCycleStatus.SKIPPED,
+            'safety_blocked': bool(get_safety_status().get('kill_switch_enabled') or get_safety_status().get('hard_stop_active')),
+            'readiness_blocked': False,
+        }
+        evaluate_guardrails(run=rollout_run, metrics=guardrail_metrics)
+        rollout_decision = evaluate_rollout_decision(run=rollout_run, metrics=guardrail_metrics)
+        cycle.details = {
+            **(cycle.details or {}),
+            'rollout': {
+                'run_id': rollout_run.id,
+                'status': rollout_run.status,
+                'mode': rollout_run.plan.mode,
+                'canary_percentage': rollout_run.plan.canary_percentage,
+                'decision': rollout_decision.decision,
+                'reason_codes': rollout_decision.reason_codes,
+            },
+        }
 
     if settings.get('run_watch_every_cycle', True):
         _record_step(cycle, step_type='risk_watch', fn=lambda: run_position_watch(metadata={'triggered_from': 'mission_control'}))
@@ -203,6 +232,7 @@ def run_mission_control_cycle(*, session: MissionControlSession, settings: dict)
         'summary',
         'finished_at',
         'updated_at',
+        'details',
     ])
 
     session.cycle_count += 1
