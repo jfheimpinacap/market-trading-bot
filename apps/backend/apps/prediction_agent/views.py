@@ -13,6 +13,8 @@ from apps.prediction_agent.serializers import (
 from apps.prediction_agent.services.features import build_prediction_features
 from apps.prediction_agent.services.profiles import ensure_default_prediction_profiles
 from apps.prediction_agent.services.scoring import score_market_prediction
+from apps.memory_retrieval.models import MemoryQueryType
+from apps.memory_retrieval.services import retrieve_precedents
 
 
 class PredictionProfileListView(generics.ListAPIView):
@@ -109,3 +111,20 @@ class PredictionBuildFeaturesView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class PredictionPrecedentAssistView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        query_text = (request.data or {}).get('query_text')
+        if not query_text:
+            return Response({'detail': 'query_text is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        run = retrieve_precedents(
+            query_text=query_text,
+            query_type=MemoryQueryType.PREDICTION,
+            context_metadata={'market_id': (request.data or {}).get('market_id'), 'source': 'prediction_agent'},
+            limit=min(int((request.data or {}).get('limit', 6)), 12),
+        )
+        return Response({'retrieval_run_id': run.id, 'result_count': run.result_count}, status=status.HTTP_200_OK)

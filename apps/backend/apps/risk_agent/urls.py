@@ -5,6 +5,7 @@ from apps.risk_agent.views import (
     RiskAssessmentListView,
     RiskSizeView,
     RiskSummaryView,
+    RiskPrecedentAssistView,
     RiskWatchEventListView,
     RiskWatchRunView,
 )
@@ -18,4 +19,5 @@ urlpatterns = [
     path('assessments/', RiskAssessmentListView.as_view(), name='assessments'),
     path('watch-events/', RiskWatchEventListView.as_view(), name='watch-events'),
     path('summary/', RiskSummaryView.as_view(), name='summary'),
+    path('precedent-assist/', RiskPrecedentAssistView.as_view(), name='precedent-assist'),
 ]

@@ -102,6 +102,7 @@ LOCAL_APPS = [
     'apps.portfolio_governor',
     'apps.profile_manager',
     'apps.champion_challenger',
+    'apps.memory_retrieval',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

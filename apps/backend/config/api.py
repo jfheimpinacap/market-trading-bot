@@ -21,6 +21,7 @@ urlpatterns = [
     path('safety/', include(('apps.safety_guard.urls', 'safety_guard'), namespace='safety_guard')),
     path('evaluation/', include(('apps.evaluation_lab.urls', 'evaluation_lab'), namespace='evaluation_lab')),
     path('learning/', include(('apps.learning_memory.urls', 'learning_memory'), namespace='learning_memory')),
+    path('memory/', include(('apps.memory_retrieval.urls', 'memory_retrieval'), namespace='memory_retrieval')),
     path('real-sync/', include(('apps.real_data_sync.urls', 'real_data_sync'), namespace='real_data_sync')),
     path('real-ops/', include(('apps.real_market_ops.urls', 'real_market_ops'), namespace='real_market_ops')),
     path('allocation/', include(('apps.allocation_engine.urls', 'allocation_engine'), namespace='allocation_engine')),

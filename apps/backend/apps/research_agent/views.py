@@ -28,6 +28,8 @@ from apps.research_agent.services.analyze import run_narrative_analysis
 from apps.research_agent.services.pursuit_board import get_latest_board_summary, get_pursuit_candidates_queryset
 from apps.research_agent.services.scan import run_full_research_scan, run_research_scan
 from apps.research_agent.services.universe_scan import run_triage_to_prediction, run_universe_scan
+from apps.memory_retrieval.models import MemoryQueryType
+from apps.memory_retrieval.services import retrieve_precedents
 
 
 class ResearchSourceListCreateView(generics.ListCreateAPIView):
@@ -203,3 +205,20 @@ class ResearchSummaryView(APIView):
             'pursuit_candidate_count': PursuitCandidate.objects.count(),
         }
         return Response(payload, status=status.HTTP_200_OK)
+
+
+class ResearchPrecedentAssistView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        query_text = (request.data or {}).get('query_text')
+        if not query_text:
+            return Response({'detail': 'query_text is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        run = retrieve_precedents(
+            query_text=query_text,
+            query_type=MemoryQueryType.RESEARCH,
+            context_metadata={'market_id': (request.data or {}).get('market_id'), 'source': 'research_agent'},
+            limit=min(int((request.data or {}).get('limit', 6)), 12),
+        )
+        return Response({'retrieval_run_id': run.id, 'result_count': run.result_count}, status=status.HTTP_200_OK)

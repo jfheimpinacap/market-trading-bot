@@ -7,6 +7,7 @@ from apps.prediction_agent.views import (
     PredictionScoreListView,
     PredictionScoreMarketView,
     PredictionSummaryView,
+    PredictionPrecedentAssistView,
 )
 
 app_name = 'prediction_agent'
@@ -18,4 +19,5 @@ urlpatterns = [
     path('scores/<int:pk>/', PredictionScoreDetailView.as_view(), name='score-detail'),
     path('summary/', PredictionSummaryView.as_view(), name='summary'),
     path('build-features/', PredictionBuildFeaturesView.as_view(), name='build-features'),
+    path('precedent-assist/', PredictionPrecedentAssistView.as_view(), name='precedent-assist'),
 ]

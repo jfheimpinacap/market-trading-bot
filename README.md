@@ -889,3 +889,30 @@ Design boundaries:
 - no real-money execution
 
 This complements prediction model governance and profile manager evidence without duplicating them.
+
+## Semantic memory / precedent retrieval layer (new)
+
+A local-first semantic memory layer is now available at `apps/backend/apps/memory_retrieval` with frontend visibility in `/memory`.
+
+What it adds:
+- formal memory entities: `MemoryDocument`, `MemoryRetrievalRun`, `RetrievedPrecedent`
+- local embedding generation via existing `llm_local` embeddings (Ollama-compatible)
+- simple in-process cosine retrieval (no external vector DB required)
+- auditable run/result traceability for precedent retrieval
+- case-based summary for caution signals, failure modes, and lessons learned
+
+Primary API endpoints:
+- `POST /api/memory/index/`
+- `POST /api/memory/retrieve/`
+- `GET /api/memory/documents/`
+- `GET /api/memory/retrieval-runs/`
+- `GET /api/memory/retrieval-runs/<id>/`
+- `GET /api/memory/summary/`
+
+Integrated assist endpoints:
+- `POST /api/research/precedent-assist/`
+- `POST /api/prediction/precedent-assist/`
+- `POST /api/risk-agent/precedent-assist/`
+- `POST /api/postmortem-board/precedent-compare/`
+
+Out of scope remains unchanged: real money, real execution, heavy enterprise RAG stack, opaque planners.

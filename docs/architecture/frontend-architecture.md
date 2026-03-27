@@ -650,3 +650,18 @@ UI flow:
 4. show recent runs with recommendation badges
 
 The page is integrated with lightweight navigation links from `/prediction` and `/profile-manager`.
+
+## Semantic memory UI integration (new)
+
+A new `/memory` route extends the existing operator workspace with a lightweight precedent console.
+
+Frontend additions:
+- `src/services/memory.ts` for memory index/retrieve/summary APIs
+- `src/types/memory.ts` for typed payloads
+- `src/pages/MemoryPage.tsx` for query + results + run history UX
+
+Design intent:
+- remain consistent with existing technical/card/table layout
+- keep retrieval interactions explicit and auditable
+- cross-link with learning/postmortem/prediction/risk routes
+- preserve local-first, desktop-first demo ergonomics
