@@ -689,3 +689,20 @@ UX principles kept:
 - inconclusive evidence displayed as governance outcome (not runtime error)
 - clear empty/loading/error states
 - route-level integration links to champion-challenger, profile-manager, prediction, readiness
+
+
+## Rollout frontend integration (new)
+
+The frontend now includes a dedicated route `/rollout` for stack promotion operations.
+
+### Data boundary
+- `services/rollout.ts` wraps rollout endpoints via existing API client
+- `types/rollout.ts` defines plan/run/guardrail/decision structures
+
+### UI boundary
+- rollout page is an operator console, not an autonomous controller
+- explicit controls only (create/start/pause/resume/rollback)
+- explicit empty/loading/error states
+- mission control surfaces rollout status for operational awareness
+
+This keeps the architecture consistent with the current desktop-first, auditable, local-first pattern.

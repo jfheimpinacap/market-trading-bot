@@ -23,6 +23,7 @@ from apps.opportunity_supervisor.models import (
 from apps.opportunity_supervisor.services.execution_path import resolve_execution_path
 from apps.opportunity_supervisor.services.profiles import get_profile
 from apps.portfolio_governor.services import get_latest_throttle_decision, run_portfolio_governance
+from apps.rollout_manager.services import get_current_rollout_run, record_routing_decision, route_opportunity
 
 
 def _create_queue_item(*, item: OpportunityCycleItem, quantity: Decimal, explanation: str) -> OperatorQueueItem:
@@ -66,6 +67,7 @@ def run_opportunity_cycle(*, profile_slug: str | None = None, triggered_by: str 
             'real_execution_enabled': False,
         },
     )
+    rollout_run = get_current_rollout_run()
 
     governance_run = run_portfolio_governance(triggered_by='opportunity_supervisor')
     throttle = governance_run.throttle_decision or get_latest_throttle_decision()
@@ -79,6 +81,14 @@ def run_opportunity_cycle(*, profile_slug: str | None = None, triggered_by: str 
     cycle.opportunities_built = len(opportunities)
 
     for opp in opportunities:
+        routing = route_opportunity(
+            run=rollout_run,
+            market_id=opp.market_id,
+            profile_slug=profile.slug,
+        )
+        if rollout_run is not None:
+            record_routing_decision(run=rollout_run, decision=routing)
+
         gate = getattr(opp, 'proposal_gate', None)
         item = OpportunityCycleItem.objects.create(
             run=cycle,
@@ -113,7 +123,15 @@ def run_opportunity_cycle(*, profile_slug: str | None = None, triggered_by: str 
             allocation_status='NOT_READY',
             execution_path=OpportunityExecutionPath.WATCH,
             rationale=opp.rationale,
-            metadata={'opportunity_signal_id': opp.id},
+            metadata={
+                'opportunity_signal_id': opp.id,
+                'rollout': {
+                    'active_run_id': rollout_run.id if rollout_run else None,
+                    'route': routing.route,
+                    'bucket': routing.bucket,
+                    'reason': routing.reason,
+                },
+            },
         )
 
         proposal = None
@@ -226,6 +244,11 @@ def run_opportunity_cycle(*, profile_slug: str | None = None, triggered_by: str 
         'fusion_profile': fusion_run.profile_slug,
         'portfolio_governance_run_id': governance_run.id,
         'portfolio_throttle_state': throttle.state if throttle else None,
+        'rollout': {
+            'active_run_id': rollout_run.id if rollout_run else None,
+            'mode': rollout_run.plan.mode if rollout_run else None,
+            'canary_percentage': rollout_run.plan.canary_percentage if rollout_run else 0,
+        },
     }
     cycle.save()
     return cycle

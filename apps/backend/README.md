@@ -1465,3 +1465,31 @@ Boundaries:
 - paper/demo only
 - manual-first
 - no opaque auto-switching
+
+
+## Rollout manager layer (new)
+
+`apps.rollout_manager` adds the formal transition layer between committee recommendation and full promotion.
+
+What it does:
+- creates `StackRolloutPlan` records with champion/candidate bindings, mode, canary percentage, sampling rule, and guardrails
+- starts and tracks `StackRolloutRun` lifecycle (`RUNNING`, `PAUSED`, `COMPLETED`, `ROLLED_BACK`, `FAILED`)
+- evaluates explicit guardrails and persists `RolloutGuardrailEvent`
+- emits auditable `RolloutDecision` recommendations
+- applies explicit rollback to champion-only routing
+
+API endpoints:
+- `POST /api/rollout/create-plan/`
+- `POST /api/rollout/start/<id>/`
+- `POST /api/rollout/pause/<id>/`
+- `POST /api/rollout/resume/<id>/`
+- `POST /api/rollout/rollback/<id>/`
+- `GET /api/rollout/runs/`
+- `GET /api/rollout/runs/<id>/`
+- `GET /api/rollout/current/`
+- `GET /api/rollout/summary/`
+
+Design boundary:
+- `promotion_committee` still recommends
+- `champion_challenger` still benchmarks
+- `rollout_manager` executes gradual, reversible paper/demo transition

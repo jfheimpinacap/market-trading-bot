@@ -949,3 +949,19 @@ Still out of scope:
 - real execution
 - opaque auto-promotion or auto-switching
 - RL/auto-optimization
+
+
+### Stack rollout manager / canary promotion / rollback guardrails (new)
+
+A new `rollout_manager` layer now operationalizes promotion recommendations with explicit gradual rollout in paper/demo mode:
+
+- explicit rollout plans (`SHADOW_ONLY`, `CANARY`, `STAGED`) with deterministic canary percentage routing
+- persisted rollout runs with routed/champion/challenger/canary counters
+- explicit guardrail events and rollout decisions (`CONTINUE_ROLLOUT`, `PAUSE_ROLLOUT`, `ROLLBACK_NOW`, `COMPLETE_PROMOTION`, `EXTEND_CANARY`)
+- explicit rollback action back to champion-only routing with auditable reason
+- integration touchpoints with mission control and opportunity supervisor
+
+Boundary remains strict:
+- no real-money execution
+- no real order routing
+- no opaque full auto-switching

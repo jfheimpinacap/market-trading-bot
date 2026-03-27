@@ -827,3 +827,20 @@ Integration links were added from:
 - `/profile-manager`
 
 All remains local-first, single-user, and paper/demo only.
+
+
+## Rollout UI (new)
+
+A new `/rollout` route provides the operator UI for formal canary promotion and rollback guardrails.
+
+Included UI blocks:
+- header with paper/demo-only boundary
+- current rollout card (mode, percentage, phase, status)
+- controls (create plan, start/pause/resume, rollback)
+- guardrail summary and latest rollout recommendation
+- recent runs table with distribution counters
+
+Frontend integration:
+- `src/services/rollout.ts`
+- `src/types/rollout.ts`
+- route links from `/promotion`, `/champion-challenger`, and `/mission-control`
