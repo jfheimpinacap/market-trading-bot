@@ -3,6 +3,7 @@ from apps.automation_policy.services.execution import execute_decision
 from apps.automation_policy.services.guardrails import get_guardrail_snapshot
 from apps.automation_policy.services.profiles import apply_profile, get_active_profile, list_profiles
 from apps.automation_policy.services.rules import list_rules
+from apps.automation_policy.services.runbook_resolution import resolve_runbook_step
 
 __all__ = [
     'evaluate_action',
@@ -12,4 +13,5 @@ __all__ = [
     'get_active_profile',
     'list_profiles',
     'list_rules',
+    'resolve_runbook_step',
 ]

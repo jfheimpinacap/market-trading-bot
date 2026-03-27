@@ -1,6 +1,9 @@
 export type RunbookInstanceStatus = 'OPEN' | 'IN_PROGRESS' | 'BLOCKED' | 'COMPLETED' | 'ABORTED' | 'ESCALATED';
 export type RunbookStepStatus = 'PENDING' | 'READY' | 'RUNNING' | 'DONE' | 'FAILED' | 'SKIPPED';
 export type RunbookStepActionKind = 'manual' | 'api_action' | 'review' | 'confirm';
+export type RunbookAutopilotRunStatus = 'RUNNING' | 'PAUSED_FOR_APPROVAL' | 'BLOCKED' | 'COMPLETED' | 'FAILED' | 'ABORTED';
+export type RunbookAutopilotStepOutcome = 'AUTO_EXECUTED' | 'APPROVAL_REQUIRED' | 'MANUAL_ONLY' | 'BLOCKED' | 'FAILED' | 'SKIPPED';
+export type RunbookApprovalCheckpointStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
 
 export type RunbookTemplate = {
   id: number;
@@ -58,6 +61,55 @@ export type RunbookInstance = {
   updated_at: string;
 };
 
+export type RunbookAutopilotStepResult = {
+  id: number;
+  autopilot_run: number;
+  runbook_step: RunbookStep;
+  attempt: number;
+  outcome: RunbookAutopilotStepOutcome;
+  automation_decision_id: number | null;
+  automation_action_log_id: number | null;
+  runbook_action_result: number | null;
+  rationale: string;
+  error_message: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RunbookApprovalCheckpoint = {
+  id: number;
+  autopilot_run: number;
+  runbook_instance: number;
+  runbook_step: number;
+  approval_reason: string;
+  blocking_constraints: string[];
+  context_snapshot: Record<string, unknown>;
+  status: RunbookApprovalCheckpointStatus;
+  approved_at: string | null;
+  resolved_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RunbookAutopilotRun = {
+  id: number;
+  runbook_instance: number;
+  status: RunbookAutopilotRunStatus;
+  steps_evaluated: number;
+  steps_auto_executed: number;
+  steps_waiting_manual: number;
+  steps_blocked: number;
+  started_at: string;
+  finished_at: string | null;
+  summary: string;
+  metadata: Record<string, unknown>;
+  step_results: RunbookAutopilotStepResult[];
+  approval_checkpoints: RunbookApprovalCheckpoint[];
+  created_at: string;
+  updated_at: string;
+};
+
 export type RunbookSummary = {
   counts: {
     open: number;
@@ -77,6 +129,29 @@ export type RunbookSummary = {
     source_object_id: string;
     progress: { done: number; total: number };
     next_step: { id: number; title: string; status: RunbookStepStatus } | null;
+    updated_at: string;
+  }>;
+};
+
+export type RunbookAutopilotSummary = {
+  counts: {
+    running: number;
+    paused_for_approval: number;
+    blocked: number;
+    completed: number;
+    failed: number;
+    aborted: number;
+    total: number;
+  };
+  recent: Array<{
+    id: number;
+    runbook_instance_id: number;
+    status: RunbookAutopilotRunStatus;
+    summary: string;
+    steps_evaluated: number;
+    steps_auto_executed: number;
+    steps_waiting_manual: number;
+    steps_blocked: number;
     updated_at: string;
   }>;
 };

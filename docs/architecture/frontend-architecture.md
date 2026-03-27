@@ -896,3 +896,18 @@ A new route, `/automation-policy`, provides an operator-facing view of supervise
 - cross-linking from cockpit and runbooks without redesigning existing pages.
 
 The UX remains manual-first and paper-only, and treats blocked/approval outcomes as healthy governance behavior.
+
+## Runbooks autopilot UI integration (new)
+
+The frontend extends existing runbook pages rather than adding a new standalone orchestration app.
+
+- `services/runbooks.ts` now exposes autopilot run/start/resume/retry/summary APIs.
+- `/runbooks` now renders:
+  - autopilot summary cards
+  - recent autopilot runs
+  - approval checkpoints
+  - retry/resume controls
+  - step outcome evidence
+- `/cockpit` consumes autopilot summary for fast operator triage and quick routing.
+
+Design remains technical and sober: explicit states, no opaque planner behavior, and manual-first control posture.

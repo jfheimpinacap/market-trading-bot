@@ -12,7 +12,7 @@ import { getProfileGovernanceSummary, runProfileGovernance } from './profileMana
 import { getPromotionSummary } from './promotion';
 import { rollbackRollout, pauseRollout, getRolloutSummary } from './rollout';
 import { getRuntimeStatus } from './runtime';
-import { getRunbookSummary } from './runbooks';
+import { getRunbookAutopilotSummary, getRunbookSummary } from './runbooks';
 import { getTraceQueryRuns, getTraceSummary } from './trace';
 import { getVenueSummary } from './executionVenue';
 import { getVenueAccountSummary } from './venueAccount';
@@ -65,6 +65,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     promotionSummary,
     championChallengerSummary,
     runbookSummary,
+    runbookAutopilotSummary,
   ] = await Promise.all([
     withFallback('runtime', () => getRuntimeStatus(), failures, null, 'Runtime status unavailable.'),
     withFallback('incidents', () => getIncidentCurrentState(), failures, null, 'Incident posture unavailable.'),
@@ -90,6 +91,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     withFallback('promotionSummary', () => getPromotionSummary(), failures, null, 'Promotion summary unavailable.'),
     withFallback('championChallengerSummary', () => getChampionChallengerSummary(), failures, null, 'Champion/challenger summary unavailable.'),
     withFallback('runbookSummary', () => getRunbookSummary(), failures, null, 'Runbook summary unavailable.'),
+    withFallback('runbookAutopilotSummary', () => getRunbookAutopilotSummary(), failures, null, 'Runbook autopilot summary unavailable.'),
   ]);
 
   return {
@@ -117,6 +119,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     promotionSummary,
     championChallengerSummary,
     runbookSummary,
+    runbookAutopilotSummary,
     failures,
     lastUpdatedAt: new Date().toISOString(),
   };
@@ -213,6 +216,17 @@ export function getCockpitAttention(snapshot: CockpitSnapshot): CockpitAttention
     });
   }
 
+
+
+  if ((snapshot.runbookAutopilotSummary?.counts.paused_for_approval ?? 0) > 0) {
+    items.push({
+      id: 'runbook-approval-paused',
+      severity: 'MEDIUM',
+      title: 'Runbook approvals pending',
+      summary: `${snapshot.runbookAutopilotSummary?.counts.paused_for_approval ?? 0} autopilot run(s) are paused for approval.`,
+      route: '/runbooks',
+    });
+  }
 
   if ((snapshot.runbookSummary?.counts.blocked ?? 0) > 0) {
     items.push({

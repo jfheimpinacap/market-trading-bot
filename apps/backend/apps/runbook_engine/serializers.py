@@ -1,6 +1,14 @@
 from rest_framework import serializers
 
-from apps.runbook_engine.models import RunbookActionResult, RunbookInstance, RunbookStep, RunbookTemplate
+from apps.runbook_engine.models import (
+    RunbookActionResult,
+    RunbookApprovalCheckpoint,
+    RunbookAutopilotRun,
+    RunbookAutopilotStepResult,
+    RunbookInstance,
+    RunbookStep,
+    RunbookTemplate,
+)
 
 
 class RunbookTemplateSerializer(serializers.ModelSerializer):
@@ -20,6 +28,29 @@ class RunbookStepSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RunbookStep
+        fields = '__all__'
+
+
+class RunbookApprovalCheckpointSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RunbookApprovalCheckpoint
+        fields = '__all__'
+
+
+class RunbookAutopilotStepResultSerializer(serializers.ModelSerializer):
+    runbook_step = RunbookStepSerializer(read_only=True)
+
+    class Meta:
+        model = RunbookAutopilotStepResult
+        fields = '__all__'
+
+
+class RunbookAutopilotRunSerializer(serializers.ModelSerializer):
+    step_results = RunbookAutopilotStepResultSerializer(many=True, read_only=True)
+    approval_checkpoints = RunbookApprovalCheckpointSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = RunbookAutopilotRun
         fields = '__all__'
 
 
@@ -43,3 +74,22 @@ class RunbookCreateSerializer(serializers.Serializer):
 
 class RunbookCompleteSerializer(serializers.Serializer):
     note = serializers.CharField(required=False, allow_blank=True)
+
+
+class RunbookAutopilotRunRequestSerializer(serializers.Serializer):
+    metadata = serializers.JSONField(required=False)
+
+
+class RunbookAutopilotResumeSerializer(serializers.Serializer):
+    checkpoint_id = serializers.IntegerField(required=False)
+    approved = serializers.BooleanField(required=False, default=True)
+    reviewer = serializers.CharField(required=False, allow_blank=True, max_length=120)
+
+
+class RunbookAutopilotRetrySerializer(serializers.Serializer):
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=255)
+
+
+class RunbookApprovalUpdateSerializer(serializers.Serializer):
+    approved = serializers.BooleanField(required=False, default=True)
+    reviewer = serializers.CharField(required=False, allow_blank=True, max_length=120)

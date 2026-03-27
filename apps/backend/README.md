@@ -1746,3 +1746,35 @@ Boundary clarification:
 - `automation_policy` decides if an action is auto-allowed, approval-required, manual-only, or blocked.
 - `incident_commander`, `runtime_governor`, `safety_guard`, and `certification_board` remain higher-order authorities.
 - scope remains local-first, single-user, paper/sandbox only.
+
+## Runbook supervised autopilot / approval-aware orchestration (new)
+
+The backend now extends `apps.runbook_engine` with a conservative autopilot layer:
+
+- Models:
+  - `RunbookAutopilotRun`
+  - `RunbookAutopilotStepResult`
+  - `RunbookApprovalCheckpoint`
+- Services:
+  - `runbook_engine.services.autopilot`
+  - `runbook_engine.services.orchestration`
+  - `runbook_engine.services.approvals`
+  - `automation_policy.services.runbook_resolution`
+
+Behavior:
+- evaluate every step via `automation_policy`
+- auto-execute only safe actions
+- pause on approval/manual requirements
+- block on guardrail/policy constraints
+- support explicit resume and retry
+- keep full step-level traceability via decisions + action logs + step results
+
+New endpoints:
+- `POST /api/runbooks/<id>/run-autopilot/`
+- `GET /api/runbooks/autopilot-runs/`
+- `GET /api/runbooks/autopilot-runs/<id>/`
+- `POST /api/runbooks/autopilot-runs/<id>/resume/`
+- `POST /api/runbooks/autopilot-runs/<id>/retry-step/<step_id>/`
+- `GET /api/runbooks/autopilot-summary/`
+
+Out of scope stays explicit: no live trading, no real execution venue actions, no fully autonomous black-box remediation.

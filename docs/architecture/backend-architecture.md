@@ -1083,3 +1083,25 @@ A dedicated `apps.automation_policy` app now provides a formal and auditable pol
 - `AutomationActionLog`
 
 This layer is intentionally conservative: local-first, single-user, paper/sandbox only, and explicitly blocks live execution domains.
+
+## Runbook autopilot architecture (new)
+
+`runbook_engine` now has a thin supervised orchestration layer over existing runbook workflows.
+
+### Responsibility split
+- `runbook_engine` remains workflow/template/step execution authority.
+- `automation_policy` remains trust-tier and guardrail authority.
+- `autopilot` only sequences steps, asks policy, executes allowed actions, and pauses/blocks when needed.
+
+### Core entities
+- `RunbookAutopilotRun`: lifecycle + counters + summary for one orchestration run.
+- `RunbookAutopilotStepResult`: per-step outcome + attempt + links to automation/runbook evidence.
+- `RunbookApprovalCheckpoint`: explicit approval pause artifact with context snapshot.
+
+### Service boundaries
+- `runbook_engine.services.autopilot`: start/resume/retry loop.
+- `runbook_engine.services.orchestration`: counters and summary updates.
+- `runbook_engine.services.approvals`: checkpoint create/resolve.
+- `automation_policy.services.runbook_resolution`: step-level policy decision projection for autopilot.
+
+This keeps the system auditable, manual-first, and conservative while enabling gradual supervised auto-advance.
