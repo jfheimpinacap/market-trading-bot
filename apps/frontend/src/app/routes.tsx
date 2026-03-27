@@ -41,6 +41,7 @@ import { RolloutPage } from '../pages/RolloutPage';
 import { SystemPage } from '../pages/SystemPage';
 import { CertificationPage } from '../pages/CertificationPage';
 import { BrokerBridgePage } from '../pages/BrokerBridgePage';
+import { GoLivePage } from '../pages/GoLivePage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -170,6 +171,14 @@ export const appRoutes: AppRoute[] = [
     description: 'Sandbox/dry-run broker routing readiness layer that maps paper execution intents to broker-like payloads under certification/runtime/safety guardrails.',
     component: BrokerBridgePage,
   },
+
+  {
+    label: 'Go Live Gate',
+    path: '/go-live',
+    description: 'Final pre-live rehearsal + capital firewall layer with checklist and manual approvals; always dry-run/paper-only in this phase.',
+    component: GoLivePage,
+  },
+
   {
     label: 'Positions',
     path: '/positions',

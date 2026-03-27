@@ -1022,3 +1022,15 @@ Boundary remains strict:
 - no real broker credentials
 - no real order routing
 - no real money or account reconciliation
+
+### Go-live rehearsal gate + capital firewall (new)
+
+The platform now includes a formal `go_live_gate` layer to rehearse final pre-live workflows while still blocking live execution by default:
+
+- persisted pre-live checklist runs
+- manual approval requests
+- final rehearsal run on broker-like intents (dry-run only)
+- explicit capital firewall rules that keep live transition disabled
+- API endpoints at `/api/go-live/*` and frontend route `/go-live`
+
+This is a preparation layer only. Still out of scope: live credentials, live broker routing, real money, and real order submission.

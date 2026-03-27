@@ -956,3 +956,14 @@ Design principles:
 - explicit service split (`intents`, `mapping`, `validation`, `dry_run`, `readiness`)
 - auditable persistence at each stage
 - strict non-goal: real order routing and real money execution
+
+## go_live_gate (final pre-live boundary, still paper-only)
+
+`go_live_gate` is a conservative orchestration layer above `broker_bridge`:
+
+- consumes existing broker intents/dry-runs from `broker_bridge`
+- uses `certification_board`, `runtime_governor`, `safety_guard`, and `incident_commander` as authoritative checklist inputs
+- writes blocked rehearsal context to `operator_queue`
+- enforces an explicit `capital_firewall` that keeps live transition disabled
+
+Scope is rehearsal-only: no credentials, no live adapter, no live order transport.
