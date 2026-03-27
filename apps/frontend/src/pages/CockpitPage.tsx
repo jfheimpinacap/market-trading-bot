@@ -164,9 +164,11 @@ export function CockpitPage() {
                   <li><span>Open</span><strong>{snapshot.runbookSummary?.counts.open ?? 0}</strong></li>
                   <li><span>In progress</span><strong>{snapshot.runbookSummary?.counts.in_progress ?? 0}</strong></li>
                   <li><span>Blocked</span><strong>{snapshot.runbookSummary?.counts.blocked ?? 0}</strong></li>
-                  <li><span>Completed</span><strong>{snapshot.runbookSummary?.counts.completed ?? 0}</strong></li>
+                  <li><span>Autopilot paused</span><strong>{snapshot.runbookAutopilotSummary?.counts.paused_for_approval ?? 0}</strong></li>
+                  <li><span>Autopilot blocked</span><strong>{snapshot.runbookAutopilotSummary?.counts.blocked ?? 0}</strong></li>
+                  <li><span>Autopilot completed</span><strong>{snapshot.runbookAutopilotSummary?.counts.completed ?? 0}</strong></li>
                 </ul>
-                <div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/runbooks')}>Open runbooks</button></div>
+                <div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/runbooks')}>Open runbooks</button><button className="ghost-button" type="button" onClick={() => navigate('/runbooks')}>Review approvals</button></div>
               </SectionCard>
 
               <SectionCard eyebrow="Change governance" title="Promotion, rollout and champion/challenger" description="Current promotion recommendations and rollout status.">

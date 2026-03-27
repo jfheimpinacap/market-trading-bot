@@ -1142,3 +1142,22 @@ The stack now includes a formal **automation policy matrix / supervised runbook 
 New operator route: `/automation-policy`.
 
 Scope remains unchanged: local-first, single-user, and paper/sandbox only.
+
+### Supervised runbook autopilot (new)
+
+A new **supervised runbook autopilot / approval-aware closed-loop remediation executor** now extends `runbook_engine` without replacing manual workflows:
+
+- per-step policy resolution through `automation_policy` trust tiers
+- safe actions can auto-execute step-by-step
+- orchestration pauses for `APPROVAL_REQUIRED` or `MANUAL_ONLY`
+- orchestration blocks on guardrail/policy `BLOCKED`
+- explicit approval checkpoints, resume, and step retry with audit trails
+- cockpit now surfaces paused/blocked autopilot pressure
+
+Strict boundaries remain unchanged:
+- local-first
+- single-user
+- paper/sandbox only
+- no real money
+- no real execution
+- no black-box autonomous remediation

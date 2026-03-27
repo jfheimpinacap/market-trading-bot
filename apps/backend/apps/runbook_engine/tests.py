@@ -119,3 +119,77 @@ class RunbookEngineTests(TestCase):
         self.assertEqual(res.status_code, 200)
         slugs = {item['template_slug'] for item in res.json()['results']}
         self.assertIn('queue_pressure_relief', slugs)
+
+from apps.automation_policy.services import apply_profile
+from apps.runbook_engine.models import RunbookApprovalCheckpointStatus, RunbookAutopilotRunStatus
+
+
+class RunbookAutopilotTests(TestCase):
+    def setUp(self):
+        ensure_default_templates()
+        apply_profile(profile_slug='supervised_autopilot')
+
+    def _create_runbook(self, template_slug='degraded_mode_recovery'):
+        template = self.client.get(reverse('runbook_engine:templates')).json()
+        chosen = next(t for t in template if t['slug'] == template_slug)
+        create_res = self.client.post(
+            reverse('runbook_engine:create'),
+            data={
+                'template_slug': chosen['slug'],
+                'source_object_type': chosen['trigger_type'],
+                'source_object_id': 'test-source',
+            },
+            content_type='application/json',
+        )
+        return create_res.json()
+
+    def test_auto_run_safe_step(self):
+        runbook = self._create_runbook('degraded_mode_recovery')
+        response = self.client.post(reverse('runbook_engine:run-autopilot', args=[runbook['id']]), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertGreaterEqual(payload['steps_evaluated'], 1)
+
+    def test_pause_on_approval_required(self):
+        runbook = self._create_runbook('rollout_guardrail_response')
+        response = self.client.post(reverse('runbook_engine:run-autopilot', args=[runbook['id']]), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertIn(payload['status'], [RunbookAutopilotRunStatus.PAUSED_FOR_APPROVAL, RunbookAutopilotRunStatus.BLOCKED])
+
+    def test_resume_after_approval(self):
+        runbook = self._create_runbook('rollout_guardrail_response')
+        run = self.client.post(reverse('runbook_engine:run-autopilot', args=[runbook['id']]), data='{}', content_type='application/json').json()
+        pending = [item for item in run.get('approval_checkpoints', []) if item['status'] == RunbookApprovalCheckpointStatus.PENDING]
+        if not pending:
+            self.skipTest('No pending approval checkpoint produced for this fixture/profile.')
+        resumed = self.client.post(
+            reverse('runbook_engine:autopilot-resume', args=[run['id']]),
+            data={'checkpoint_id': pending[0]['id'], 'approved': True, 'reviewer': 'operator'},
+            content_type='application/json',
+        )
+        self.assertEqual(resumed.status_code, 200)
+        self.assertIn(resumed.json()['status'], [RunbookAutopilotRunStatus.RUNNING, RunbookAutopilotRunStatus.COMPLETED, RunbookAutopilotRunStatus.PAUSED_FOR_APPROVAL, RunbookAutopilotRunStatus.BLOCKED])
+
+    def test_retry_failed_step_endpoint(self):
+        runbook = self._create_runbook('queue_pressure_relief')
+        run = self.client.post(reverse('runbook_engine:run-autopilot', args=[runbook['id']]), data='{}', content_type='application/json').json()
+        step_id = runbook['steps'][0]['id']
+        retry_res = self.client.post(
+            reverse('runbook_engine:autopilot-retry-step', args=[run['id'], step_id]),
+            data={'reason': 'manual retry from test'},
+            content_type='application/json',
+        )
+        self.assertEqual(retry_res.status_code, 200)
+
+    def test_autopilot_endpoints(self):
+        runbook = self._create_runbook('degraded_mode_recovery')
+        run = self.client.post(reverse('runbook_engine:run-autopilot', args=[runbook['id']]), data='{}', content_type='application/json').json()
+        urls = [
+            reverse('runbook_engine:autopilot-runs'),
+            reverse('runbook_engine:autopilot-run-detail', args=[run['id']]),
+            reverse('runbook_engine:autopilot-summary'),
+        ]
+        for url in urls:
+            res = self.client.get(url)
+            self.assertEqual(res.status_code, 200)

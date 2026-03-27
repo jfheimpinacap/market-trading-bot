@@ -1041,3 +1041,18 @@ Scope remains conservative:
 - no real-money paths
 - no real execution
 - no opaque autonomous planner
+
+## Runbooks supervised autopilot UX (new)
+
+`/runbooks` now includes supervised autopilot controls and audit surfaces:
+
+- `Run autopilot` action per runbook
+- autopilot run status badges (`RUNNING`, `PAUSED_FOR_APPROVAL`, `BLOCKED`, `COMPLETED`, `FAILED`, `ABORTED`)
+- approval checkpoints with explicit approve-and-resume flow
+- step-level outcomes (`AUTO_EXECUTED`, `APPROVAL_REQUIRED`, `MANUAL_ONLY`, `BLOCKED`, `FAILED`, `SKIPPED`)
+- retry controls for failed/blocked steps
+- empty/loading/error states for autopilot runs and summaries
+
+`/cockpit` now also surfaces autopilot paused/blocked posture and attention item routing back to `/runbooks`.
+
+Scope is unchanged: local-first, single-user, paper/sandbox only, manual-first supervision.

@@ -1,5 +1,13 @@
 import { requestJson } from './api/client';
-import type { CreateRunbookPayload, RunbookInstance, RunbookRecommendation, RunbookSummary, RunbookTemplate } from '../types/runbooks';
+import type {
+  CreateRunbookPayload,
+  RunbookAutopilotRun,
+  RunbookAutopilotSummary,
+  RunbookInstance,
+  RunbookRecommendation,
+  RunbookSummary,
+  RunbookTemplate,
+} from '../types/runbooks';
 
 export function getRunbookTemplates() {
   return requestJson<RunbookTemplate[]>('/api/runbooks/templates/');
@@ -26,6 +34,39 @@ export function runRunbookStep(runbookId: number, stepId: number) {
     method: 'POST',
     body: '{}',
   });
+}
+
+export function runRunbookAutopilot(runbookId: number) {
+  return requestJson<RunbookAutopilotRun>(`/api/runbooks/${runbookId}/run-autopilot/`, {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+export function getRunbookAutopilotRuns() {
+  return requestJson<RunbookAutopilotRun[]>('/api/runbooks/autopilot-runs/');
+}
+
+export function getRunbookAutopilotRun(id: number) {
+  return requestJson<RunbookAutopilotRun>(`/api/runbooks/autopilot-runs/${id}/`);
+}
+
+export function resumeRunbookAutopilot(id: number, checkpointId?: number, approved = true) {
+  return requestJson<RunbookAutopilotRun>(`/api/runbooks/autopilot-runs/${id}/resume/`, {
+    method: 'POST',
+    body: JSON.stringify({ checkpoint_id: checkpointId, approved }),
+  });
+}
+
+export function retryRunbookAutopilotStep(runId: number, stepId: number, reason = '') {
+  return requestJson<RunbookAutopilotRun>(`/api/runbooks/autopilot-runs/${runId}/retry-step/${stepId}/`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function getRunbookAutopilotSummary() {
+  return requestJson<RunbookAutopilotSummary>('/api/runbooks/autopilot-summary/');
 }
 
 export function completeRunbook(runbookId: number, note = '') {
