@@ -39,6 +39,15 @@ export type ReadinessAssessmentRun = {
     critical_blockers?: ReadinessGateResult[];
     warnings?: ReadinessGateResult[];
     recommendations?: string[];
+    execution_impact_summary?: {
+      execution_aware_runs: number;
+      avg_fill_rate: number;
+      avg_no_fill_rate: number;
+      avg_execution_drag: number;
+      avg_execution_realism_score: number;
+      readiness_penalty: number;
+      summary: string;
+    };
   };
   created_at: string;
   updated_at: string;

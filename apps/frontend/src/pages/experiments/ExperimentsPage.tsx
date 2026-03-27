@@ -40,6 +40,8 @@ const defaultForm: RunExperimentPayload = {
   active_only: true,
   use_allocation: true,
   stop_on_error: false,
+  execution_mode: 'naive',
+  execution_profile: 'balanced_paper',
 };
 
 export function ExperimentsPage() {
@@ -180,6 +182,21 @@ export function ExperimentsPage() {
                   Related continuous session ID (optional)
                   <input type="number" onChange={(event) => setForm((prev) => ({ ...prev, related_continuous_session_id: event.target.value ? Number(event.target.value) : undefined }))} />
                 </label>
+                <label>
+                  Execution mode
+                  <select value={form.execution_mode} onChange={(event) => setForm((prev) => ({ ...prev, execution_mode: event.target.value as RunExperimentPayload['execution_mode'] }))}>
+                    <option value="naive">naive</option>
+                    <option value="execution_aware">execution_aware</option>
+                  </select>
+                </label>
+                <label>
+                  Execution profile
+                  <select value={form.execution_profile} onChange={(event) => setForm((prev) => ({ ...prev, execution_profile: event.target.value as RunExperimentPayload['execution_profile'] }))}>
+                    <option value="optimistic_paper">optimistic_paper</option>
+                    <option value="balanced_paper">balanced_paper</option>
+                    <option value="conservative_paper">conservative_paper</option>
+                  </select>
+                </label>
               </div>
               <div className="button-row" style={{ marginTop: '1rem' }}>
                 <button type="button" className="primary-button" disabled={isRunning || !form.strategy_profile_id} onClick={() => void runSelectedExperiment()}>
@@ -259,6 +276,15 @@ export function ExperimentsPage() {
                       <ul>
                         {comparison.interpretation.map((item) => <li key={item}>{item}</li>)}
                       </ul>
+                      {comparison.execution_comparison ? (
+                        <div className="system-metadata-grid">
+                          <div><strong>Naive PnL:</strong> {comparison.execution_comparison.naive_total_pnl}</div>
+                          <div><strong>Aware PnL:</strong> {comparison.execution_comparison.aware_total_pnl}</div>
+                          <div><strong>Execution drag:</strong> {comparison.execution_comparison.execution_drag}</div>
+                          <div><strong>Fill rate delta:</strong> {comparison.execution_comparison.fill_rate_delta}</div>
+                          <div><strong>No-fill delta:</strong> {comparison.execution_comparison.no_fill_rate_delta}</div>
+                        </div>
+                      ) : null}
                     </>
                   ) : null}
                 </>

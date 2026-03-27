@@ -107,3 +107,32 @@ class ExperimentLabTests(TestCase):
         summary = self.client.get(reverse('experiment_lab:summary'))
         self.assertEqual(summary.status_code, 200)
         self.assertIn('recent_runs', summary.json())
+
+    def test_comparison_includes_execution_aware_delta(self):
+        self._seed_replay_snapshots()
+        profile = StrategyProfile.objects.get(slug='balanced')
+        now = timezone.now()
+        base_payload = {
+            'strategy_profile_id': profile.id,
+            'run_type': 'replay',
+            'provider_scope': 'kalshi',
+            'start_timestamp': (now - timedelta(hours=2)).isoformat(),
+            'end_timestamp': now.isoformat(),
+        }
+        left = self.client.post(
+            reverse('experiment_lab:run'),
+            {**base_payload, 'execution_mode': 'naive'},
+            format='json',
+        ).json()
+        right = self.client.post(
+            reverse('experiment_lab:run'),
+            {**base_payload, 'execution_mode': 'execution_aware', 'execution_profile': 'balanced_paper'},
+            format='json',
+        ).json()
+        comparison = self.client.get(
+            reverse('experiment_lab:comparison'),
+            {'left_run_id': left['id'], 'right_run_id': right['id']},
+        )
+        self.assertEqual(comparison.status_code, 200)
+        payload = comparison.json()
+        self.assertIn('execution_comparison', payload)

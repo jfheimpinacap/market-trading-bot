@@ -11,6 +11,7 @@ from apps.proposal_engine.models import TradeProposal
 from apps.safety_guard.models import SafetyEvent, SafetyEventType
 from apps.semi_auto_demo.models import PendingApproval, PendingApprovalStatus, SemiAutoRun
 
+from .execution_metrics import build_execution_metrics, merge_execution_pnl
 from .metrics import build_guidance, safe_rate
 
 
@@ -118,6 +119,10 @@ def build_metrics_for_run(run: EvaluationRun) -> EvaluationMetricSet:
         'percent_auto_approved': safe_rate(auto_executed_count, auto_executed_count + manual_approved_count),
         'percent_manual_approved': safe_rate(manual_approved_count, auto_executed_count + manual_approved_count),
     }
+    execution_metrics = merge_execution_pnl(
+        total_pnl=metrics['total_pnl'],
+        execution_metrics=build_execution_metrics(started_at=started_at, finished_at=finished_at),
+    )
 
     guidance = build_guidance(metrics)
     run.market_scope = _resolve_market_scope(run)
@@ -127,7 +132,11 @@ def build_metrics_for_run(run: EvaluationRun) -> EvaluationMetricSet:
         f"block rate {metrics['block_rate']}, favorable reviews {metrics['favorable_review_rate']}."
     )
     run.guidance = guidance
-    run.save(update_fields=['market_scope', 'status', 'summary', 'guidance', 'updated_at'])
+    run.metadata = {
+        **(run.metadata or {}),
+        'execution_adjusted_snapshot': execution_metrics,
+    }
+    run.save(update_fields=['market_scope', 'status', 'summary', 'guidance', 'metadata', 'updated_at'])
 
     metric_set, _ = EvaluationMetricSet.objects.update_or_create(run=run, defaults=metrics)
     return metric_set

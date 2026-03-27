@@ -20,6 +20,8 @@ const defaultForm: RunReplayPayload = {
   auto_execute_allowed: true,
   treat_approval_required_as_skip: true,
   stop_on_error: false,
+  execution_mode: 'naive',
+  execution_profile: 'balanced_paper',
 };
 
 function tone(status: string) {
@@ -80,6 +82,7 @@ export function ReplayPage() {
     if (!lastRun) return '—';
     return `${new Date(lastRun.replay_start_at).toLocaleString()} → ${new Date(lastRun.replay_end_at).toLocaleString()}`;
   }, [lastRun]);
+  const latestImpact = lastRun?.details?.execution_impact_summary;
 
   return (
     <div className="page-stack">
@@ -98,6 +101,8 @@ export function ReplayPage() {
             <label>Start <input type="datetime-local" onChange={(e) => setForm((prev) => ({ ...prev, start_timestamp: new Date(e.target.value).toISOString() }))} /></label>
             <label>End <input type="datetime-local" onChange={(e) => setForm((prev) => ({ ...prev, end_timestamp: new Date(e.target.value).toISOString() }))} /></label>
             <label>Market limit <input type="number" value={form.market_limit} onChange={(e) => setForm((prev) => ({ ...prev, market_limit: Number(e.target.value) }))} /></label>
+            <label>Execution mode <select value={form.execution_mode} onChange={(e) => setForm((prev) => ({ ...prev, execution_mode: e.target.value as RunReplayPayload['execution_mode'] }))}><option value="naive">naive</option><option value="execution_aware">execution_aware</option></select></label>
+            <label>Execution profile <select value={form.execution_profile} onChange={(e) => setForm((prev) => ({ ...prev, execution_profile: e.target.value as RunReplayPayload['execution_profile'] }))}><option value="optimistic_paper">optimistic_paper</option><option value="balanced_paper">balanced_paper</option><option value="conservative_paper">conservative_paper</option></select></label>
           </div>
           <div className="button-row" style={{ marginTop: '1rem' }}>
             <button type="button" className="primary-button" disabled={busy} onClick={() => void submitReplay()}>{busy ? 'Running replay…' : 'Execute replay'}</button>
@@ -118,7 +123,21 @@ export function ReplayPage() {
                 <div><strong>Blocked:</strong> {lastRun.blocked_count}</div>
                 <div><strong>Total PnL:</strong> {money(lastRun.total_pnl)}</div>
                 <div><strong>Ending equity:</strong> {money(lastRun.ending_equity)}</div>
+                <div><strong>Mode:</strong> {lastRun.details?.execution_mode ?? 'naive'}</div>
+                <div><strong>Profile:</strong> {lastRun.details?.execution_profile ?? '—'}</div>
               </div>
+              {lastRun.details?.execution_mode === 'execution_aware' ? (
+                <div className="system-metadata-grid" style={{ marginTop: '1rem' }}>
+                  <div><strong>Fill rate:</strong> {((latestImpact?.fill_rate ?? 0) * 100).toFixed(2)}%</div>
+                  <div><strong>No-fill rate:</strong> {((latestImpact?.no_fill_rate ?? 0) * 100).toFixed(2)}%</div>
+                  <div><strong>Partial-fill rate:</strong> {((latestImpact?.partial_fill_rate ?? 0) * 100).toFixed(2)}%</div>
+                  <div><strong>Avg slippage:</strong> {latestImpact?.avg_slippage_bps ?? 0} bps</div>
+                  <div><strong>Execution-adjusted PnL:</strong> {money(latestImpact?.execution_adjusted_pnl)}</div>
+                  <div><strong>Execution drag:</strong> {money(latestImpact?.execution_drag)}</div>
+                </div>
+              ) : (
+                <p style={{ marginTop: '1rem' }}>Run replay with execution-aware mode to measure fill realism.</p>
+              )}
             </SectionCard>
 
             <SectionCard eyebrow="Recent replay runs" title="Run history" description="Auditable replay runs for side-by-side checks with evaluation metrics.">

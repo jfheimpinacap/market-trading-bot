@@ -18,7 +18,23 @@ export type ReplayRun = {
   total_pnl: string;
   ending_equity: string;
   summary: string;
-  details: Record<string, unknown>;
+  details: {
+    execution_mode?: 'naive' | 'execution_aware';
+    execution_profile?: 'optimistic_paper' | 'balanced_paper' | 'conservative_paper' | null;
+    execution_impact_summary?: {
+      fill_rate: number;
+      partial_fill_rate: number;
+      no_fill_rate: number;
+      avg_slippage_bps: number;
+      execution_adjusted_pnl: string;
+      execution_drag: string;
+      execution_realism_score: number;
+      execution_quality_bucket: string;
+      cancel_rate: number;
+      order_expire_rate: number;
+    };
+    [key: string]: unknown;
+  };
   paper_account: number | null;
   created_at: string;
   updated_at: string;
@@ -47,6 +63,10 @@ export type ReplaySummary = {
   recent_runs: ReplayRun[];
   total_runs: number;
   successful_runs: number;
+  execution_modes?: {
+    naive_runs: number;
+    execution_aware_runs: number;
+  };
 };
 
 export type RunReplayPayload = {
@@ -62,4 +82,6 @@ export type RunReplayPayload = {
   treat_approval_required_as_skip: boolean;
   snapshot_sampling_interval?: number;
   stop_on_error: boolean;
+  execution_mode?: 'naive' | 'execution_aware';
+  execution_profile?: 'optimistic_paper' | 'balanced_paper' | 'conservative_paper';
 };

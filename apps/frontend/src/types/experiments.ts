@@ -43,6 +43,8 @@ export type RunExperimentPayload = {
   active_only?: boolean;
   use_allocation?: boolean;
   stop_on_error?: boolean;
+  execution_mode?: 'naive' | 'execution_aware';
+  execution_profile?: 'optimistic_paper' | 'balanced_paper' | 'conservative_paper';
 };
 
 export type ExperimentComparison = {
@@ -50,6 +52,15 @@ export type ExperimentComparison = {
   right_run: { id: number; profile: string; run_type: ExperimentRunType; metrics: Record<string, unknown> };
   delta: Record<string, string>;
   interpretation: string[];
+  execution_comparison?: {
+    naive_mode: string;
+    aware_mode: string;
+    naive_total_pnl: string;
+    aware_total_pnl: string;
+    execution_drag: string;
+    fill_rate_delta: string;
+    no_fill_rate_delta: string;
+  };
 };
 
 export type ExperimentSummary = {

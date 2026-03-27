@@ -6,6 +6,7 @@ from apps.evaluation_lab.models import EvaluationMetricSet, EvaluationRun
 from apps.experiment_lab.models import ExperimentRun
 from apps.operator_queue.models import OperatorQueueItem
 from apps.readiness_lab.models import ReadinessAssessmentRun, ReadinessStatus
+from apps.readiness_lab.services.execution_readiness import summarize_execution_realism
 from apps.readiness_lab.services.gates import evaluate_gates
 from apps.readiness_lab.services.recommendations import build_recommendations
 from apps.replay_lab.models import ReplayRun
@@ -54,6 +55,7 @@ def _collect_metrics() -> dict:
     experiment_consistency_rate = (consistency_hits / consistency_candidates) if consistency_candidates else 0.0
 
     safety_event_rate = (safety_events_total / evaluation_runs_count) if evaluation_runs_count else 1.0
+    execution_realism = summarize_execution_realism()
 
     return {
         'evaluation_runs_count': evaluation_runs_count,
@@ -68,6 +70,12 @@ def _collect_metrics() -> dict:
         'operator_intervention_rate': operator_intervention_rate,
         'real_market_ops_coverage': real_market_ops_coverage,
         'experiment_consistency_rate': experiment_consistency_rate,
+        'execution_realism_score': execution_realism['avg_execution_realism_score'],
+        'execution_no_fill_rate': execution_realism['avg_no_fill_rate'],
+        'execution_drag_avg': execution_realism['avg_execution_drag'],
+        'execution_aware_replay_runs': execution_realism['execution_aware_runs'],
+        'execution_readiness_penalty': execution_realism['readiness_penalty'],
+        'execution_impact_summary': execution_realism,
     }
 
 
@@ -95,6 +103,7 @@ def run_readiness_assessment(profile) -> ReadinessAssessmentRun:
     )
 
     score = pass_count / len(gate_results) if gate_results else 0.0
+    score = max(0.0, score - metrics.get('execution_readiness_penalty', 0.0))
 
     summary = f'{status_value}: {pass_count}/{len(gate_results)} gates passed.'
     rationale = ' | '.join([f"{gate.gate}: {gate.actual} {gate.comparator} {gate.expected}" for gate in failed[:4]])
@@ -104,6 +113,7 @@ def run_readiness_assessment(profile) -> ReadinessAssessmentRun:
         'critical_blockers': [gate.__dict__ for gate in critical_failed],
         'warnings': [gate.__dict__ for gate in warning_failed],
         'recommendations': recommendations,
+        'execution_impact_summary': metrics.get('execution_impact_summary', {}),
     }
 
     return ReadinessAssessmentRun.objects.create(

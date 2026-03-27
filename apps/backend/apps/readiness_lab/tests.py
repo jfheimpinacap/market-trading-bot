@@ -79,3 +79,11 @@ class ReadinessLabTests(TestCase):
         detail = self.client.get(reverse('readiness_lab:run-detail', kwargs={'pk': run_id}))
         self.assertEqual(detail.status_code, 200)
         self.assertEqual(detail.json()['id'], run_id)
+
+    def test_readiness_includes_execution_impact_summary(self):
+        profile = ReadinessProfile.objects.get(slug='readiness-balanced')
+        response = self.client.post(reverse('readiness_lab:assess'), {'readiness_profile_id': profile.id}, format='json')
+        self.assertEqual(response.status_code, 201)
+        execution_summary = response.json().get('details', {}).get('execution_impact_summary', {})
+        self.assertIn('execution_aware_runs', execution_summary)
+        self.assertIn('summary', execution_summary)

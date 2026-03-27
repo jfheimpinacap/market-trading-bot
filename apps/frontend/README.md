@@ -218,6 +218,25 @@ Query params de markets usados por frontend (sin cliente HTTP paralelo):
 - `GET /api/paper/trades/`
 - `GET /api/reviews/`
 
+## Execution-aware UX (replay / evaluation / experiments / readiness)
+
+Se agregó una capa visual para execution realism sin crear rutas gigantes nuevas:
+
+- `/replay`:
+  - selector `execution_mode` (`naive` vs `execution_aware`)
+  - selector `execution_profile` (`optimistic_paper`, `balanced_paper`, `conservative_paper`)
+  - métricas de fill/no-fill/partial/slippage y execution drag cuando hay evidencia
+  - empty state explícito: “Run replay with execution-aware mode to measure fill realism.”
+- `/evaluation`:
+  - bloque técnico “Execution-aware impact” con métricas ajustadas por ejecución
+- `/experiments`:
+  - permite lanzar runs con execution mode/profile
+  - comparación muestra deltas naive vs aware cuando aplica
+- `/readiness`:
+  - bloque “Execution realism impact” mostrando penalización de readiness por calidad de ejecución
+
+Todo se mantiene desktop-first, sobrio, auditable, local-first y paper/demo only.
+
 ### Proposals
 - `GET /api/proposals/`
 - `GET /api/proposals/<id>/`
