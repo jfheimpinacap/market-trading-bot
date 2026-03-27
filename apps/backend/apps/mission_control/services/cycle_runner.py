@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from django.utils import timezone
 
 from apps.learning_memory.services import run_learning_rebuild
+from apps.champion_challenger.services import run_shadow_benchmark
 from apps.execution_simulator.services import run_execution_lifecycle
 from apps.mission_control.models import (
     MissionControlCycle,
@@ -171,6 +172,13 @@ def run_mission_control_cycle(*, session: MissionControlSession, settings: dict)
 
     if _should_run(cycle.cycle_number, settings.get('run_learning_rebuild_every_n_cycles')):
         _record_step(cycle, step_type='learning_rebuild', fn=lambda: run_learning_rebuild(triggered_from='automation'))
+
+    if _should_run(cycle.cycle_number, settings.get('run_shadow_benchmark_every_n_cycles')):
+        _record_step(
+            cycle,
+            step_type='champion_challenger_shadow_benchmark',
+            fn=lambda: run_shadow_benchmark(payload={'lookback_hours': settings.get('shadow_benchmark_lookback_hours', 24)}),
+        )
 
     cycle.steps_run_count = cycle.steps.count()
     any_failed = cycle.steps.filter(status=MissionControlStepStatus.FAILED).exists()

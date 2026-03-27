@@ -90,7 +90,7 @@ export function ProfileManagerPage() {
         eyebrow="Adaptive profile manager"
         title="/profile-manager"
         description="Auditable meta-governance layer: classifies operational regime and coordinates module profiles for paper/demo only. No real-money execution."
-        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/portfolio-governor')}>Open Portfolio Governor</button><button className="secondary-button" type="button" onClick={() => navigate('/mission-control')}>Open Mission Control</button><button className="secondary-button" type="button" onClick={() => navigate('/runtime')}>Open Runtime</button><button className="secondary-button" type="button" onClick={() => navigate('/opportunities')}>Open Opportunities</button></div>}
+        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/portfolio-governor')}>Open Portfolio Governor</button><button className="secondary-button" type="button" onClick={() => navigate('/mission-control')}>Open Mission Control</button><button className="secondary-button" type="button" onClick={() => navigate('/runtime')}>Open Runtime</button><button className="secondary-button" type="button" onClick={() => navigate('/opportunities')}>Open Opportunities</button><button className="secondary-button" type="button" onClick={() => navigate('/champion-challenger')}>Open Champion Challenger</button></div>}
       />
 
       <SectionCard eyebrow="Governance controls" title="Run profile governance" description="Evaluate state, classify regime, and emit profile recommendation/application decision.">

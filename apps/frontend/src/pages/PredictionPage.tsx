@@ -238,6 +238,7 @@ export function PredictionPage() {
             <button type="button" className="secondary-button" onClick={() => navigate('/proposals')}>Open Proposals</button>
             <button type="button" className="secondary-button" onClick={() => navigate('/agents')}>Open Agents</button>
             <button type="button" className="secondary-button" onClick={() => navigate('/risk-agent')}>Open Risk Agent</button>
+            <button type="button" className="secondary-button" onClick={() => navigate('/champion-challenger')}>Open Champion Challenger</button>
           </div>
         )}
       />
