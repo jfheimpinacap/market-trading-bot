@@ -990,3 +990,19 @@ The platform now includes a formal `chaos_lab` layer to actively validate resili
 
 Scope boundaries remain unchanged: no real money, no real execution, no distributed chaos orchestration.
 
+
+### Operational certification board / paper go-live gate (new)
+
+The platform now includes a formal `certification_board` layer for **paper-only** operational certification.
+
+What it adds:
+- consolidated evidence snapshot across readiness, chaos/resilience, incidents, champion/challenger, promotion, rollout, runtime/safety, profile and portfolio governance, and execution-aware evaluation
+- explicit certification levels and recommendation codes
+- auditable operating envelope output (autonomy limits, entry/sizing caps, profile constraints)
+- manual-first run/apply workflow with clear logs
+
+What it explicitly does not add:
+- real money
+- real order execution
+- automatic opaque go-live
+- auto-promotion to real capital

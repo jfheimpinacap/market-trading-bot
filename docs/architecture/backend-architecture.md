@@ -922,3 +922,20 @@ Integration approach:
 - validate reaction of `mission_control`, `rollout_manager`, alerts, notifications, and queue systems
 - keep paper/demo-only boundaries and avoid real execution paths
 
+
+## Certification board architecture (paper-only)
+
+New app: `apps.certification_board`.
+
+Service split:
+- `services/evidence.py`: consolidates multi-module operational evidence into `CertificationEvidenceSnapshot`
+- `services/recommendation.py`: conservative rules to derive level + recommendation + blockers + remediation
+- `services/envelope.py`: translates certification into explicit `OperatingEnvelope`
+- `services/review.py`: orchestrates run creation and decision logs
+- `services/apply.py`: optional manual safe apply (conservative runtime mode enforcement only)
+
+Design goals:
+- wrap readiness with resilience + incidents + rollout/promotion + execution realism
+- avoid logic in views
+- keep full audit trail
+- preserve manual-first paper-only boundaries

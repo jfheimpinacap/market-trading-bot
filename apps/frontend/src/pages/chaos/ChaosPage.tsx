@@ -79,7 +79,7 @@ export function ChaosPage() {
         eyebrow="Chaos lab / resilience benchmark"
         title="/chaos"
         description="Controlled fault injection and resilience validation for paper/demo-only operations. This layer is auditable, reversible, and never executes real money."
-        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/incidents')}>Open Incidents</button><button className="secondary-button" type="button" onClick={() => navigate('/mission-control')}>Open Mission Control</button><button className="secondary-button" type="button" onClick={() => navigate('/runtime')}>Open Runtime</button><button className="secondary-button" type="button" onClick={() => navigate('/rollout')}>Open Rollout</button></div>}
+        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/incidents')}>Open Incidents</button><button className="secondary-button" type="button" onClick={() => navigate('/mission-control')}>Open Mission Control</button><button className="secondary-button" type="button" onClick={() => navigate('/runtime')}>Open Runtime</button><button className="secondary-button" type="button" onClick={() => navigate('/rollout')}>Open Rollout</button><button type="button" className="secondary-button" onClick={() => navigate('/certification')}>Open Certification</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
