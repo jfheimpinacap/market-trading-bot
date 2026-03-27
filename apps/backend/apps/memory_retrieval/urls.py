@@ -1,8 +1,11 @@
 from django.urls import path
 
 from apps.memory_retrieval.views import (
+    AgentPrecedentUseDetailView,
+    AgentPrecedentUseListView,
     MemoryDocumentListView,
     MemoryIndexView,
+    MemoryInfluenceSummaryView,
     MemoryPrecedentSummaryView,
     MemoryRetrievalRunDetailView,
     MemoryRetrievalRunListView,
@@ -20,4 +23,7 @@ urlpatterns = [
     path('retrieval-runs/<int:pk>/', MemoryRetrievalRunDetailView.as_view(), name='retrieval-run-detail'),
     path('summary/', MemorySummaryView.as_view(), name='summary'),
     path('precedent-summary/', MemoryPrecedentSummaryView.as_view(), name='precedent-summary'),
+    path('precedent-uses/', AgentPrecedentUseListView.as_view(), name='precedent-uses'),
+    path('precedent-uses/<int:pk>/', AgentPrecedentUseDetailView.as_view(), name='precedent-use-detail'),
+    path('influence-summary/', MemoryInfluenceSummaryView.as_view(), name='influence-summary'),
 ]

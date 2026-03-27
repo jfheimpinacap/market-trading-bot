@@ -27,6 +27,13 @@ class MemoryQueryType(models.TextChoices):
     MANUAL = 'manual', 'Manual'
 
 
+class PrecedentInfluenceMode(models.TextChoices):
+    CONTEXT_ONLY = 'context_only', 'Context only'
+    CAUTION_BOOST = 'caution_boost', 'Caution boost'
+    CONFIDENCE_ADJUST = 'confidence_adjust', 'Confidence adjust'
+    RATIONALE_ONLY = 'rationale_only', 'Rationale only'
+
+
 class MemoryDocument(TimeStampedModel):
     document_type = models.CharField(max_length=48, choices=MemoryDocumentType.choices)
     source_app = models.CharField(max_length=64)
@@ -73,4 +80,21 @@ class RetrievedPrecedent(TimeStampedModel):
         ordering = ['rank', 'id']
         constraints = [
             models.UniqueConstraint(fields=['retrieval_run', 'rank'], name='memory_precedent_rank_unique')
+        ]
+
+
+class AgentPrecedentUse(TimeStampedModel):
+    agent_name = models.CharField(max_length=64)
+    source_app = models.CharField(max_length=64)
+    source_object_id = models.CharField(max_length=128)
+    retrieval_run = models.ForeignKey(MemoryRetrievalRun, on_delete=models.PROTECT, related_name='agent_uses')
+    precedent_count = models.PositiveIntegerField(default=0)
+    influence_mode = models.CharField(max_length=32, choices=PrecedentInfluenceMode.choices, default=PrecedentInfluenceMode.CONTEXT_ONLY)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['agent_name', '-created_at']),
+            models.Index(fields=['source_app', '-created_at']),
         ]

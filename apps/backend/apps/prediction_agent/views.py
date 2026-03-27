@@ -14,7 +14,7 @@ from apps.prediction_agent.services.features import build_prediction_features
 from apps.prediction_agent.services.profiles import ensure_default_prediction_profiles
 from apps.prediction_agent.services.scoring import score_market_prediction
 from apps.memory_retrieval.models import MemoryQueryType
-from apps.memory_retrieval.services import retrieve_precedents
+from apps.memory_retrieval.services import run_assist
 
 
 class PredictionProfileListView(generics.ListAPIView):
@@ -121,10 +121,19 @@ class PredictionPrecedentAssistView(APIView):
         query_text = (request.data or {}).get('query_text')
         if not query_text:
             return Response({'detail': 'query_text is required.'}, status=status.HTTP_400_BAD_REQUEST)
-        run = retrieve_precedents(
+        run = run_assist(
             query_text=query_text,
             query_type=MemoryQueryType.PREDICTION,
             context_metadata={'market_id': (request.data or {}).get('market_id'), 'source': 'prediction_agent'},
             limit=min(int((request.data or {}).get('limit', 6)), 12),
         )
-        return Response({'retrieval_run_id': run.id, 'result_count': run.result_count}, status=status.HTTP_200_OK)
+        return Response(
+            {
+                'retrieval_run_id': run.retrieval_run.id,
+                'result_count': run.retrieval_run.result_count,
+                'influence_mode': run.influence_mode,
+                'precedent_confidence': run.precedent_confidence,
+                'summary': run.summary,
+            },
+            status=status.HTTP_200_OK,
+        )

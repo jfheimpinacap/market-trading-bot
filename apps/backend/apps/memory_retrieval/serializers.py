@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.memory_retrieval.models import MemoryDocument, MemoryQueryType, MemoryRetrievalRun, RetrievedPrecedent
+from apps.memory_retrieval.models import AgentPrecedentUse, MemoryDocument, MemoryQueryType, MemoryRetrievalRun, RetrievedPrecedent
 from apps.memory_retrieval.services.precedents import build_precedent_summary
 
 
@@ -91,6 +91,35 @@ class MemoryPrecedentSummarySerializer(serializers.Serializer):
 class MemoryRunWithSummarySerializer(serializers.Serializer):
     run = MemoryRetrievalRunSerializer()
     summary = MemoryPrecedentSummarySerializer()
+
+
+class AgentPrecedentUseSerializer(serializers.ModelSerializer):
+    retrieval_run = MemoryRetrievalRunSerializer(read_only=True)
+
+    class Meta:
+        model = AgentPrecedentUse
+        fields = (
+            'id',
+            'agent_name',
+            'source_app',
+            'source_object_id',
+            'retrieval_run',
+            'precedent_count',
+            'influence_mode',
+            'metadata',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+
+class MemoryInfluenceSummarySerializer(serializers.Serializer):
+    retrieval_run_id = serializers.IntegerField()
+    influence_mode = serializers.CharField()
+    precedent_confidence = serializers.FloatField()
+    caution_flags = serializers.ListField(child=serializers.CharField())
+    summary = MemoryPrecedentSummarySerializer()
+    agent_use_id = serializers.IntegerField(allow_null=True)
 
 
 def serialize_run_with_summary(run: MemoryRetrievalRun) -> dict:

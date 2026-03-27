@@ -10,6 +10,18 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 - **Research scan:** `research_agent` with RSS + Reddit + optional X/Twitter adapter ingestion, local LLM structured narrative analysis, social normalization, market linking, and mixed-source shortlist generation.
 - **Infrastructure:** Docker Compose services for PostgreSQL and Redis.
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
+- **Precedent-aware decision support (new):** research, prediction, risk, signal-fusion, and postmortem now consume semantic precedents automatically in internal flows with conservative influence and explicit audit trails (`AgentPrecedentUse`).
+
+### Precedent-aware agents (new)
+
+- Memory is now used as **decision support**, not as an opaque planner.
+- Core sequence:
+  1) retrieval (`MemoryRetrievalRun` + `RetrievedPrecedent`)
+  2) precedent summary (`top similar cases`, `failure modes`, `lessons`)
+  3) conservative influence suggestion (`context_only`, `caution_boost`, `confidence_adjust`, `rationale_only`)
+  4) auditable use record (`AgentPrecedentUse`)
+- Influence is bounded: it can add caution/reduce confidence/rationale, but it does **not** replace core numeric policy/risk/safety gates.
+- Still local-first, single-user, and paper/demo only.
 
 ### Real data UX boundary (current)
 

@@ -201,6 +201,10 @@ export function PostmortemBoardPage() {
               <div><strong>Secondary modes:</strong> {latestConclusion.secondary_failure_modes.join(', ') || '—'}</div>
               <div style={{ gridColumn: '1 / -1' }}><strong>Lesson learned:</strong> {latestConclusion.lesson_learned}</div>
               <div style={{ gridColumn: '1 / -1' }}><strong>Recommended adjustments:</strong> {latestConclusion.recommended_adjustments.join(' | ') || '—'}</div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <strong>Similar prior cases:</strong>{' '}
+                {((runs.find((run) => run.id === selectedRunId)?.details?.precedent_context as any)?.similar_prior_failures ?? []).join(', ') || 'No strong precedents found for this case.'}
+              </div>
             </div>
           )}
         </SectionCard>

@@ -5,8 +5,8 @@ import { SectionCard } from '../components/SectionCard';
 import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
-import { getMemoryRetrievalRuns, getMemorySummary, runMemoryIndex, runMemoryRetrieval } from '../services/memory';
-import type { MemoryRetrievalRun, MemoryRunResponse, MemorySummary } from '../types/memory';
+import { getAgentPrecedentUses, getMemoryInfluenceSummary, getMemoryRetrievalRuns, getMemorySummary, runMemoryIndex, runMemoryRetrieval } from '../services/memory';
+import type { AgentPrecedentUse, MemoryInfluenceSummary, MemoryRetrievalRun, MemoryRunResponse, MemorySummary } from '../types/memory';
 
 const QUERY_TYPES = ['manual', 'research', 'prediction', 'risk', 'postmortem', 'lifecycle'];
 
@@ -25,6 +25,8 @@ function similarityTone(score: number): 'ready' | 'pending' | 'neutral' {
 export function MemoryPage() {
   const [summary, setSummary] = useState<MemorySummary | null>(null);
   const [runs, setRuns] = useState<MemoryRetrievalRun[]>([]);
+  const [uses, setUses] = useState<AgentPrecedentUse[]>([]);
+  const [influenceSummary, setInfluenceSummary] = useState<MemoryInfluenceSummary | null>(null);
   const [result, setResult] = useState<MemoryRunResponse | null>(null);
   const [queryText, setQueryText] = useState('Recent volatility with sizing pressure and weak follow-through.');
   const [queryType, setQueryType] = useState('manual');
@@ -37,9 +39,10 @@ export function MemoryPage() {
     setLoading(true);
     setError(null);
     try {
-      const [summaryRes, runsRes] = await Promise.all([getMemorySummary(), getMemoryRetrievalRuns()]);
+      const [summaryRes, runsRes, usesRes] = await Promise.all([getMemorySummary(), getMemoryRetrievalRuns(), getAgentPrecedentUses()]);
       setSummary(summaryRes);
       setRuns(runsRes);
+      setUses(usesRes);
       if (!result && summaryRes.last_retrieval_run) {
         setResult({ run: summaryRes.last_retrieval_run, summary: {
           retrieval_run_id: summaryRes.last_retrieval_run.id,
@@ -88,6 +91,8 @@ export function MemoryPage() {
     try {
       const runRes = await runMemoryRetrieval({ query_text: queryText.trim(), query_type: queryType, limit: 8 });
       setResult(runRes);
+      const influence = await getMemoryInfluenceSummary(queryText.trim(), queryType);
+      setInfluenceSummary(influence);
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Retrieval failed.');
@@ -187,6 +192,32 @@ export function MemoryPage() {
               </table>
             </div>
           )}
+        </SectionCard>
+        <SectionCard eyebrow="Audit trail" title="Recent precedent uses" description="Agent-level precedent-aware usage with conservative influence modes.">
+          {uses.length === 0 ? <EmptyState title="No precedent uses yet" description="Run research/prediction/risk/postmortem flows to capture precedent-aware decision traces." /> : (
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>ID</th><th>Agent</th><th>Source</th><th>Precedents</th><th>Influence</th><th>Created</th></tr></thead>
+                <tbody>
+                  {uses.slice(0, 20).map((use) => (
+                    <tr key={use.id}>
+                      <td>{use.id}</td>
+                      <td>{use.agent_name}</td>
+                      <td>{use.source_app}#{use.source_object_id}</td>
+                      <td>{use.precedent_count}</td>
+                      <td><StatusBadge tone={use.influence_mode === 'caution_boost' ? 'pending' : 'neutral'}>{use.influence_mode}</StatusBadge></td>
+                      <td>{formatDate(use.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {influenceSummary ? (
+            <p style={{ marginTop: '0.75rem' }}>
+              Latest influence summary: mode={influenceSummary.influence_mode}, confidence={influenceSummary.precedent_confidence.toFixed(3)}.
+            </p>
+          ) : null}
         </SectionCard>
       </DataStateWrapper>
     </div>

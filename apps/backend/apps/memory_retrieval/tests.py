@@ -5,8 +5,9 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.learning_memory.models import LearningMemoryEntry
-from apps.memory_retrieval.models import MemoryDocument, MemoryQueryType, MemoryRetrievalRun
+from apps.memory_retrieval.models import AgentPrecedentUse, MemoryDocument, MemoryQueryType, MemoryRetrievalRun
 from apps.memory_retrieval.services.indexing import run_indexing
+from apps.memory_retrieval.services.influence import record_agent_precedent_use, retrieve_with_influence
 from apps.memory_retrieval.services.precedents import build_precedent_summary
 from apps.memory_retrieval.services.retrieval import retrieve_precedents
 
@@ -86,3 +87,31 @@ class MemoryRetrievalTests(TestCase):
         self.assertEqual(self.client.get(reverse('memory_retrieval:retrieval-run-detail', kwargs={'pk': run_id})).status_code, 200)
         self.assertEqual(self.client.get(reverse('memory_retrieval:summary')).status_code, 200)
         self.assertEqual(self.client.get(f"{reverse('memory_retrieval:precedent-summary')}?run_id={run_id}").status_code, 200)
+
+    @patch('apps.memory_retrieval.services.retrieval.embed_text', return_value=[1.0, 0.0, 0.0])
+    def test_influence_summary_and_precedent_use_endpoints(self, _query_embed):
+        MemoryDocument.objects.create(
+            document_type='learning_note',
+            source_app='learning_memory',
+            source_object_id='222',
+            title='Caution precedent',
+            text_content='execution drag and no fill issues',
+            tags=['negative', 'failed'],
+            structured_summary={'primary_failure_mode': 'execution_drag', 'lesson': 'Apply smaller sizing.'},
+            embedding=[1.0, 0.0, 0.0],
+            embedding_model='mock',
+        )
+        influence = retrieve_with_influence(query_text='execution drag', query_type=MemoryQueryType.RISK)
+        use = record_agent_precedent_use(
+            agent_name='risk_agent',
+            source_app='risk_agent',
+            source_object_id='1',
+            influence=influence,
+            metadata={'test': True},
+        )
+        self.assertTrue(AgentPrecedentUse.objects.filter(id=use.id).exists())
+        self.assertEqual(self.client.get(reverse('memory_retrieval:precedent-uses')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('memory_retrieval:precedent-use-detail', kwargs={'pk': use.id})).status_code, 200)
+        influence_response = self.client.get(reverse('memory_retrieval:influence-summary'))
+        self.assertEqual(influence_response.status_code, 200)
+        self.assertIn('influence_mode', influence_response.json())

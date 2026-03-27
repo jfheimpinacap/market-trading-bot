@@ -9,6 +9,22 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 - Provide a provider-agnostic market domain for catalog, metadata, rule text, snapshot history, and local simulation work.
 - Make it easy to seed realistic demo data locally for admin and frontend development.
 - Make the demo dataset feel alive locally without real provider integrations, trading, or websockets.
+- Provide precedent-aware agent support via `memory_retrieval` with conservative and auditable influence on research/prediction/risk/signals/postmortem.
+
+## Precedent-aware backend layer (new)
+
+- Added `AgentPrecedentUse` for auditable agent-memory usage records.
+- Added `memory_retrieval/services/assist.py` and `memory_retrieval/services/influence.py` to separate:
+  - retrieval
+  - precedent summary
+  - influence suggestion
+  - usage persistence
+- New audit endpoints:
+  - `GET /api/memory/precedent-uses/`
+  - `GET /api/memory/precedent-uses/<id>/`
+  - `GET /api/memory/influence-summary/`
+- Existing assist endpoints for research/prediction/risk/postmortem now return influence metadata + summary (not only run IDs).
+- Mission control can optionally refresh memory index on cadence (`run_memory_index_refresh_every_n_cycles`) and cycle details now mark precedent-aware mode.
 
 ## Internal structure
 

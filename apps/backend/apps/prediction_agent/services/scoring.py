@@ -22,6 +22,7 @@ from apps.prediction_agent.services.calibration import (
     q4,
 )
 from apps.prediction_agent.services.features import build_prediction_features
+from apps.prediction_agent.services.precedent_enrichment import apply_prediction_precedents
 from apps.prediction_agent.services.profiles import get_prediction_profile
 from apps.prediction_training.services.dataset import FEATURE_COLUMNS
 from apps.prediction_training.services.registry import get_active_model_artifact, predict_probability
@@ -160,6 +161,19 @@ def score_market_prediction(*, market: Market, profile_slug: str | None = None, 
             'model_runtime': model_details,
         },
     )
+    adjusted_confidence, precedent_note, precedent_context = apply_prediction_precedents(
+        score=score,
+        system_probability=system_probability,
+        confidence=confidence,
+    )
+    score.confidence = max(profile.confidence_floor, min(profile.confidence_cap, adjusted_confidence))
+    score.confidence_level = confidence_level(score.confidence)
+    score.rationale = f'{score.rationale} Precedent context: {precedent_note}'
+    score.details = {
+        **(score.details or {}),
+        'precedent_context': precedent_context,
+    }
+    score.save(update_fields=['confidence', 'confidence_level', 'rationale', 'details', 'updated_at'])
 
     run.finished_at = timezone.now()
     run.markets_scored = 1

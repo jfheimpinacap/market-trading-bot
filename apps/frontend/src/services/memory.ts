@@ -1,5 +1,13 @@
 import { requestJson } from './api/client';
-import type { MemoryDocument, MemoryRetrievalRun, MemoryRunResponse, MemorySummary, MemoryPrecedentSummary } from '../types/memory';
+import type {
+  AgentPrecedentUse,
+  MemoryDocument,
+  MemoryInfluenceSummary,
+  MemoryPrecedentSummary,
+  MemoryRetrievalRun,
+  MemoryRunResponse,
+  MemorySummary,
+} from '../types/memory';
 
 export function runMemoryIndex(payload?: { sources?: string[]; force_reembed?: boolean }) {
   return requestJson<{ indexed_by_source: Record<string, number>; documents_total: number; embeddings_generated: number; force_reembed: boolean }>('/memory/index/', {
@@ -33,4 +41,18 @@ export function getMemorySummary() {
 
 export function getMemoryPrecedentSummary(runId?: number) {
   return requestJson<MemoryPrecedentSummary>(`/memory/precedent-summary/${runId ? `?run_id=${runId}` : ''}`);
+}
+
+export function getAgentPrecedentUses(agentName?: string) {
+  const qs = agentName ? `?agent_name=${agentName}` : '';
+  return requestJson<AgentPrecedentUse[]>(`/memory/precedent-uses/${qs}`);
+}
+
+export function getAgentPrecedentUse(id: number) {
+  return requestJson<AgentPrecedentUse>(`/memory/precedent-uses/${id}/`);
+}
+
+export function getMemoryInfluenceSummary(queryText?: string, queryType = 'manual') {
+  const qs = queryText ? `?query_text=${encodeURIComponent(queryText)}&query_type=${encodeURIComponent(queryType)}` : '';
+  return requestJson<MemoryInfluenceSummary>(`/memory/influence-summary/${qs}`);
 }

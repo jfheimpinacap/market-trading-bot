@@ -430,15 +430,30 @@ export function PredictionPage() {
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
-                <thead><tr><th>Market</th><th>Profile</th><th>Edge</th><th>Confidence</th><th>Created</th></tr></thead>
+                <thead><tr><th>Market</th><th>Profile</th><th>Edge</th><th>Confidence</th><th>Precedent context</th><th>Created</th></tr></thead>
                 <tbody>
                   {recentScores.map((score) => (
                     <tr key={score.id}>
+                      {(() => {
+                        const precedent = (score.details?.precedent_context ?? {}) as Record<string, unknown>;
+                        return (
+                          <>
                       <td><button type="button" className="link-button" onClick={() => navigate(`/markets/${score.market_slug}`)}>{score.market_title}</button></td>
                       <td>{score.profile_slug}</td>
                       <td><StatusBadge tone={edgeTone(score.edge_label)}>{fmtPct(score.edge)}</StatusBadge></td>
                       <td><StatusBadge tone={confidenceTone(score.confidence_level)}>{fmtPct(score.confidence)}</StatusBadge></td>
+                      <td>
+                        {precedent.precedent_aware ? (
+                          <div style={{ display: 'grid', gap: '0.25rem' }}>
+                            <StatusBadge tone="pending">CAUTION_FROM_HISTORY</StatusBadge>
+                            <small>{String(precedent.influence_mode ?? 'context_only')}</small>
+                          </div>
+                        ) : '—'}
+                      </td>
                       <td>{new Date(score.created_at).toLocaleString()}</td>
+                          </>
+                        );
+                      })()}
                     </tr>
                   ))}
                 </tbody>

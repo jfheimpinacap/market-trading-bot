@@ -91,3 +91,16 @@ export function getResearchCandidates() {
 export function getResearchSummary() {
   return requestJson<ResearchSummary>('/api/research/summary/');
 }
+
+export function runResearchPrecedentAssist(payload: { query_text: string; market_id?: number; limit?: number }) {
+  return requestJson<{
+    retrieval_run_id: number;
+    result_count: number;
+    influence_mode: string;
+    precedent_confidence: number;
+    summary: Record<string, unknown>;
+  }>('/api/research/precedent-assist/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}

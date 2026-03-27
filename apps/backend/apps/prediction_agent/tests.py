@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -6,6 +7,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.markets.models import Event, Market, MarketSnapshot, Provider
+from apps.memory_retrieval.models import MemoryDocument
 from apps.prediction_agent.models import PredictionScore
 from apps.prediction_agent.services.features import build_prediction_features
 from apps.prediction_agent.services.scoring import score_market_prediction
@@ -54,6 +56,17 @@ class PredictionAgentTests(TestCase):
             priority=Decimal('0.80'),
         )
         candidate.narrative_items.add(item)
+        MemoryDocument.objects.create(
+            document_type='prediction_score_snapshot',
+            source_app='prediction_agent',
+            source_object_id='seed-1',
+            title='Execution realism precedent',
+            text_content='similar edge degraded in execution realism',
+            tags=['negative'],
+            structured_summary={'primary_failure_mode': 'execution_drag'},
+            embedding=[1.0, 0.0, 0.0],
+            embedding_model='mock',
+        )
 
     def test_feature_construction_returns_expected_keys(self):
         result = build_prediction_features(market=self.market)
@@ -62,12 +75,14 @@ class PredictionAgentTests(TestCase):
         self.assertIn('narrative_confidence', result.snapshot)
         self.assertIn('divergence_narrative_vs_market', result.snapshot)
 
-    def test_scoring_market_creates_positive_or_negative_edge(self):
+    @patch('apps.memory_retrieval.services.retrieval.embed_text', return_value=[1.0, 0.0, 0.0])
+    def test_scoring_market_creates_positive_or_negative_edge(self, _retrieval_embed):
         scored = score_market_prediction(market=self.market, profile_slug='heuristic_baseline', triggered_by='test')
         self.assertIsNotNone(scored.score.id)
         self.assertIn(scored.score.confidence_level, ['low', 'medium', 'high'])
         self.assertTrue(scored.score.rationale)
         self.assertNotEqual(scored.score.system_probability, scored.score.market_probability)
+        self.assertIn('precedent_context', scored.score.details)
 
     def test_api_score_market_endpoint(self):
         response = self.client.post(

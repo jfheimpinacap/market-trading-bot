@@ -14,6 +14,7 @@ from apps.runtime_governor.models import RuntimeModeState
 from apps.safety_guard.models import SafetyPolicyConfig
 from apps.signals.models import OpportunitySignal, OpportunityStatus, ProposalGateDecision, SignalFusionRun, SignalRunStatus
 from apps.signals.services.gating import build_proposal_gate_decision
+from apps.signals.services.precedent_enrichment import apply_signal_precedents
 from apps.signals.services.profiles import get_profile
 from apps.signals.services.ranking import rank_opportunities
 
@@ -186,6 +187,22 @@ def run_signal_fusion(*, profile_slug: str | None = None, market_ids: list[int] 
                 'risk': {'risk_assessment_id': assessment.id if assessment else None, 'risk_sizing_id': sizing.id if sizing else None},
             },
         )
+        precedent_context = apply_signal_precedents(
+            opportunity_id=opportunity.id,
+            market_id=market.id,
+            market_title=market.title,
+            opportunity_score=opportunity.opportunity_score,
+            risk_level=risk_level,
+        )
+        opportunity.opportunity_score = _normalize_score_0_100(opportunity.opportunity_score + Decimal(str(precedent_context.get('score_adjustment') or '0.00')))
+        if precedent_context.get('status_override') and opportunity.opportunity_status != OpportunityStatus.BLOCKED:
+            opportunity.opportunity_status = precedent_context['status_override']
+        opportunity.rationale = f"{opportunity.rationale} Precedent context: {precedent_context.get('rationale_note')}"
+        opportunity.metadata = {
+            **(opportunity.metadata or {}),
+            'precedent_context': precedent_context,
+        }
+        opportunity.save(update_fields=['opportunity_score', 'opportunity_status', 'rationale', 'metadata', 'updated_at'])
 
         gate_payload = build_proposal_gate_decision(opportunity=opportunity, profile=profile)
         ProposalGateDecision.objects.create(opportunity=opportunity, **gate_payload)

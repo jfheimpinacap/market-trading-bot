@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -7,6 +8,7 @@ from rest_framework.test import APIClient
 from apps.agents.services.orchestrator import run_agent_pipeline
 from apps.markets.demo_data import seed_demo_markets
 from apps.markets.models import Market
+from apps.memory_retrieval.models import MemoryDocument
 from apps.paper_trading.services.execution import execute_paper_trade
 from apps.paper_trading.services.portfolio import ensure_demo_account
 from apps.prediction_agent.services.scoring import score_market_prediction
@@ -20,10 +22,23 @@ class RiskAgentServiceTests(TestCase):
         self.account, _ = ensure_demo_account()
         self.market = Market.objects.filter(is_active=True).order_by('id').first()
         self.prediction = score_market_prediction(market=self.market, triggered_by='risk_agent_tests').score
+        MemoryDocument.objects.create(
+            document_type='risk_assessment_snapshot',
+            source_app='risk_agent',
+            source_object_id='risk-1',
+            title='Adverse risk precedent',
+            text_content='similar risk setup ended in loss and review escalation',
+            tags=['negative', 'failed'],
+            structured_summary={'primary_failure_mode': 'oversizing_under_pressure'},
+            embedding=[1.0, 0.0, 0.0],
+            embedding_model='mock',
+        )
 
-    def test_assessment_and_sizing_basic(self):
+    @patch('apps.memory_retrieval.services.retrieval.embed_text', return_value=[1.0, 0.0, 0.0])
+    def test_assessment_and_sizing_basic(self, _retrieval_embed):
         assessment = run_risk_assessment(market=self.market, prediction_score=self.prediction)
         self.assertIn(assessment.risk_level, {RiskLevel.LOW, RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.BLOCKED})
+        self.assertIn('precedent_context', assessment.metadata)
         sizing = run_risk_sizing(risk_assessment=assessment, base_quantity=Decimal('10.0000'))
         self.assertGreaterEqual(sizing.adjusted_quantity, Decimal('0.0000'))
 

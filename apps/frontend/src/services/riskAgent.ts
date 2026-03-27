@@ -33,3 +33,16 @@ export function getRiskWatchEvents() {
 export function getRiskSummary() {
   return requestJson<RiskSummary>('/api/risk-agent/summary/');
 }
+
+export function runRiskPrecedentAssist(payload: { query_text: string; assessment_id?: number; limit?: number }) {
+  return requestJson<{
+    retrieval_run_id: number;
+    result_count: number;
+    influence_mode: string;
+    precedent_confidence: number;
+    summary: Record<string, unknown>;
+  }>('/api/risk-agent/precedent-assist/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}

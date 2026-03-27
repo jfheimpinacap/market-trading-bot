@@ -335,16 +335,32 @@ export function ResearchPage() {
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
-                <thead><tr><th>Market</th><th>Narrative direction</th><th>Source mix</th><th>Relation</th><th>Priority</th><th>Thesis</th></tr></thead>
+                <thead><tr><th>Market</th><th>Narrative direction</th><th>Source mix</th><th>Relation</th><th>Priority</th><th>Precedent</th><th>Thesis</th></tr></thead>
                 <tbody>
                   {candidates.map((candidate) => (
                     <tr key={candidate.id}>
+                      {(() => {
+                        const precedent = (candidate.metadata?.precedent_context ?? {}) as Record<string, unknown>;
+                        const warnings = (precedent.warnings as string[] | undefined) ?? [];
+                        return (
+                          <>
                       <td>{candidate.market_title}</td>
                       <td><StatusBadge tone={sentimentTone(candidate.sentiment_direction)}>{candidate.sentiment_direction}</StatusBadge></td>
                       <td><StatusBadge tone={sourceMixBadge(candidate.source_mix)}>{candidate.source_mix.toUpperCase()}</StatusBadge></td>
                       <td><StatusBadge tone={relationTone(candidate.relation)}>{candidate.relation}</StatusBadge></td>
                       <td>{candidate.priority}</td>
+                      <td>
+                        {precedent.precedent_aware ? (
+                          <div style={{ display: 'grid', gap: '0.25rem' }}>
+                            <StatusBadge tone="pending">PRECEDENT_AWARE</StatusBadge>
+                            <small>{warnings.join(', ') || 'No strong precedents found for this case.'}</small>
+                          </div>
+                        ) : '—'}
+                      </td>
                       <td>{candidate.short_thesis}</td>
+                          </>
+                        );
+                      })()}
                     </tr>
                   ))}
                 </tbody>

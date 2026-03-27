@@ -11,6 +11,20 @@ The backend is a local-first Django service inside the monorepo. Its current res
 - `apps/*/views.py` and `serializers.py`: DRF endpoint and payload boundaries.
 - `apps/*/management/commands/`: reusable Django management commands, including local seed and simulation workflows.
 
+## Precedent-aware decision support layer (new)
+
+- `apps.memory_retrieval` now includes an explicit integration sublayer:
+  - `services/assist.py`: query builders + standardized assist entrypoint
+  - `services/influence.py`: influence summary, conservative mode suggestion, and audit persistence
+- New model: `AgentPrecedentUse` (agent, source object, retrieval run, influence mode, metadata).
+- Integrated consumers:
+  - `research_agent.services.precedent_enrichment`
+  - `prediction_agent.services.precedent_enrichment`
+  - `risk_agent.services.precedent_enrichment`
+  - `signals.services.precedent_enrichment`
+  - `postmortem_agents.services.precedent_enrichment`
+- Architectural rule: precedent memory augments context/rationale and may apply bounded caution, but cannot replace numeric risk/policy/safety guardrails.
+
 ## Current backend app roles
 - `apps.common`: abstract timestamped models and shared technical helpers.
 - `apps.health`: lightweight environment-oriented health endpoint.
