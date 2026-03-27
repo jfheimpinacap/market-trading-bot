@@ -717,3 +717,18 @@ A new `/incidents` page is integrated into the same technical desktop-first UX l
 - links to `/mission-control`, `/runtime`, `/rollout`, `/alerts` for cross-module drilldown
 
 This is an orchestration and visibility layer; it does not add autonomous opaque decision logic in the frontend.
+
+## Chaos lab frontend integration (new)
+
+A new route `/chaos` adds resilience validation to the operator workspace using existing UI building blocks.
+
+Frontend integration points:
+- `services/chaos.ts` for API calls
+- `types/chaos.ts` for typed experiment/run/benchmark payloads
+- `pages/chaos/ChaosPage.tsx` for catalog, run controls, runs table, and benchmark cards
+
+UX intent:
+- keep design consistent with incidents/mission-control/rollout/runtime pages
+- make empty/loading/error states explicit
+- expose resilient outcomes even when no incident is created (valid observation)
+

@@ -106,6 +106,7 @@ LOCAL_APPS = [
     'apps.promotion_committee',
     'apps.rollout_manager',
     'apps.incident_commander',
+    'apps.chaos_lab',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

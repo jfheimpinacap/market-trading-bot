@@ -978,3 +978,15 @@ Boundary remains strict:
 - no real-money execution
 - no real order routing
 - no opaque full auto-switching
+
+### Chaos lab / fault injection / resilience benchmark (new)
+
+The platform now includes a formal `chaos_lab` layer to actively validate resilience in paper/demo mode:
+
+- controlled and reversible fault injection scenarios (`/api/chaos/experiments/`, `/api/chaos/run/`)
+- auditable run traces (`ChaosRun`, `ChaosObservation`)
+- resilience benchmark snapshots (`ResilienceBenchmark`) with detection/mitigation/recovery metrics and a simple transparent score
+- explicit integration with `incident_commander`, `mission_control`, `rollout_manager`, alerts, notifications, and operator queue
+
+Scope boundaries remain unchanged: no real money, no real execution, no distributed chaos orchestration.
+

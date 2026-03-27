@@ -854,3 +854,16 @@ Route `/incidents` provides a dedicated operational resilience view:
 - operator controls for detection, mitigation, and resolution
 
 This complements (not replaces) `/alerts`, `/runtime`, `/mission-control`, and `/rollout`.
+
+## Chaos Lab UI (new)
+
+The frontend now includes `/chaos`, a dedicated resilience workspace to run controlled fault-injection experiments and inspect resilience evidence.
+
+The page includes:
+- experiment catalog (target module, severity, description)
+- manual run controls
+- recent run table with status badges
+- benchmark panel for detection/mitigation/recovery plus degraded/rollback flags
+
+It is explicitly paper/demo only and links directly to `/incidents`, `/mission-control`, `/runtime`, and `/rollout`.
+

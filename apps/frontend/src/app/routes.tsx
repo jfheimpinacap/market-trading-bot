@@ -1,6 +1,7 @@
 import { AgentsPage } from '../pages/AgentsPage';
 import { AutomationPage } from '../pages/AutomationPage';
 import { AlertsPage } from '../pages/AlertsPage';
+import { ChaosPage } from '../pages/ChaosPage';
 import { IncidentsPage } from '../pages/IncidentsPage';
 import { NotificationsPage } from '../pages/NotificationsPage';
 import { DashboardPage } from '../pages/DashboardPage';
@@ -197,6 +198,13 @@ export const appRoutes: AppRoute[] = [
     path: '/evaluation',
     description: 'Benchmark and evaluation harness for autonomous paper/demo performance over time.',
     component: EvaluationPage,
+  },
+
+  {
+    label: 'Chaos Lab',
+    path: '/chaos',
+    description: 'Controlled fault injection and resilience benchmark for incident/degraded/rollback validation in paper/demo mode.',
+    component: ChaosPage,
   },
 
   {

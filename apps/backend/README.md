@@ -1505,3 +1505,25 @@ Responsibilities:
 - integrate with mission_control, rollout_manager, runtime_governor, safety_guard, operator_alerts, notification_center, and operator_queue
 
 Key rule: runtime/safety remain higher authority; incident commander can only degrade conservatively, never bypass safety guardrails.
+
+## Chaos lab / resilience validation (new)
+
+A new backend app, `apps.chaos_lab`, adds a formal resilience-validation layer on top of existing runtime safety systems.
+
+What it does:
+- seeds a baseline catalog of controlled experiments
+- runs fault injection in scoped/reversible mode
+- triggers existing detection/mitigation flows from `incident_commander`
+- records auditable observations + benchmark metrics
+- cleans injected artifacts after each run to avoid persistent corruption
+
+Key endpoints:
+- `GET /api/chaos/experiments/`
+- `POST /api/chaos/run/`
+- `GET /api/chaos/runs/`
+- `GET /api/chaos/runs/<id>/`
+- `GET /api/chaos/benchmarks/`
+- `GET /api/chaos/summary/`
+
+Out of scope (unchanged): real money, real execution, unrestricted destructive chaos, cluster orchestration, opaque planner control.
+

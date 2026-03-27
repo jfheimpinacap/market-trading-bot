@@ -899,3 +899,26 @@ A new backend module `apps/rollout_manager` introduces a conservative operationa
 - `services/degraded_mode.py`: singleton-like degraded posture snapshot (`DegradedModeState`).
 
 Authority model: `safety_guard` and `runtime_governor` constraints remain authoritative; incident commander only tightens restrictions.
+
+## Chaos lab architecture (new)
+
+`apps.chaos_lab` introduces a dedicated resilience-testing boundary without duplicating incident logic.
+
+Model layer:
+- `ChaosExperiment`: catalog of controlled scenarios
+- `ChaosRun`: concrete execution trace
+- `ChaosObservation`: per-run audit events
+- `ResilienceBenchmark`: consolidated resilience metrics
+
+Service layer:
+- `services/experiments.py`: scenario catalog seeding
+- `services/injection.py`: scoped fault injection against existing apps
+- `services/observations.py`: detection/mitigation/degraded/rollback observation capture
+- `services/benchmark.py`: transparent metric consolidation and scoring
+- `services/recovery.py`: cleanup/reset of injected artifacts
+
+Integration approach:
+- reuse `incident_commander` for detection and mitigation actions
+- validate reaction of `mission_control`, `rollout_manager`, alerts, notifications, and queue systems
+- keep paper/demo-only boundaries and avoid real execution paths
+
