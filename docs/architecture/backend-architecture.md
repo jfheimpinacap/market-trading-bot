@@ -967,3 +967,24 @@ Design principles:
 - enforces an explicit `capital_firewall` that keeps live transition disabled
 
 Scope is rehearsal-only: no credentials, no live adapter, no live order transport.
+
+## Execution venue contract layer (new)
+
+A dedicated `apps.execution_venue` app now sits beside `broker_bridge` and below the go-live transition boundary.
+
+Design intent:
+- keep `broker_bridge` as intent/validation/dry-run orchestration
+- add a stable external contract for future adapters
+- provide a null/sandbox adapter implementation for deterministic local behavior
+- run parity checks across internal and future external semantics without live routing
+
+Core backend components:
+- services/adapters.py: adapter contract + `NullSandboxVenueAdapter`
+- services/payloads.py: canonical payload build + capability-aware validation
+- services/responses.py: normalized status mapping and simulated venue responses
+- services/parity.py: `VenueParityRun` creation, readiness score, and optional incident context
+- services/capabilities.py: capability profile bootstrap and serialization
+
+Hard boundary remains intact:
+- `live_supported` is false
+- no credentials, no real broker connections, no order transmission

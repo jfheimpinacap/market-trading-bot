@@ -1034,3 +1034,24 @@ The platform now includes a formal `go_live_gate` layer to rehearse final pre-li
 - API endpoints at `/api/go-live/*` and frontend route `/go-live`
 
 This is a preparation layer only. Still out of scope: live credentials, live broker routing, real money, and real order submission.
+
+## Execution venue abstraction (new)
+
+A new backend/frontend layer now formalizes the final **execution venue contract** without enabling any real routing:
+
+- Backend app: `apps/backend/apps/execution_venue`
+- Frontend route: `/execution-venue`
+- API base: `/api/execution-venue/*`
+
+What it adds:
+- canonical external order payload model (`VenueOrderPayload`)
+- normalized venue response model (`VenueOrderResponse`)
+- capability contract (`VenueCapabilityProfile`) with `live_supported=false`
+- parity harness (`VenueParityRun`) to compare broker bridge dry-run, simulator context, and sandbox adapter behavior
+- default `NullSandboxVenueAdapter` that never submits real orders
+
+Still explicitly out of scope:
+- broker credentials
+- real broker/exchange connectivity
+- live order placement
+- real-money execution or reconciliation

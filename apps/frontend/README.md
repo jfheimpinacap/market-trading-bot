@@ -905,3 +905,19 @@ Frontend now includes `/go-live`, a dedicated go-live rehearsal page that shows:
 - final rehearsal panel on top of broker intents
 
 The page is intentionally explicit that **real orders are still disabled** and firewall blocking is expected/healthy in this phase.
+
+## Execution Venue UI (new)
+
+Nueva ruta: `/execution-venue`.
+
+Objetivo UX:
+- mostrar el contrato canónico de venue/adapters sin tocar live
+- visualizar capacidades del adapter actual (`null_sandbox`)
+- construir payload desde `BrokerOrderIntent`
+- simular `dry-run` bajo contrato uniforme
+- ejecutar parity harness y revisar gaps como resultado técnico válido
+
+Integraciones ligeras:
+- links rápidos desde `/broker-bridge` y `/go-live`
+- estado explícito `SANDBOX_ONLY`
+- mensaje claro cuando no existen intents: “Create a broker intent first to test venue parity.”

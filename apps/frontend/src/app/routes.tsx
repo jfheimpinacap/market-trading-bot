@@ -42,6 +42,7 @@ import { SystemPage } from '../pages/SystemPage';
 import { CertificationPage } from '../pages/CertificationPage';
 import { BrokerBridgePage } from '../pages/BrokerBridgePage';
 import { GoLivePage } from '../pages/GoLivePage';
+import { ExecutionVenuePage } from '../pages/ExecutionVenuePage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -171,6 +172,14 @@ export const appRoutes: AppRoute[] = [
     description: 'Sandbox/dry-run broker routing readiness layer that maps paper execution intents to broker-like payloads under certification/runtime/safety guardrails.',
     component: BrokerBridgePage,
   },
+
+  {
+    label: 'Execution Venue',
+    path: '/execution-venue',
+    description: 'Canonical external execution contract with sandbox adapter and paper-live parity harness across broker bridge and execution simulator.',
+    component: ExecutionVenuePage,
+  },
+
 
   {
     label: 'Go Live Gate',

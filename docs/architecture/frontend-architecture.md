@@ -777,3 +777,18 @@ A new `/go-live` route centralizes pre-live readiness at UI level:
 - final rehearsal execution against selected broker intent with clear blocked reasons
 
 This route complements `/broker-bridge` and `/certification` without replacing them.
+
+## Execution venue frontend module (new)
+
+The frontend now includes `/execution-venue` as a technical pre-live contract page.
+
+Responsibilities:
+- consume `/api/execution-venue/*` endpoints via `services/executionVenue.ts`
+- expose adapter capabilities and sandbox-only warning state
+- allow operator-driven build payload / dry-run / parity actions from a selected broker intent
+- render canonical payload + normalized response + parity gaps in one workflow
+- keep parity gaps visible as valid technical outcomes (not UI failures)
+
+This route complements, but does not replace:
+- `/broker-bridge` for intent creation/validation/dry-run
+- `/go-live` for checklist/approval/firewall gate state
