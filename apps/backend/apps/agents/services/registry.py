@@ -68,6 +68,12 @@ DEFAULT_AGENT_DEFINITIONS = [
         'agent_type': 'position_manager',
         'description': 'Runs position lifecycle governance to decide hold/reduce/close/review for open paper positions.',
     },
+    {
+        'name': 'Execution Simulator Agent',
+        'slug': 'execution_simulator_agent',
+        'agent_type': 'execution_simulator',
+        'description': 'Converts trade intents into paper orders/fills with realistic lifecycle, slippage, and partial fill simulation.',
+    },
 ]
 
 

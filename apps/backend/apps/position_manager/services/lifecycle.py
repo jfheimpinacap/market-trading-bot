@@ -3,8 +3,8 @@ from __future__ import annotations
 from django.db import transaction
 
 from apps.operator_queue.models import OperatorQueueItem, OperatorQueuePriority, OperatorQueueSource, OperatorQueueStatus, OperatorQueueType
-from apps.paper_trading.models import PaperPositionStatus, PaperTradeType
-from apps.paper_trading.services.execution import execute_paper_trade
+from apps.paper_trading.models import PaperPositionStatus
+from apps.execution_simulator.services import create_order, run_execution_lifecycle
 from apps.paper_trading.services.portfolio import get_active_account
 from apps.position_manager.models import PositionExitPlan, PositionLifecycleDecision, PositionLifecycleRun, PositionLifecycleRunStatus, PositionLifecycleStatus
 from apps.position_manager.services.decision import decide_lifecycle_action
@@ -82,14 +82,22 @@ def run_position_lifecycle(*, metadata: dict | None = None) -> PositionLifecycle
             )
 
         if plan.auto_execute_allowed and plan.quantity_delta > 0:
-            execute_paper_trade(
+            side = 'CLOSE' if plan.action == PositionLifecycleStatus.CLOSE else 'REDUCE'
+            create_order(
                 market=position.market,
-                trade_type=PaperTradeType.SELL,
-                side=position.side,
-                quantity=plan.quantity_delta,
-                metadata={'triggered_from': 'position_lifecycle', 'position_exit_plan_id': plan.id, 'paper_demo_only': True},
-                notes=f'Lifecycle auto action: {plan.action}',
+                side=side,
+                requested_quantity=plan.quantity_delta,
+                created_from='position_manager',
+                paper_account=account,
+                order_type='close_order' if side == 'CLOSE' else 'market_like',
+                metadata={
+                    'triggered_from': 'position_lifecycle',
+                    'position_exit_plan_id': plan.id,
+                    'position_side': position.side,
+                    'paper_demo_only': True,
+                },
             )
+            run_execution_lifecycle(open_only=True, metadata={'triggered_from': 'position_lifecycle', 'position_exit_plan_id': plan.id})
 
         decisions.append(decision)
 

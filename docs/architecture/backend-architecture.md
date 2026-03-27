@@ -742,3 +742,7 @@ Integration points:
 - runtime/safety/readiness remain higher-order authority
 
 Non-goals unchanged: real execution, opaque planner autonomy, RL/ML meta-controller.
+
+### Execution simulator
+- Added a dedicated backend app `execution_simulator` to separate trade intent from paper execution outcomes.
+- This app owns order lifecycle simulation (open/partial/filled/cancelled/expired/rejected), slippage, and no-fill handling.

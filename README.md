@@ -846,3 +846,8 @@ A formal paper/demo-only `profile_manager` layer now coordinates adaptive operat
 - exposes `/profile-manager` UI + `/api/profile-manager/*` endpoints
 
 Still out of scope: real-money execution, opaque planner behavior, RL/ML meta-controller, and LLM final authority.
+
+
+## Paper execution realism layer
+- Added `execution_simulator` to model paper order lifecycle (`PaperOrder`, `PaperExecutionAttempt`, `PaperFill`) with partial/no-fill, slippage, cancel/expire handling.
+- This layer is **paper/demo only** and intentionally excludes real routing/exchange execution.

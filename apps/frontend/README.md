@@ -744,3 +744,8 @@ New technical route `/profile-manager` adds an auditable adaptive profile contro
 - inspect recent governance runs
 
 This route integrates with Portfolio Governor, Mission Control, Runtime, and Opportunities via quick links and keeps explicit paper/demo-only messaging.
+
+
+## Execution route
+- New `/execution` page provides paper execution realism visibility: order lifecycle states, fills, summary metrics, and lifecycle controls.
+- Uses `src/services/execution.ts` and remains paper/demo only.
