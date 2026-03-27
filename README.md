@@ -129,6 +129,21 @@ A formal `incident_commander` backend layer now coordinates conservative failure
 
 Still out of scope: real-money execution, real execution routing, opaque black-box remediation, and distributed orchestration.
 
+
+### Operator cockpit / command center (new)
+
+A new desktop-first `/cockpit` route now provides a **single-pane operational control** for manual-first supervision:
+
+- central posture: runtime status, degraded mode, certification, and profile regime
+- mission operations panel with cycle context and incident impact
+- risk/exposure panel with portfolio throttle + `REVIEW_REQUIRED` position pressure
+- execution/venue panel with broker-bridge validation, parity gaps, and reconciliation mismatches
+- change-governance panel with promotion, rollout, and champion/challenger status
+- severity-based attention queue (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) with trace drill-down buttons
+- quick actions that trigger existing controls (mission control, incident detection, certification, governance, rollout pause/rollback)
+
+Scope remains unchanged: local-first, single-user, paper/sandbox only, and no real-money execution.
+
 ## What this scaffold does not include yet
 
 - Real trading provider integrations (execution/auth).

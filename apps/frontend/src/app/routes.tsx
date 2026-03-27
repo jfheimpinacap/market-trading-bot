@@ -1,6 +1,7 @@
 import { AgentsPage } from '../pages/AgentsPage';
 import { AutomationPage } from '../pages/AutomationPage';
 import { AlertsPage } from '../pages/AlertsPage';
+import { CockpitPage } from '../pages/CockpitPage';
 import { ChaosPage } from '../pages/ChaosPage';
 import { IncidentsPage } from '../pages/IncidentsPage';
 import { NotificationsPage } from '../pages/NotificationsPage';
@@ -54,6 +55,14 @@ export type AppRoute = NavRoute & {
 };
 
 export const appRoutes: AppRoute[] = [
+
+  {
+    label: 'Cockpit',
+    path: '/cockpit',
+    description: 'Single-pane operational command center that centralizes posture, incidents, governance, queue pressure, and trace drill-down for manual-first paper/sandbox operations.',
+    component: CockpitPage,
+  },
+
   {
     label: 'Dashboard',
     path: '/',
