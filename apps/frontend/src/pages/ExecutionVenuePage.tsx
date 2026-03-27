@@ -132,6 +132,9 @@ export function ExecutionVenuePage() {
           <p>
             Need policy and approvals? Continue using <a href="/go-live">Go-Live Gate</a>. Need intent creation? Use <a href="/broker-bridge">Broker Bridge</a> first.
           </p>
+          <p>
+            Need incoming external-state parity? Open <a href="/venue-account">Venue Account Mirror</a>.
+          </p>
         </SectionCard>
 
         <section className="stats-grid">

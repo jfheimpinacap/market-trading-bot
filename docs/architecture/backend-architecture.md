@@ -988,3 +988,18 @@ Core backend components:
 Hard boundary remains intact:
 - `live_supported` is false
 - no credentials, no real broker connections, no order transmission
+
+## Venue account mirror / external state parity (new)
+
+`apps.venue_account` introduces a clean, sandbox-only inbound bridge layer:
+
+- snapshot builders (`services/snapshots.py`) normalize external-style account/order/position/balance state.
+- mirror orchestration (`services/mirror.py`) refreshes canonical external snapshots.
+- reconciliation engine (`services/reconciliation.py`) compares internal paper state vs mirror state and persists issues.
+- issue logging (`services/issues.py`) keeps reconciliation findings explicit and auditable.
+- summary/state helpers (`services/state.py`) provide lightweight dashboard/go-live consumption paths.
+
+Design boundary:
+- complements `execution_venue` (send-side contract) instead of duplicating it.
+- uses `broker_bridge`, `execution_simulator`, and `paper_trading` artifacts as source evidence.
+- remains local-first and sandbox-only; no live connectors.

@@ -792,3 +792,18 @@ Responsibilities:
 This route complements, but does not replace:
 - `/broker-bridge` for intent creation/validation/dry-run
 - `/go-live` for checklist/approval/firewall gate state
+
+## Venue account parity UX (new)
+
+The `/venue-account` route extends the existing execution-readiness story:
+
+- `/execution-venue`: outgoing canonical payload + response parity
+- `/venue-account`: incoming external-state mirror + reconciliation parity
+- `/go-live`: policy/rehearsal/firewall gate
+
+UI contract:
+- explicit `SANDBOX_ONLY` warning
+- snapshot-first account card
+- tabular order/position mirror visibility
+- reconciliation panel with parity status and issue list
+- no hidden automation; run parity explicitly from operator action

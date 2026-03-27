@@ -146,6 +146,9 @@ export function GoLivePage() {
           <p>
             For canonical venue payload mapping and parity diagnostics, use <a href="/execution-venue">Execution Venue</a>.
           </p>
+          <p>
+            For sandbox external account/order/position reconciliation parity, use <a href="/venue-account">Venue Account Mirror</a>.
+          </p>
         </SectionCard>
 
         <section className="stats-grid">

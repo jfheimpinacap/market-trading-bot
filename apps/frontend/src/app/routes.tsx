@@ -43,6 +43,7 @@ import { CertificationPage } from '../pages/CertificationPage';
 import { BrokerBridgePage } from '../pages/BrokerBridgePage';
 import { GoLivePage } from '../pages/GoLivePage';
 import { ExecutionVenuePage } from '../pages/ExecutionVenuePage';
+import { VenueAccountPage } from '../pages/VenueAccountPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -180,6 +181,13 @@ export const appRoutes: AppRoute[] = [
     component: ExecutionVenuePage,
   },
 
+
+  {
+    label: 'Venue Account',
+    path: '/venue-account',
+    description: 'Sandbox external account mirror and reconciliation layer for external state parity against internal paper portfolio.',
+    component: VenueAccountPage,
+  },
 
   {
     label: 'Go Live Gate',

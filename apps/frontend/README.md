@@ -921,3 +921,16 @@ Integraciones ligeras:
 - links rápidos desde `/broker-bridge` y `/go-live`
 - estado explícito `SANDBOX_ONLY`
 - mensaje claro cuando no existen intents: “Create a broker intent first to test venue parity.”
+
+## Venue Account Mirror UI (new)
+
+A new operator page is available at `/venue-account`.
+
+It provides:
+- sandbox boundary warning (`SANDBOX_ONLY`)
+- current external-style account snapshot (equity/cash/reserved/open counts)
+- external order snapshots table
+- external position snapshots table
+- reconciliation controls + recent runs/issues
+
+The page is intentionally technical and conservative. Parity gaps are displayed as valid reconciliation results (not treated as frontend failures).
