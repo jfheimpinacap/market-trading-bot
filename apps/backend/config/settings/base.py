@@ -111,6 +111,7 @@ LOCAL_APPS = [
     'apps.broker_bridge',
     'apps.go_live_gate',
     'apps.execution_venue',
+    'apps.venue_account',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

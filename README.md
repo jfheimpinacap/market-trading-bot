@@ -1055,3 +1055,18 @@ Still explicitly out of scope:
 - real broker/exchange connectivity
 - live order placement
 - real-money execution or reconciliation
+
+## Venue account mirror / reconciliation sandbox (new)
+
+A new `venue_account` layer completes the **incoming external bridge** in sandbox mode:
+
+- canonical external-style snapshots for account, balances, orders, and positions
+- mirror-building from existing `execution_venue` payload/response artifacts plus `execution_simulator`/`paper_trading` state
+- formal reconciliation runs (`PARITY_OK` / `PARITY_GAP`) and explicit issue types (missing order mappings, fill drift, status mismatch, balance drift, stale snapshot)
+- frontend route `/venue-account` for operational parity visibility
+
+Boundary remains strict:
+- sandbox-only (`SANDBOX_ONLY`)
+- no broker credentials
+- no real account connections
+- no real order placement or real-money execution

@@ -1611,3 +1611,29 @@ New endpoints:
 - `POST /api/execution-venue/run-parity/<intent_id>/`
 - `GET /api/execution-venue/parity-runs/`
 - `GET /api/execution-venue/summary/`
+
+## Venue account mirror module (new)
+
+The backend now includes `apps.venue_account` as a dedicated sandbox external-state layer.
+
+What it does:
+- builds canonical snapshot entities:
+  - `VenueAccountSnapshot`
+  - `VenueBalanceSnapshot`
+  - `VenueOrderSnapshot`
+  - `VenuePositionSnapshot`
+- runs formal parity checks via:
+  - `VenueReconciliationRun`
+  - `VenueReconciliationIssue`
+- exposes REST endpoints under `/api/venue-account/*`.
+
+How it differs from nearby modules:
+- `execution_venue` = outgoing payload/response contract and send-parity harness.
+- `venue_account` = incoming external-state mirror and account parity diagnostics.
+- `broker_bridge` = intent/mapping/validation/dry-run source.
+
+Still out of scope:
+- real broker auth/connectivity
+- live account sync
+- live reconciliation
+- real execution/money
