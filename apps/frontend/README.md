@@ -934,3 +934,22 @@ It provides:
 - reconciliation controls + recent runs/issues
 
 The page is intentionally technical and conservative. Parity gaps are displayed as valid reconciliation results (not treated as frontend failures).
+
+## Connectors route (`/connectors`) (new)
+
+The frontend now includes a dedicated **Connectors** route for venue adapter qualification and readiness.
+
+What it shows:
+- explicit sandbox-only warning banner
+- current adapter readiness recommendation card
+- fixture-based qualification run controls
+- latest qualification case results (issues/warnings visible as valid technical outcomes)
+- recent run history with status + recommendation badges
+
+Integration links are kept light and consistent with `/execution-venue`, `/venue-account`, `/go-live`, and `/certification`.
+
+Non-goals remain unchanged:
+- no real broker connections
+- no credentials
+- no live/read-only third-party connectivity yet
+- no real orders/money

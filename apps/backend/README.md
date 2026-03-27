@@ -1637,3 +1637,28 @@ Still out of scope:
 - live account sync
 - live reconciliation
 - real execution/money
+
+## Connector Lab app (new)
+
+`apps.connector_lab` is a technical adapter qualification harness that reuses `execution_venue`, `venue_account`, `go_live_gate`, `certification_board`, and `incident_commander` evidence surfaces while remaining strictly sandbox-only.
+
+Service split:
+- `services/cases.py`: explicit qualification catalog.
+- `services/fixtures.py`: reusable sandbox fixture profiles.
+- `services/qualification.py`: end-to-end suite execution against adapter contract + mirror/reconciliation.
+- `services/recommendation.py`: readiness recommendation generation.
+- `services/reporting.py`: summary aggregation for dashboards and gate/certification evidence.
+
+Core endpoints:
+- `GET /api/connectors/cases/`
+- `POST /api/connectors/run-qualification/`
+- `GET /api/connectors/runs/`
+- `GET /api/connectors/runs/<id>/`
+- `GET /api/connectors/current-readiness/`
+- `GET /api/connectors/summary/`
+
+Still out of scope:
+- real read-only broker connectivity
+- real credentials/secrets
+- real order routing/execution
+- real-money workflows

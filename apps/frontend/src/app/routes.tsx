@@ -44,6 +44,7 @@ import { BrokerBridgePage } from '../pages/BrokerBridgePage';
 import { GoLivePage } from '../pages/GoLivePage';
 import { ExecutionVenuePage } from '../pages/ExecutionVenuePage';
 import { VenueAccountPage } from '../pages/VenueAccountPage';
+import { ConnectorsPage } from '../pages/ConnectorsPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -187,6 +188,13 @@ export const appRoutes: AppRoute[] = [
     path: '/venue-account',
     description: 'Sandbox external account mirror and reconciliation layer for external state parity against internal paper portfolio.',
     component: VenueAccountPage,
+  },
+
+  {
+    label: 'Connectors',
+    path: '/connectors',
+    description: 'Venue connector certification suite and adapter qualification harness for sandbox-only readiness toward a future read-only phase.',
+    component: ConnectorsPage,
   },
 
   {

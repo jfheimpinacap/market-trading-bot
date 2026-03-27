@@ -1003,3 +1003,21 @@ Design boundary:
 - complements `execution_venue` (send-side contract) instead of duplicating it.
 - uses `broker_bridge`, `execution_simulator`, and `paper_trading` artifacts as source evidence.
 - remains local-first and sandbox-only; no live connectors.
+
+## Connector lab architecture (new)
+
+`apps.connector_lab` introduces a formal certification boundary for future venue adapters.
+
+Design goals:
+- separate adapter contract qualification from runtime execution paths
+- keep qualification logic in services (not views)
+- produce auditable run/results/recommendation entities
+- reuse existing `execution_venue` and `venue_account` workflows for payload/response/parity evidence
+
+Main entities:
+- `AdapterQualificationRun`
+- `AdapterQualificationResult`
+- `AdapterReadinessRecommendation`
+- `ConnectorFixtureProfile`
+
+This boundary is intentionally pre-integration: it does not open any real read-only/live connectivity.
