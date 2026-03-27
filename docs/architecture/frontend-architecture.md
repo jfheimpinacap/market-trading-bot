@@ -836,3 +836,33 @@ Integration style:
 - shared API client and typed service wrapper (`services/trace.ts`)
 
 Scope boundary is unchanged: local-first, single-user, paper/sandbox only.
+
+
+## Operator cockpit architecture (new)
+
+`/cockpit` is implemented as an aggregation page that **reuses existing module APIs** instead of replacing backend domains.
+
+### Design choices
+
+- Single-pane operational command center for manual-first operation.
+- No module rewrite: specialized pages remain authoritative and are linked as drill-down targets.
+- Attention model is explicit and deterministic (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) from runtime/incidents/certification/queue/parity/position/opportunity signals.
+- Quick actions call existing control endpoints; cockpit does not introduce a hidden planner.
+- Trace integration is link-based (`/trace?root_type=...&root_id=...`) so provenance stays inside trace explorer.
+
+### Partial failure strategy
+
+Cockpit uses per-source fallback in `services/cockpit.ts`:
+
+- each source is fetched independently
+- each failure is captured in `snapshot.failures`
+- panels keep rendering with available data
+- operator sees degraded data explicitly without losing the full view
+
+### Scope boundaries
+
+- keeps local-first, paper/sandbox-only boundaries
+- no real-money or live execution
+- no multi-user orchestration
+- no heavy global state framework introduced
+

@@ -184,6 +184,40 @@ python start.py simulate-tick
 python start.py simulate-loop
 ```
 
+
+## Operator cockpit en `/cockpit` (new)
+
+Se agregó un **operator cockpit / command center** como home técnico de operación manual-first.
+
+Qué centraliza en una sola vista:
+
+- postura del sistema: runtime, degraded mode, certification, profile regime
+- mission control + incidents operativos
+- riesgo/exposure: portfolio governor, throttle, review_required
+- ejecución/venue: broker bridge, parity, venue reconciliation
+- change governance: promotion, rollout, champion/challenger
+- attention queue priorizada por severidad con drill-down a módulos y a `/trace`
+- quick actions para disparar acciones ya existentes (sin nueva lógica autónoma)
+
+Diseño y alcance:
+
+- desktop-first, sobrio, auditable
+- no reemplaza pantallas especializadas; las enlaza como source of truth
+- fallback parcial por panel cuando algún endpoint falla
+- local-first, single-user, paper/sandbox only
+
+### Endpoints integrados por cockpit
+
+El cockpit compone servicios ya existentes (sin backend monolítico nuevo):
+
+- runtime, incidents, mission-control
+- rollout, certification, profile-manager
+- portfolio-governor, positions, opportunities
+- broker-bridge, execution-venue, venue-account
+- operator-queue, alerts
+- promotion, champion-challenger
+- trace summary + query runs
+
 ## Endpoints consumidos por el frontend
 
 ### Dashboard

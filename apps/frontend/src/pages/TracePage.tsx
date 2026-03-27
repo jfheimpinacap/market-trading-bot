@@ -8,13 +8,21 @@ import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { getTraceQueryRuns, getTraceSummary, runTraceQuery } from '../services/trace';
 import type { ProvenanceSnapshot, TraceNode, TraceQueryRun, TraceSummary } from '../types/trace';
 
-const ROOT_TYPES = ['market', 'opportunity', 'proposal', 'paper_order', 'venue_order_snapshot', 'incident', 'mission_cycle'];
+const ROOT_TYPES = ['market', 'opportunity', 'proposal', 'paper_order', 'venue_order_snapshot', 'incident', 'mission_cycle', 'position'];
+
+function getInitialQueryParams() {
+  const params = new URLSearchParams(window.location.search);
+  const rootType = params.get('root_type') ?? 'opportunity';
+  const rootId = params.get('root_id') ?? '';
+  return { rootType, rootId };
+}
 const fmtDate = (v: string | null) => (v ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(v)) : 'n/a');
 const tone = (status: string): 'ready' | 'pending' | 'offline' | 'neutral' => (['SUCCESS', 'FILLED', 'PARITY_OK', 'ACTIVE', 'OPEN', 'READY'].includes(status) ? 'ready' : ['PARTIAL', 'DEGRADED', 'WARNING', 'PAUSED', 'BLOCKED'].includes(status) ? 'pending' : ['FAILED', 'REJECTED', 'CRITICAL'].includes(status) ? 'offline' : 'neutral');
 
 export function TracePage() {
-  const [rootType, setRootType] = useState('opportunity');
-  const [rootId, setRootId] = useState('');
+  const initialQuery = getInitialQueryParams();
+  const [rootType, setRootType] = useState(ROOT_TYPES.includes(initialQuery.rootType) ? initialQuery.rootType : 'opportunity');
+  const [rootId, setRootId] = useState(initialQuery.rootId);
   const [snapshot, setSnapshot] = useState<ProvenanceSnapshot | null>(null);
   const [nodes, setNodes] = useState<TraceNode[]>([]);
   const [queryRuns, setQueryRuns] = useState<TraceQueryRun[]>([]);
@@ -41,6 +49,12 @@ export function TracePage() {
   useEffect(() => {
     void loadMeta();
   }, [loadMeta]);
+
+  useEffect(() => {
+    if (!rootId.trim()) return;
+    void executeQuery();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const executeQuery = useCallback(async () => {
     if (!rootId.trim()) {
