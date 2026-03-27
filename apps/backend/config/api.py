@@ -44,4 +44,5 @@ urlpatterns = [
     path('promotion/', include(('apps.promotion_committee.urls', 'promotion_committee'), namespace='promotion_committee')),
     path('rollout/', include(('apps.rollout_manager.urls', 'rollout_manager'), namespace='rollout_manager')),
     path('incidents/', include(('apps.incident_commander.urls', 'incident_commander'), namespace='incident_commander')),
+    path('chaos/', include(('apps.chaos_lab.urls', 'chaos_lab'), namespace='chaos_lab')),
 ]
