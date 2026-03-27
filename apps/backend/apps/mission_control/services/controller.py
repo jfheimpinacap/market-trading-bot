@@ -206,6 +206,25 @@ def status_snapshot() -> dict:
     except Exception:
         promotion_summary = {'latest_recommendation': None, 'latest_review_at': None, 'is_recommendation_stale': False}
     rollout_summary = None
+    incident_summary = None
+    degraded_state = None
+    try:
+        from apps.incident_commander.services import get_current_degraded_mode_state, summarize_incidents
+
+        degraded = get_current_degraded_mode_state()
+        degraded_state = {
+            'state': degraded.state,
+            'mission_control_paused': degraded.mission_control_paused,
+            'auto_execution_enabled': degraded.auto_execution_enabled,
+            'rollout_enabled': degraded.rollout_enabled,
+            'degraded_modules': degraded.degraded_modules,
+            'disabled_actions': degraded.disabled_actions,
+        }
+        incident_summary = summarize_incidents()
+    except Exception:
+        degraded_state = None
+        incident_summary = None
+
     try:
         from apps.rollout_manager.services import build_rollout_summary
 
@@ -239,4 +258,6 @@ def status_snapshot() -> dict:
         'safety': get_safety_status(),
         'promotion': promotion_summary,
         'rollout': rollout_summary,
+        'incident_summary': incident_summary,
+        'degraded_mode': degraded_state,
     }

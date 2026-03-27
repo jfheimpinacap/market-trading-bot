@@ -706,3 +706,14 @@ The frontend now includes a dedicated route `/rollout` for stack promotion opera
 - mission control surfaces rollout status for operational awareness
 
 This keeps the architecture consistent with the current desktop-first, auditable, local-first pattern.
+
+## Incident commander frontend integration (new)
+
+A new `/incidents` page is integrated into the same technical desktop-first UX language:
+
+- consumes `services/incidents.ts` over `/api/incidents/*`
+- shows degraded mode + active incident summary
+- exposes explicit operator actions: run detection, mitigate, resolve
+- links to `/mission-control`, `/runtime`, `/rollout`, `/alerts` for cross-module drilldown
+
+This is an orchestration and visibility layer; it does not add autonomous opaque decision logic in the frontend.

@@ -68,6 +68,22 @@ export type MissionControlStatusResponse = {
     latest_run_id: number | null;
     total_runs: number;
   };
+  incident_summary?: {
+    active_incidents: number;
+    critical_active: number;
+    high_active: number;
+    warning_active: number;
+    resolved_total: number;
+    by_type: Array<{ incident_type: string; count: number }>;
+  } | null;
+  degraded_mode?: {
+    state: string;
+    mission_control_paused: boolean;
+    auto_execution_enabled: boolean;
+    rollout_enabled: boolean;
+    degraded_modules: string[];
+    disabled_actions: string[];
+  } | null;
 };
 
 export type MissionControlSummary = {

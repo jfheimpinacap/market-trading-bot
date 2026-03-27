@@ -83,7 +83,7 @@ export function RolloutPage() {
         eyebrow="Stack rollout manager"
         title="/rollout"
         description="Formal canary promotion and rollback guardrails for paper/demo stack evolution. This page is paper/demo only and never executes real money."
-        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/promotion')}>Open Promotion</button><button className="secondary-button" type="button" onClick={() => navigate('/champion-challenger')}>Open Champion Challenger</button><button className="secondary-button" type="button" onClick={() => navigate('/mission-control')}>Open Mission Control</button><button className="secondary-button" type="button" onClick={() => navigate('/runtime')}>Open Runtime</button></div>}
+        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/promotion')}>Open Promotion</button><button className="secondary-button" type="button" onClick={() => navigate('/champion-challenger')}>Open Champion Challenger</button><button className="secondary-button" type="button" onClick={() => navigate('/mission-control')}>Open Mission Control</button><button className="secondary-button" type="button" onClick={() => navigate('/runtime')}>Open Runtime</button><button className="secondary-button" type="button" onClick={() => navigate('/incidents')}>Open Incidents</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>

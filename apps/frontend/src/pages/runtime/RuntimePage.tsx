@@ -4,6 +4,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { SectionCard } from '../../components/SectionCard';
 import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { navigate } from '../../lib/router';
+import { getIncidentSummary } from '../../services/incidents';
 import {
   getRuntimeCapabilities,
   getRuntimeModes,
@@ -12,6 +13,7 @@ import {
   setRuntimeMode,
 } from '../../services/runtime';
 import type { RuntimeCapabilities, RuntimeModeOption, RuntimeStatusResponse, RuntimeTransition } from '../../types/runtime';
+import type { IncidentSummary } from '../../types/incidents';
 
 function tone(value: string) {
   if (value === 'PAPER_AUTO' || value === 'ACTIVE') return 'ready';
@@ -25,6 +27,7 @@ export function RuntimePage() {
   const [modes, setModes] = useState<RuntimeModeOption[]>([]);
   const [transitions, setTransitions] = useState<RuntimeTransition[]>([]);
   const [caps, setCaps] = useState<RuntimeCapabilities | null>(null);
+  const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,16 +36,18 @@ export function RuntimePage() {
     setLoading(true);
     setError(null);
     try {
-      const [statusRes, modesRes, transitionsRes, capsRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
         getRuntimeCapabilities(),
+        getIncidentSummary(),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
       setTransitions(transitionsRes);
       setCaps(capsRes);
+      setIncidentSummary(incidentSummaryRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load runtime governance.');
     } finally {
@@ -73,7 +78,7 @@ export function RuntimePage() {
         eyebrow="Runtime promotion controller"
         title="Runtime Governance"
         description="Explicit paper/demo runtime modes with auditable readiness and safety influence. No real-money enablement."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/readiness')}>Open Readiness</button><button type="button" className="secondary-button" onClick={() => navigate('/safety')}>Open Safety</button><button type="button" className="secondary-button" onClick={() => navigate('/alerts')}>Open Alerts</button><button type="button" className="secondary-button" onClick={() => navigate('/mission-control')}>Open Mission Control</button></div>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/readiness')}>Open Readiness</button><button type="button" className="secondary-button" onClick={() => navigate('/safety')}>Open Safety</button><button type="button" className="secondary-button" onClick={() => navigate('/alerts')}>Open Alerts</button><button type="button" className="secondary-button" onClick={() => navigate('/incidents')}>Open Incidents</button><button type="button" className="secondary-button" onClick={() => navigate('/mission-control')}>Open Mission Control</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
@@ -85,6 +90,8 @@ export function RuntimePage() {
             <div><strong>Rationale:</strong> {status?.state.rationale ?? '—'}</div>
             <div><strong>Readiness:</strong> {status?.readiness_status ?? 'No runs yet'}</div>
             <div><strong>Safety:</strong> {status?.safety_status.status ?? 'Unknown'} · {status?.safety_status.status_message ?? '—'}</div>
+            <div><strong>Active incidents:</strong> {incidentSummary?.active_incidents ?? 0}</div>
+            <div><strong>Critical incidents:</strong> {incidentSummary?.critical_active ?? 0}</div>
           </div>
         </SectionCard>
 

@@ -887,3 +887,15 @@ A new backend module `apps/rollout_manager` introduces a conservative operationa
 - no real execution
 - no enterprise/distributed rollout orchestration
 - no opaque autonomous full switching
+
+## Incident commander architecture (new)
+
+`apps/incident_commander` adds a formal resilience layer above existing runtime/safety/mission/rollout services:
+
+- `services/detection.py`: detects incident patterns from existing app data.
+- `services/policies.py`: conservative rule mapping incident -> actions + degraded state.
+- `services/actions.py`: executes explicit mitigations and records `IncidentAction`.
+- `services/recovery.py`: bounded safe retries (`IncidentRecoveryRun`).
+- `services/degraded_mode.py`: singleton-like degraded posture snapshot (`DegradedModeState`).
+
+Authority model: `safety_guard` and `runtime_governor` constraints remain authoritative; incident commander only tightens restrictions.
