@@ -1021,3 +1021,23 @@ Main entities:
 - `ConnectorFixtureProfile`
 
 This boundary is intentionally pre-integration: it does not open any real read-only/live connectivity.
+
+## Trace explorer provenance boundary (new)
+
+`apps.trace_explorer` introduces a dedicated cross-cutting provenance boundary to unify traceability without modifying existing execution domains.
+
+Architecture characteristics:
+- **Aggregator, not replacement**: consumes existing app records and composes an operational narrative.
+- **Explicit primitives**: `TraceRoot`, `TraceNode`, `TraceEdge`, `TraceQueryRun`.
+- **Service-oriented composition**:
+  - root resolution
+  - node harvesting across modules
+  - causal/handoff edge building
+  - compact provenance snapshot generation
+  - query-run auditing
+- **Operational goal**: explain *why* a case reached its state (e.g., `PROPOSAL_READY`, blocked, degraded, executed).
+
+Non-goals remain strict:
+- no live money/execution
+- no distributed enterprise graph
+- no opaque planner authority

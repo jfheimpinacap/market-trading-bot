@@ -104,7 +104,7 @@ export function ExecutionPage() {
         eyebrow="Execution simulator"
         title="Execution"
         description="Paper/demo-only order lifecycle simulator that separates trade intent from realistic execution outcomes: full fill, partial fill, no fill, cancellation, or expiration."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/broker-bridge')}>Open Broker Bridge</button></div>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/broker-bridge')}>Open Broker Bridge</button><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Open Trace Explorer</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>

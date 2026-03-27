@@ -1662,3 +1662,46 @@ Still out of scope:
 - real credentials/secrets
 - real order routing/execution
 - real-money workflows
+
+## Trace Explorer (`apps.trace_explorer`) (new)
+
+A dedicated provenance app now unifies end-to-end traceability over existing modules.
+
+### Purpose
+
+`trace_explorer` does **not** replace existing domain modules. It aggregates them into a single auditable narrative:
+
+- roots resolution (`TraceRoot`) by market/opportunity/proposal/order/incident/mission-cycle
+- compact snapshots of related entities (`TraceNode`)
+- explicit causal/handoff links (`TraceEdge`)
+- query audit log (`TraceQueryRun`)
+
+### Service split
+
+- `services/roots.py`: root resolution and contextual ids
+- `services/nodes.py`: node aggregation from existing modules (orchestrator, memory, execution, venue, incidents, profile/certification/runtime)
+- `services/edges.py`: causal + handoff edges
+- `services/provenance.py`: compact provenance snapshot
+- `services/query.py`: end-to-end query orchestration + query-run persistence
+
+### API
+
+- `POST /api/trace/query/`
+- `GET /api/trace/roots/`
+- `GET /api/trace/roots/<id>/`
+- `GET /api/trace/snapshot/<root_type>/<root_id>/`
+- `GET /api/trace/query-runs/`
+- `GET /api/trace/summary/`
+
+### Scope boundaries
+
+Included:
+- local-first paper/sandbox provenance
+- partial traces with explicit partial status
+- auditable query history
+
+Excluded:
+- real execution and real money
+- live broker connectors
+- distributed graph infra
+- opaque autonomous planner behavior

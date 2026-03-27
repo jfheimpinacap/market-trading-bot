@@ -953,3 +953,21 @@ Non-goals remain unchanged:
 - no credentials
 - no live/read-only third-party connectivity yet
 - no real orders/money
+
+## `/trace` route (new)
+
+A new `/trace` route provides a unified decision provenance and audit explorer.
+
+It includes:
+- root query panel (`root_type` + id)
+- provenance snapshot card (status, key stages, blockers, execution outcome, incident/degraded context)
+- trace timeline table with stage badges
+- related evidence panel (precedents/incidents/profile/certification/venue context)
+- auditable recent query-run history
+
+Client boundary:
+- service: `src/services/trace.ts`
+- types: `src/types/trace.ts`
+- route: `src/pages/TracePage.tsx`
+
+This route is explicitly local-first and paper/sandbox-only.

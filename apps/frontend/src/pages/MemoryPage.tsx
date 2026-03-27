@@ -119,6 +119,7 @@ export function MemoryPage() {
           <button type="button" className="secondary-button" onClick={() => navigate('/postmortem-board')}>Open Postmortem Board</button>
           <button type="button" className="secondary-button" onClick={() => navigate('/prediction')}>Open Prediction</button>
           <button type="button" className="secondary-button" onClick={() => navigate('/risk-agent')}>Open Risk Agent</button>
+          <button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Open Trace Explorer</button>
           <button type="button" className="primary-button" disabled={indexing} onClick={() => void onIndex()}>{indexing ? 'Indexing...' : 'Run index'}</button>
         </div>}
       />
