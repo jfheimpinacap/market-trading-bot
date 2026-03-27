@@ -1405,3 +1405,19 @@ Integration notes:
 - reuses execution-aware replay realism so comparison is not perfect-fill optimistic
 
 Out of scope remains explicit: real-money execution, automatic champion promotion, opaque meta-controller.
+
+## Semantic memory retrieval app (new)
+
+`apps.memory_retrieval` introduces a formal semantic precedent layer for paper/demo workflows.
+
+Responsibilities:
+- index high-value documents from learning memory, postmortem board, trade reviews, replay, experiments, and lifecycle decisions
+- create/update embeddings using existing local `llm_local` embedding service
+- execute auditable precedent retrieval runs with persisted ranks and scores
+- expose case-based summary (similar cases, caution signals, failure modes, lessons)
+
+Design choices:
+- local-first single-user operation
+- no mandatory external vector DB
+- no view-layer business logic (services split across documents/embeddings/indexing/retrieval/precedents)
+- retrieval enriches decision context; it does not become final decision authority

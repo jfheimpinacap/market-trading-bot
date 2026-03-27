@@ -796,3 +796,28 @@ Non-goals unchanged: real execution, opaque planner autonomy, RL/ML meta-control
 - no automatic champion promotion
 - no opaque planner authority
 - no distributed orchestration layer
+
+## Semantic memory retrieval architecture (new)
+
+A dedicated backend boundary now exists in `apps.memory_retrieval`.
+
+Core models:
+- `MemoryDocument`: normalized memory unit with metadata + local embedding vector.
+- `MemoryRetrievalRun`: auditable retrieval query record.
+- `RetrievedPrecedent`: ranked similar document rows with score/reason.
+
+Service split:
+- `services/documents.py`: source-to-memory document builders.
+- `services/embeddings.py`: embedding lifecycle + cosine similarity.
+- `services/indexing.py`: source sync + embedding refresh orchestration.
+- `services/retrieval.py`: query embedding + similarity ranking + run persistence.
+- `services/precedents.py`: case-based summary synthesis.
+
+Integration pattern:
+- research/prediction/risk/postmortem apps can trigger precedent retrieval through lightweight assist endpoints.
+- retrieval is contextual evidence, not an authoritative planner.
+
+Scope guardrails:
+- local-first, paper/demo only
+- no real-money execution
+- no external enterprise vector DB requirement

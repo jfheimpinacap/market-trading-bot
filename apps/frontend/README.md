@@ -783,3 +783,18 @@ The frontend now includes `/champion-challenger` as a technical benchmark worksp
 The page is integrated via quick links from `/prediction` and `/profile-manager`.
 
 This route is evidence-oriented only; it does not auto-switch active stack.
+
+## Semantic memory workspace en `/memory` (nuevo)
+
+La UI ahora incluye `/memory` como capa formal de precedentes semánticos para paper/demo:
+
+- cards de estado (`documents indexed`, `retrieval runs`, `types present`, `last indexing`)
+- panel de consulta (`query text`, `query type`, `run retrieval`)
+- tabla de precedentes recuperados (rank, tipo, título, similitud, razón, fuente)
+- historial reciente de retrieval runs
+- estados claros de loading/error/empty
+
+Integración operativa:
+- enlaces directos a `/learning`, `/postmortem-board`, `/prediction` y `/risk-agent`
+- mensaje explícito cuando falta indexado inicial: “Index learning and review documents first.”
+- “no good match” tratado como resultado válido y no como error

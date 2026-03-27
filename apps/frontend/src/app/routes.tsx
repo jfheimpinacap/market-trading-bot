@@ -12,6 +12,7 @@ import { PredictionPage } from '../pages/PredictionPage';
 import { RiskAgentPage } from '../pages/RiskAgentPage';
 import { ReplayPage } from '../pages/ReplayPage';
 import { LearningPage } from '../pages/LearningPage';
+import { MemoryPage } from '../pages/MemoryPage';
 import { RealOpsPage } from '../pages/RealOpsPage';
 import { ContinuousDemoPage } from '../pages/ContinuousDemoPage';
 import { AllocationPage } from '../pages/AllocationPage';
@@ -259,6 +260,12 @@ export const appRoutes: AppRoute[] = [
     path: '/learning',
     description: 'Heuristic demo learning memory with auditable adjustments for conservative proposal/risk influence.',
     component: LearningPage,
+  },
+  {
+    label: 'Memory',
+    path: '/memory',
+    description: 'Semantic precedent retrieval layer for local-first case-based reasoning across research/prediction/risk/postmortem workflows.',
+    component: MemoryPage,
   },
   {
     label: 'Safety',

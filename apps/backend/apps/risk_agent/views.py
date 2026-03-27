@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.risk_agent.models import PositionWatchEvent, RiskAssessment
+from apps.memory_retrieval.models import MemoryQueryType
+from apps.memory_retrieval.services import retrieve_precedents
 from apps.risk_agent.serializers import (
     PositionWatchEventSerializer,
     RiskAssessRequestSerializer,
@@ -87,3 +89,20 @@ class RiskSummaryView(APIView):
                 'real_execution_enabled': False,
             }
         )
+
+
+class RiskPrecedentAssistView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        query_text = (request.data or {}).get('query_text')
+        if not query_text:
+            return Response({'detail': 'query_text is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        run = retrieve_precedents(
+            query_text=query_text,
+            query_type=MemoryQueryType.RISK,
+            context_metadata={'assessment_id': (request.data or {}).get('assessment_id'), 'source': 'risk_agent'},
+            limit=min(int((request.data or {}).get('limit', 6)), 12),
+        )
+        return Response({'retrieval_run_id': run.id, 'result_count': run.result_count}, status=status.HTTP_200_OK)

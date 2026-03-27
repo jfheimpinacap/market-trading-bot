@@ -12,6 +12,7 @@ from apps.research_agent.views import (
     ResearchRunFullScanView,
     ResearchRunIngestView,
     ResearchRunUniverseScanView,
+    ResearchPrecedentAssistView,
     ResearchSourceListCreateView,
     ResearchSummaryView,
     ResearchTriageToPredictionView,
@@ -34,4 +35,5 @@ urlpatterns = [
     path('pursuit-candidates/', PursuitCandidateListView.as_view(), name='pursuit-candidate-list'),
     path('board-summary/', ResearchBoardSummaryView.as_view(), name='board-summary'),
     path('summary/', ResearchSummaryView.as_view(), name='summary'),
+    path('precedent-assist/', ResearchPrecedentAssistView.as_view(), name='precedent-assist'),
 ]

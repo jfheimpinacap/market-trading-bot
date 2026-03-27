@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.postmortem_agents.models import PostmortemAgentReview, PostmortemBoardConclusion, PostmortemBoardRun
+from apps.memory_retrieval.models import MemoryQueryType
+from apps.memory_retrieval.services import retrieve_precedents
 from apps.postmortem_agents.serializers import (
     PostmortemAgentReviewSerializer,
     PostmortemBoardConclusionSerializer,
@@ -88,3 +90,20 @@ class PostmortemBoardSummaryView(APIView):
             'total_conclusions': PostmortemBoardConclusion.objects.count(),
         }
         return Response(payload, status=status.HTTP_200_OK)
+
+
+class PostmortemPrecedentCompareView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        query_text = (request.data or {}).get('query_text')
+        if not query_text:
+            return Response({'detail': 'query_text is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        run = retrieve_precedents(
+            query_text=query_text,
+            query_type=MemoryQueryType.POSTMORTEM,
+            context_metadata={'review_id': (request.data or {}).get('review_id'), 'source': 'postmortem_agents'},
+            limit=min(int((request.data or {}).get('limit', 6)), 12),
+        )
+        return Response({'retrieval_run_id': run.id, 'result_count': run.result_count}, status=status.HTTP_200_OK)
