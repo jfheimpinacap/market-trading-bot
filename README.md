@@ -116,6 +116,19 @@ The platform now also includes a controlled **autonomous continuous demo loop** 
 
 Still out of scope: real execution, exchange auth, distributed schedulers, websockets, and LLM agents.
 
+
+### Incident commander / degraded mode orchestration (new)
+
+A formal `incident_commander` backend layer now coordinates conservative failure handling across runtime, mission control, rollout, alerts/notifications, and operator queue:
+
+- formal incident entities (`IncidentRecord`, `IncidentAction`, `IncidentRecoveryRun`)
+- explicit degraded mode state (`DegradedModeState`)
+- conservative mitigation policies (pause/degrade/rollback/disable auto-exec/manual review)
+- bounded self-healing retries with full audit trail
+- dedicated operator route `/incidents` for current degraded state + incident history
+
+Still out of scope: real-money execution, real execution routing, opaque black-box remediation, and distributed orchestration.
+
 ## What this scaffold does not include yet
 
 - Real trading provider integrations (execution/auth).

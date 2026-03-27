@@ -1,6 +1,7 @@
 import { AgentsPage } from '../pages/AgentsPage';
 import { AutomationPage } from '../pages/AutomationPage';
 import { AlertsPage } from '../pages/AlertsPage';
+import { IncidentsPage } from '../pages/IncidentsPage';
 import { NotificationsPage } from '../pages/NotificationsPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { EvaluationPage } from '../pages/EvaluationPage';
@@ -91,6 +92,12 @@ export const appRoutes: AppRoute[] = [
     component: AgentsPage,
   },
 
+  {
+    label: 'Incidents',
+    path: '/incidents',
+    description: 'Incident commander center for conservative degraded mode orchestration, mitigation and recovery traceability.',
+    component: IncidentsPage,
+  },
   {
     label: 'Alerts',
     path: '/alerts',

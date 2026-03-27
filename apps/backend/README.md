@@ -1493,3 +1493,15 @@ Design boundary:
 - `promotion_committee` still recommends
 - `champion_challenger` still benchmarks
 - `rollout_manager` executes gradual, reversible paper/demo transition
+
+## Incident commander boundary (new)
+
+New app: `apps/incident_commander`
+
+Responsibilities:
+- detect recurring operational incidents
+- maintain incident lifecycle + action/recovery audit trail
+- apply conservative degraded mode orchestration
+- integrate with mission_control, rollout_manager, runtime_governor, safety_guard, operator_alerts, notification_center, and operator_queue
+
+Key rule: runtime/safety remain higher authority; incident commander can only degrade conservatively, never bypass safety guardrails.

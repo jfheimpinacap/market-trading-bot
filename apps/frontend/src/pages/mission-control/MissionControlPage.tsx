@@ -73,7 +73,7 @@ export function MissionControlPage() {
         eyebrow="Mission control"
         title="/mission-control"
         description="Autonomous operations scheduler / closed-loop supervision for paper/demo-only operation. Explicit and auditable, no real-money execution."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/runtime')}>Open Runtime</button><button type="button" className="secondary-button" onClick={() => navigate('/opportunities')}>Open Opportunities</button><button type="button" className="secondary-button" onClick={() => navigate('/alerts')}>Open Alerts</button><button type="button" className="secondary-button" onClick={() => navigate('/notifications')}>Open Notifications</button><button type="button" className="secondary-button" onClick={() => navigate('/portfolio-governor')}>Open Portfolio Governor</button><button type="button" className="secondary-button" onClick={() => navigate('/profile-manager')}>Open Profile Manager</button><button type="button" className="secondary-button" onClick={() => navigate('/promotion')}>Open Promotion</button><button type="button" className="secondary-button" onClick={() => navigate('/rollout')}>Open Rollout</button></div>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/runtime')}>Open Runtime</button><button type="button" className="secondary-button" onClick={() => navigate('/opportunities')}>Open Opportunities</button><button type="button" className="secondary-button" onClick={() => navigate('/alerts')}>Open Alerts</button><button type="button" className="secondary-button" onClick={() => navigate('/incidents')}>Open Incidents</button><button type="button" className="secondary-button" onClick={() => navigate('/notifications')}>Open Notifications</button><button type="button" className="secondary-button" onClick={() => navigate('/portfolio-governor')}>Open Portfolio Governor</button><button type="button" className="secondary-button" onClick={() => navigate('/profile-manager')}>Open Profile Manager</button><button type="button" className="secondary-button" onClick={() => navigate('/promotion')}>Open Promotion</button><button type="button" className="secondary-button" onClick={() => navigate('/rollout')}>Open Rollout</button></div>}
       />
 
       <SectionCard eyebrow="Control panel" title="Session controls" description="Start, pause, resume, stop, and run one cycle with explicit profile selection.">
@@ -103,6 +103,8 @@ export function MissionControlPage() {
               <div><strong>Cycle in progress:</strong> {status?.state?.cycle_in_progress ? 'yes' : 'no'}</div>
               <div><strong>Rollout status:</strong> {status?.rollout?.current_status ?? 'None'}</div>
               <div><strong>Rollout canary %:</strong> {status?.rollout?.canary_percentage ?? 0}%</div>
+              <div><strong>Active incidents:</strong> {status?.incident_summary?.active_incidents ?? 0}</div>
+              <div><strong>Degraded mode:</strong> {status?.degraded_mode?.state ?? 'normal'}</div>
             </div>
           </SectionCard>
 

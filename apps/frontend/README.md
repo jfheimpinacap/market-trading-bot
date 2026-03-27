@@ -844,3 +844,13 @@ Frontend integration:
 - `src/services/rollout.ts`
 - `src/types/rollout.ts`
 - route links from `/promotion`, `/champion-challenger`, and `/mission-control`
+
+## Incident commander UI (new)
+
+Route `/incidents` provides a dedicated operational resilience view:
+- current degraded mode state card
+- incident table with severity/status/source/traceability
+- detail panel with mitigation and recovery history
+- operator controls for detection, mitigation, and resolution
+
+This complements (not replaces) `/alerts`, `/runtime`, `/mission-control`, and `/rollout`.

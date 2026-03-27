@@ -22,6 +22,12 @@ export const systemQuickLinks: DashboardQuickLink[] = [
     availability: 'live',
   },
   {
+    title: 'Incidents',
+    description: 'Open incident commander degraded mode and mitigation center.',
+    path: '/incidents',
+    availability: 'live',
+  },
+  {
     title: 'Alerts',
     description: 'Review deduplicated operational incidents, alert severity, and recent digest summaries.',
     path: '/alerts',
