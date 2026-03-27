@@ -108,6 +108,7 @@ LOCAL_APPS = [
     'apps.incident_commander',
     'apps.chaos_lab',
     'apps.certification_board',
+    'apps.broker_bridge',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

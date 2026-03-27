@@ -750,3 +750,19 @@ Integration pattern:
 - lightweight cross-linking from readiness/chaos/promotion/mission-control/runtime pages
 
 Non-goals remain unchanged: no real execution, no opaque autonomous go-live.
+
+
+## Broker bridge frontend integration (new)
+
+The `/broker-bridge` route extends the existing technical operations UI without introducing new frontend architecture primitives.
+
+It provides:
+- summary cards (created, validated, rejected, dry-run outcomes)
+- intent table with validation context
+- detail panel for mapping + checks + simulated broker response
+- controls to create/validate/dry-run intents
+
+Integration remains lightweight:
+- service boundary in `services/brokerBridge.ts`
+- type boundary in `types/brokerBridge.ts`
+- quick links from `/execution` and `/certification`

@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { createPaperOrder, getExecutionSummary, getPaperFills, getPaperOrders, runExecutionLifecycle } from '../services/execution';
 import { getMarkets } from '../services/markets';
+import { navigate } from '../lib/router';
 
 const TONE: Record<string, 'ready' | 'pending' | 'offline' | 'neutral'> = {
   OPEN: 'pending',
@@ -103,6 +104,7 @@ export function ExecutionPage() {
         eyebrow="Execution simulator"
         title="Execution"
         description="Paper/demo-only order lifecycle simulator that separates trade intent from realistic execution outcomes: full fill, partial fill, no fill, cancellation, or expiration."
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/broker-bridge')}>Open Broker Bridge</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>

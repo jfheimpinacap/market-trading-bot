@@ -882,3 +882,15 @@ It provides:
 Integration links were added from readiness, chaos, promotion, mission-control, and runtime pages.
 
 This remains paper/demo only and does not enable real execution.
+
+
+## Broker bridge UI (new)
+
+A new `/broker-bridge` route adds a technical paper-only bridge console:
+
+- create broker intents from execution-ready paper orders
+- validate intents against backend guardrails
+- run dry-run simulated routing
+- inspect validation checks, blocking reasons, missing fields, mapping profile, and simulated response
+
+The UI is explicitly labeled **paper-only** and does not trigger any real broker communication.
