@@ -108,6 +108,7 @@ export function BrokerBridgePage() {
           title="Dry-run order router controls"
           description="This module never sends real orders. It only records what would be routed to a future broker connector under current certification/runtime/safety constraints."
         >
+          <p>Need final pre-live controls? Open the <a href="/go-live">Go-Live Gate</a> for checklist, approvals, and capital firewall status.</p>
           <div className="button-row">
             <select value={selectedSourceOrderId ?? ''} onChange={(event) => setSelectedSourceOrderId(Number(event.target.value))}>
               {paperOrders.map((order) => (

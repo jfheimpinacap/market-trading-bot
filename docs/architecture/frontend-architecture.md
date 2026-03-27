@@ -766,3 +766,14 @@ Integration remains lightweight:
 - service boundary in `services/brokerBridge.ts`
 - type boundary in `types/brokerBridge.ts`
 - quick links from `/execution` and `/certification`
+
+## Go-live rehearsal UX
+
+A new `/go-live` route centralizes pre-live readiness at UI level:
+
+- gate state and blocker visibility
+- one-click checklist run with persisted result review
+- manual approval request workflow
+- final rehearsal execution against selected broker intent with clear blocked reasons
+
+This route complements `/broker-bridge` and `/certification` without replacing them.

@@ -894,3 +894,14 @@ A new `/broker-bridge` route adds a technical paper-only bridge console:
 - inspect validation checks, blocking reasons, missing fields, mapping profile, and simulated response
 
 The UI is explicitly labeled **paper-only** and does not trigger any real broker communication.
+
+## /go-live route (paper-only rehearsal)
+
+Frontend now includes `/go-live`, a dedicated go-live rehearsal page that shows:
+
+- current gate state + firewall status
+- checklist controls/results
+- manual approval request panel
+- final rehearsal panel on top of broker intents
+
+The page is intentionally explicit that **real orders are still disabled** and firewall blocking is expected/healthy in this phase.

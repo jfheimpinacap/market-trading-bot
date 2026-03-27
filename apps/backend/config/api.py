@@ -47,4 +47,5 @@ urlpatterns = [
     path('chaos/', include(('apps.chaos_lab.urls', 'chaos_lab'), namespace='chaos_lab')),
     path('certification/', include(('apps.certification_board.urls', 'certification_board'), namespace='certification_board')),
     path('broker-bridge/', include(('apps.broker_bridge.urls', 'broker_bridge'), namespace='broker_bridge')),
+    path('go-live/', include(('apps.go_live_gate.urls', 'go_live_gate'), namespace='go_live_gate')),
 ]

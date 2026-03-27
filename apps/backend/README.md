@@ -1578,3 +1578,17 @@ API:
 
 Important boundary:
 `broker_bridge` does not replace `execution_simulator`; it records what would be sent to a future broker adapter while execution remains paper-only.
+
+## Go-live gate (rehearsal only)
+
+A new backend app `apps/go_live_gate` adds the final pre-live rehearsal boundary **without enabling live execution**.
+
+- API namespace: `/api/go-live/*`
+- Core entities: `GoLiveChecklistRun`, `GoLiveApprovalRequest`, `GoLiveRehearsalRun`, `CapitalFirewallRule`
+- Core behavior:
+  - persisted pre-live checklist runs
+  - manual approval requests (manual-first, never auto-applied)
+  - final rehearsal run over an existing `BrokerOrderIntent`
+  - explicit capital firewall that blocks all live transition paths
+
+This layer sits above `broker_bridge`: it does not remap orders and does not send anything live.
