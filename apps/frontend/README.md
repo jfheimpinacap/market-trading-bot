@@ -1005,3 +1005,17 @@ Client boundary:
 - route: `src/pages/TracePage.tsx`
 
 This route is explicitly local-first and paper/sandbox-only.
+
+
+## /runbooks
+
+The frontend includes a `/runbooks` page for guided operator remediation workflows.
+
+It shows:
+- Summary cards (open / in progress / blocked / completed / escalated)
+- Active runbooks with next steps
+- Template catalog with create actions
+- Step-by-step runbook detail with result history
+- Deterministic recommendations and links to `/cockpit`, `/incidents`, `/trace`, `/mission-control`, and `/operator-queue`
+
+This view is manual-first and paper/sandbox only.

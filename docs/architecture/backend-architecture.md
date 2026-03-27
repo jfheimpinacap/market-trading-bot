@@ -1041,3 +1041,21 @@ Non-goals remain strict:
 - no live money/execution
 - no distributed enterprise graph
 - no opaque planner authority
+
+
+## Runbook engine (guided remediation layer)
+
+`apps.runbook_engine` is an orchestration/audit layer above specialized operational modules.
+
+Responsibilities:
+- Keep reusable runbook templates
+- Instantiate source-linked runbooks
+- Execute and track step progression
+- Reuse existing APIs/services (mission control, incidents, rollout, certification, venue account reconciliation, trace)
+- Store per-step action outcomes/evidence
+- Produce summary + deterministic recommendations
+
+Out of scope:
+- real-money or live execution
+- opaque autonomous planner behavior
+- enterprise multi-user workflow complexity

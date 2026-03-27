@@ -114,6 +114,7 @@ LOCAL_APPS = [
     'apps.venue_account',
     'apps.connector_lab',
     'apps.trace_explorer',
+    'apps.runbook_engine',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

@@ -1116,3 +1116,14 @@ Still out of scope:
 - distributed enterprise graph infrastructure
 - opaque planner authority
 - multi-user enterprise tenancy
+
+
+## Runbook engine / operator playbooks
+
+The platform now includes a manual-first **runbook engine** for guided remediation workflows.
+
+- Backend module: `apps/backend/apps/runbook_engine/`
+- API surface: `/api/runbooks/*`
+- Frontend route: `/runbooks`
+
+This layer orchestrates and records operator workflows for incidents, degraded mode, rollout/certification/venue parity issues, queue pressure, and related operational states. It reuses existing module actions (mission control, incidents, rollout, certification, venue reconciliation, trace) and does **not** introduce real money, live execution, or opaque automation.

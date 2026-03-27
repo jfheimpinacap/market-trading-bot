@@ -4,6 +4,7 @@ import { AlertsPage } from '../pages/AlertsPage';
 import { CockpitPage } from '../pages/CockpitPage';
 import { ChaosPage } from '../pages/ChaosPage';
 import { IncidentsPage } from '../pages/IncidentsPage';
+import { RunbooksPage } from '../pages/RunbooksPage';
 import { NotificationsPage } from '../pages/NotificationsPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { EvaluationPage } from '../pages/EvaluationPage';
@@ -109,6 +110,13 @@ export const appRoutes: AppRoute[] = [
     component: AgentsPage,
   },
 
+
+  {
+    label: 'Runbooks',
+    path: '/runbooks',
+    description: 'Guided manual-first operator remediation workflows with explicit runbook templates, steps, actions, and evidence history.',
+    component: RunbooksPage,
+  },
   {
     label: 'Incidents',
     path: '/incidents',
