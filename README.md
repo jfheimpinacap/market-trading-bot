@@ -1006,3 +1006,19 @@ What it explicitly does not add:
 - real order execution
 - automatic opaque go-live
 - auto-promotion to real capital
+
+
+### Broker bridge sandbox / dry-run routing readiness layer (new)
+
+A new `broker_bridge` layer now prepares the platform for eventual real execution **without crossing into real trading**:
+
+- maps internal sources (currently paper orders and explicit manual payloads) into `BrokerOrderIntent`
+- validates intents against certification envelope, runtime, safety, degraded mode, and open critical incidents
+- records a `BrokerDryRun` simulated broker response (`accepted`, `rejected`, `hold`, `needs_manual_review`)
+- creates operator queue review context when blocked/manual review is required
+- exposes `/api/broker-bridge/*` endpoints and frontend route `/broker-bridge`
+
+Boundary remains strict:
+- no real broker credentials
+- no real order routing
+- no real money or account reconciliation

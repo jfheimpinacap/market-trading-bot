@@ -40,6 +40,7 @@ import { PromotionPage } from '../pages/PromotionPage';
 import { RolloutPage } from '../pages/RolloutPage';
 import { SystemPage } from '../pages/SystemPage';
 import { CertificationPage } from '../pages/CertificationPage';
+import { BrokerBridgePage } from '../pages/BrokerBridgePage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -161,6 +162,13 @@ export const appRoutes: AppRoute[] = [
     path: '/execution',
     description: 'Paper execution realism layer with explicit order lifecycle, attempts, and fills.',
     component: ExecutionPage,
+  },
+
+  {
+    label: 'Broker Bridge',
+    path: '/broker-bridge',
+    description: 'Sandbox/dry-run broker routing readiness layer that maps paper execution intents to broker-like payloads under certification/runtime/safety guardrails.',
+    component: BrokerBridgePage,
   },
   {
     label: 'Positions',

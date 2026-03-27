@@ -939,3 +939,20 @@ Design goals:
 - avoid logic in views
 - keep full audit trail
 - preserve manual-first paper-only boundaries
+
+
+## Broker bridge architecture (new)
+
+`apps.broker_bridge` formalizes the boundary between internal paper execution and future broker adapters.
+
+Flow:
+1) build `BrokerOrderIntent` from internal source (`execution_simulator` paper orders now, extendable later)
+2) validate with existing authorities (certification envelope, runtime governor, safety guard, incident degraded mode)
+3) create `BrokerDryRun` simulated broker response
+4) enqueue operator review context for blocked/manual-review outcomes
+
+Design principles:
+- no business logic in views
+- explicit service split (`intents`, `mapping`, `validation`, `dry_run`, `readiness`)
+- auditable persistence at each stage
+- strict non-goal: real order routing and real money execution

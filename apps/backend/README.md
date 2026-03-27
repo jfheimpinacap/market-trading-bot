@@ -1550,3 +1550,31 @@ Scope boundaries:
 - no real money
 - no real execution
 - no opaque auto go-live
+
+
+## Broker bridge sandbox layer (new)
+
+`apps.broker_bridge` adds a dedicated real-execution-readiness boundary while preserving paper-only behavior.
+
+Core entities:
+- `BrokerOrderIntent`
+- `BrokerBridgeValidation`
+- `BrokerDryRun`
+
+Core services:
+- `services/intents.py`: build intents from internal sources
+- `services/mapping.py`: map internal objects to broker-like fields/profiles
+- `services/validation.py`: envelope/runtime/safety/incident guardrail checks
+- `services/dry_run.py`: simulated broker routing response
+- `services/readiness.py`: summary counters for operator UI
+
+API:
+- `POST /api/broker-bridge/create-intent/`
+- `POST /api/broker-bridge/validate/<id>/`
+- `POST /api/broker-bridge/dry-run/<id>/`
+- `GET /api/broker-bridge/intents/`
+- `GET /api/broker-bridge/intents/<id>/`
+- `GET /api/broker-bridge/summary/`
+
+Important boundary:
+`broker_bridge` does not replace `execution_simulator`; it records what would be sent to a future broker adapter while execution remains paper-only.
