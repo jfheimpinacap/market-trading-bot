@@ -7,6 +7,7 @@ import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
 import { navigate } from '../../lib/router';
 import { completeRunbook, createRunbook, getRunbookRecommendations, getRunbookSummary, getRunbooks, getRunbookTemplates, runRunbookStep } from '../../services/runbooks';
+import { getAutomationPolicySummary } from '../../services/automationPolicy';
 import type { RunbookInstance, RunbookStepActionKind, RunbookSummary, RunbookTemplate } from '../../types/runbooks';
 
 function statusTone(status: string): 'ready' | 'pending' | 'offline' | 'neutral' {
@@ -32,6 +33,7 @@ export function RunbooksPage() {
   const [runbooks, setRunbooks] = useState<RunbookInstance[]>([]);
   const [summary, setSummary] = useState<RunbookSummary | null>(null);
   const [recommendations, setRecommendations] = useState<Array<{ template_slug: string; reason: string; source_object_type: string; source_object_id: string; priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' }>>([]);
+  const [autoEligibleActions, setAutoEligibleActions] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -42,16 +44,18 @@ export function RunbooksPage() {
     setLoading(true);
     setError(null);
     try {
-      const [templatesData, runbooksData, summaryData, recommendationsData] = await Promise.all([
+      const [templatesData, runbooksData, summaryData, recommendationsData, automationSummary] = await Promise.all([
         getRunbookTemplates(),
         getRunbooks(),
         getRunbookSummary(),
         getRunbookRecommendations(),
+        getAutomationPolicySummary(),
       ]);
       setTemplates(templatesData);
       setRunbooks(runbooksData);
       setSummary(summaryData);
       setRecommendations(recommendationsData.results);
+      setAutoEligibleActions(automationSummary.auto_eligible_action_types ?? []);
       if (!selectedId && runbooksData.length > 0) {
         setSelectedId(runbooksData[0].id);
       }
@@ -89,7 +93,7 @@ export function RunbooksPage() {
         eyebrow="Operator playbooks"
         title="/runbooks"
         description="Guided manual-first remediation workflows. Runbooks orchestrate existing module actions with step-by-step progress and auditable evidence; they do not introduce opaque automation or real execution."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Open Cockpit</button><button type="button" className="secondary-button" onClick={() => navigate('/incidents')}>Open Incidents</button><button type="button" className="secondary-button" onClick={() => navigate('/mission-control')}>Open Mission Control</button><button type="button" className="secondary-button" onClick={() => navigate('/operator-queue')}>Open Operator Queue</button><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Open Trace Explorer</button></div>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Open Cockpit</button><button type="button" className="secondary-button" onClick={() => navigate('/incidents')}>Open Incidents</button><button type="button" className="secondary-button" onClick={() => navigate('/mission-control')}>Open Mission Control</button><button type="button" className="secondary-button" onClick={() => navigate('/operator-queue')}>Open Operator Queue</button><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Open Trace Explorer</button><button type="button" className="secondary-button" onClick={() => navigate('/automation-policy')}>Open Automation Policy</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
@@ -100,6 +104,7 @@ export function RunbooksPage() {
             <div><strong>Blocked</strong><div>{summary?.counts.blocked ?? 0}</div></div>
             <div><strong>Completed</strong><div>{summary?.counts.completed ?? 0}</div></div>
             <div><strong>Escalated</strong><div>{summary?.counts.escalated ?? 0}</div></div>
+            <div><strong>Auto-eligible actions</strong><div>{autoEligibleActions.length}</div></div>
           </div>
         </SectionCard>
 
@@ -197,7 +202,7 @@ export function RunbooksPage() {
               <p><strong>Priority:</strong> <StatusBadge tone={statusTone(selected.priority)}>{selected.priority}</StatusBadge></p>
               <p><strong>Source:</strong> {selected.source_object_type} / {selected.source_object_id}</p>
               <p><strong>Summary:</strong> {selected.summary || '—'}</p>
-              <p><strong>Related links:</strong> <button type="button" className="link-button" onClick={() => navigate(`/trace?root_type=${encodeURIComponent(selected.source_object_type)}&root_id=${encodeURIComponent(selected.source_object_id)}`)}>Open trace</button> · <button type="button" className="link-button" onClick={() => navigate('/incidents')}>Incidents</button> · <button type="button" className="link-button" onClick={() => navigate('/operator-queue')}>Operator queue</button> · <button type="button" className="link-button" onClick={() => navigate('/mission-control')}>Mission control</button></p>
+              <p><strong>Related links:</strong> <button type="button" className="link-button" onClick={() => navigate(`/trace?root_type=${encodeURIComponent(selected.source_object_type)}&root_id=${encodeURIComponent(selected.source_object_id)}`)}>Open trace</button> · <button type="button" className="link-button" onClick={() => navigate('/incidents')}>Incidents</button> · <button type="button" className="link-button" onClick={() => navigate('/operator-queue')}>Operator queue</button> · <button type="button" className="link-button" onClick={() => navigate('/mission-control')}>Mission control</button> · <button type="button" className="link-button" onClick={() => navigate('/automation-policy')}>Automation policy</button></p>
 
               <div className="table-wrapper">
                 <table className="data-table">

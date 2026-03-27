@@ -1127,3 +1127,18 @@ The platform now includes a manual-first **runbook engine** for guided remediati
 - Frontend route: `/runbooks`
 
 This layer orchestrates and records operator workflows for incidents, degraded mode, rollout/certification/venue parity issues, queue pressure, and related operational states. It reuses existing module actions (mission control, incidents, rollout, certification, venue reconciliation, trace) and does **not** introduce real money, live execution, or opaque automation.
+
+### Trust-tiered automation policy matrix (new)
+
+The stack now includes a formal **automation policy matrix / supervised runbook autopilot** layer:
+
+- explicit automation profiles (`conservative_manual_first`, `balanced_assist`, `supervised_autopilot`)
+- explicit trust tiers (`MANUAL_ONLY`, `APPROVAL_REQUIRED`, `SAFE_AUTOMATION`, `AUTO_BLOCKED`)
+- auditable decisions for every evaluated action
+- explicit action logs for every auto-execution attempt
+- effective tier downgrade by runtime/safety/certification/degraded posture
+- hard block for live-execution domains
+
+New operator route: `/automation-policy`.
+
+Scope remains unchanged: local-first, single-user, and paper/sandbox only.
