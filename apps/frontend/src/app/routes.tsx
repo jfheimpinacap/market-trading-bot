@@ -48,6 +48,7 @@ import { ExecutionVenuePage } from '../pages/ExecutionVenuePage';
 import { VenueAccountPage } from '../pages/VenueAccountPage';
 import { ConnectorsPage } from '../pages/ConnectorsPage';
 import { TracePage } from '../pages/TracePage';
+import { AutomationPolicyPage } from '../pages/AutomationPolicyPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -213,6 +214,13 @@ export const appRoutes: AppRoute[] = [
     path: '/connectors',
     description: 'Venue connector certification suite and adapter qualification harness for sandbox-only readiness toward a future read-only phase.',
     component: ConnectorsPage,
+  },
+
+  {
+    label: 'Automation Policy',
+    path: '/automation-policy',
+    description: 'Trust-tiered supervised automation policy matrix for runbooks and operational actions in manual-first paper/sandbox mode.',
+    component: AutomationPolicyPage,
   },
 
   {

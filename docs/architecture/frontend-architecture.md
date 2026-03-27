@@ -878,3 +878,21 @@ It consumes `/api/runbooks/*` and is integrated lightly with cockpit and inciden
 - Runbooks detail links to trace/incidents/queue/mission-control
 
 The page does not duplicate module business logic; it orchestrates existing actions and records outcomes.
+
+## Trust-tiered automation policy UX layer (new)
+
+A new route, `/automation-policy`, provides an operator-facing view of supervised runbook autopilot policies.
+
+### UI composition
+- current policy/guardrail posture card
+- rule matrix table with trust-tier badges
+- recent decision history (`ALLOWED` / `APPROVAL_REQUIRED` / `MANUAL_ONLY` / `BLOCKED`)
+- automation action log (`EXECUTED` / `SKIPPED` / `FAILED`)
+
+### Integration pattern
+- API integration through `src/services/automationPolicy.ts` using shared `requestJson` client.
+- Type-safe payloads in `src/types/automationPolicy.ts`.
+- lightweight routing integration through `app/routes.tsx`.
+- cross-linking from cockpit and runbooks without redesigning existing pages.
+
+The UX remains manual-first and paper-only, and treats blocked/approval outcomes as healthy governance behavior.

@@ -1719,3 +1719,30 @@ It provides:
 - Deterministic recommendation matching
 
 Key rule: manual-first orchestration with auditability. It reuses existing services and does not enable real/live execution.
+
+## Automation policy matrix (new)
+
+A new app, `apps.automation_policy`, introduces a formal trust-tiered automation boundary above existing operational actions and runbook steps.
+
+Core capabilities:
+- explicit profiles (`conservative_manual_first`, `balanced_assist`, `supervised_autopilot`)
+- explicit trust tiers (`MANUAL_ONLY`, `APPROVAL_REQUIRED`, `SAFE_AUTOMATION`, `AUTO_BLOCKED`)
+- rule matrix by `action_type` and optional `source_context_type`
+- auditable decision records (`AutomationDecision`)
+- explicit action execution logs (`AutomationActionLog`)
+- guardrail-aware effective tier downgrade from runtime/safety/certification/degraded mode
+
+API endpoints:
+- `GET /api/automation-policy/profiles/`
+- `GET /api/automation-policy/current/`
+- `POST /api/automation-policy/evaluate/`
+- `GET /api/automation-policy/decisions/`
+- `GET /api/automation-policy/action-logs/`
+- `POST /api/automation-policy/apply-profile/`
+- `GET /api/automation-policy/summary/`
+
+Boundary clarification:
+- `runbook_engine` remains workflow orchestration.
+- `automation_policy` decides if an action is auto-allowed, approval-required, manual-only, or blocked.
+- `incident_commander`, `runtime_governor`, `safety_guard`, and `certification_board` remain higher-order authorities.
+- scope remains local-first, single-user, paper/sandbox only.

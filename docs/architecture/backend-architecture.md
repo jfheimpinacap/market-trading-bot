@@ -1059,3 +1059,27 @@ Out of scope:
 - real-money or live execution
 - opaque autonomous planner behavior
 - enterprise multi-user workflow complexity
+
+## Trust-tiered automation policy layer (new)
+
+A dedicated `apps.automation_policy` app now provides a formal and auditable policy matrix for supervised automation.
+
+### Responsibility split
+- `runbook_engine`: workflow sequencing and step lifecycle.
+- `automation_policy`: evaluate whether actions are auto-allowed, approval-required, manual-only, or blocked.
+- `runtime_governor`, `safety_guard`, `certification_board`, `incident_commander`: authority layers that can downgrade effective trust.
+
+### Internal services
+- `services/profiles.py`: active profile resolution and profile switching.
+- `services/rules.py`: explicit policy rule matrix by action/context.
+- `services/guardrails.py`: effective tier downgrade from runtime/safety/certification/degraded posture.
+- `services/decisions.py`: decision creation + reason codes.
+- `services/execution.py`: controlled execution/logging path for allowed actions.
+
+### Audit model
+- `AutomationPolicyProfile`
+- `AutomationPolicyRule`
+- `AutomationDecision`
+- `AutomationActionLog`
+
+This layer is intentionally conservative: local-first, single-user, paper/sandbox only, and explicitly blocks live execution domains.

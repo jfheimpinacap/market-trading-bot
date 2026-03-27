@@ -1019,3 +1019,25 @@ It shows:
 - Deterministic recommendations and links to `/cockpit`, `/incidents`, `/trace`, `/mission-control`, and `/operator-queue`
 
 This view is manual-first and paper/sandbox only.
+
+## Automation policy workspace `/automation-policy` (new)
+
+A dedicated route now surfaces trust-tiered supervised automation over existing runbook/operational actions.
+
+What the page shows:
+- active automation profile and guardrail influence (runtime/safety/certification/degraded mode)
+- rule matrix with action types, trust tiers, and rationale
+- recent decisions (`ALLOWED`, `APPROVAL_REQUIRED`, `MANUAL_ONLY`, `BLOCKED`)
+- auto-action log (`EXECUTED`, `SKIPPED`, `FAILED`)
+- explicit manual-first/paper-only framing and profile switching controls
+
+Frontend integration points:
+- service layer: `src/services/automationPolicy.ts`
+- types: `src/types/automationPolicy.ts`
+- route: `/automation-policy`
+- quick links added from cockpit and runbooks flows
+
+Scope remains conservative:
+- no real-money paths
+- no real execution
+- no opaque autonomous planner

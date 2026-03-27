@@ -248,6 +248,7 @@ export function getCockpitQuickLinks() {
     { label: 'Rollout manager', path: '/rollout' },
     { label: 'Operator queue', path: '/operator-queue' },
     { label: 'Runbooks', path: '/runbooks' },
+    { label: 'Automation policy', path: '/automation-policy' },
     { label: 'Trace explorer', path: '/trace' },
     { label: 'Execution venue', path: '/execution-venue' },
     { label: 'Venue account', path: '/venue-account' },
