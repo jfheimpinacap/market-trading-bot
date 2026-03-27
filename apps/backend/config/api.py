@@ -50,4 +50,5 @@ urlpatterns = [
     path('go-live/', include(('apps.go_live_gate.urls', 'go_live_gate'), namespace='go_live_gate')),
     path('execution-venue/', include(('apps.execution_venue.urls', 'execution_venue'), namespace='execution_venue')),
     path('venue-account/', include(('apps.venue_account.urls', 'venue_account'), namespace='venue_account')),
+    path('connectors/', include(('apps.connector_lab.urls', 'connector_lab'), namespace='connector_lab')),
 ]

@@ -807,3 +807,14 @@ UI contract:
 - tabular order/position mirror visibility
 - reconciliation panel with parity status and issue list
 - no hidden automation; run parity explicitly from operator action
+
+## Connectors UX boundary (new)
+
+A new `/connectors` route exposes adapter qualification and readiness in a sober technical UI:
+
+- readiness card with recommendation + missing capability context
+- explicit run controls with fixture selection
+- case-level results table with warnings/issues
+- recent run history for auditability
+
+The page intentionally links (but does not merge) with `/execution-venue`, `/venue-account`, `/go-live`, and `/certification` to preserve modular boundaries.

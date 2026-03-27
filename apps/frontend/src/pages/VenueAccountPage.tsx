@@ -94,7 +94,7 @@ export function VenueAccountPage() {
             <StatusBadge tone={STATUS_TONE[latestRun?.status ?? 'PARITY_GAP'] ?? 'neutral'}>{latestRun?.status ?? 'PARITY_GAP'}</StatusBadge>
           </p>
           <p>
-            Build outgoing payload parity first in <a href="/execution-venue">Execution Venue</a>, then inspect incoming state parity here. Final readiness remains in <a href="/go-live">Go-Live Gate</a>.
+            Build outgoing payload parity first in <a href="/execution-venue">Execution Venue</a>, then inspect incoming state parity here. Run adapter certification in <a href="/connectors">Connectors</a>. Final readiness remains in <a href="/go-live">Go-Live Gate</a>.
           </p>
         </SectionCard>
 

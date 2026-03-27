@@ -1070,3 +1070,12 @@ Boundary remains strict:
 - no broker credentials
 - no real account connections
 - no real order placement or real-money execution
+
+## Connector Lab: venue connector certification suite (new)
+
+A new sandbox-only **connector_lab** boundary is now available to certify future venue adapters before any read-only/live integration.
+
+- Backend API under `/api/connectors/*` runs formal qualification suites for capabilities, payload mapping, response normalization, account mirror, and reconciliation.
+- Readiness outputs include recommendation codes such as `SANDBOX_CERTIFIED`, `READ_ONLY_PREPARED`, `INCOMPLETE_MAPPING`, `RECONCILIATION_GAPS`, and `NOT_READY`.
+- Frontend route `/connectors` provides qualification controls, readiness card, case results table, and recent runs.
+- This does **not** add real broker connectivity, credentials, live routing, real orders, or real money.
