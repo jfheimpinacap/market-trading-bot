@@ -975,3 +975,14 @@ UX role:
 - surfaces autonomy posture inside cockpit attention/quick-links
 
 State model remains lightweight: page-local fetch orchestration with explicit loading/error/empty handling.
+
+## Autonomy rollout board route
+
+The frontend adds `/autonomy-rollout` as a focused post-change domain-transition monitor:
+
+- follows existing card + table visual language from autonomy/policy-rollout pages
+- uses `services/autonomyRollout.ts` with no global state changes
+- keeps explicit loading/error/empty states (`REQUIRE_MORE_DATA` treated as normal stabilization)
+- integrates via lightweight links from `/autonomy` and `/cockpit`
+
+This extends governance visibility without introducing new orchestration or real-execution capabilities.

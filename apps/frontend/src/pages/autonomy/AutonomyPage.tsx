@@ -135,7 +135,7 @@ export function AutonomyPage() {
         eyebrow="Domain-level staged autonomy"
         title="/autonomy"
         description="Autonomy stage manager for manual-first domain envelopes. It groups action-level policy controls into operational domains, emits evidence-backed recommendations, and keeps apply/rollback explicit and auditable."
-        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run autonomy review</button><button className="secondary-button" type="button" onClick={() => navigate('/automation-policy')}>Automation policy</button><button className="secondary-button" type="button" onClick={() => navigate('/trust-calibration')}>Trust calibration</button><button className="secondary-button" type="button" onClick={() => navigate('/policy-rollout')}>Policy rollout</button><button className="ghost-button" type="button" onClick={() => navigate('/trace')}>Trace evidence</button></div>}
+        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run autonomy review</button><button className="secondary-button" type="button" onClick={() => navigate('/automation-policy')}>Automation policy</button><button className="secondary-button" type="button" onClick={() => navigate('/trust-calibration')}>Trust calibration</button><button className="secondary-button" type="button" onClick={() => navigate('/policy-rollout')}>Policy rollout</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-rollout')}>Autonomy rollout</button><button className="ghost-button" type="button" onClick={() => navigate('/trace')}>Trace evidence</button></div>}
       />
 
       {message ? <p className="success-text">{message}</p> : null}
@@ -201,7 +201,7 @@ export function AutonomyPage() {
                           <StatusBadge tone={transitionTone(recommendation.transition.status)}>{recommendation.transition.status}</StatusBadge>
                           <button className="secondary-button" type="button" disabled={busy || !['READY_TO_APPLY', 'DRAFT', 'PENDING_APPROVAL'].includes(recommendation.transition.status)} onClick={() => void applyTransition(recommendation.transition!.id)}>Apply transition</button>
                           <button className="ghost-button" type="button" disabled={busy || recommendation.transition.status !== 'APPLIED'} onClick={() => void rollbackTransition(recommendation.transition!.id)}>Rollback</button>
-                          <button className="link-button" type="button" onClick={() => navigate(`/trace?root_type=autonomy_transition&root_id=${encodeURIComponent(String(recommendation.transition!.id))}`)}>Trace</button>
+                          <button className="link-button" type="button" onClick={() => navigate(`/trace?root_type=autonomy_transition&root_id=${encodeURIComponent(String(recommendation.transition!.id))}`)}>Trace</button><button className="link-button" type="button" onClick={() => navigate('/autonomy-rollout')}>Open rollout monitor</button>
                           {recommendation.transition.approval_request ? <button className="link-button" type="button" onClick={() => navigate(`/approvals?request_id=${encodeURIComponent(String(recommendation.transition!.approval_request))}`)}>Approval #{recommendation.transition.approval_request}</button> : null}
                         </>
                       ) : (

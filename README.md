@@ -1232,3 +1232,22 @@ The stack now includes `autonomy_manager` as a conservative domain-level governa
 - keeps stage changes manual-first with explicit apply/rollback and approval-center integration for higher-impact changes
 
 Scope stays unchanged: local-first, single-user, paper/sandbox only, no real-money execution, and no opaque auto-promotion planner.
+
+### Autonomy rollout board / domain transition baselining (new)
+
+A dedicated `autonomy_rollout` layer now closes the post-change loop for domain stage transitions:
+
+- starts monitoring from an **already APPLIED** autonomy transition
+- captures explicit baseline and post-change snapshots per domain
+- compares before/after deltas for approvals, friction, blocked actions, incidents, and degraded context
+- emits recommendation-first outcomes:
+  - `KEEP_STAGE`
+  - `REQUIRE_MORE_DATA`
+  - `FREEZE_DOMAIN`
+  - `ROLLBACK_STAGE`
+  - `REVIEW_MANUALLY`
+  - `STABILIZE_AND_MONITOR`
+- supports auditable **manual rollback only**, optionally approval-gated
+- includes conservative cross-domain warning notes when related incident/degraded signals are detected
+
+Scope remains local-first and paper/sandbox only: no real money, no real execution, no silent auto-rollback.

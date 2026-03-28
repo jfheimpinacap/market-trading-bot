@@ -1901,3 +1901,23 @@ It reuses existing governance modules instead of replacing them:
 - `incident_commander`, `certification_board`, `trace_explorer`, and `cockpit` consume/emphasize posture context
 
 Out-of-scope remains explicit: no real execution, no real money, no opaque automatic autonomy promotion.
+
+## Autonomy rollout guard layer (new)
+
+`apps.autonomy_rollout` complements `autonomy_manager` with post-change observation and rollback guidance for **domain stage transitions**.
+
+- Starts from an **already applied** `AutonomyStageTransition`.
+- Builds explicit baseline and post-change snapshots for domain action types.
+- Compares before/after deltas (approval/friction/blocked/incident/degraded context).
+- Emits recommendation-first outcomes: `KEEP_STAGE`, `REQUIRE_MORE_DATA`, `FREEZE_DOMAIN`, `ROLLBACK_STAGE`, `REVIEW_MANUALLY`, `STABILIZE_AND_MONITOR`.
+- Supports manual rollback only, auditable, optionally approval-gated.
+
+Endpoints:
+- `POST /api/autonomy-rollout/start/`
+- `GET /api/autonomy-rollout/runs/`
+- `GET /api/autonomy-rollout/runs/<id>/`
+- `POST /api/autonomy-rollout/runs/<id>/evaluate/`
+- `POST /api/autonomy-rollout/runs/<id>/rollback/`
+- `GET /api/autonomy-rollout/summary/`
+
+Out of scope stays unchanged: no real-money execution, no auto-rollback without operator confirmation, no opaque planner.
