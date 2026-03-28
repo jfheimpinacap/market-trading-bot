@@ -12,6 +12,7 @@ import type { ProfileGovernanceSummary } from './profileManager';
 import type { PromotionSummary } from './promotion';
 import type { RolloutSummary } from './rollout';
 import type { RuntimeStatusResponse } from './runtime';
+import type { ApprovalRequest, ApprovalSummary } from './approvals';
 import type { RunbookAutopilotSummary, RunbookSummary } from './runbooks';
 import type { TraceQueryRun, TraceSummary } from './trace';
 import type { VenueSummary } from './executionVenue';
@@ -42,7 +43,9 @@ export type CockpitPanelKey =
   | 'promotionSummary'
   | 'championChallengerSummary'
   | 'runbookSummary'
-  | 'runbookAutopilotSummary';
+  | 'runbookAutopilotSummary'
+  | 'approvalSummary'
+  | 'pendingApprovals';
 
 export type CockpitPanelFailures = Partial<Record<CockpitPanelKey, string>>;
 
@@ -72,6 +75,8 @@ export type CockpitSnapshot = {
   championChallengerSummary: ChampionChallengerSummary | null;
   runbookSummary: RunbookSummary | null;
   runbookAutopilotSummary: RunbookAutopilotSummary | null;
+  approvalSummary: ApprovalSummary | null;
+  pendingApprovals: ApprovalRequest[];
   failures: CockpitPanelFailures;
   lastUpdatedAt: string;
 };

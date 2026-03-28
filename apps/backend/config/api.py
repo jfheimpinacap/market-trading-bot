@@ -54,4 +54,5 @@ urlpatterns = [
     path('trace/', include(('apps.trace_explorer.urls', 'trace_explorer'), namespace='trace_explorer')),
     path('runbooks/', include(('apps.runbook_engine.urls', 'runbook_engine'), namespace='runbook_engine')),
     path('automation-policy/', include(('apps.automation_policy.urls', 'automation_policy'), namespace='automation_policy')),
+    path('approvals/', include(('apps.approval_center.urls', 'approval_center'), namespace='approval_center')),
 ]

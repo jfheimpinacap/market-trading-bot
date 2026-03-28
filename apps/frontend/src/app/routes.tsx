@@ -49,6 +49,7 @@ import { VenueAccountPage } from '../pages/VenueAccountPage';
 import { ConnectorsPage } from '../pages/ConnectorsPage';
 import { TracePage } from '../pages/TracePage';
 import { AutomationPolicyPage } from '../pages/AutomationPolicyPage';
+import { ApprovalsPage } from '../pages/ApprovalsPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -214,6 +215,13 @@ export const appRoutes: AppRoute[] = [
     path: '/connectors',
     description: 'Venue connector certification suite and adapter qualification harness for sandbox-only readiness toward a future read-only phase.',
     component: ConnectorsPage,
+  },
+
+  {
+    label: 'Approvals',
+    path: '/approvals',
+    description: 'Unified human-in-the-loop approval center centralizing decision gates across runbooks, go-live, and operator queue in paper/sandbox mode.',
+    component: ApprovalsPage,
   },
 
   {
