@@ -58,6 +58,7 @@ import { AutonomyRolloutPage } from '../pages/AutonomyRolloutPage';
 import { AutonomyRoadmapPage } from '../pages/AutonomyRoadmapPage';
 import { AutonomyScenariosPage } from '../pages/AutonomyScenariosPage';
 import { AutonomyCampaignsPage } from '../pages/AutonomyCampaignsPage';
+import { AutonomyProgramPage } from '../pages/AutonomyProgramPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -288,6 +289,13 @@ export const appRoutes: AppRoute[] = [
     component: AutonomyScenariosPage,
   },
 
+
+  {
+    label: 'Autonomy Program',
+    path: '/autonomy-program',
+    description: 'Program-level control tower for cross-campaign concurrency guardrails, global health posture, and manual-first recommendations.',
+    component: AutonomyProgramPage,
+  },
   {
     label: 'Autonomy Campaigns',
     path: '/autonomy-campaigns',

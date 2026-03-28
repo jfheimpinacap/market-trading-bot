@@ -1031,3 +1031,25 @@ Frontend now adds `/autonomy-campaigns` as a dedicated execution-program board b
 - light integration links from roadmap/scenario/cockpit
 
 The UX remains desktop-first, technical, and conservative: blocked/waiting states are modeled as normal guardrail outcomes.
+
+## Autonomy program frontend architecture (new)
+
+A dedicated route `/autonomy-program` adds a program-control-tower view for multi-campaign governance.
+
+Frontend boundaries:
+- `services/autonomyProgram.ts` encapsulates all API calls for program governance endpoints
+- `types/autonomyProgram.ts` defines explicit posture/health/recommendation contracts
+- `pages/autonomy-program/AutonomyProgramPage.tsx` renders posture cards, health table, recommendations, and rules
+
+UX intent:
+- operator-readable, audit-friendly, desktop-first panel
+- explicit loading/error/empty states
+- safe-state framing: `HOLD_NEW_CAMPAIGNS` and `BLOCKED` can be healthy guardrails
+
+Integration:
+- quick links from `/autonomy-campaigns` and `/cockpit`
+- context links from recommendations/health to `/approvals` and `/trace`
+
+Non-goals preserved:
+- no opaque multi-campaign auto-orchestration UX
+- no real-execution UI paths

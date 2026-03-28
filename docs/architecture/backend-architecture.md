@@ -1275,3 +1275,36 @@ Separation of concerns:
 - binds into `approval_center` for approval-required checkpoints
 
 This keeps recommendation/simulation modules (`autonomy_roadmap`, `autonomy_scenario`) decoupled from execution sequencing while preserving traceability and manual control.
+
+## Autonomy program governance architecture (new)
+
+`apps.autonomy_program` is a program-level control layer above `autonomy_campaign`.
+
+Design intent:
+- keep campaign execution semantics inside `autonomy_campaign` (steps/waves/checkpoints)
+- add cross-campaign program governance for safe coexistence and operational health
+
+Core models:
+- `AutonomyProgramState`
+- `CampaignConcurrencyRule`
+- `CampaignHealthSnapshot`
+- `ProgramRecommendation`
+
+Service split:
+- `services/state.py`: consolidate global posture and lock/concurrency metadata
+- `services/rules.py`: explicit concurrency rules + conflict detection
+- `services/health.py`: campaign health snapshots from checkpoints/approvals/rollout/incidents/degraded
+- `services/recommendation.py`: recommendation emission from posture + conflicts + health
+- `services/control.py`: `run_program_review` orchestration + optional pause gating + approval request handoff
+
+Integration points:
+- `autonomy_campaign`: reads campaign + step/checkpoint state and can mark campaign `BLOCKED` via pause gate
+- `autonomy_rollout`: consumes rollout warning/freeze/rollback signals
+- `incident_commander`: consumes critical/degraded posture signals
+- `approval_center`: opens high-impact pause approval requests
+- `trace_explorer`: remains downstream drill-down layer via linked roots
+
+Non-goals:
+- no replacement of campaign internals
+- no opaque auto-planner or mass auto-apply
+- no real-money/real-execution pathways

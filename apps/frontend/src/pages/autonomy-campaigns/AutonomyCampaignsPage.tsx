@@ -112,7 +112,7 @@ export function AutonomyCampaignsPage() {
         eyebrow="Autonomy campaign board"
         title="/autonomy-campaigns"
         description="Scenario/roadmap handoff into explicit staged execution programs. Manual-first, approval-gated, and sandbox-only."
-        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy || !latestRoadmapId} onClick={() => void createFromRoadmap()}>Create from roadmap</button><button className="secondary-button" type="button" disabled={busy || !latestScenarioId} onClick={() => void createFromScenario()}>Create from scenario</button><button className="secondary-button" type="button" onClick={() => navigate('/approvals')}>Approvals</button><button className="ghost-button" type="button" onClick={() => navigate('/trace')}>Trace</button></div>}
+        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy || !latestRoadmapId} onClick={() => void createFromRoadmap()}>Create from roadmap</button><button className="secondary-button" type="button" disabled={busy || !latestScenarioId} onClick={() => void createFromScenario()}>Create from scenario</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-program')}>Program tower</button><button className="secondary-button" type="button" onClick={() => navigate('/approvals')}>Approvals</button><button className="ghost-button" type="button" onClick={() => navigate('/trace')}>Trace</button></div>}
       />
       {message ? <p className="success-text">{message}</p> : null}
 

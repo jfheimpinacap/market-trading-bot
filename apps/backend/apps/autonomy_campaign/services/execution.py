@@ -84,7 +84,7 @@ def advance_campaign(*, campaign: AutonomyCampaign, actor: str = 'operator-ui') 
             ).exists():
                 create_approval_checkpoint(
                     step=step,
-                    summary=f'Manual approval required by campaign policy before domain transition for {step.domain.slug if step.domain_id else \"n/a\"}.',
+                    summary=f'Manual approval required by campaign policy before domain transition for {step.domain.slug if step.domain_id else "n/a"}.',
                     metadata={'domain': step.domain.slug if step.domain_id else None},
                 )
                 step.status = AutonomyCampaignStepStatus.WAITING_APPROVAL
