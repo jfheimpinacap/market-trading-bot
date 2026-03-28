@@ -1113,3 +1113,22 @@ Se agregó una vista técnica y auditable para supervised automation tuning:
 - logs before/after visibles
 
 La ruta conserva límites explícitos: local-first, single-user, paper/sandbox only, sin auto-apply.
+
+
+## Autonomy stage manager UI in `/autonomy` (new)
+
+A new `/autonomy` route adds the progressive enablement board for domain-level autonomy envelopes.
+
+It provides:
+- domain state cards and stage/status badges
+- recommendation panel (`promote`, `keep`, `downgrade`, `freeze`, `require_more_data`, `rollback`)
+- transition controls for manual apply and manual rollback
+- evidence links toward `/trace` and `/approvals`
+- summary cards for manual/assisted/supervised/frozen/degraded posture
+
+Integration:
+- connects with `/automation-policy`, `/trust-calibration`, `/policy-tuning`, `/policy-rollout`, `/cockpit`, and `/trace`
+- keeps action-level policy authority in automation policy
+- keeps domain-level stage transitions explicit and auditable
+
+Deliberate non-goals remain: no real-money execution, no real execution venue routing, no opaque auto-promotion.

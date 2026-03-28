@@ -957,3 +957,21 @@ Cross-module integration is lightweight via quick links from automation-policy/a
 - Shows actionable policy diff current -> proposed.
 - Keeps review/apply flow explicit and audit-oriented.
 - Exposes empty/loading/error states for healthy manual-first operation.
+
+
+## Domain-level autonomy UX layer (new)
+
+The frontend now adds a dedicated domain-level autonomy board at `/autonomy`.
+
+Client boundaries:
+- `services/autonomy.ts` for all autonomy API calls
+- `types/autonomy.ts` for stage/recommendation/transition contracts
+- `pages/autonomy/AutonomyPage.tsx` for manual-first review/apply/rollback flow
+
+UX role:
+- complements (not replaces) `/automation-policy` and `/policy-tuning`
+- shows domain posture and progressive enablement status
+- links evidence and control points to `/trace` and `/approvals`
+- surfaces autonomy posture inside cockpit attention/quick-links
+
+State model remains lightweight: page-local fetch orchestration with explicit loading/error/empty handling.

@@ -1178,3 +1178,27 @@ Design constraints:
 - Mutates only through explicit manual apply: `automation_policy.AutomationPolicyRule`
 - Uses `approval_center` for consistent manual decision visibility
 - Preserves recommendation-only posture in trust calibration and manual-first policy authority
+
+
+## Autonomy manager architecture (new)
+
+`apps.autonomy_manager` is a domain-level orchestration layer that sits above action-level policy governance.
+
+Core entities:
+- `AutonomyDomain`: operational domain and action mapping
+- `AutonomyEnvelope`: per-domain operational limits
+- `AutonomyStageState`: current/effective stage posture
+- `AutonomyStageRecommendation`: evidence-backed recommendation output
+- `AutonomyStageTransition`: manual-first transition lifecycle (approval/apply/rollback)
+
+Service split:
+- `services/domains.py`: domain seed catalog and mapping to action types
+- `services/evidence.py`: trust/rollout/incident/approval/certification evidence consolidation
+- `services/recommendation.py`: deterministic recommendation policy (no black-box planner)
+- `services/transitions.py`: transition generation + approval-aware apply/rollback
+- `services/envelopes.py`: envelope projection
+
+Boundary contracts:
+- `automation_policy` remains source-of-truth at rule/action granularity
+- `policy_tuning` and `policy_rollout` remain change-detail and post-change loops
+- `autonomy_manager` governs staged posture across coherent domains

@@ -19,6 +19,7 @@ import type { VenueSummary } from './executionVenue';
 import type { VenueAccountSummary } from './venueAccount';
 import type { PolicyTuningSummary } from './policyTuning';
 import type { PolicyRolloutSummary } from './policyRollout';
+import type { AutonomySummary } from './autonomy';
 
 export type CockpitPanelKey =
   | 'runtime'
@@ -49,7 +50,8 @@ export type CockpitPanelKey =
   | 'approvalSummary'
   | 'pendingApprovals'
   | 'policyTuningSummary'
-  | 'policyRolloutSummary';
+  | 'policyRolloutSummary'
+  | 'autonomySummary';
 
 export type CockpitPanelFailures = Partial<Record<CockpitPanelKey, string>>;
 
@@ -83,6 +85,7 @@ export type CockpitSnapshot = {
   pendingApprovals: ApprovalRequest[];
   policyTuningSummary: PolicyTuningSummary | null;
   policyRolloutSummary: PolicyRolloutSummary | null;
+  autonomySummary: AutonomySummary | null;
   failures: CockpitPanelFailures;
   lastUpdatedAt: string;
 };

@@ -1219,3 +1219,16 @@ Still out of scope:
 - real execution
 - opaque planners / black-box learning
 - complex multi-user governance
+
+
+### Autonomy stage manager / domain-level envelopes (new)
+
+The stack now includes `autonomy_manager` as a conservative domain-level governance layer above action-level policy tuning:
+
+- groups related action types into auditable operational domains
+- tracks explicit domain stages (`MANUAL`, `ASSISTED`, `SUPERVISED_AUTOPILOT`, `FROZEN`, `ROLLBACK_RECOMMENDED`)
+- consolidates evidence from trust calibration, policy rollout, incidents, approval friction, and certification posture
+- emits recommendation-first domain transitions
+- keeps stage changes manual-first with explicit apply/rollback and approval-center integration for higher-impact changes
+
+Scope stays unchanged: local-first, single-user, paper/sandbox only, no real-money execution, and no opaque auto-promotion planner.

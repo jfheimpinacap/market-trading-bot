@@ -1881,3 +1881,23 @@ API endpoints:
 - `POST /api/policy-tuning/candidates/<id>/apply/`
 - `GET /api/policy-tuning/application-logs/`
 - `GET /api/policy-tuning/summary/`
+
+
+## Autonomy manager layer (new)
+
+A new `apps.autonomy_manager` app introduces a formal domain-level autonomy stage manager.
+
+Responsibilities:
+- domain catalog + action-type grouping (`AutonomyDomain`)
+- stage posture state (`AutonomyStageState`)
+- recommendation records (`AutonomyStageRecommendation`)
+- manual-first transition records (`AutonomyStageTransition`)
+- envelope constraints (`AutonomyEnvelope`)
+
+It reuses existing governance modules instead of replacing them:
+- `automation_policy` stays the granular authority per action type
+- `trust_calibration` + `policy_rollout` provide evidence inputs
+- `approval_center` gates high-impact stage changes
+- `incident_commander`, `certification_board`, `trace_explorer`, and `cockpit` consume/emphasize posture context
+
+Out-of-scope remains explicit: no real execution, no real money, no opaque automatic autonomy promotion.
