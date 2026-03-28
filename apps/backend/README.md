@@ -1804,3 +1804,38 @@ Scope guardrails:
 - single-user local-first operation
 - paper/sandbox only
 - no live execution enablement
+
+
+## Trust calibration / approval analytics layer
+
+New app: `apps.trust_calibration`
+
+Purpose:
+- provide a formal approval analytics + human-feedback governance loop
+- measure where `automation_policy` is too conservative/permissive
+- generate recommendation-only trust-tier tuning suggestions
+
+Key models:
+- `TrustCalibrationRun`
+- `AutomationFeedbackSnapshot`
+- `TrustCalibrationRecommendation`
+
+Service split:
+- `services/feedback.py`: consolidates approval + automation + incident evidence
+- `services/metrics.py`: explicit calibration metric formulas
+- `services/recommendation.py`: conservative recommendation rules
+- `services/candidates.py`: manual policy tuning candidate payloads
+- `services/reporting.py`: summary views for cockpit/UI consumption
+
+API:
+- `POST /api/trust-calibration/run/`
+- `GET /api/trust-calibration/runs/`
+- `GET /api/trust-calibration/runs/<id>/`
+- `GET /api/trust-calibration/recommendations/`
+- `GET /api/trust-calibration/summary/`
+- `GET /api/trust-calibration/feedback/`
+
+Operational boundary remains unchanged:
+- manual-first, recommendation-only default
+- no automatic policy mutation
+- no real execution / no real money

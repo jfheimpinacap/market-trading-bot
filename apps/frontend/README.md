@@ -1072,3 +1072,16 @@ Integration points:
 - quick links from cockpit/runbooks
 - cockpit now surfaces pending approval pressure
 - trace deep links from each approval row/detail item
+
+
+## Trust calibration UX
+
+A new route `/trust-calibration` adds a formal approval analytics / trust-calibration view that integrates with existing pages (`/automation-policy`, `/approvals`, `/runbooks`, `/cockpit`, `/trace`).
+
+Highlights:
+- recommendation-only + manual-first header messaging
+- summary cards (actions analyzed, friction, top domains, recommendation count)
+- action-level metrics table with current tier and recommendation badge
+- recommendation panel with current→recommended tier, reason codes, confidence, and evidence links
+- recent run history for auditable evolution
+- explicit empty-state for insufficient evidence (`Not enough approval/autopilot history yet to calibrate trust tiers.`)

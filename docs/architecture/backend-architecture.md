@@ -1120,3 +1120,21 @@ Why this is conservative:
 - source of truth remains in each module
 - approval center keeps lifecycle + audit continuity across modules
 - no live money/execution behavior introduced
+
+
+## Trust calibration architecture boundary
+
+`apps.trust_calibration` is an analytics/governance boundary that **does not** replace `automation_policy` authority.
+
+Flow:
+1. ingest historical approvals (`approval_center`)
+2. ingest policy decisions + action logs (`automation_policy`)
+3. join runbook/profile/source context where available
+4. fold in incident-after-auto signals (`incident_commander`)
+5. persist auditable run + feedback snapshots + recommendations
+
+Design constraints:
+- explicit rules and formulas (no black-box learning)
+- recommendation-only by default
+- policy updates remain explicit human decisions
+- local-first, single-user, paper/sandbox only

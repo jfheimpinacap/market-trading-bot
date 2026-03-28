@@ -55,4 +55,5 @@ urlpatterns = [
     path('runbooks/', include(('apps.runbook_engine.urls', 'runbook_engine'), namespace='runbook_engine')),
     path('automation-policy/', include(('apps.automation_policy.urls', 'automation_policy'), namespace='automation_policy')),
     path('approvals/', include(('apps.approval_center.urls', 'approval_center'), namespace='approval_center')),
+    path('trust-calibration/', include(('apps.trust_calibration.urls', 'trust_calibration'), namespace='trust_calibration')),
 ]

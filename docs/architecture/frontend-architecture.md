@@ -925,3 +925,15 @@ Integration strategy:
 - no routing framework rewrite
 - cockpit/runbooks add lightweight links and approval-pressure indicators
 - trace explorer remains the drill-down system of record
+
+
+## Trust calibration frontend boundary
+
+Frontend adds `/trust-calibration` as a thin integration page powered by `services/trustCalibration.ts` and `types/trustCalibration.ts`.
+
+The route reuses existing UI primitives (`PageHeader`, `SectionCard`, `StatusBadge`, `DataStateWrapper`) and keeps complexity low:
+- no global-state rewrite
+- no new websocket/polling subsystem
+- no hidden auto-apply behavior
+
+Cross-module integration is lightweight via quick links from automation-policy/approvals/cockpit and evidence drill-down links to trace/approvals pages.

@@ -170,7 +170,7 @@ export function CockpitPage() {
                   <li><span>Approval center pending</span><strong>{snapshot.approvalSummary?.pending ?? 0}</strong></li>
                   <li><span>High priority approvals</span><strong>{snapshot.approvalSummary?.high_priority_pending ?? 0}</strong></li>
                 </ul>
-                <div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/runbooks')}>Open runbooks</button><button className="ghost-button" type="button" onClick={() => navigate('/approvals')}>Open approvals</button></div>
+                <div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/runbooks')}>Open runbooks</button><button className="ghost-button" type="button" onClick={() => navigate('/approvals')}>Open approvals</button><button className="ghost-button" type="button" onClick={() => navigate('/trust-calibration')}>Open trust calibration</button></div>
               </SectionCard>
 
               <SectionCard eyebrow="Change governance" title="Promotion, rollout and champion/challenger" description="Current promotion recommendations and rollout status.">

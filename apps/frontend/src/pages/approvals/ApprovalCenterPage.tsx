@@ -79,7 +79,7 @@ export function ApprovalCenterPage() {
         eyebrow="Human-in-the-loop control plane"
         title="/approvals"
         description="Unified approval center for manual-first decision gates across runbooks, go-live, and approval-required operator queue items. Every decision is explicit, traceable, and paper/sandbox only."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Open cockpit</button><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Open trace</button><button type="button" className="secondary-button" onClick={() => void load()}>Refresh</button></div>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Open cockpit</button><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Open trace</button><button type="button" className="secondary-button" onClick={() => navigate('/trust-calibration')}>Trust calibration</button><button type="button" className="secondary-button" onClick={() => void load()}>Refresh</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
