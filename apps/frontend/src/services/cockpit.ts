@@ -22,6 +22,7 @@ import { getPolicyRolloutSummary } from './policyRollout';
 import { getAutonomySummary } from './autonomy';
 import { getAutonomyRolloutSummary } from './autonomyRollout';
 import { getAutonomyRoadmapSummary } from './autonomyRoadmap';
+import { getAutonomyCampaignSummary } from './autonomyCampaign';
 import type { CockpitAttentionItem, CockpitPanelFailures, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -79,6 +80,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     autonomySummary,
     autonomyRolloutSummary,
     autonomyRoadmapSummary,
+    autonomyCampaignSummary,
   ] = await Promise.all([
     withFallback('runtime', () => getRuntimeStatus(), failures, null, 'Runtime status unavailable.'),
     withFallback('incidents', () => getIncidentCurrentState(), failures, null, 'Incident posture unavailable.'),
@@ -112,6 +114,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     withFallback('autonomySummary', () => getAutonomySummary(), failures, null, 'Autonomy summary unavailable.'),
     withFallback('autonomyRolloutSummary', () => getAutonomyRolloutSummary(), failures, null, 'Autonomy rollout summary unavailable.'),
     withFallback('autonomyRoadmapSummary', () => getAutonomyRoadmapSummary(), failures, null, 'Autonomy roadmap summary unavailable.'),
+    withFallback('autonomyCampaignSummary', () => getAutonomyCampaignSummary(), failures, null, 'Autonomy campaign summary unavailable.'),
   ]);
 
   return {
@@ -147,6 +150,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     autonomySummary,
     autonomyRolloutSummary,
     autonomyRoadmapSummary,
+    autonomyCampaignSummary,
     failures,
     lastUpdatedAt: new Date().toISOString(),
   };
@@ -371,6 +375,7 @@ export function getCockpitQuickLinks() {
     { label: 'Policy rollout', path: '/policy-rollout' },
     { label: 'Autonomy manager', path: '/autonomy' },
     { label: 'Autonomy roadmap', path: '/autonomy-roadmap' },
+    { label: 'Autonomy campaigns', path: '/autonomy-campaigns' },
     { label: 'Trace explorer', path: '/trace' },
     { label: 'Execution venue', path: '/execution-venue' },
     { label: 'Venue account', path: '/venue-account' },

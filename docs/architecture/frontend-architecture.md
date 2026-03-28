@@ -1019,3 +1019,15 @@ Integration points are lightweight and decoupled:
 - quick links from autonomy roadmap and cockpit
 - trace drill-down from scenario recommendations
 - no automatic apply controls and no execution controls on this route
+
+
+## Autonomy campaign board integration
+
+Frontend now adds `/autonomy-campaigns` as a dedicated execution-program board between roadmap/scenario recommendation pages and operational controls.
+
+- new service layer: `services/autonomyCampaign.ts`
+- new types: `types/autonomyCampaign.ts`
+- campaign board page with wave/step/checkpoint views
+- light integration links from roadmap/scenario/cockpit
+
+The UX remains desktop-first, technical, and conservative: blocked/waiting states are modeled as normal guardrail outcomes.
