@@ -57,6 +57,7 @@ import { AutonomyPage } from '../pages/AutonomyPage';
 import { AutonomyRolloutPage } from '../pages/AutonomyRolloutPage';
 import { AutonomyRoadmapPage } from '../pages/AutonomyRoadmapPage';
 import { AutonomyScenariosPage } from '../pages/AutonomyScenariosPage';
+import { AutonomyCampaignsPage } from '../pages/AutonomyCampaignsPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -285,6 +286,13 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-scenarios',
     description: 'Scenario lab for roadmap what-if simulation, bundle/sequence comparison, and recommendation-first autonomy progression decisions.',
     component: AutonomyScenariosPage,
+  },
+
+  {
+    label: 'Autonomy Campaigns',
+    path: '/autonomy-campaigns',
+    description: 'Formal scenario/roadmap handoff into staged, checkpoint-gated autonomy campaign execution programs.',
+    component: AutonomyCampaignsPage,
   },
 
   {

@@ -1176,3 +1176,17 @@ UI sections:
 - recent run history with selected option and recommendation summary
 
 This route is integrated with `/autonomy-roadmap`, `/autonomy`, `/approvals`, `/cockpit`, and `/trace` through lightweight navigation links.
+
+
+## Autonomy campaigns UI (new)
+
+Added `/autonomy-campaigns` as the staged scenario-to-execution handoff board:
+
+- campaign cards with status/source/wave/progress
+- detailed wave/step timeline
+- checkpoint table (approval + observation gates)
+- controls for create/start/resume/abort
+- explicit empty/loading/error states
+- cockpit + roadmap + scenario quick-link integration
+
+This page stays manual-first and recommendation-first, and does not introduce real execution.

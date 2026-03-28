@@ -1285,3 +1285,17 @@ A new `autonomy_scenario` layer adds a **roadmap simulation / bundle what-if eva
 - emits recommendation-first outcomes such as `BEST_NEXT_MOVE`, `SAFE_BUNDLE`, `SEQUENCE_FIRST`, `DELAY_UNTIL_STABLE`, `DO_NOT_EXECUTE`, and `REQUIRE_APPROVAL_HEAVY`
 
 Hard boundaries remain unchanged: manual-first, simulation-only, paper/sandbox only, no real-money or real-execution paths, and no auto-apply.
+
+
+### Autonomy campaign board / staged transition program (new)
+
+The platform now includes `autonomy_campaign` as the formal handoff layer between roadmap/scenario recommendations and staged manual-first execution programs.
+
+- source binding: roadmap plan, scenario run, or manual bundle
+- wave/step/checkpoint model for transparent staged execution
+- explicit controls: create/start/resume/abort
+- approval-center checkpoint integration and resume-after-approval
+- rollout monitor + observation checkpoint orchestration (without duplicating autonomy_rollout)
+- cockpit and frontend route integration at `/autonomy-campaigns`
+
+Explicit non-goals remain: no real money, no real execution, no opaque auto-promotion planner.

@@ -1262,3 +1262,16 @@ Separation of concerns:
 - scenario lab compares alternatives
 - autonomy manager remains the only apply boundary
 - autonomy rollout remains post-change monitoring/rollback guidance
+
+
+## Autonomy campaign orchestration boundary
+
+`autonomy_campaign` is an orchestration boundary, not a replacement for autonomy transition engines:
+
+- owns campaign program lifecycle (`DRAFT/READY/RUNNING/PAUSED/BLOCKED/COMPLETED/ABORTED/FAILED`)
+- owns step/checkpoint progression and audit metadata
+- calls into `autonomy_manager` for actual stage transition apply
+- calls into `autonomy_rollout` for post-apply monitor lifecycle
+- binds into `approval_center` for approval-required checkpoints
+
+This keeps recommendation/simulation modules (`autonomy_roadmap`, `autonomy_scenario`) decoupled from execution sequencing while preserving traceability and manual control.

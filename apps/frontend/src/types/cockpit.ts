@@ -22,6 +22,7 @@ import type { PolicyRolloutSummary } from './policyRollout';
 import type { AutonomySummary } from './autonomy';
 import type { AutonomyRolloutSummary } from './autonomyRollout';
 import type { AutonomyRoadmapSummary } from './autonomyRoadmap';
+import type { AutonomyCampaignSummary } from './autonomyCampaign';
 
 export type CockpitPanelKey =
   | 'runtime'
@@ -55,7 +56,8 @@ export type CockpitPanelKey =
   | 'policyRolloutSummary'
   | 'autonomySummary'
   | 'autonomyRolloutSummary'
-  | 'autonomyRoadmapSummary';
+  | 'autonomyRoadmapSummary'
+  | 'autonomyCampaignSummary';
 
 export type CockpitPanelFailures = Partial<Record<CockpitPanelKey, string>>;
 
@@ -92,6 +94,7 @@ export type CockpitSnapshot = {
   autonomySummary: AutonomySummary | null;
   autonomyRolloutSummary: AutonomyRolloutSummary | null;
   autonomyRoadmapSummary: AutonomyRoadmapSummary | null;
+  autonomyCampaignSummary: AutonomyCampaignSummary | null;
   failures: CockpitPanelFailures;
   lastUpdatedAt: string;
 };

@@ -1968,3 +1968,29 @@ Endpoints:
 - `GET /api/autonomy-scenario/summary/`
 
 Out of scope remains explicit: no auto-apply, no real-money, no real execution, no opaque planner, no multi-user orchestration.
+
+
+## Autonomy campaign layer (new)
+
+`apps.autonomy_campaign` introduces the formal staged execution handoff between recommendation modules and manual transition apply.
+
+Responsibilities:
+- create campaigns from `autonomy_roadmap` plans or `autonomy_scenario` runs
+- expand into wave/step programs with explicit status
+- open checkpoints for approval and rollout-observation gates
+- orchestrate `autonomy_manager` transition apply timing (without replacing transition logic)
+- orchestrate `autonomy_rollout` monitor start + wait/evaluate checkpoints
+
+Endpoints:
+- `POST /api/autonomy-campaigns/create/`
+- `GET /api/autonomy-campaigns/`
+- `GET /api/autonomy-campaigns/<id>/`
+- `POST /api/autonomy-campaigns/<id>/start/`
+- `POST /api/autonomy-campaigns/<id>/resume/`
+- `POST /api/autonomy-campaigns/<id>/abort/`
+- `GET /api/autonomy-campaigns/summary/`
+
+Boundaries:
+- recommendation-first
+- sandbox/paper only
+- no real execution or auto mass multi-domain apply
