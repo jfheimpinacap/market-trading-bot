@@ -116,6 +116,7 @@ LOCAL_APPS = [
     'apps.trace_explorer',
     'apps.runbook_engine',
     'apps.automation_policy',
+    'apps.approval_center',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

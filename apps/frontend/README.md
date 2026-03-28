@@ -1056,3 +1056,19 @@ Scope remains conservative:
 `/cockpit` now also surfaces autopilot paused/blocked posture and attention item routing back to `/runbooks`.
 
 Scope is unchanged: local-first, single-user, paper/sandbox only, manual-first supervision.
+
+## Approval Center UI (new)
+
+The frontend now includes `/approvals` as the unified human decision gate tray.
+
+Implemented UX:
+- header with manual-first scope reminder
+- summary cards (pending, high priority, approved recently, expired/escalated)
+- centralized approval queue table (source, title, priority, status, requested time, impact preview, trace link)
+- detail panel with rationale/context, impact preview, evidence hints, and approve/reject/expire/escalate controls
+- explicit empty/loading/error states
+
+Integration points:
+- quick links from cockpit/runbooks
+- cockpit now surfaces pending approval pressure
+- trace deep links from each approval row/detail item

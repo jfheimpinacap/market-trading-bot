@@ -1105,3 +1105,18 @@ This layer is intentionally conservative: local-first, single-user, paper/sandbo
 - `automation_policy.services.runbook_resolution`: step-level policy decision projection for autopilot.
 
 This keeps the system auditable, manual-first, and conservative while enabling gradual supervised auto-advance.
+
+## Approval center architecture (new)
+
+A new backend module `approval_center` acts as a **normalization and control plane**, not as a replacement of source-domain models.
+
+Design:
+- Source adapters (`services/sources.py`) map runbook/go-live/operator queue objects into normalized `ApprovalRequest` records.
+- Decision engine (`services/decisions.py`) applies manual actions and dispatches side effects back to source modules.
+- Impact layer (`services/impact.py`) provides auditable action previews.
+- Request/sync + queue views (`services/requests.py`, `services/summary.py`) power list/detail/pending/summary endpoints.
+
+Why this is conservative:
+- source of truth remains in each module
+- approval center keeps lifecycle + audit continuity across modules
+- no live money/execution behavior introduced

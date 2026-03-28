@@ -12,6 +12,7 @@ import { getProfileGovernanceSummary, runProfileGovernance } from './profileMana
 import { getPromotionSummary } from './promotion';
 import { rollbackRollout, pauseRollout, getRolloutSummary } from './rollout';
 import { getRuntimeStatus } from './runtime';
+import { getApprovalSummary, getPendingApprovals } from './approvals';
 import { getRunbookAutopilotSummary, getRunbookSummary } from './runbooks';
 import { getTraceQueryRuns, getTraceSummary } from './trace';
 import { getVenueSummary } from './executionVenue';
@@ -66,6 +67,8 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     championChallengerSummary,
     runbookSummary,
     runbookAutopilotSummary,
+    approvalSummary,
+    pendingApprovals,
   ] = await Promise.all([
     withFallback('runtime', () => getRuntimeStatus(), failures, null, 'Runtime status unavailable.'),
     withFallback('incidents', () => getIncidentCurrentState(), failures, null, 'Incident posture unavailable.'),
@@ -92,6 +95,8 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     withFallback('championChallengerSummary', () => getChampionChallengerSummary(), failures, null, 'Champion/challenger summary unavailable.'),
     withFallback('runbookSummary', () => getRunbookSummary(), failures, null, 'Runbook summary unavailable.'),
     withFallback('runbookAutopilotSummary', () => getRunbookAutopilotSummary(), failures, null, 'Runbook autopilot summary unavailable.'),
+    withFallback('approvalSummary', () => getApprovalSummary(), failures, null, 'Approval summary unavailable.'),
+    withFallback('pendingApprovals', () => getPendingApprovals(), failures, [], 'Pending approvals unavailable.'),
   ]);
 
   return {
@@ -120,6 +125,8 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     championChallengerSummary,
     runbookSummary,
     runbookAutopilotSummary,
+    approvalSummary,
+    pendingApprovals,
     failures,
     lastUpdatedAt: new Date().toISOString(),
   };
@@ -218,6 +225,18 @@ export function getCockpitAttention(snapshot: CockpitSnapshot): CockpitAttention
 
 
 
+  if ((snapshot.approvalSummary?.pending ?? 0) > 0) {
+    items.push({
+      id: 'approval-center-pending',
+      severity: (snapshot.approvalSummary?.high_priority_pending ?? 0) > 0 ? 'HIGH' : 'MEDIUM',
+      title: 'Approval center has pending decisions',
+      summary: `${snapshot.approvalSummary?.pending ?? 0} approval request(s) are pending in /approvals.`,
+      route: '/approvals',
+      traceRootType: snapshot.pendingApprovals[0]?.metadata?.trace?.root_type as string | undefined,
+      traceRootId: snapshot.pendingApprovals[0]?.metadata?.trace?.root_id as string | undefined,
+    });
+  }
+
   if ((snapshot.runbookAutopilotSummary?.counts.paused_for_approval ?? 0) > 0) {
     items.push({
       id: 'runbook-approval-paused',
@@ -262,6 +281,7 @@ export function getCockpitQuickLinks() {
     { label: 'Rollout manager', path: '/rollout' },
     { label: 'Operator queue', path: '/operator-queue' },
     { label: 'Runbooks', path: '/runbooks' },
+    { label: 'Approvals', path: '/approvals' },
     { label: 'Automation policy', path: '/automation-policy' },
     { label: 'Trace explorer', path: '/trace' },
     { label: 'Execution venue', path: '/execution-venue' },

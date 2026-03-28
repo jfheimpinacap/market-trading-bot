@@ -1778,3 +1778,29 @@ New endpoints:
 - `GET /api/runbooks/autopilot-summary/`
 
 Out of scope stays explicit: no live trading, no real execution venue actions, no fully autonomous black-box remediation.
+
+## Approval center (new)
+
+The backend now includes `apps.approval_center`, a lightweight unified human-in-the-loop decision layer.
+
+What it does:
+- aggregates approval requests from existing modules (without replacing their source models)
+- normalizes lifecycle states: `PENDING`, `APPROVED`, `REJECTED`, `EXPIRED`, `ESCALATED`, `CANCELLED`
+- stores explicit operator decisions in `ApprovalDecision`
+- exposes impact previews before actioning
+- routes decisions back to source workflows (e.g., runbook autopilot resume)
+
+API endpoints:
+- `GET /api/approvals/`
+- `GET /api/approvals/pending/`
+- `GET /api/approvals/summary/`
+- `GET /api/approvals/<id>/`
+- `POST /api/approvals/<id>/approve/`
+- `POST /api/approvals/<id>/reject/`
+- `POST /api/approvals/<id>/expire/`
+- `POST /api/approvals/<id>/escalate/`
+
+Scope guardrails:
+- single-user local-first operation
+- paper/sandbox only
+- no live execution enablement

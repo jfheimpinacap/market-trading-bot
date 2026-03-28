@@ -911,3 +911,17 @@ The frontend extends existing runbook pages rather than adding a new standalone 
 - `/cockpit` consumes autopilot summary for fast operator triage and quick routing.
 
 Design remains technical and sober: explicit states, no opaque planner behavior, and manual-first control posture.
+
+## Approval center frontend integration (new)
+
+The new `/approvals` route extends the existing page/service/type pattern:
+
+- `types/approvals.ts`: normalized request/decision/summary contracts
+- `services/approvals.ts`: centralized API client wrappers
+- `pages/approvals/ApprovalCenterPage.tsx`: queue + detail operational view
+
+Integration strategy:
+- reuse existing shell/components (`PageHeader`, `SectionCard`, `StatusBadge`, `DataStateWrapper`)
+- no routing framework rewrite
+- cockpit/runbooks add lightweight links and approval-pressure indicators
+- trace explorer remains the drill-down system of record

@@ -1161,3 +1161,16 @@ Strict boundaries remain unchanged:
 - no real money
 - no real execution
 - no black-box autonomous remediation
+
+### Approval center / unified decision gates (new)
+
+A new manual-first `/approvals` control plane now centralizes human decisions that were previously scattered across modules.
+
+- Backend app: `apps/backend/apps/approval_center`
+- Central entities: `ApprovalRequest`, `ApprovalDecision`
+- Sources integrated now: runbook checkpoints, go-live approval requests, and `operator_queue` items marked `approval_required`
+- Explicit actions: approve / reject / expire / escalate
+- Every decision is auditable and links back to source context + trace roots
+- Approving go-live requests in this phase **does not enable live trading** (still rehearsal + paper/sandbox only)
+
+Out of scope remains unchanged: no real money, no real execution, no opaque black-box automation, no enterprise multi-user approval chains.

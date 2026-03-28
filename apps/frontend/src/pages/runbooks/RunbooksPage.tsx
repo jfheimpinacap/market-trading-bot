@@ -108,7 +108,7 @@ export function RunbooksPage() {
         eyebrow="Operator playbooks"
         title="/runbooks"
         description="Supervised runbook autopilot keeps manual-first paper/sandbox remediation: safe steps auto-execute, approval/manual/block states pause orchestration, and every step remains auditable."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Open Cockpit</button><button type="button" className="secondary-button" onClick={() => navigate('/incidents')}>Open Incidents</button><button type="button" className="secondary-button" onClick={() => navigate('/automation-policy')}>Open Automation Policy</button></div>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Open Cockpit</button><button type="button" className="secondary-button" onClick={() => navigate('/incidents')}>Open Incidents</button><button type="button" className="secondary-button" onClick={() => navigate('/approvals')}>Open Approvals</button><button type="button" className="secondary-button" onClick={() => navigate('/automation-policy')}>Open Automation Policy</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
@@ -180,7 +180,7 @@ export function RunbooksPage() {
                         {selectedAutopilot.approval_checkpoints.map((checkpoint) => (
                           <li key={checkpoint.id}>
                             <StatusBadge tone={statusTone(checkpoint.status)}>{checkpoint.status}</StatusBadge> Step #{checkpoint.runbook_step} — {checkpoint.approval_reason}
-                            {checkpoint.status === 'PENDING' ? <button type="button" className="link-button" onClick={() => void runAction(() => resumeRunbookAutopilot(selectedAutopilot.id, checkpoint.id, true), `Checkpoint #${checkpoint.id} approved and resumed.`)}>Approve & resume</button> : null}
+                            {checkpoint.status === 'PENDING' ? <><button type="button" className="link-button" onClick={() => void runAction(() => resumeRunbookAutopilot(selectedAutopilot.id, checkpoint.id, true), `Checkpoint #${checkpoint.id} approved and resumed.`)}>Approve & resume</button><button type="button" className="link-button" onClick={() => navigate('/approvals')}>Open in approvals</button></> : null}
                           </li>
                         ))}
                       </ul>
