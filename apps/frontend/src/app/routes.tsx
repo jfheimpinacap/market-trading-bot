@@ -53,6 +53,7 @@ import { ApprovalsPage } from '../pages/ApprovalsPage';
 import { TrustCalibrationPage } from '../pages/TrustCalibrationPage';
 import { PolicyTuningPage } from '../pages/PolicyTuningPage';
 import { PolicyRolloutPage } from '../pages/PolicyRolloutPage';
+import { AutonomyPage } from '../pages/AutonomyPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -253,6 +254,13 @@ export const appRoutes: AppRoute[] = [
     path: '/policy-rollout',
     description: 'Post-change rollout guard for applied policy tuning updates with baseline/post-change comparison, recommendation-first outcomes, and manual rollback loop.',
     component: PolicyRolloutPage,
+  },
+
+  {
+    label: 'Autonomy',
+    path: '/autonomy',
+    description: 'Domain-level staged autonomy manager with manual-first recommendations, transitions, and audit-ready apply/rollback flow.',
+    component: AutonomyPage,
   },
 
   {
