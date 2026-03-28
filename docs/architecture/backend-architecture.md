@@ -1202,3 +1202,20 @@ Boundary contracts:
 - `automation_policy` remains source-of-truth at rule/action granularity
 - `policy_tuning` and `policy_rollout` remain change-detail and post-change loops
 - `autonomy_manager` governs staged posture across coherent domains
+
+## `autonomy_rollout` post-change layer
+
+`autonomy_rollout` is a narrow, auditable boundary that observes the impact of an **applied** domain stage transition.
+
+- Depends on `autonomy_manager` for transition lifecycle (does not replace stage recommendation/apply logic).
+- Reuses trust/policy-like metrics semantics for baseline/post snapshots.
+- Adds conservative cross-domain warning signals from incident/degraded posture context.
+- Keeps rollback manual-first by delegating rollback execution to `autonomy_manager.services.transitions.rollback_transition` and optionally opening approval gates in `approval_center`.
+
+Service split:
+- `services/baseline.py`: baseline snapshot creation per domain action scope
+- `services/observation.py`: post-change snapshot capture
+- `services/comparison.py`: metric delta computation
+- `services/recommendation.py`: recommendation-first outcome
+- `services/rollback.py`: manual rollback orchestration + audit payload
+- `services/reporting.py`: cockpit/board summary

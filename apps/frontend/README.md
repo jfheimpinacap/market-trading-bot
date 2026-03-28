@@ -1132,3 +1132,19 @@ Integration:
 - keeps domain-level stage transitions explicit and auditable
 
 Deliberate non-goals remain: no real-money execution, no real execution venue routing, no opaque auto-promotion.
+
+### Autonomy rollout monitor (new)
+
+A new route `/autonomy-rollout` provides the domain transition post-change board:
+
+- start monitor from an already applied autonomy transition
+- active rollout status + recommendation badge
+- baseline vs post-change metrics and deltas
+- recommendation panel with rationale, warnings, cross-domain notes
+- manual rollback controls (approval-oriented)
+- recent run history
+
+Frontend integration points:
+- new service `src/services/autonomyRollout.ts`
+- new types `src/types/autonomyRollout.ts`
+- quick links from `/autonomy` and `/cockpit`

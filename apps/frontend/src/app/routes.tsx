@@ -54,6 +54,7 @@ import { TrustCalibrationPage } from '../pages/TrustCalibrationPage';
 import { PolicyTuningPage } from '../pages/PolicyTuningPage';
 import { PolicyRolloutPage } from '../pages/PolicyRolloutPage';
 import { AutonomyPage } from '../pages/AutonomyPage';
+import { AutonomyRolloutPage } from '../pages/AutonomyRolloutPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -261,6 +262,13 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy',
     description: 'Domain-level staged autonomy manager with manual-first recommendations, transitions, and audit-ready apply/rollback flow.',
     component: AutonomyPage,
+  },
+
+  {
+    label: 'Autonomy Rollout',
+    path: '/autonomy-rollout',
+    description: 'Post-change domain transition monitor with baseline/post-change comparison, freeze/rollback recommendations, and manual rollback loop.',
+    component: AutonomyRolloutPage,
   },
 
   {

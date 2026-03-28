@@ -20,6 +20,7 @@ import { getVenueAccountSummary } from './venueAccount';
 import { getPolicyTuningSummary } from './policyTuning';
 import { getPolicyRolloutSummary } from './policyRollout';
 import { getAutonomySummary } from './autonomy';
+import { getAutonomyRolloutSummary } from './autonomyRollout';
 import type { CockpitAttentionItem, CockpitPanelFailures, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -75,6 +76,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     policyTuningSummary,
     policyRolloutSummary,
     autonomySummary,
+    autonomyRolloutSummary,
   ] = await Promise.all([
     withFallback('runtime', () => getRuntimeStatus(), failures, null, 'Runtime status unavailable.'),
     withFallback('incidents', () => getIncidentCurrentState(), failures, null, 'Incident posture unavailable.'),
@@ -106,6 +108,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     withFallback('policyTuningSummary', () => getPolicyTuningSummary(), failures, null, 'Policy tuning summary unavailable.'),
     withFallback('policyRolloutSummary', () => getPolicyRolloutSummary(), failures, null, 'Policy rollout summary unavailable.'),
     withFallback('autonomySummary', () => getAutonomySummary(), failures, null, 'Autonomy summary unavailable.'),
+    withFallback('autonomyRolloutSummary', () => getAutonomyRolloutSummary(), failures, null, 'Autonomy rollout summary unavailable.'),
   ]);
 
   return {
@@ -139,6 +142,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     policyTuningSummary,
     policyRolloutSummary,
     autonomySummary,
+    autonomyRolloutSummary,
     failures,
     lastUpdatedAt: new Date().toISOString(),
   };

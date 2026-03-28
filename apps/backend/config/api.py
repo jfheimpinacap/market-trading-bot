@@ -59,4 +59,5 @@ urlpatterns = [
     path('policy-tuning/', include(('apps.policy_tuning.urls', 'policy_tuning'), namespace='policy_tuning')),
     path('policy-rollout/', include(('apps.policy_rollout.urls', 'policy_rollout'), namespace='policy_rollout')),
     path('autonomy/', include(('apps.autonomy_manager.urls', 'autonomy_manager'), namespace='autonomy_manager')),
+    path('autonomy-rollout/', include(('apps.autonomy_rollout.urls', 'autonomy_rollout'), namespace='autonomy_rollout')),
 ]
