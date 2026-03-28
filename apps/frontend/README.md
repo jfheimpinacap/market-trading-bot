@@ -1148,3 +1148,18 @@ Frontend integration points:
 - new service `src/services/autonomyRollout.ts`
 - new types `src/types/autonomyRollout.ts`
 - quick links from `/autonomy` and `/cockpit`
+
+## Autonomy roadmap board en `/autonomy-roadmap` (new)
+
+Se agregó una nueva ruta técnica para gobierno global de autonomía entre dominios:
+
+- postura global (manual/assisted/supervised + blocked/frozen/under observation)
+- panel de recomendaciones (`NEXT_BEST_MOVE`, secuencia sugerida, bloqueos)
+- vista de dependencias (`requires_stable`, `incompatible_parallel`, etc.)
+- bundles recomendados con riesgo y `requires_approval`
+- tabla de planes recientes auditables
+
+Integraciones ligeras:
+- quick links desde `/autonomy` y `/cockpit`
+- navegación a `/trace`, `/approvals`, `/autonomy`, `/autonomy-rollout`
+- estado vacío explícito: `Run an autonomy roadmap review to coordinate domain progression.`

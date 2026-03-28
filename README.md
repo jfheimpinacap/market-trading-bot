@@ -1251,3 +1251,25 @@ A dedicated `autonomy_rollout` layer now closes the post-change loop for domain 
 - includes conservative cross-domain warning notes when related incident/degraded signals are detected
 
 Scope remains local-first and paper/sandbox only: no real money, no real execution, no silent auto-rollback.
+
+### Autonomy roadmap board (new)
+
+A new `autonomy_roadmap` layer now governs **cross-domain autonomy progression** as a staged portfolio (not just per-domain transitions):
+
+- explicit dependency mapping between autonomy domains (`requires_stable`, `blocks_if_degraded`, `recommended_before`, `incompatible_parallel`)
+- recommendation-first roadmap plans with blocked/frozen domains, sequence suggestions, and optional bundles
+- strict manual-first boundary: no automatic multi-domain promotion or hidden planner behavior
+- cockpit and autonomy pages now link to `/autonomy-roadmap` for global roadmap visibility
+
+Key API surface:
+- `GET /api/autonomy-roadmap/dependencies/`
+- `POST /api/autonomy-roadmap/run-plan/`
+- `GET /api/autonomy-roadmap/plans/`
+- `GET /api/autonomy-roadmap/plans/<id>/`
+- `GET /api/autonomy-roadmap/recommendations/`
+- `GET /api/autonomy-roadmap/summary/`
+
+Still out of scope:
+- real-money flows
+- real execution
+- opaque automatic multi-domain promotion

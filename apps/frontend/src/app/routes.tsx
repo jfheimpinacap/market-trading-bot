@@ -55,6 +55,7 @@ import { PolicyTuningPage } from '../pages/PolicyTuningPage';
 import { PolicyRolloutPage } from '../pages/PolicyRolloutPage';
 import { AutonomyPage } from '../pages/AutonomyPage';
 import { AutonomyRolloutPage } from '../pages/AutonomyRolloutPage';
+import { AutonomyRoadmapPage } from '../pages/AutonomyRoadmapPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -269,6 +270,13 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-rollout',
     description: 'Post-change domain transition monitor with baseline/post-change comparison, freeze/rollback recommendations, and manual rollback loop.',
     component: AutonomyRolloutPage,
+  },
+
+  {
+    label: 'Autonomy Roadmap',
+    path: '/autonomy-roadmap',
+    description: 'Dependency-aware cross-domain autonomy sequencing board with recommendation-first global roadmap plans and manual-first execution gates.',
+    component: AutonomyRoadmapPage,
   },
 
   {
