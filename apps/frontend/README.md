@@ -1163,3 +1163,16 @@ Integraciones ligeras:
 - quick links desde `/autonomy` y `/cockpit`
 - navegación a `/trace`, `/approvals`, `/autonomy`, `/autonomy-rollout`
 - estado vacío explícito: `Run an autonomy roadmap review to coordinate domain progression.`
+
+
+## Autonomy scenarios UI (new)
+
+Added route `/autonomy-scenarios` as a simulation-only lab to compare autonomy progression alternatives before any manual apply step.
+
+UI sections:
+- options panel (single/sequence/bundle/freeze-delay candidates)
+- risk panel (dependency conflicts, friction, degraded/incident exposure, approval-heavy)
+- recommendation panel (best/safe/delay/do-not-execute outputs)
+- recent run history with selected option and recommendation summary
+
+This route is integrated with `/autonomy-roadmap`, `/autonomy`, `/approvals`, `/cockpit`, and `/trace` through lightweight navigation links.

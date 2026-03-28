@@ -1273,3 +1273,15 @@ Still out of scope:
 - real-money flows
 - real execution
 - opaque automatic multi-domain promotion
+
+
+### Autonomy scenario lab (new)
+
+A new `autonomy_scenario` layer adds a **roadmap simulation / bundle what-if evaluator** on top of existing autonomy governance:
+
+- compares scenario options (single domain, sequence, bundle, freeze+promote, delay-until-stable)
+- estimates dependency conflict risk, approval friction, degraded/incident exposure, rollback hints, and approval-heavy posture
+- persists auditable simulation runs (`AutonomyScenarioRun`) with per-option risk and recommendation records
+- emits recommendation-first outcomes such as `BEST_NEXT_MOVE`, `SAFE_BUNDLE`, `SEQUENCE_FIRST`, `DELAY_UNTIL_STABLE`, `DO_NOT_EXECUTE`, and `REQUIRE_APPROVAL_HEAVY`
+
+Hard boundaries remain unchanged: manual-first, simulation-only, paper/sandbox only, no real-money or real-execution paths, and no auto-apply.

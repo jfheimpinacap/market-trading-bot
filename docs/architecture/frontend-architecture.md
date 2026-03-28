@@ -1004,3 +1004,18 @@ Cockpit integration remains lightweight:
 - quick link and attention item route users to `/autonomy-roadmap`
 
 No routing rewrite or global-state rewrite was introduced.
+
+
+## Autonomy scenario lab UI (new)
+
+Frontend adds `/autonomy-scenarios` as a dedicated autonomy what-if workspace:
+
+- loaded via `services/autonomyScenario.ts` using existing `services/api/client.ts`
+- typed through `types/autonomyScenario.ts`
+- technical card/table layout aligned with roadmap/cockpit styling
+- explicit loading/error/empty states, including healthy `DO_NOT_EXECUTE` outcomes
+
+Integration points are lightweight and decoupled:
+- quick links from autonomy roadmap and cockpit
+- trace drill-down from scenario recommendations
+- no automatic apply controls and no execution controls on this route
