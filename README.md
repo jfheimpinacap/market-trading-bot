@@ -144,6 +144,23 @@ A new desktop-first `/cockpit` route now provides a **single-pane operational co
 
 Scope remains unchanged: local-first, single-user, paper/sandbox only, and no real-money execution.
 
+### Policy rollout guard / post-change baselining loop (new)
+
+The stack now includes a dedicated `policy_rollout` layer (`/api/policy-rollout/*` + `/policy-rollout`) that closes the post-change governance loop after `policy_tuning` apply:
+
+- starts a formal observation run from an **already applied** policy tuning candidate
+- captures explicit **baseline snapshot** and **post-change snapshot**
+- compares before/after deltas for approvals, friction, auto-success, incidents, and manual intervention
+- emits recommendation-first outcomes:
+  - `KEEP_CHANGE`
+  - `REQUIRE_MORE_DATA`
+  - `ROLLBACK_CHANGE`
+  - `REVIEW_MANUALLY`
+  - `STABILIZE_AND_MONITOR`
+- supports **manual rollback only** (no silent auto-rollback), with audit metadata and optional approval-center gate
+
+Deliberate non-goals remain unchanged: no real money, no real execution, no opaque auto-apply/auto-rollback planner, single-user local-first scope.
+
 ## What this scaffold does not include yet
 
 - Real trading provider integrations (execution/auth).
