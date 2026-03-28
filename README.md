@@ -1185,3 +1185,20 @@ A dedicated `trust_calibration` layer now closes the human-feedback loop between
 - emits conservative recommendation-only trust-tier suggestions (`PROMOTE_TO_SAFE_AUTOMATION`, `KEEP_APPROVAL_REQUIRED`, `DOWNGRADE_TO_MANUAL_ONLY`, `BLOCK_AUTOMATION_FOR_ACTION`, `REQUIRE_MORE_DATA`, `REVIEW_RULE_CONDITIONS`)
 - adds frontend route `/trust-calibration` with summary cards, metrics table, recommendation panel, and run history
 - no auto-apply, no real-money execution, no real routing
+
+### Policy tuning board / recommendation-to-approval workflow (new)
+
+The platform now includes a formal `policy_tuning` layer that turns trust calibration recommendations into explicit, auditable policy change candidates.
+
+- recommendation source remains `trust_calibration`
+- operational policy authority remains `automation_policy`
+- new explicit flow: candidate -> review decision -> manual apply -> application log
+- before/after snapshots persisted for traceability
+- frontend board available at `/policy-tuning`
+
+Still out of scope:
+- auto-apply without approval
+- real money
+- real execution
+- opaque planners / black-box learning
+- complex multi-user governance

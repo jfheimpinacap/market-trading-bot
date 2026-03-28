@@ -1138,3 +1138,13 @@ Design constraints:
 - recommendation-only by default
 - policy updates remain explicit human decisions
 - local-first, single-user, paper/sandbox only
+
+## policy_tuning boundary (new)
+
+`policy_tuning` is the supervised automation tuning boundary between recommendation generation and policy mutation.
+
+- Consumes: `trust_calibration.TrustCalibrationRecommendation`
+- Produces: `PolicyTuningCandidate` + `PolicyChangeSet` + `PolicyTuningReview` + `PolicyTuningApplicationLog`
+- Mutates only through explicit manual apply: `automation_policy.AutomationPolicyRule`
+- Uses `approval_center` for consistent manual decision visibility
+- Preserves recommendation-only posture in trust calibration and manual-first policy authority

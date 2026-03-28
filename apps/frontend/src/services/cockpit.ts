@@ -17,6 +17,7 @@ import { getRunbookAutopilotSummary, getRunbookSummary } from './runbooks';
 import { getTraceQueryRuns, getTraceSummary } from './trace';
 import { getVenueSummary } from './executionVenue';
 import { getVenueAccountSummary } from './venueAccount';
+import { getPolicyTuningSummary } from './policyTuning';
 import type { CockpitAttentionItem, CockpitPanelFailures, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -69,6 +70,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     runbookAutopilotSummary,
     approvalSummary,
     pendingApprovals,
+    policyTuningSummary,
   ] = await Promise.all([
     withFallback('runtime', () => getRuntimeStatus(), failures, null, 'Runtime status unavailable.'),
     withFallback('incidents', () => getIncidentCurrentState(), failures, null, 'Incident posture unavailable.'),
@@ -97,6 +99,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     withFallback('runbookAutopilotSummary', () => getRunbookAutopilotSummary(), failures, null, 'Runbook autopilot summary unavailable.'),
     withFallback('approvalSummary', () => getApprovalSummary(), failures, null, 'Approval summary unavailable.'),
     withFallback('pendingApprovals', () => getPendingApprovals(), failures, [], 'Pending approvals unavailable.'),
+    withFallback('policyTuningSummary', () => getPolicyTuningSummary(), failures, null, 'Policy tuning summary unavailable.'),
   ]);
 
   return {
@@ -127,6 +130,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     runbookAutopilotSummary,
     approvalSummary,
     pendingApprovals,
+    policyTuningSummary,
     failures,
     lastUpdatedAt: new Date().toISOString(),
   };
@@ -257,6 +261,21 @@ export function getCockpitAttention(snapshot: CockpitSnapshot): CockpitAttention
     });
   }
 
+
+  if ((snapshot.policyTuningSummary?.approved_not_applied ?? 0) > 0 || (snapshot.policyTuningSummary?.pending_candidates ?? 0) > 0) {
+    const pending = snapshot.policyTuningSummary?.pending_candidates ?? 0;
+    const approved = snapshot.policyTuningSummary?.approved_not_applied ?? 0;
+    items.push({
+      id: 'policy-tuning-pending',
+      severity: approved > 0 ? 'HIGH' : 'MEDIUM',
+      title: 'Policy tuning candidates require review/apply',
+      summary: `${pending} pending and ${approved} approved-not-applied candidate(s) in /policy-tuning.`,
+      route: '/policy-tuning',
+      traceRootType: 'trust_calibration_run',
+      traceRootId: '',
+    });
+  }
+
   if (snapshot.missionControl?.state.status === 'PAUSED' && snapshot.incidents?.degraded_mode.state !== 'ACTIVE') {
     items.push({
       id: 'mission-paused',
@@ -283,6 +302,7 @@ export function getCockpitQuickLinks() {
     { label: 'Runbooks', path: '/runbooks' },
     { label: 'Approvals', path: '/approvals' },
     { label: 'Automation policy', path: '/automation-policy' },
+    { label: 'Policy tuning', path: '/policy-tuning' },
     { label: 'Trace explorer', path: '/trace' },
     { label: 'Execution venue', path: '/execution-venue' },
     { label: 'Venue account', path: '/venue-account' },

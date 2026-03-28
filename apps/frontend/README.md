@@ -1085,3 +1085,15 @@ Highlights:
 - recommendation panel with current→recommended tier, reason codes, confidence, and evidence links
 - recent run history for auditable evolution
 - explicit empty-state for insufficient evidence (`Not enough approval/autopilot history yet to calibrate trust tiers.`)
+
+## Policy tuning board en `/policy-tuning` (new)
+
+Se agregó una vista técnica y auditable para supervised automation tuning:
+
+- lista de tuning candidates (status, trust-tier diff, confianza)
+- panel de diff current vs proposed (tier + conditions)
+- review controls explícitos (`APPROVE`, `REJECT`, `REQUIRE_MORE_EVIDENCE`, `DEFER`)
+- apply manual solo para candidatos `APPROVED`
+- logs before/after visibles
+
+La ruta conserva límites explícitos: local-first, single-user, paper/sandbox only, sin auto-apply.

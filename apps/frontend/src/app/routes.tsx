@@ -51,6 +51,7 @@ import { TracePage } from '../pages/TracePage';
 import { AutomationPolicyPage } from '../pages/AutomationPolicyPage';
 import { ApprovalsPage } from '../pages/ApprovalsPage';
 import { TrustCalibrationPage } from '../pages/TrustCalibrationPage';
+import { PolicyTuningPage } from '../pages/PolicyTuningPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -237,6 +238,14 @@ export const appRoutes: AppRoute[] = [
     path: '/trust-calibration',
     description: 'Approval analytics and human-feedback governance loop that recommends conservative trust-tier tuning in recommendation-only mode.',
     component: TrustCalibrationPage,
+  },
+
+
+  {
+    label: 'Policy Tuning',
+    path: '/policy-tuning',
+    description: 'Manual-first recommendation-to-approval policy tuning board with explicit candidate diff, review decisions, and audited apply flow.',
+    component: PolicyTuningPage,
   },
 
   {
