@@ -123,6 +123,7 @@ LOCAL_APPS = [
     'apps.autonomy_manager',
     'apps.autonomy_rollout',
     'apps.autonomy_roadmap',
+    'apps.autonomy_scenario',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

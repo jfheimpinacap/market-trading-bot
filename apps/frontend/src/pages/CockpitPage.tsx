@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
 import { getCockpitAttention, getCockpitQuickLinks, getCockpitSummary, runCockpitAction } from '../services/cockpit';
+import { getAutonomyScenarioSummary } from '../services/autonomyScenario';
 import type { CockpitAttentionItem, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
 
 const formatDate = (value: string | null | undefined) => (value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'n/a');
@@ -45,13 +46,15 @@ export function CockpitPage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [runningAction, setRunningAction] = useState<CockpitQuickActionId | null>(null);
+  const [autonomyScenarioSummary, setAutonomyScenarioSummary] = useState<Awaited<ReturnType<typeof getAutonomyScenarioSummary>> | null>(null);
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await getCockpitSummary();
+      const [response, scenarioSummary] = await Promise.all([getCockpitSummary(), getAutonomyScenarioSummary()]);
       setSnapshot(response);
+      setAutonomyScenarioSummary(scenarioSummary);
     } catch (loadError) {
       setError(getErrorMessage(loadError, 'Could not load cockpit data.'));
       setSnapshot(null);
@@ -182,9 +185,9 @@ export function CockpitPage() {
                   <li><span>Champion/challenger mode</span><strong>{snapshot.championChallengerSummary?.latest_run?.status ?? 'n/a'}</strong></li>
                   <li><span>Champion/challenger result</span><strong>{snapshot.championChallengerSummary?.latest_run?.recommendation_code ?? 'n/a'}</strong></li>
                   <li><span>Autonomy pending changes</span><strong>{snapshot.autonomySummary?.pending_stage_changes ?? 0}</strong></li>
-                  <li><span>Autonomy degraded/blocked</span><strong>{(snapshot.autonomySummary?.degraded_domains ?? 0) + (snapshot.autonomySummary?.blocked_domains ?? 0)}</strong></li><li><span>Autonomy rollout observing</span><strong>{snapshot.autonomyRolloutSummary?.observing_runs ?? 0}</strong></li><li><span>Autonomy freeze/rollback warnings</span><strong>{(snapshot.autonomyRolloutSummary?.freeze_recommended_runs ?? 0) + (snapshot.autonomyRolloutSummary?.rollback_recommended_runs ?? 0)}</strong></li><li><span>Roadmap blocked domains</span><strong>{snapshot.autonomyRoadmapSummary?.latest_blocked_domains.length ?? 0}</strong></li><li><span>Roadmap next best sequence</span><strong>{snapshot.autonomyRoadmapSummary?.latest_recommended_sequence.slice(0, 2).join(' → ') || 'n/a'}</strong></li>
+                  <li><span>Autonomy degraded/blocked</span><strong>{(snapshot.autonomySummary?.degraded_domains ?? 0) + (snapshot.autonomySummary?.blocked_domains ?? 0)}</strong></li><li><span>Autonomy rollout observing</span><strong>{snapshot.autonomyRolloutSummary?.observing_runs ?? 0}</strong></li><li><span>Autonomy freeze/rollback warnings</span><strong>{(snapshot.autonomyRolloutSummary?.freeze_recommended_runs ?? 0) + (snapshot.autonomyRolloutSummary?.rollback_recommended_runs ?? 0)}</strong></li><li><span>Roadmap blocked domains</span><strong>{snapshot.autonomyRoadmapSummary?.latest_blocked_domains.length ?? 0}</strong></li><li><span>Roadmap next best sequence</span><strong>{snapshot.autonomyRoadmapSummary?.latest_recommended_sequence.slice(0, 2).join(' → ') || 'n/a'}</strong></li><li><span>Scenario best next move</span><strong>{autonomyScenarioSummary?.latest_selected_option_key ?? 'n/a'}</strong></li><li><span>Scenario recommendation</span><strong>{autonomyScenarioSummary?.latest_recommendation_code ?? 'n/a'}</strong></li>
                 </ul>
-                <div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/promotion')}>Open promotion</button><button className="secondary-button" type="button" onClick={() => navigate('/rollout')}>Open rollout</button><button className="secondary-button" type="button" onClick={() => navigate('/policy-rollout')}>Open policy rollout</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy')}>Open autonomy</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-rollout')}>Open autonomy rollout</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-roadmap')}>Open autonomy roadmap</button><button className="secondary-button" type="button" onClick={() => navigate('/champion-challenger')}>Open C/C</button></div>
+                <div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/promotion')}>Open promotion</button><button className="secondary-button" type="button" onClick={() => navigate('/rollout')}>Open rollout</button><button className="secondary-button" type="button" onClick={() => navigate('/policy-rollout')}>Open policy rollout</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy')}>Open autonomy</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-rollout')}>Open autonomy rollout</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-roadmap')}>Open autonomy roadmap</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-scenarios')}>Open autonomy scenarios</button><button className="secondary-button" type="button" onClick={() => navigate('/champion-challenger')}>Open C/C</button></div>
               </SectionCard>
             </div>
 

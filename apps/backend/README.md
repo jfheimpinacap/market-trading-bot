@@ -1948,3 +1948,23 @@ Boundary rules:
 - recommendation-first and auditable only
 - no hidden multi-domain auto-apply
 - local-first, single-user, paper/sandbox only
+
+
+## Autonomy scenario lab layer (new)
+
+`apps.autonomy_scenario` complements (does not replace) autonomy roadmap and rollout:
+
+- consumes roadmap dependencies + current stage posture + rollout warnings + trust/approval/incident summaries
+- builds candidate options and compares them in simulation-only runs
+- persists auditable run artifacts for operator review
+- exposes recommendation-first API without applying transitions
+
+Endpoints:
+- `POST /api/autonomy-scenario/run/`
+- `GET /api/autonomy-scenario/runs/`
+- `GET /api/autonomy-scenario/runs/<id>/`
+- `GET /api/autonomy-scenario/options/`
+- `GET /api/autonomy-scenario/recommendations/`
+- `GET /api/autonomy-scenario/summary/`
+
+Out of scope remains explicit: no auto-apply, no real-money, no real execution, no opaque planner, no multi-user orchestration.

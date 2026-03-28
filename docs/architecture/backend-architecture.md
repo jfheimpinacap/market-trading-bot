@@ -1241,3 +1241,24 @@ Recommendation strategy is deterministic and auditable:
 - persist recommendations and bundles under one plan ID
 
 Safety boundary is explicit: no multi-domain auto-apply, no opaque planner, no real-money/real-execution expansion.
+
+
+## Autonomy scenario architecture (new)
+
+`autonomy_scenario` is a comparative simulation boundary between roadmap planning and transition apply:
+
+- **Input sources**: `DomainDependency`, `AutonomyStageState`, latest roadmap recommendations, rollout warnings, approval summary, trust friction, incident/degraded posture
+- **Core services**:
+  - `services/options.py`: scenario option drafting
+  - `services/risk.py`: risk and conflict estimation
+  - `services/recommendation.py`: scenario recommendation coding/scoring
+  - `services/simulation.py`: run orchestration + persistence
+  - `services/reporting.py`: summary/list endpoints
+- **Persistence**: `AutonomyScenarioRun`, `ScenarioOption`, `ScenarioRiskEstimate`, `ScenarioRecommendation`
+- **Output contract**: recommendation-first and auditable; never applies transitions
+
+Separation of concerns:
+- roadmap proposes global plans/bundles
+- scenario lab compares alternatives
+- autonomy manager remains the only apply boundary
+- autonomy rollout remains post-change monitoring/rollback guidance

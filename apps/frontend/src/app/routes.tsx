@@ -56,6 +56,7 @@ import { PolicyRolloutPage } from '../pages/PolicyRolloutPage';
 import { AutonomyPage } from '../pages/AutonomyPage';
 import { AutonomyRolloutPage } from '../pages/AutonomyRolloutPage';
 import { AutonomyRoadmapPage } from '../pages/AutonomyRoadmapPage';
+import { AutonomyScenariosPage } from '../pages/AutonomyScenariosPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -277,6 +278,13 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-roadmap',
     description: 'Dependency-aware cross-domain autonomy sequencing board with recommendation-first global roadmap plans and manual-first execution gates.',
     component: AutonomyRoadmapPage,
+  },
+
+  {
+    label: 'Autonomy Scenarios',
+    path: '/autonomy-scenarios',
+    description: 'Scenario lab for roadmap what-if simulation, bundle/sequence comparison, and recommendation-first autonomy progression decisions.',
+    component: AutonomyScenariosPage,
   },
 
   {
