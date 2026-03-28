@@ -80,7 +80,7 @@ export function AutomationPolicyPage() {
         eyebrow="Supervised runbook autopilot"
         title="/automation-policy"
         description="Trust-tiered automation matrix for manual-first, paper-only operations. This page classifies what can auto-run, what needs approval, and what stays blocked, with explicit audit logs."
-        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/runbooks')}>Runbooks</button><button className="secondary-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button><button className="secondary-button" type="button" onClick={() => navigate('/incidents')}>Incidents</button><button className="secondary-button" type="button" onClick={() => navigate('/mission-control')}>Mission control</button><button className="ghost-button" type="button" onClick={() => navigate('/trust-calibration')}>Trust calibration</button></div>}
+        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/runbooks')}>Runbooks</button><button className="secondary-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button><button className="secondary-button" type="button" onClick={() => navigate('/incidents')}>Incidents</button><button className="secondary-button" type="button" onClick={() => navigate('/mission-control')}>Mission control</button><button className="ghost-button" type="button" onClick={() => navigate('/trust-calibration')}>Trust calibration</button><button className="ghost-button" type="button" onClick={() => navigate('/policy-tuning')}>Policy tuning</button></div>}
       />
 
       {message ? <p className="success-text">{message}</p> : null}

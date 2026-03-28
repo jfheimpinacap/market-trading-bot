@@ -56,4 +56,5 @@ urlpatterns = [
     path('automation-policy/', include(('apps.automation_policy.urls', 'automation_policy'), namespace='automation_policy')),
     path('approvals/', include(('apps.approval_center.urls', 'approval_center'), namespace='approval_center')),
     path('trust-calibration/', include(('apps.trust_calibration.urls', 'trust_calibration'), namespace='trust_calibration')),
+    path('policy-tuning/', include(('apps.policy_tuning.urls', 'policy_tuning'), namespace='policy_tuning')),
 ]

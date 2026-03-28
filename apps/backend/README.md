@@ -1839,3 +1839,22 @@ Operational boundary remains unchanged:
 - manual-first, recommendation-only default
 - no automatic policy mutation
 - no real execution / no real money
+
+## Policy tuning board (new)
+
+Added `apps.policy_tuning` as a formal recommendation-to-approval workflow layer.
+
+- Source of truth for analysis stays in `trust_calibration`.
+- Operational policy authority stays in `automation_policy`.
+- `policy_tuning` materializes recommendation -> candidate -> review -> manual apply.
+- Every apply writes before/after snapshots to `PolicyTuningApplicationLog`.
+- No auto-apply, no real-money execution, no live execution.
+
+API endpoints:
+- `POST /api/policy-tuning/create-candidate/`
+- `GET /api/policy-tuning/candidates/`
+- `GET /api/policy-tuning/candidates/<id>/`
+- `POST /api/policy-tuning/candidates/<id>/review/`
+- `POST /api/policy-tuning/candidates/<id>/apply/`
+- `GET /api/policy-tuning/application-logs/`
+- `GET /api/policy-tuning/summary/`

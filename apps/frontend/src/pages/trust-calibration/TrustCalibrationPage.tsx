@@ -91,7 +91,7 @@ export function TrustCalibrationPage() {
         eyebrow="Approval analytics & human-feedback governance"
         title="/trust-calibration"
         description="Recommendation-only trust calibration loop. This page analyzes approval outcomes, autopilot outcomes, and incident follow-through to propose conservative trust-tier tuning without auto-applying policy changes."
-        actions={<div className="button-row"><button type="button" className="primary-button" disabled={running} onClick={() => void runNow()}>Run calibration</button><button type="button" className="secondary-button" onClick={() => navigate('/automation-policy')}>Automation policy</button><button type="button" className="secondary-button" onClick={() => navigate('/approvals')}>Approvals</button><button type="button" className="ghost-button" onClick={() => navigate('/trace')}>Trace explorer</button></div>}
+        actions={<div className="button-row"><button type="button" className="primary-button" disabled={running} onClick={() => void runNow()}>Run calibration</button><button type="button" className="secondary-button" onClick={() => navigate('/automation-policy')}>Automation policy</button><button type="button" className="secondary-button" onClick={() => navigate('/policy-tuning')}>Policy tuning</button><button type="button" className="secondary-button" onClick={() => navigate('/approvals')}>Approvals</button><button type="button" className="ghost-button" onClick={() => navigate('/trace')}>Trace explorer</button></div>}
       />
 
       {message ? <p className="success-text">{message}</p> : null}

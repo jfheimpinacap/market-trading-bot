@@ -937,3 +937,12 @@ The route reuses existing UI primitives (`PageHeader`, `SectionCard`, `StatusBad
 - no hidden auto-apply behavior
 
 Cross-module integration is lightweight via quick links from automation-policy/approvals/cockpit and evidence drill-down links to trace/approvals pages.
+
+## `/policy-tuning` route (new)
+
+`/policy-tuning` is a dedicated supervised automation tuning board.
+
+- Integrates with trust calibration recommendations and trace evidence.
+- Shows actionable policy diff current -> proposed.
+- Keeps review/apply flow explicit and audit-oriented.
+- Exposes empty/loading/error states for healthy manual-first operation.
