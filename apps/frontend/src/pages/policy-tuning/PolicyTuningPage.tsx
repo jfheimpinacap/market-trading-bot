@@ -98,7 +98,7 @@ export function PolicyTuningPage() {
         eyebrow="Supervised automation tuning"
         title="/policy-tuning"
         description="Policy tuning board for recommendation-to-approval workflow. Candidates are created from trust calibration evidence, reviewed explicitly, and applied manually with before/after audit snapshots. No auto-apply."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/trust-calibration')}>Trust calibration</button><button type="button" className="secondary-button" onClick={() => navigate('/automation-policy')}>Automation policy</button><button type="button" className="secondary-button" onClick={() => navigate('/approvals')}>Approvals</button><button type="button" className="ghost-button" onClick={() => navigate('/trace')}>Trace explorer</button></div>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/trust-calibration')}>Trust calibration</button><button type="button" className="secondary-button" onClick={() => navigate('/automation-policy')}>Automation policy</button><button type="button" className="secondary-button" onClick={() => navigate('/policy-rollout')}>Policy rollout</button><button type="button" className="secondary-button" onClick={() => navigate('/approvals')}>Approvals</button><button type="button" className="ghost-button" onClick={() => navigate('/trace')}>Trace explorer</button></div>}
       />
 
       {message ? <p className="success-text">{message}</p> : null}
@@ -161,6 +161,7 @@ export function PolicyTuningPage() {
 
                 <div className="button-row">
                   <button type="button" className="primary-button" disabled={busy || selected.status !== 'APPROVED'} onClick={() => void applySelected()}>Apply approved change</button>
+                  <button type="button" className="secondary-button" disabled={selected.status !== 'APPLIED'} onClick={() => navigate('/policy-rollout')}>Open rollout monitor</button>
                   <button type="button" className="link-button" onClick={() => navigate(`/trace?root_type=trust_calibration_run&root_id=${encodeURIComponent(String(selected.evidence_refs.find((ref) => ref.type === 'trust_calibration_run')?.id ?? ''))}`)}>Open trace evidence</button>
                 </div>
 

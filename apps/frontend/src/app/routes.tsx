@@ -52,6 +52,7 @@ import { AutomationPolicyPage } from '../pages/AutomationPolicyPage';
 import { ApprovalsPage } from '../pages/ApprovalsPage';
 import { TrustCalibrationPage } from '../pages/TrustCalibrationPage';
 import { PolicyTuningPage } from '../pages/PolicyTuningPage';
+import { PolicyRolloutPage } from '../pages/PolicyRolloutPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -246,6 +247,12 @@ export const appRoutes: AppRoute[] = [
     path: '/policy-tuning',
     description: 'Manual-first recommendation-to-approval policy tuning board with explicit candidate diff, review decisions, and audited apply flow.',
     component: PolicyTuningPage,
+  },
+  {
+    label: 'Policy Rollout',
+    path: '/policy-rollout',
+    description: 'Post-change rollout guard for applied policy tuning updates with baseline/post-change comparison, recommendation-first outcomes, and manual rollback loop.',
+    component: PolicyRolloutPage,
   },
 
   {

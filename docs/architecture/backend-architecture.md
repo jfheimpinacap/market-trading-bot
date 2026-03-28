@@ -39,6 +39,36 @@ The backend is a local-first Django service inside the monorepo. Its current res
 - `apps.experiment_lab`: profile-driven experiment orchestration layer that reuses replay/evaluation services and produces auditable run comparisons.
 - `apps.research_agent`: scan/research boundary for RSS + Reddit + optional X/Twitter adapter ingestion, local LLM structured analysis, social-signal normalization, heuristic market linking, and conservative mixed-source candidate fusion.
 - `apps.position_manager`: post-entry holding governance boundary that consumes risk watch + prediction/research drift context to produce auditable HOLD/REDUCE/CLOSE/REVIEW decisions and explicit paper-only exit plans.
+- `apps.policy_rollout`: post-change governance boundary that evaluates applied policy tuning impact against baseline metrics and emits recommendation-first keep/monitor/rollback guidance with manual rollback support.
+
+## Policy rollout architecture (new)
+
+`apps.policy_rollout` adds a focused post-change loop without duplicating `policy_tuning` lifecycle responsibilities.
+
+Core entities:
+- `PolicyRolloutRun`
+- `PolicyBaselineSnapshot`
+- `PolicyPostChangeSnapshot`
+- `PolicyRolloutRecommendation`
+
+Service split:
+- `services/baseline.py`: start rollout run + baseline capture
+- `services/observation.py`: post-change snapshot capture
+- `services/comparison.py`: before/after metric delta computation
+- `services/recommendation.py`: recommendation-first decisioning
+- `services/rollback.py`: explicit manual rollback application
+
+Integration points:
+- `policy_tuning`: binds run to `PolicyTuningCandidate` + `PolicyTuningApplicationLog`
+- `trust_calibration`: reuses metric semantics from trust calibration snapshot logic
+- `automation_policy`: applies rollback restoration on policy rule trust tier/conditions
+- `approval_center`: optional rollback-gate approval request creation
+- `incident_commander` + `trace_explorer`: incident linkage and trace root metadata for root-cause drilldown
+
+Boundaries:
+- no auto-rollback without human confirmation
+- no real-money or real-execution path changes
+- no opaque planner behavior
 
 ## Market domain shape
 The current `apps.markets` app is intentionally provider-agnostic.

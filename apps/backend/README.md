@@ -71,6 +71,29 @@ apps/backend/
 - `apps.prediction_training`: offline prediction dataset/training/model-registry plus model governance (heuristic-vs-artifact comparison + recommendation).
 - `apps.research_agent`: narrative scan/research layer with RSS + Reddit + optional X/Twitter adapter ingestion, local LLM structured analysis, social normalization, heuristic market linking, and shortlist candidate generation for paper/demo workflows.
 - `apps.position_manager`: position lifecycle manager / exit decision engine that governs open paper positions with HOLD/REDUCE/CLOSE/REVIEW_REQUIRED decisions and auditable exit plans.
+- `apps.policy_rollout`: post-change rollout guard for applied policy-tuning candidates, with baseline/post snapshots, before/after delta comparison, recommendation-first outcomes, and manual rollback audit loop.
+
+## Policy rollout guard layer (new)
+
+`apps.policy_rollout` is intentionally adjacent to (not replacing) `policy_tuning` and `trust_calibration`:
+
+- `policy_tuning` still owns create/review/apply change management.
+- `trust_calibration` still owns broad trust-signal recommendation analytics.
+- `policy_rollout` monitors the impact **after apply** for one candidate/run.
+
+Endpoints:
+- `POST /api/policy-rollout/start/`
+- `GET /api/policy-rollout/runs/`
+- `GET /api/policy-rollout/runs/<id>/`
+- `POST /api/policy-rollout/runs/<id>/evaluate/`
+- `POST /api/policy-rollout/runs/<id>/rollback/`
+- `GET /api/policy-rollout/summary/`
+
+Manual-first safeguards:
+- no automatic rollback execution
+- rollback requires explicit operator request + rationale
+- optional approval-center request creation for rollback gate consistency
+- paper/sandbox-only metadata markers are retained for auditability
 
 ## Markets app summary
 The `apps.markets` app now provides a practical local catalog for prediction-market development without adding trading workflows or provider integrations.

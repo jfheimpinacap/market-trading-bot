@@ -18,6 +18,7 @@ import { getTraceQueryRuns, getTraceSummary } from './trace';
 import { getVenueSummary } from './executionVenue';
 import { getVenueAccountSummary } from './venueAccount';
 import { getPolicyTuningSummary } from './policyTuning';
+import { getPolicyRolloutSummary } from './policyRollout';
 import type { CockpitAttentionItem, CockpitPanelFailures, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -71,6 +72,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     approvalSummary,
     pendingApprovals,
     policyTuningSummary,
+    policyRolloutSummary,
   ] = await Promise.all([
     withFallback('runtime', () => getRuntimeStatus(), failures, null, 'Runtime status unavailable.'),
     withFallback('incidents', () => getIncidentCurrentState(), failures, null, 'Incident posture unavailable.'),
@@ -100,6 +102,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     withFallback('approvalSummary', () => getApprovalSummary(), failures, null, 'Approval summary unavailable.'),
     withFallback('pendingApprovals', () => getPendingApprovals(), failures, [], 'Pending approvals unavailable.'),
     withFallback('policyTuningSummary', () => getPolicyTuningSummary(), failures, null, 'Policy tuning summary unavailable.'),
+    withFallback('policyRolloutSummary', () => getPolicyRolloutSummary(), failures, null, 'Policy rollout summary unavailable.'),
   ]);
 
   return {
@@ -131,6 +134,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     approvalSummary,
     pendingApprovals,
     policyTuningSummary,
+    policyRolloutSummary,
     failures,
     lastUpdatedAt: new Date().toISOString(),
   };
@@ -276,6 +280,18 @@ export function getCockpitAttention(snapshot: CockpitSnapshot): CockpitAttention
     });
   }
 
+  if ((snapshot.policyRolloutSummary?.rollback_recommended_runs ?? 0) > 0) {
+    items.push({
+      id: 'policy-rollout-rollback-warning',
+      severity: 'HIGH',
+      title: 'Policy rollout recommends rollback',
+      summary: `${snapshot.policyRolloutSummary?.rollback_recommended_runs ?? 0} rollout run(s) are marked rollback recommended.`,
+      route: '/policy-rollout',
+      traceRootType: 'policy_rollout_run',
+      traceRootId: String(snapshot.policyRolloutSummary?.latest_run_id ?? ''),
+    });
+  }
+
   if (snapshot.missionControl?.state.status === 'PAUSED' && snapshot.incidents?.degraded_mode.state !== 'ACTIVE') {
     items.push({
       id: 'mission-paused',
@@ -303,6 +319,7 @@ export function getCockpitQuickLinks() {
     { label: 'Approvals', path: '/approvals' },
     { label: 'Automation policy', path: '/automation-policy' },
     { label: 'Policy tuning', path: '/policy-tuning' },
+    { label: 'Policy rollout', path: '/policy-rollout' },
     { label: 'Trace explorer', path: '/trace' },
     { label: 'Execution venue', path: '/execution-venue' },
     { label: 'Venue account', path: '/venue-account' },

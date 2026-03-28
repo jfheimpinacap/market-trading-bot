@@ -218,6 +218,22 @@ El cockpit compone servicios ya existentes (sin backend monolítico nuevo):
 - promotion, champion-challenger
 - trace summary + query runs
 
+## Policy rollout monitor en `/policy-rollout` (new)
+
+Nueva ruta técnica para cerrar el loop post-change de automation policy tuning:
+
+- arranca monitoreo desde un candidato `APPLIED` de `/policy-tuning`
+- muestra `baseline` vs `post-change` con deltas explícitos
+- presenta recommendation panel (`KEEP_CHANGE`, `REQUIRE_MORE_DATA`, `ROLLBACK_CHANGE`, etc.)
+- expone rollback manual asistido (sin auto-rollback opaco)
+- integra navegación con `/policy-tuning`, `/trust-calibration`, `/approvals`, `/trace` y señales en `/cockpit`
+
+Estados UX incluidos:
+- loading/error explícitos
+- empty state claro para runs vacíos:
+  - `Start a rollout monitor from an applied policy tuning change.`
+- `REQUIRE_MORE_DATA` mostrado como resultado sano de gobernanza (no como error)
+
 ## Endpoints consumidos por el frontend
 
 ### Dashboard

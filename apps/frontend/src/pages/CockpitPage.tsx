@@ -177,10 +177,12 @@ export function CockpitPage() {
                 <ul className="key-value-list">
                   <li><span>Promotion recommendation</span><strong>{snapshot.promotionSummary?.latest_run?.recommendation_code ?? 'n/a'}</strong></li>
                   <li><span>Rollout status</span><strong>{snapshot.rollout?.current_run?.status ?? snapshot.rollout?.latest_run?.status ?? 'n/a'}</strong></li>
+                  <li><span>Policy rollout observing</span><strong>{snapshot.policyRolloutSummary?.observing_runs ?? 0}</strong></li>
+                  <li><span>Policy rollback recommended</span><strong>{snapshot.policyRolloutSummary?.rollback_recommended_runs ?? 0}</strong></li>
                   <li><span>Champion/challenger mode</span><strong>{snapshot.championChallengerSummary?.latest_run?.status ?? 'n/a'}</strong></li>
                   <li><span>Champion/challenger result</span><strong>{snapshot.championChallengerSummary?.latest_run?.recommendation_code ?? 'n/a'}</strong></li>
                 </ul>
-                <div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/promotion')}>Open promotion</button><button className="secondary-button" type="button" onClick={() => navigate('/rollout')}>Open rollout</button><button className="secondary-button" type="button" onClick={() => navigate('/champion-challenger')}>Open C/C</button></div>
+                <div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/promotion')}>Open promotion</button><button className="secondary-button" type="button" onClick={() => navigate('/rollout')}>Open rollout</button><button className="secondary-button" type="button" onClick={() => navigate('/policy-rollout')}>Open policy rollout</button><button className="secondary-button" type="button" onClick={() => navigate('/champion-challenger')}>Open C/C</button></div>
               </SectionCard>
             </div>
 

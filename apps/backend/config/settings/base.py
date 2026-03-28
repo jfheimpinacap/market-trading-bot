@@ -119,6 +119,7 @@ LOCAL_APPS = [
     'apps.approval_center',
     'apps.trust_calibration',
     'apps.policy_tuning',
+    'apps.policy_rollout',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

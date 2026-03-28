@@ -79,6 +79,7 @@ Instead, each page coordinates a small set of explicit service calls.
 - `services/policy.ts` for trade approval evaluation and policy decision summaries
 - `services/experiments.ts` for strategy profiles, experiment runs, and run comparisons
 - `services/research.ts` for mixed narrative source management (`RSS` + `REDDIT` + optional `TWITTER`), ingest/analysis/full-scan controls, and shortlist/candidate data.
+- `services/policyRollout.ts` for rollout-monitor start/list/detail/evaluate/rollback/summary APIs tied to post-change policy tuning governance.
 
 This keeps data dependencies understandable and prevents the current demo phase from turning into a client-state rewrite.
 
@@ -186,6 +187,16 @@ The `/postmortem` route now closes the loop more clearly:
 - review queue with explicit workflow links
 - detail view with clearer trade, signal, and risk context
 - contextual links back to Market detail and Portfolio
+
+### Policy rollout
+
+The `/policy-rollout` route is the post-change monitoring board for applied policy tuning changes:
+
+- start rollout monitors from applied candidates
+- show active rollout status and recommendation outcome
+- compare baseline vs post-change metrics + deltas in one technical panel
+- expose manual rollback control with approval/trace-oriented navigation
+- keep empty/loading/error states explicit and audit-friendly
 
 ### Research
 
