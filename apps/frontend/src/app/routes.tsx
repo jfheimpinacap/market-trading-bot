@@ -50,6 +50,7 @@ import { ConnectorsPage } from '../pages/ConnectorsPage';
 import { TracePage } from '../pages/TracePage';
 import { AutomationPolicyPage } from '../pages/AutomationPolicyPage';
 import { ApprovalsPage } from '../pages/ApprovalsPage';
+import { TrustCalibrationPage } from '../pages/TrustCalibrationPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -229,6 +230,13 @@ export const appRoutes: AppRoute[] = [
     path: '/automation-policy',
     description: 'Trust-tiered supervised automation policy matrix for runbooks and operational actions in manual-first paper/sandbox mode.',
     component: AutomationPolicyPage,
+  },
+
+  {
+    label: 'Trust Calibration',
+    path: '/trust-calibration',
+    description: 'Approval analytics and human-feedback governance loop that recommends conservative trust-tier tuning in recommendation-only mode.',
+    component: TrustCalibrationPage,
   },
 
   {

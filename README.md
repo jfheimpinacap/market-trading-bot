@@ -1174,3 +1174,14 @@ A new manual-first `/approvals` control plane now centralizes human decisions th
 - Approving go-live requests in this phase **does not enable live trading** (still rehearsal + paper/sandbox only)
 
 Out of scope remains unchanged: no real money, no real execution, no opaque black-box automation, no enterprise multi-user approval chains.
+
+
+### Trust calibration governance loop (new)
+
+A dedicated `trust_calibration` layer now closes the human-feedback loop between `approval_center` and `automation_policy` with explicit, auditable analytics.
+
+- consolidates approval outcomes, automation decisions/action logs, and incident aftermath into feedback snapshots
+- computes explicit friction/success/reversal metrics by action domain
+- emits conservative recommendation-only trust-tier suggestions (`PROMOTE_TO_SAFE_AUTOMATION`, `KEEP_APPROVAL_REQUIRED`, `DOWNGRADE_TO_MANUAL_ONLY`, `BLOCK_AUTOMATION_FOR_ACTION`, `REQUIRE_MORE_DATA`, `REVIEW_RULE_CONDITIONS`)
+- adds frontend route `/trust-calibration` with summary cards, metrics table, recommendation panel, and run history
+- no auto-apply, no real-money execution, no real routing
