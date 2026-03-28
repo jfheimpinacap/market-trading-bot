@@ -1921,3 +1921,30 @@ Endpoints:
 - `GET /api/autonomy-rollout/summary/`
 
 Out of scope stays unchanged: no real-money execution, no auto-rollback without operator confirmation, no opaque planner.
+
+## Autonomy roadmap layer (new)
+
+`apps.autonomy_roadmap` adds global autonomy portfolio governance on top of domain-level governance:
+
+- `autonomy_manager` remains the authority for per-domain transitions/apply/rollback.
+- `autonomy_rollout` remains the post-change monitor for each applied transition.
+- `autonomy_roadmap` consumes those signals and proposes **cross-domain sequencing**.
+
+Core entities:
+- `DomainDependency`
+- `DomainRoadmapProfile` (criticality)
+- `AutonomyRoadmapPlan`
+- `RoadmapRecommendation`
+- `RoadmapBundle`
+
+Service split:
+- `services/dependencies.py`: seed/list dependency graph + domain criticality
+- `services/evidence.py`: aggregate posture from autonomy stage state, rollout status, incidents, approvals, trust, certification
+- `services/recommendation.py`: recommendation-first draft generation (promote/hold/freeze/rollback/sequence/conflict)
+- `services/bundles.py`: optional safe bundle suggestions with risk + approval hints
+- `services/plans.py`: plan assembly and summary payloads
+
+Boundary rules:
+- recommendation-first and auditable only
+- no hidden multi-domain auto-apply
+- local-first, single-user, paper/sandbox only

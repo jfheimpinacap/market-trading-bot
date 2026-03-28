@@ -986,3 +986,21 @@ The frontend adds `/autonomy-rollout` as a focused post-change domain-transition
 - integrates via lightweight links from `/autonomy` and `/cockpit`
 
 This extends governance visibility without introducing new orchestration or real-execution capabilities.
+
+## Autonomy roadmap UX architecture (new)
+
+New route: `/autonomy-roadmap`.
+
+It extends existing autonomy governance UX without replacing module boundaries:
+
+- fetches from `services/autonomyRoadmap.ts` (dependencies, plans, run-plan, recommendations, summary)
+- composes posture metrics with existing autonomy and autonomy-rollout summaries
+- presents recommendation-first sequencing and conflict warnings (`DO_NOT_PROMOTE_IN_PARALLEL`, `REQUIRE_STABILIZATION_FIRST`)
+- surfaces optional roadmap bundles and recent plan history
+
+Cockpit integration remains lightweight:
+- roadmap summary is added to cockpit snapshot aggregation
+- change-governance panel shows roadmap blocked domains + next sequence hints
+- quick link and attention item route users to `/autonomy-roadmap`
+
+No routing rewrite or global-state rewrite was introduced.

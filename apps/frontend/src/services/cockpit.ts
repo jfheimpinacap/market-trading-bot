@@ -21,6 +21,7 @@ import { getPolicyTuningSummary } from './policyTuning';
 import { getPolicyRolloutSummary } from './policyRollout';
 import { getAutonomySummary } from './autonomy';
 import { getAutonomyRolloutSummary } from './autonomyRollout';
+import { getAutonomyRoadmapSummary } from './autonomyRoadmap';
 import type { CockpitAttentionItem, CockpitPanelFailures, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -77,6 +78,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     policyRolloutSummary,
     autonomySummary,
     autonomyRolloutSummary,
+    autonomyRoadmapSummary,
   ] = await Promise.all([
     withFallback('runtime', () => getRuntimeStatus(), failures, null, 'Runtime status unavailable.'),
     withFallback('incidents', () => getIncidentCurrentState(), failures, null, 'Incident posture unavailable.'),
@@ -109,6 +111,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     withFallback('policyRolloutSummary', () => getPolicyRolloutSummary(), failures, null, 'Policy rollout summary unavailable.'),
     withFallback('autonomySummary', () => getAutonomySummary(), failures, null, 'Autonomy summary unavailable.'),
     withFallback('autonomyRolloutSummary', () => getAutonomyRolloutSummary(), failures, null, 'Autonomy rollout summary unavailable.'),
+    withFallback('autonomyRoadmapSummary', () => getAutonomyRoadmapSummary(), failures, null, 'Autonomy roadmap summary unavailable.'),
   ]);
 
   return {
@@ -143,6 +146,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     policyRolloutSummary,
     autonomySummary,
     autonomyRolloutSummary,
+    autonomyRoadmapSummary,
     failures,
     lastUpdatedAt: new Date().toISOString(),
   };
@@ -324,6 +328,19 @@ export function getCockpitAttention(snapshot: CockpitSnapshot): CockpitAttention
     });
   }
 
+
+  if ((snapshot.autonomyRoadmapSummary?.latest_blocked_domains.length ?? 0) > 0) {
+    items.push({
+      id: 'autonomy-roadmap-blocked',
+      severity: 'MEDIUM',
+      title: 'Roadmap has blocked domains',
+      summary: `${snapshot.autonomyRoadmapSummary?.latest_blocked_domains.length ?? 0} domain(s) are blocked in the latest autonomy roadmap plan.`,
+      route: '/autonomy-roadmap',
+      traceRootType: 'autonomy_roadmap_plan',
+      traceRootId: String(snapshot.autonomyRoadmapSummary?.latest_plan_id ?? ''),
+    });
+  }
+
   if (snapshot.missionControl?.state.status === 'PAUSED' && snapshot.incidents?.degraded_mode.state !== 'ACTIVE') {
     items.push({
       id: 'mission-paused',
@@ -353,6 +370,7 @@ export function getCockpitQuickLinks() {
     { label: 'Policy tuning', path: '/policy-tuning' },
     { label: 'Policy rollout', path: '/policy-rollout' },
     { label: 'Autonomy manager', path: '/autonomy' },
+    { label: 'Autonomy roadmap', path: '/autonomy-roadmap' },
     { label: 'Trace explorer', path: '/trace' },
     { label: 'Execution venue', path: '/execution-venue' },
     { label: 'Venue account', path: '/venue-account' },

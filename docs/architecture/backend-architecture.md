@@ -1219,3 +1219,25 @@ Service split:
 - `services/recommendation.py`: recommendation-first outcome
 - `services/rollback.py`: manual rollback orchestration + audit payload
 - `services/reporting.py`: cockpit/board summary
+
+## Autonomy roadmap architecture (new)
+
+A dedicated `apps.autonomy_roadmap` module introduces a formal cross-domain governance layer:
+
+- `autonomy_manager` keeps domain transition authority.
+- `autonomy_rollout` keeps per-domain post-change observation authority.
+- `autonomy_roadmap` provides **global sequencing intelligence** with explicit dependency rules.
+
+Modeling primitives:
+- dependency graph (`DomainDependency`)
+- domain criticality (`DomainRoadmapProfile`: LOW/MEDIUM/HIGH/CRITICAL)
+- global plan snapshot (`AutonomyRoadmapPlan`)
+- recommendation ledger (`RoadmapRecommendation`)
+- optional sequencing bundles (`RoadmapBundle`)
+
+Recommendation strategy is deterministic and auditable:
+- consolidate stage state, rollout warnings, degraded posture, approval friction, trust/certification signals
+- classify actions (`PROMOTE_DOMAIN`, `FREEZE_DOMAIN`, `ROLLBACK_DOMAIN`, `SEQUENCE_BEFORE`, `DO_NOT_PROMOTE_IN_PARALLEL`, `REQUIRE_STABILIZATION_FIRST`)
+- persist recommendations and bundles under one plan ID
+
+Safety boundary is explicit: no multi-domain auto-apply, no opaque planner, no real-money/real-execution expansion.
