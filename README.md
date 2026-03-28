@@ -1299,3 +1299,24 @@ The platform now includes `autonomy_campaign` as the formal handoff layer betwee
 - cockpit and frontend route integration at `/autonomy-campaigns`
 
 Explicit non-goals remain: no real money, no real execution, no opaque auto-promotion planner.
+
+### Autonomy program control tower / campaign concurrency guard (new)
+
+The stack now includes an explicit **program-level governance layer** for autonomy campaigns:
+
+- backend app: `apps/backend/apps/autonomy_program`
+- frontend route: `/autonomy-program`
+- purpose: coordinate multiple autonomy campaigns safely as one program (not isolated runs)
+
+What it adds:
+- global program posture (`NORMAL`, `CONSTRAINED`, `HIGH_RISK`, `FROZEN`)
+- explicit concurrency rules (`max_active_campaigns`, `incompatible_domains`, degraded/incident/observation blocks)
+- campaign health snapshots (checkpoints, approvals, rollout warnings, incident/degraded impact)
+- recommendations (`PAUSE_CAMPAIGN`, `REORDER_QUEUE`, `HOLD_NEW_CAMPAIGNS`, etc.)
+- optional pause gating with approval-center handoff
+
+What it does **not** add:
+- real-money trading
+- real execution
+- opaque multi-campaign mass auto-orchestration
+- black-box planner behavior

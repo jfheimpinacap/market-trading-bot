@@ -1994,3 +1994,28 @@ Boundaries:
 - recommendation-first
 - sandbox/paper only
 - no real execution or auto mass multi-domain apply
+
+## Autonomy program control tower (`autonomy_program`) (new)
+
+A dedicated program-level layer now governs **multiple autonomy campaigns concurrently** without replacing per-campaign execution internals.
+
+Scope:
+- program posture/state consolidation (`active`, `blocked`, `observing`, `waiting approvals`, `degraded domains`, `locked domains`)
+- explicit concurrency rules (max active campaigns, incompatible domains, degraded/incident/observation blocks)
+- campaign health snapshots using campaign/checkpoint/approval/rollout/incident signals
+- recommendation emission (`PAUSE_CAMPAIGN`, `REORDER_QUEUE`, `HOLD_NEW_CAMPAIGNS`, `SAFE_TO_START_NEXT`, `WAIT_FOR_STABILIZATION`)
+- optional pause gating that marks campaign as `BLOCKED` and opens an approval-center request
+
+Endpoints:
+- `GET /api/autonomy-program/state/`
+- `GET /api/autonomy-program/rules/`
+- `POST /api/autonomy-program/run-review/`
+- `GET /api/autonomy-program/recommendations/`
+- `GET /api/autonomy-program/health/`
+- `GET /api/autonomy-program/summary/`
+
+Boundary guarantees:
+- manual-first and recommendation-first
+- paper/sandbox only
+- no real-money or real-execution path
+- no opaque multi-campaign auto-orchestration planner

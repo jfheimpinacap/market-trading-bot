@@ -63,4 +63,5 @@ urlpatterns = [
     path('autonomy-roadmap/', include(('apps.autonomy_roadmap.urls', 'autonomy_roadmap'), namespace='autonomy_roadmap')),
     path('autonomy-scenario/', include(('apps.autonomy_scenario.urls', 'autonomy_scenario'), namespace='autonomy_scenario')),
     path('autonomy-campaigns/', include(('apps.autonomy_campaign.urls', 'autonomy_campaign'), namespace='autonomy_campaign')),
+    path('autonomy-program/', include(('apps.autonomy_program.urls', 'autonomy_program'), namespace='autonomy_program')),
 ]

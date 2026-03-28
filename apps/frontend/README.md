@@ -1190,3 +1190,23 @@ Added `/autonomy-campaigns` as the staged scenario-to-execution handoff board:
 - cockpit + roadmap + scenario quick-link integration
 
 This page stays manual-first and recommendation-first, and does not introduce real execution.
+
+## Autonomy program UI en `/autonomy-program` (new)
+
+Nueva vista técnica para gobierno global de campañas de autonomía:
+
+- cards de postura global (`active`, `blocked`, `observing`, `waiting approvals`, `concurrency posture`)
+- panel de health por campaña con score, blockers e influencia de incident/degraded/rollout
+- panel de recommendations (`continue/pause/reorder/hold/wait`) con rationale + confidence
+- panel de reglas de concurrencia activas
+- acción explícita `Run program review` (manual-first)
+
+Integraciones ligeras:
+- quick link desde `/autonomy-campaigns`
+- quick link desde `/cockpit`
+- enlaces contextuales hacia `/approvals` y `/trace`
+
+Se mantiene el mismo boundary:
+- sin auto-orquestación opaca multi-campaña
+- sin dinero real ni ejecución real
+- single-user local-first
