@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-<<<<<<< HEAD
 from apps.autonomy_intervention.models import CampaignInterventionRequest
 from apps.autonomy_intervention.services.validation import validate_request
 from apps.autonomy_operations.models import CampaignAttentionSignal, CampaignRuntimeSnapshot, OperationsRecommendation
@@ -33,34 +32,15 @@ def create_request(
     request_status, inferred_blockers = validate_request(campaign=campaign, requested_action=requested_action, runtime_snapshot=runtime_snapshot)
     final_blockers = list(blockers or []) + [item for item in inferred_blockers if item not in (blockers or [])]
 
-=======
-from apps.autonomy_intervention.models import (
-    CampaignInterventionRequest,
-    InterventionRequestStatus,
-    InterventionSourceType,
-)
-
-
-def create_intervention_request(*, campaign, requested_action: str, source_type: str = InterventionSourceType.MANUAL, severity: str = 'MEDIUM', rationale: str = '', reason_codes=None, blockers=None, linked_signal=None, linked_recommendation=None, requested_by: str = 'operator-ui', metadata=None, approval_required: bool = False):
-    status = InterventionRequestStatus.APPROVAL_REQUIRED if approval_required else InterventionRequestStatus.OPEN
->>>>>>> origin/main
     return CampaignInterventionRequest.objects.create(
         campaign=campaign,
         source_type=source_type,
         requested_action=requested_action,
-<<<<<<< HEAD
         request_status=request_status,
         severity=(severity or 'MEDIUM').upper(),
         rationale=rationale,
         reason_codes=inferred_reason_codes,
         blockers=final_blockers,
-=======
-        request_status=status,
-        severity=severity or 'MEDIUM',
-        rationale=rationale or f'Manual intervention request for {requested_action}.',
-        reason_codes=reason_codes or [],
-        blockers=blockers or [],
->>>>>>> origin/main
         linked_signal=linked_signal,
         linked_recommendation=linked_recommendation,
         requested_by=requested_by,
