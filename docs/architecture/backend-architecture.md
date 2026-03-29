@@ -1509,3 +1509,27 @@ Service split:
 
 Key boundary:
 - explicit/manual-first rules only, no ML/LLM authority, no automatic roadmap/scenario application.
+
+## Autonomy insights architecture (new)
+
+`apps.autonomy_insights` is a conservative synthesis boundary layered after campaign lifecycle closure.
+
+### Inputs
+- `autonomy_closeout`: campaign dossier + findings
+- `autonomy_followup`: emitted handoffs
+- `autonomy_feedback`: follow-up resolution state
+- `autonomy_disposition`: final disposition posture
+
+### Service split
+- `services/candidates.py`: lifecycle-closed candidate derivation
+- `services/synthesis.py`: per-campaign evidence consolidation
+- `services/patterns.py`: deterministic cross-campaign pattern extraction
+- `services/recommendation.py`: recommendation mapping
+- `services/control.py`: manual review controls
+- `services/run.py`: auditable synthesis run orchestration and summary counters
+
+### Guardrails
+- lifecycle must be closed before synthesis
+- pending key follow-ups block synthesis for that campaign
+- recommendation-first outputs only (no auto-apply)
+- no ML/LLM authority in decision logic

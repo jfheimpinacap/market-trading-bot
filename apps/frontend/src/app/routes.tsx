@@ -69,6 +69,7 @@ import { AutonomyDispositionPage } from '../pages/AutonomyDispositionPage';
 import { AutonomyCloseoutPage } from '../pages/AutonomyCloseoutPage';
 import { AutonomyFollowupPage } from '../pages/AutonomyFollowupPage';
 import { AutonomyFeedbackPage } from '../pages/AutonomyFeedbackPage';
+import { AutonomyInsightsPage } from '../pages/AutonomyInsightsPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -263,6 +264,13 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-feedback',
     description: 'Manual-first follow-up resolution tracker that monitors emitted handoffs and closes campaign knowledge loops with auditable status.',
     component: AutonomyFeedbackPage,
+  },
+
+  {
+    label: 'Autonomy Insights',
+    path: '/autonomy-insights',
+    description: 'Cross-campaign lessons registry and governance synthesis board derived from closed campaign lifecycle evidence with manual-first recommendations.',
+    component: AutonomyInsightsPage,
   },
 
   {

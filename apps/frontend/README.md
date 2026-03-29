@@ -1365,3 +1365,16 @@ Nueva vista para cerrar el knowledge loop posterior al handoff de `autonomy_foll
 - acción `Run feedback review` y `Complete resolution` (manual, auditado).
 
 Integra `autonomy_followup`, `autonomy_closeout`, `approval_center`, `memory_retrieval`, `trace` y `cockpit` sin rediseñar arquitectura.
+
+## Autonomy insights board in UI (new)
+
+New route: `/autonomy-insights`
+
+The board provides:
+- lifecycle-closed candidate visibility
+- summary cards for success/failure/blocker/governance patterns
+- insights table with campaign/scope/type/target/confidence and trace links
+- recommendations panel for governance actions (`REGISTER_MEMORY_PRECEDENT`, `PREPARE_ROADMAP_GOVERNANCE_NOTE`, `PREPARE_SCENARIO_CAUTION`, `PREPARE_PROGRAM_POLICY_NOTE`, `REQUIRE_OPERATOR_REVIEW`)
+- manual `Run insights review` action and optional `Mark reviewed` action
+
+Design constraints are preserved: manual-first, recommendation-first, no opaque auto-learning, no auto-policy/roadmap apply.

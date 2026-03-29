@@ -1199,3 +1199,24 @@ The `/autonomy-feedback` route adds a focused governance board for post-followup
 - UI board: `pages/autonomy-feedback/AutonomyFeedbackPage.tsx`
 
 Design intent: connect existing modules (`autonomy-followup`, `autonomy-closeout`, `cockpit`, `approvals`, `trace`) with explicit manual actions and auditable status visibility, without introducing opaque automation or a new client-state framework.
+
+## Autonomy insights frontend architecture (new)
+
+A new page-level module (`/autonomy-insights`) was added without changing the routing model.
+
+### Composition
+- Page: `pages/autonomy-insights/AutonomyInsightsPage.tsx`
+- Service: `services/autonomyInsights.ts`
+- Types: `types/autonomyInsights.ts`
+
+### UX behavior
+- explicit loading/error/empty states
+- empty state when no lifecycle-closed campaigns are available for synthesis
+- manual trigger (`Run insights review`)
+- insights and recommendations shown as valid governance states (including `success_pattern` and `REQUIRE_OPERATOR_REVIEW`)
+- direct links to campaign/closeout/trace and cockpit integration via quick links
+
+### Scope discipline
+- no automatic changes to roadmap/scenario/program/manager flows
+- no opaque auto-learning behavior
+- still local-first and desktop-first
