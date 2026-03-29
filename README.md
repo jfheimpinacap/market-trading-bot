@@ -1384,3 +1384,15 @@ What it does not change:
 - `autonomy_program` remains global posture authority
 
 Scope remains local-first, single-user, paper/sandbox only, with manual-first controls and no opaque auto-remediation.
+
+### Autonomy intervention control / manual remediation gateway (new)
+
+The stack now includes `autonomy_intervention` to formalize manual operational actions over active autonomy campaigns:
+
+- request/action/outcome/run entities for auditable intervention control
+- manual-first execution for pause/resume/escalate/review-for-abort/clear-to-continue
+- validation gates based on campaign status, open blockers, program posture, and incidents
+- approval-center integration for sensitive intervention flows
+- operator UI route `/autonomy-interventions` with summary, requests, and action history
+
+Non-goals remain unchanged: no real broker/exchange execution, no real money, and no opaque auto-remediation.

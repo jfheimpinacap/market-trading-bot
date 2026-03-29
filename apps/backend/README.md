@@ -2130,3 +2130,28 @@ Boundary clarifications:
 - does **not** replace `autonomy_program` posture authority
 - recommendation-only/manual-first (no opaque auto-remediation)
 - still paper/sandbox/local-first only
+
+## Autonomy intervention control layer (new)
+
+`apps.autonomy_intervention` introduces a formal manual remediation gateway for active autonomy campaigns.
+
+Responsibilities:
+- consumes autonomy operations recommendations/signals as intervention intake
+- stores auditable intervention requests/actions/outcomes/runs
+- executes conservative manual-first actions: pause, resume, escalate-to-approval, review-for-abort, clear-to-continue
+- enforces validation gates using campaign state, program posture, checkpoints, and critical incidents
+- opens approval-center records for sensitive actions (`ESCALATE_TO_APPROVAL`, `REVIEW_FOR_ABORT`)
+
+Primary API endpoints:
+- `GET /api/autonomy-interventions/requests/`
+- `POST /api/autonomy-interventions/run-review/`
+- `GET /api/autonomy-interventions/summary/`
+- `POST /api/autonomy-interventions/request/<campaign_id>/`
+- `POST /api/autonomy-interventions/execute/<request_id>/`
+- `GET /api/autonomy-interventions/actions/`
+
+Boundaries:
+- does not replace `autonomy_operations` runtime monitoring
+- does not replace `autonomy_campaign` execution model
+- does not replace `autonomy_program` global posture governance
+- no real money, no real broker/exchange execution, no opaque auto-remediation

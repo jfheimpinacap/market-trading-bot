@@ -1393,3 +1393,28 @@ Non-goals remain:
 - broker/exchange routing
 - opaque auto-remediation
 - distributed enterprise orchestration
+
+## Autonomy intervention architecture (new)
+
+`apps.autonomy_intervention` is the manual-first intervention boundary between observation (`autonomy_operations`) and campaign control (`autonomy_campaign`).
+
+Domain records:
+- `CampaignInterventionRequest` (intent/control)
+- `CampaignInterventionAction` (execution attempt)
+- `InterventionOutcome` (explicit auditable result)
+- `InterventionRun` (periodic summary snapshot)
+
+Service split:
+- `services/intake.py` converts manual/recommendation input into requests
+- `services/recommendation_bridge.py` maps operations recommendation types to intervention actions
+- `services/validation.py` enforces conservative policy checks (campaign state, blockers, posture, incidents)
+- `services/execution.py` runs pause/resume/escalate/review/continue with approval gating integration
+- `services/outcome.py` persists state transition outcomes and result summaries
+- `services/run.py` builds intervention runs and summary payloads for UI/API
+
+Integration boundaries:
+- consumes `autonomy_operations` signals/recommendations (does not duplicate monitoring)
+- drives safe campaign controls via `autonomy_campaign` (does not replace campaign engine)
+- reads `autonomy_program` posture and incident state for safety gating
+- creates `approval_center` requests for sensitive actions
+- keeps links to campaign/approvals/trace for cockpit/operator visibility
