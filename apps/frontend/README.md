@@ -1493,3 +1493,19 @@ New page: `/autonomy-package-review`
 - quick integration links to `/autonomy-package`, `/autonomy-decision`, `/cockpit`, `/trace`
 
 Design constraints remain: manual-first, recommendation-first, paper/sandbox only, no opaque auto-apply.
+
+## Autonomy seed board route (new)
+
+Added `/autonomy-seed` as the adopted package registry and next-cycle seed board.
+
+Route behavior:
+- summary cards for candidate/ready/blocked/registered/duplicate + target counts
+- candidate table with manual **Run seed review** and **Register seed** actions
+- seed history with optional **Acknowledge** action
+- recommendation panel for register/skip/manual-review/reorder guidance
+- explicit empty/loading/error states and trace drill-down links
+
+Design constraints preserved:
+- manual-first actions only
+- recommendation-first governance UX
+- no opaque auto-apply behavior
