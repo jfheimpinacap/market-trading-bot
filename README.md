@@ -1460,3 +1460,16 @@ A new `autonomy_feedback` layer now tracks *post-emission* follow-up resolution 
 - frontend route `/autonomy-feedback` exposes summary cards, candidate/resolution tracking, recommendation queue, and manual completion action.
 
 Out of scope remains unchanged: real money, real broker/exchange execution, opaque auto-learning, and automatic roadmap/scenario apply.
+
+### Autonomy insights board (new)
+
+Added a formal `autonomy_insights` layer to synthesize reusable lessons across **closed lifecycle campaigns** (`closeout + followup + feedback`).
+
+Capabilities:
+- manual-first cross-campaign synthesis runs (`/api/autonomy-insights/run-review/`)
+- auditable `CampaignInsight`, `InsightRecommendation`, and `InsightRun` records
+- explicit success/failure/blocker/governance pattern extraction (rule-based, no ML/LLM authority)
+- recommendation targets for memory/roadmap/scenario/program/manager/operator review
+- frontend board at `/autonomy-insights` connected to cockpit, closeout, followup, feedback, and trace
+
+Boundaries remain unchanged: local-first, single-user, paper/sandbox only, no real broker/exchange execution, and no opaque auto-apply to roadmap/scenario/policy/runtime.

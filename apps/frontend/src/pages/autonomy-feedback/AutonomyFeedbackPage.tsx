@@ -99,7 +99,7 @@ export function AutonomyFeedbackPage() {
         eyebrow="Autonomy feedback board"
         title="/autonomy-feedback"
         description="Manual-first follow-up resolution tracker and campaign knowledge-loop governance. No opaque auto-learning and no automatic roadmap/scenario apply."
-        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run feedback review</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-followup')}>Autonomy followup</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-closeout')}>Autonomy closeout</button><button className="ghost-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button></div>}
+        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run feedback review</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-followup')}>Autonomy followup</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-closeout')}>Autonomy closeout</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-insights')}>Autonomy insights</button><button className="ghost-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button></div>}
       />
 
       {message ? <p className="success-text">{message}</p> : null}

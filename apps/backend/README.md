@@ -2259,3 +2259,27 @@ Safety boundary:
 - paper/sandbox scope only
 - no auto-apply roadmap/scenario changes
 - no opaque/black-box planner behavior
+
+## Autonomy insights layer (new)
+
+`apps.autonomy_insights` adds governance learning synthesis on top of the existing campaign closeout/followup/feedback loop.
+
+What it does:
+- consumes lifecycle evidence from `autonomy_closeout`, `autonomy_followup`, `autonomy_feedback`, plus disposition/findings metadata
+- produces auditable cross-campaign insights (`CampaignInsight`)
+- records deterministic run summaries (`InsightRun`)
+- emits recommendation-first governance outputs (`InsightRecommendation`)
+
+API:
+- `GET /api/autonomy-insights/candidates/`
+- `POST /api/autonomy-insights/run-review/`
+- `GET /api/autonomy-insights/insights/`
+- `GET /api/autonomy-insights/recommendations/`
+- `GET /api/autonomy-insights/summary/`
+- `GET /api/autonomy-insights/insights/<id>/`
+- `POST /api/autonomy-insights/mark-reviewed/<id>/`
+
+Hard boundaries:
+- no auto-learning authority
+- no automatic roadmap/scenario/program/manager apply
+- no real-money or real broker/exchange execution
