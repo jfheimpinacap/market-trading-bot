@@ -1330,3 +1330,15 @@ Integraciones de navegación ligera:
 - quick link desde cockpit y desde autonomía recovery hacia `/autonomy-disposition`
 
 Fuera de alcance: auto-close opaco, auto-abort opaco, dinero real, ejecución real broker/exchange, multiusuario complejo.
+
+
+## Autonomy closeout board en `/autonomy-closeout` (new)
+
+Nueva vista manual-first para cierre formal post-disposition:
+
+- summary cards: candidates/ready/blocked/postmortem/memory/roadmap-feedback
+- panel de reports con disposition, closeout status, final outcome y blockers
+- findings estructurados (success/failure/blocker/incident/recovery/disposition lessons)
+- recommendations explícitas (`COMPLETE_CLOSEOUT`, `SEND_TO_POSTMORTEM`, `INDEX_IN_MEMORY`, `PREPARE_ROADMAP_FEEDBACK`, `REQUIRE_MANUAL_CLOSEOUT_REVIEW`, `KEEP_OPEN_FOR_FOLLOWUP`)
+- acción manual `Complete closeout` por campaña y `Run closeout review`
+- quick links hacia `/autonomy-campaigns`, `/autonomy-disposition`, `/autonomy-recovery`, `/autonomy-interventions`, `/approvals`, `/trace`, `/cockpit`

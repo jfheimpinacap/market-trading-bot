@@ -1163,3 +1163,18 @@ UI responsibilities:
 - provide manual-first actions (`run review`, `request approval`, `apply`)
 
 Integration remains lightweight through navigation links to campaign, approvals, trace, recovery/interventions, and cockpit without redesigning existing autonomy pages.
+
+
+## Autonomy closeout board architecture (new)
+
+A dedicated `/autonomy-closeout` route extends the autonomy governance chain after disposition:
+
+- page boundary: `pages/autonomy-closeout/AutonomyCloseoutPage.tsx`
+- API client: `services/autonomyCloseout.ts`
+- typed payloads: `types/autonomyCloseout.ts`
+
+UI responsibilities:
+- show closeout candidate posture (ready vs blocked)
+- render auditable report/findings/recommendations panels
+- preserve manual-first controls (`Run closeout review`, `Complete closeout`)
+- expose trace/approval/campaign navigation without auto-archive or opaque auto-learning
