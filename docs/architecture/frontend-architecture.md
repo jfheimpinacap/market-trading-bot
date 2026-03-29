@@ -1069,3 +1069,16 @@ A new `/autonomy-scheduler` route extends the autonomy control surface without r
 - Linked from autonomy program/campaign pages and cockpit.
 - Uses dedicated API service file (`services/autonomyScheduler.ts`) and typed contracts (`types/autonomyScheduler.ts`).
 - Keeps existing route boundaries intact (`autonomy_program` vs `autonomy_campaign` vs `autonomy_scheduler`).
+
+
+## Autonomy launch UX boundary (new)
+
+A dedicated `/autonomy-launch` route now handles the preflight start-gate workflow for admitted campaigns:
+
+- consume launch API surfaces via `services/autonomyLaunch.ts`
+- show explicit readiness and blocker context per campaign
+- expose recommendation-first guidance with confidence/reason codes
+- keep controls manual-first (`Run preflight`, `Authorize`, `Hold`)
+- connect to source-of-truth pages (`/autonomy-scheduler`, `/autonomy-program`, `/autonomy-campaigns`, `/approvals`, `/trace`)
+
+The route follows the existing desktop-first technical card/table style and intentionally avoids introducing a new orchestration UX framework.

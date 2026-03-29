@@ -60,6 +60,7 @@ import { AutonomyScenariosPage } from '../pages/AutonomyScenariosPage';
 import { AutonomyCampaignsPage } from '../pages/AutonomyCampaignsPage';
 import { AutonomyProgramPage } from '../pages/AutonomyProgramPage';
 import { AutonomySchedulerPage } from '../pages/AutonomySchedulerPage';
+import { AutonomyLaunchPage } from '../pages/AutonomyLaunchPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -302,6 +303,12 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-scheduler',
     description: 'Campaign admission board and safe-start window planner for manual-first queue ordering and recommendation-driven campaign admission.',
     component: AutonomySchedulerPage,
+  },
+  {
+    label: 'Autonomy Launch',
+    path: '/autonomy-launch',
+    description: 'Preflight launch control board for admitted campaigns with explicit readiness checks, blockers, and manual start authorization decisions.',
+    component: AutonomyLaunchPage,
   },
   {
     label: 'Autonomy Campaigns',

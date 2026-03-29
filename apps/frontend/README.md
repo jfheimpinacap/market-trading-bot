@@ -1229,3 +1229,16 @@ Route boundary:
 - `autonomy_program` remains active-campaign coexistence control
 - `autonomy_scheduler` governs pending campaign admission ordering and safe-start windows
 - no opaque auto-start is introduced
+
+
+## Autonomy launch board en `/autonomy-launch` (new)
+
+Nueva ruta técnica para control de inicio manual-first entre admission y start de campañas:
+
+- cards de postura/resumen (`ready`, `approval-required`, `blocked`, `waiting`)
+- panel de candidatos con readiness status, blockers y pendientes
+- panel de recomendaciones (`START_NOW`, `WAIT_FOR_WINDOW`, `BLOCK_START`, etc.)
+- panel de autorizaciones recientes (estado, approval linkage, expiración)
+- acciones explícitas: `Run preflight`, `Authorize`, `Hold`
+
+Integración ligera incluida con `/autonomy-scheduler`, `/autonomy-program`, `/autonomy-campaigns`, `/cockpit`, `/approvals` y `/trace`.

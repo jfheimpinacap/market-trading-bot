@@ -1337,3 +1337,16 @@ This module is intentionally adjacent to existing autonomy layers:
 - `autonomy_scheduler`: now owns candidate admission ordering and safe-start timing
 
 Still out of scope: real-money execution, real broker routing, distributed schedulers, opaque planners, multi-user orchestration.
+
+
+### Autonomy launch control / preflight start gate (new)
+
+A new `autonomy_launch` layer now sits between `autonomy_scheduler` admission and `autonomy_campaign` start:
+
+- evaluates admitted/ready campaigns for **start-now readiness** under explicit preflight checks
+- persists auditable `LaunchReadinessSnapshot`, `LaunchAuthorization`, `LaunchRun`, and `LaunchRecommendation` records
+- blocks unsafe starts when posture/window/incidents/degraded/rollout pressure/checkpoints/approvals are not safe
+- keeps a manual-first loop with explicit `authorize` / `hold` actions
+- powers a new operator board at `/autonomy-launch` for readiness, blockers, recommendations, and authorization state
+
+Scope remains unchanged: local-first, single-user, paper/sandbox only, and no opaque mass auto-start orchestration.
