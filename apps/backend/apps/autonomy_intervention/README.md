@@ -1,5 +1,19 @@
 # autonomy_intervention
 
+<<<<<<< HEAD
+Manual-first gateway for active autonomy campaign interventions.
+
+## Scope
+- Consume autonomy operations recommendations/signals and convert them into explicit intervention requests.
+- Validate whether a requested action is safe under current campaign/program/runtime posture.
+- Execute manual intervention actions (`pause`, `resume`, `escalate`, `abort_review`, `continue_clearance`) with auditable outcomes.
+- Preserve local-first, paper/sandbox-only boundaries.
+
+## Out of scope
+- Real broker/exchange execution.
+- Automatic opaque remediation.
+- Multi-user arbitration.
+=======
 Manual-first autonomy intervention control layer for active autonomy campaigns.
 
 ## Scope
@@ -14,3 +28,4 @@ Manual-first autonomy intervention control layer for active autonomy campaigns.
 - No real broker/exchange execution.
 - No opaque auto-remediation.
 - No multi-user orchestration.
+>>>>>>> origin/main

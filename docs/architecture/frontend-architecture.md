@@ -1114,6 +1114,22 @@ UX policy:
 - no hidden auto-remediation
 - trace/approval/campaign deep-linking from runtime and signal panels
 
+<<<<<<< HEAD
+
+### Autonomy interventions board (new)
+
+A dedicated `/autonomy-interventions` page was added as a thin frontend boundary over backend intervention APIs:
+
+- service layer: `services/autonomyInterventions.ts`
+- typed payloads: `types/autonomyInterventions.ts`
+- route/page: `pages/autonomy-interventions/AutonomyInterventionsPage.tsx`
+
+UI intent:
+- show intervention readiness and blockers
+- keep actions explicit and operator-driven
+- bridge to `/autonomy-campaigns`, `/approvals`, and `/trace` for drill-down
+- avoid hidden remediation automation
+=======
 ## Autonomy intervention board (new)
 
 `/autonomy-interventions` is the dedicated manual remediation gateway for active autonomy campaigns.
@@ -1129,3 +1145,4 @@ UX principles kept:
 - status/action badges for OPEN/APPROVAL_REQUIRED/READY/EXECUTED/BLOCKED/REJECTED and intervention action types
 - cross-links to campaigns, approvals, trace, operations, and cockpit
 - cockpit quick links include both `/autonomy-operations` and `/autonomy-interventions` for fast operator escalation routing
+>>>>>>> origin/main

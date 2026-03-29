@@ -1,3 +1,9 @@
+<<<<<<< HEAD
+from apps.autonomy_intervention.models import InterventionOutcome
+
+
+def persist_outcome(*, action, outcome_type: str, campaign_state_before: str, campaign_state_after: str, summary: str, metadata: dict | None = None):
+=======
 from __future__ import annotations
 
 from django.utils import timezone
@@ -9,6 +15,7 @@ def record_outcome(*, action, outcome_type: str, campaign_state_before: str, cam
     action.result_summary = summary
     action.executed_at = timezone.now()
     action.save(update_fields=['result_summary', 'executed_at', 'updated_at'])
+>>>>>>> origin/main
     return InterventionOutcome.objects.create(
         action=action,
         outcome_type=outcome_type,
@@ -17,6 +24,8 @@ def record_outcome(*, action, outcome_type: str, campaign_state_before: str, cam
         summary=summary,
         metadata=metadata or {},
     )
+<<<<<<< HEAD
+=======
 
 
 def blocked_outcome(action, before: str, summary: str, blockers: list[str]):
@@ -28,3 +37,4 @@ def blocked_outcome(action, before: str, summary: str, blockers: list[str]):
         summary=summary,
         metadata={'blockers': blockers},
     )
+>>>>>>> origin/main

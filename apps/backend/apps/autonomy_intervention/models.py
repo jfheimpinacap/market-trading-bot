@@ -58,8 +58,13 @@ class InterventionOutcomeType(models.TextChoices):
 
 class CampaignInterventionRequest(TimeStampedModel):
     campaign = models.ForeignKey('autonomy_campaign.AutonomyCampaign', on_delete=models.CASCADE, related_name='intervention_requests')
+<<<<<<< HEAD
+    source_type = models.CharField(max_length=32, choices=InterventionSourceType.choices)
+    requested_action = models.CharField(max_length=32, choices=InterventionRequestedAction.choices)
+=======
     source_type = models.CharField(max_length=40, choices=InterventionSourceType.choices)
     requested_action = models.CharField(max_length=40, choices=InterventionRequestedAction.choices)
+>>>>>>> origin/main
     request_status = models.CharField(max_length=20, choices=InterventionRequestStatus.choices, default=InterventionRequestStatus.OPEN)
     severity = models.CharField(max_length=12, default='MEDIUM')
     rationale = models.CharField(max_length=255)
@@ -76,6 +81,10 @@ class CampaignInterventionRequest(TimeStampedModel):
         indexes = [
             models.Index(fields=['request_status', '-created_at']),
             models.Index(fields=['campaign', '-created_at']),
+<<<<<<< HEAD
+            models.Index(fields=['requested_action', '-created_at']),
+=======
+>>>>>>> origin/main
         ]
 
 
@@ -97,6 +106,8 @@ class CampaignInterventionAction(TimeStampedModel):
         indexes = [models.Index(fields=['action_status', '-created_at']), models.Index(fields=['campaign', '-created_at'])]
 
 
+<<<<<<< HEAD
+=======
 class InterventionOutcome(TimeStampedModel):
     action = models.ForeignKey(CampaignInterventionAction, on_delete=models.CASCADE, related_name='outcomes')
     outcome_type = models.CharField(max_length=32, choices=InterventionOutcomeType.choices)
@@ -109,6 +120,7 @@ class InterventionOutcome(TimeStampedModel):
         ordering = ['-created_at', '-id']
 
 
+>>>>>>> origin/main
 class InterventionRun(TimeStampedModel):
     active_campaign_count = models.PositiveIntegerField(default=0)
     open_request_count = models.PositiveIntegerField(default=0)
@@ -121,3 +133,19 @@ class InterventionRun(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at', '-id']
+<<<<<<< HEAD
+
+
+class InterventionOutcome(TimeStampedModel):
+    action = models.ForeignKey(CampaignInterventionAction, on_delete=models.CASCADE, related_name='outcomes')
+    outcome_type = models.CharField(max_length=32, choices=InterventionOutcomeType.choices)
+    campaign_state_before = models.CharField(max_length=24, blank=True)
+    campaign_state_after = models.CharField(max_length=24, blank=True)
+    summary = models.CharField(max_length=255)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['outcome_type', '-created_at'])]
+=======
+>>>>>>> origin/main

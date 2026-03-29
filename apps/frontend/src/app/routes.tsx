@@ -327,6 +327,13 @@ export const appRoutes: AppRoute[] = [
     component: AutonomyActivationPage,
   },
   {
+    label: 'Autonomy Interventions',
+    path: '/autonomy-interventions',
+    description: 'Manual-first active campaign action board for auditable pause/resume/escalate/abort-review/continue interventions.',
+    component: AutonomyInterventionsPage,
+  },
+
+  {
     label: 'Autonomy Operations',
     path: '/autonomy-operations',
     description: 'Active campaign runtime monitor with explicit progress/stall/blocker signals and manual-first operations recommendations.',

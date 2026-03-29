@@ -9,5 +9,10 @@ from apps.autonomy_intervention.models import (
 
 admin.site.register(CampaignInterventionRequest)
 admin.site.register(CampaignInterventionAction)
+<<<<<<< HEAD
+admin.site.register(InterventionRun)
+admin.site.register(InterventionOutcome)
+=======
 admin.site.register(InterventionOutcome)
 admin.site.register(InterventionRun)
+>>>>>>> origin/main

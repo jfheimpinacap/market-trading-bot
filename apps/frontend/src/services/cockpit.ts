@@ -377,7 +377,10 @@ export function getCockpitQuickLinks() {
     { label: 'Autonomy roadmap', path: '/autonomy-roadmap' },
     { label: 'Autonomy campaigns', path: '/autonomy-campaigns' },
     { label: 'Autonomy activation', path: '/autonomy-activation' },
+<<<<<<< HEAD
+=======
     { label: 'Autonomy operations', path: '/autonomy-operations' },
+>>>>>>> origin/main
     { label: 'Autonomy interventions', path: '/autonomy-interventions' },
     { label: 'Trace explorer', path: '/trace' },
     { label: 'Execution venue', path: '/execution-venue' },
