@@ -92,6 +92,33 @@ Endpoints:
 - `GET /api/autonomy-advisory/summary/`
 - `POST /api/autonomy-advisory/emit/<insight_id>/`
 
+
+## Autonomy backlog board layer (new)
+
+`apps.autonomy_backlog` sits after `autonomy_advisory_resolution` and creates a formal, auditable future-cycle planning handoff without mutating roadmap/scenario/program/manager automatically.
+
+What it does:
+- consumes `ADOPTED`/`ACKNOWLEDGED` advisory resolutions as candidates
+- builds structured governance backlog items by target scope (`roadmap`, `scenario`, `program`, `manager`, `operator_review`)
+- applies explicit dedup + transparent priority heuristics
+- emits run-level recommendation artifacts (`CREATE`, `PRIORITIZE`, `SKIP_DUPLICATE`, `REQUIRE_MANUAL_BACKLOG_REVIEW`, `REORDER`)
+- keeps all actions manual-first (`create`, `prioritize`, optional `defer`)
+
+What it does not do:
+- no opaque auto-apply to roadmap/scenario/program/manager
+- no real broker/exchange execution
+- no real-money operations
+
+Endpoints:
+- `GET /api/autonomy-backlog/candidates/`
+- `POST /api/autonomy-backlog/run-review/`
+- `GET /api/autonomy-backlog/items/`
+- `GET /api/autonomy-backlog/recommendations/`
+- `GET /api/autonomy-backlog/summary/`
+- `POST /api/autonomy-backlog/create/<artifact_id>/`
+- `POST /api/autonomy-backlog/prioritize/<item_id>/`
+- `POST /api/autonomy-backlog/defer/<item_id>/`
+
 ## Policy rollout guard layer (new)
 
 `apps.policy_rollout` is intentionally adjacent to (not replacing) `policy_tuning` and `trust_calibration`:

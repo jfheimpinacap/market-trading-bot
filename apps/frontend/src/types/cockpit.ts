@@ -23,6 +23,7 @@ import type { AutonomySummary } from './autonomy';
 import type { AutonomyRolloutSummary } from './autonomyRollout';
 import type { AutonomyRoadmapSummary } from './autonomyRoadmap';
 import type { AutonomyCampaignSummary } from './autonomyCampaign';
+import type { AutonomyBacklogSummary } from './autonomyBacklog';
 
 export type CockpitPanelKey =
   | 'runtime'
@@ -57,7 +58,8 @@ export type CockpitPanelKey =
   | 'autonomySummary'
   | 'autonomyRolloutSummary'
   | 'autonomyRoadmapSummary'
-  | 'autonomyCampaignSummary';
+  | 'autonomyCampaignSummary'
+  | 'autonomyBacklogSummary';
 
 export type CockpitPanelFailures = Partial<Record<CockpitPanelKey, string>>;
 
@@ -95,6 +97,7 @@ export type CockpitSnapshot = {
   autonomyRolloutSummary: AutonomyRolloutSummary | null;
   autonomyRoadmapSummary: AutonomyRoadmapSummary | null;
   autonomyCampaignSummary: AutonomyCampaignSummary | null;
+  autonomyBacklogSummary: AutonomyBacklogSummary | null;
   failures: CockpitPanelFailures;
   lastUpdatedAt: string;
 };

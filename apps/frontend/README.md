@@ -1402,3 +1402,24 @@ The frontend includes `/autonomy-advisory-resolution` as a dedicated governance-
 - manual actions: run review, acknowledge, adopt, defer, reject
 
 The page is intentionally recommendation-first and audit-oriented, and does not auto-apply downstream changes.
+
+## Autonomy backlog board en `/autonomy-backlog` (new)
+
+Se agregó una vista formal de **future-cycle planning handoff** conectada a `autonomy_advisory_resolution`.
+
+Qué muestra:
+- summary cards: candidates, ready, blocked, created, prioritized, duplicate skipped
+- tabla de candidates (artifact/insight/campaign/target/readiness/blockers)
+- historial de backlog items con `backlog_type`, `backlog_status`, `priority_level`, `target_scope`
+- panel de recomendaciones (`CREATE`, `PRIORITIZE`, `DEFER`, `SKIP_DUPLICATE`, `REQUIRE_MANUAL_BACKLOG_REVIEW`, `REORDER`)
+- acciones manuales: run review, create backlog item, prioritize, defer
+
+Integraciones UI:
+- quick link desde `/autonomy-advisory-resolution` hacia `/autonomy-backlog`
+- enlaces de trace desde backlog candidates a advisory / insight / campaign
+- cockpit incorpora señal de atención cuando hay backlog crítico o pendientes de priorizar
+
+Límites explícitos:
+- no auto-apply opaco
+- no mutaciones automáticas de roadmap/scenario/program/manager
+- single-user, local-first, paper/sandbox only
