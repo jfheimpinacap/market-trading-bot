@@ -1484,3 +1484,15 @@ Capabilities:
 - frontend board at `/autonomy-insights` connected to cockpit, closeout, followup, feedback, and trace
 
 Boundaries remain unchanged: local-first, single-user, paper/sandbox only, no real broker/exchange execution, and no opaque auto-apply to roadmap/scenario/policy/runtime.
+
+
+### Autonomy advisory resolution board (new)
+
+A new `autonomy_advisory_resolution` layer closes the governance-note loop after `autonomy_advisory` emission:
+
+- consumes emitted advisory artifacts and tracks explicit downstream statuses (`PENDING`, `ACKNOWLEDGED`, `ADOPTED`, `DEFERRED`, `REJECTED`, `BLOCKED`, `CLOSED`)
+- records auditable manual actions for acknowledge/adopt/defer/reject
+- provides resolution runs, recommendation queue, and summary snapshots for cockpit/trace oriented operator review
+- remains manual-first and recommendation-first (no opaque auto-apply to roadmap/scenario/program/manager)
+
+Explicit non-goals remain unchanged: no real money, no broker/exchange execution, no black-box planner, and no multi-user enterprise orchestration.

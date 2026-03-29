@@ -1390,3 +1390,15 @@ The board provides:
 - manual `Run insights review` action and optional `Mark reviewed` action
 
 Design constraints are preserved: manual-first, recommendation-first, no opaque auto-learning, no auto-policy/roadmap apply.
+
+
+### Autonomy advisory resolution
+
+The frontend includes `/autonomy-advisory-resolution` as a dedicated governance-note acknowledgment/adoption tracker:
+
+- summary cards for emitted/pending/acknowledged/adopted/deferred/rejected
+- candidate table with artifact/insight/campaign/target/blockers and trace links
+- recommendation panel for explicit manual-first next actions
+- manual actions: run review, acknowledge, adopt, defer, reject
+
+The page is intentionally recommendation-first and audit-oriented, and does not auto-apply downstream changes.
