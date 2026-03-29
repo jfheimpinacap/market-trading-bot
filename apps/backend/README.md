@@ -2175,3 +2175,29 @@ Boundaries:
 - does not replace `autonomy_program` global posture governance
 - no real money, no real broker/exchange execution, no opaque auto-remediation
 >>>>>>> origin/main
+
+## Autonomy recovery board (new)
+
+Added `apps.autonomy_recovery` as the paused-campaign resolution layer that sits between interventions and final manual disposition.
+
+Responsibilities:
+- derive recovery candidates from paused/blocked/recently-intervened campaigns
+- consolidate open blockers (approvals, checkpoints, incidents, program posture/domain locks)
+- persist auditable `RecoverySnapshot`, `RecoveryRun`, and `RecoveryRecommendation`
+- recommend explicit outcomes (`RESUME_CAMPAIGN`, `KEEP_PAUSED`, `REQUIRE_MORE_RECOVERY`, `REVIEW_FOR_ABORT`, `CLOSE_CAMPAIGN`, `REORDER_RECOVERY_PRIORITY`)
+- expose manual approval request hooks for resume/close through `approval_center`
+
+Key boundaries:
+- does **not** execute campaign resume/abort itself (kept in intervention/campaign layers)
+- does **not** replace `autonomy_operations` runtime monitor
+- does **not** replace `autonomy_program` global posture authority
+- stays paper/sandbox only, local-first, and manual-first
+
+Endpoints:
+- `GET /api/autonomy-recovery/candidates/`
+- `POST /api/autonomy-recovery/run-review/`
+- `GET /api/autonomy-recovery/snapshots/`
+- `GET /api/autonomy-recovery/recommendations/`
+- `GET /api/autonomy-recovery/summary/`
+- `POST /api/autonomy-recovery/request-resume-approval/<campaign_id>/`
+- `POST /api/autonomy-recovery/request-close-approval/<campaign_id>/`

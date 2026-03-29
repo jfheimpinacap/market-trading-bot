@@ -1438,3 +1438,27 @@ Integration boundaries:
 - creates `approval_center` requests for sensitive actions
 - keeps links to campaign/approvals/trace for cockpit/operator visibility
 >>>>>>> origin/main
+
+## Autonomy recovery architecture (new)
+
+`apps.autonomy_recovery` is the formal paused-campaign resolution layer.
+
+Service split:
+- `services/candidates.py`: campaign candidate selection (paused/blocked/intervened context)
+- `services/blockers.py`: blocker aggregation (approvals, checkpoints, incidents, program posture/domain locks)
+- `services/readiness.py`: deterministic score/readiness/status evaluation
+- `services/recommendation.py`: recommendation emission per snapshot
+- `services/control.py`: manual-first approval request helpers (resume/close)
+- `services/run.py`: auditable orchestration of snapshots + run summary + recommendations
+
+Model layer:
+- `RecoverySnapshot`: per-campaign recovery state snapshot
+- `RecoveryRun`: aggregate run summary for one review cycle
+- `RecoveryRecommendation`: explicit disposition guidance records
+
+Integration boundaries:
+- consumes intervention outcomes and campaign/runtime context
+- respects `autonomy_program` as global posture authority
+- routes sensitive actions through `approval_center`
+- leaves actual pause/resume/abort execution to intervention/campaign flows
+- keeps traceability through campaign identifiers and recommendation metadata

@@ -64,6 +64,7 @@ import { AutonomyLaunchPage } from '../pages/AutonomyLaunchPage';
 import { AutonomyActivationPage } from '../pages/AutonomyActivationPage';
 import { AutonomyOperationsPage } from '../pages/AutonomyOperationsPage';
 import { AutonomyInterventionsPage } from '../pages/AutonomyInterventionsPage';
+import { AutonomyRecoveryPage } from '../pages/AutonomyRecoveryPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -331,6 +332,12 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-interventions',
     description: 'Manual-first active campaign action board for auditable pause/resume/escalate/abort-review/continue interventions.',
     component: AutonomyInterventionsPage,
+  },
+  {
+    label: 'Autonomy Recovery',
+    path: '/autonomy-recovery',
+    description: 'Paused campaign resolution board for safe-resume governance with explicit blockers, readiness snapshots, and manual-first close/abort review recommendations.',
+    component: AutonomyRecoveryPage,
   },
 
   {

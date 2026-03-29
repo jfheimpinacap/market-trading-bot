@@ -1318,3 +1318,21 @@ Integration links:
 
 Scope remains local-first, single-user, paper/sandbox only.
 >>>>>>> origin/main
+
+## Autonomy recovery route in `/autonomy-recovery` (new)
+
+New operator board for paused/blocked campaign resolution and safe-resume governance.
+
+What it shows:
+- summary cards (candidates, ready, keep paused, blocked, review abort, close candidate)
+- recovery snapshots table (blockers, pending approvals/checkpoints, pressure, readiness/status)
+- recovery recommendations panel (resume/keep paused/recovery needed/review abort/close/reorder)
+- manual-first action panel to request resume/close approvals
+
+UX boundaries:
+- no opaque auto-resume and no auto-abort
+- `READY_TO_RESUME` and `KEEP_PAUSED` are valid, expected states
+- explicit loading, error, and empty states
+
+Integration links:
+- connected to interventions, operations, campaigns, approvals, cockpit, and trace explorer.

@@ -1146,3 +1146,21 @@ UX principles kept:
 - cross-links to campaigns, approvals, trace, operations, and cockpit
 - cockpit quick links include both `/autonomy-operations` and `/autonomy-interventions` for fast operator escalation routing
 >>>>>>> origin/main
+
+## Autonomy recovery UX architecture (new)
+
+A dedicated `/autonomy-recovery` route now provides safe-resume governance for affected campaigns.
+
+Composition:
+- `services/autonomyRecovery.ts`: typed API gateway for candidates/run-review/snapshots/recommendations/summary
+- `types/autonomyRecovery.ts`: explicit status/readiness/recommendation payload contracts
+- `pages/autonomy-recovery/AutonomyRecoveryPage.tsx`: manual-first board with summary cards, snapshots table, recommendation panel, and approval request actions
+
+Navigation integration:
+- direct links to interventions, operations, program, cockpit, approvals, campaign board, and trace explorer
+- cockpit now includes a quick access path to autonomy recovery
+
+Boundary rules in UI:
+- no auto-resume or auto-abort controls
+- clear empty/loading/error handling
+- status badges distinguish `READY_TO_RESUME`, `KEEP_PAUSED`, `BLOCKED`, `REVIEW_ABORT`, `CLOSE_CANDIDATE`, and readiness grades.

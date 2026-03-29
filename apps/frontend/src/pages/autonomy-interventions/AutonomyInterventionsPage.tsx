@@ -215,7 +215,7 @@ export function AutonomyInterventionsPage() {
         title="/autonomy-interventions"
 <<<<<<< HEAD
         description="Active campaign action board and manual remediation gateway. Manual-first only: no opaque auto-remediation, no real broker/exchange execution."
-        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run intervention review</button><button className="secondary-button" type="button" disabled={busy} onClick={() => void createManual()}>Create manual request</button><button className="ghost-button" type="button" onClick={() => navigate('/autonomy-operations')}>Autonomy operations</button><button className="ghost-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button></div>}
+        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run intervention review</button><button className="secondary-button" type="button" disabled={busy} onClick={() => void createManual()}>Create manual request</button><button className="ghost-button" type="button" onClick={() => navigate('/autonomy-operations')}>Autonomy operations</button><button className="ghost-button" type="button" onClick={() => navigate('/autonomy-recovery')}>Autonomy recovery</button><button className="ghost-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button></div>}
       />
 
       {message ? <p className="success-text">{message}</p> : null}
@@ -223,7 +223,7 @@ export function AutonomyInterventionsPage() {
         <SectionCard eyebrow="Intervention summary" title="Manual action readiness" description="READY and EXECUTED are valid states. Actions stay explicit and auditable.">
 =======
         description="Active campaign action board and manual remediation gateway. Manual-first interventions only: no opaque auto-remediation and no real broker/exchange execution."
-        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run intervention review</button><button className="secondary-button" type="button" disabled={busy} onClick={() => void createManual()}>Create manual request</button><button className="ghost-button" type="button" onClick={() => navigate('/autonomy-operations')}>Autonomy operations</button><button className="ghost-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button></div>}
+        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run intervention review</button><button className="secondary-button" type="button" disabled={busy} onClick={() => void createManual()}>Create manual request</button><button className="ghost-button" type="button" onClick={() => navigate('/autonomy-operations')}>Autonomy operations</button><button className="ghost-button" type="button" onClick={() => navigate('/autonomy-recovery')}>Autonomy recovery</button><button className="ghost-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button></div>}
       />
       {message ? <p className="success-text">{message}</p> : null}
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
