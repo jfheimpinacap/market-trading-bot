@@ -1439,3 +1439,20 @@ Incluye:
 Límites explícitos:
 - no auto-apply opaco sobre roadmap/scenario/program/manager
 - local-first, single-user, paper/sandbox only
+
+## Autonomy planning review board en `/autonomy-planning-review` (new)
+
+La UI incorpora una capa formal de resolución de planning proposals emitidas por `autonomy_intake`.
+
+Objetivo:
+- rastrear proposals pendientes vs acknowledged/accepted/deferred/rejected
+- cerrar el handoff loop de planificación con auditoría explícita
+- mantener `manual-first`, `recommendation-first` y sin `auto-apply` opaco
+
+Incluye:
+- summary cards (emitted/pending/acknowledged/accepted/deferred/rejected)
+- tabla de candidates + resolución downstream
+- panel de resolutions histórico
+- panel de recommendations
+- acciones manuales `Acknowledge`, `Accept`, `Defer`, `Reject`
+- links de trazabilidad hacia backlog/advisory/insight/campaign/proposal/trace

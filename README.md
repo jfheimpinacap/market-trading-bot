@@ -1518,3 +1518,17 @@ Hard boundaries:
 
 `autonomy_intake` adds a governed handoff between `autonomy_backlog` and planning surfaces.
 It consumes READY/PRIORITIZED backlog items and emits auditable planning proposals (roadmap/scenario/program/manager/operator review) with manual-first controls and duplicate protection, without auto-applying downstream changes.
+
+## autonomy_planning_review: governed planning adoption tracker (new)
+
+`autonomy_planning_review` extiende el flujo posterior a `autonomy_intake` para cerrar el loop de handoff de planning proposals emitidas.
+
+Qué hace:
+- consume `PlanningProposal` ya emitidas
+- registra resolución posterior (`PENDING`, `ACKNOWLEDGED`, `ACCEPTED`, `DEFERRED`, `REJECTED`, `BLOCKED`, `CLOSED`)
+- genera runs y recomendaciones auditables para revisión manual
+
+Qué **no** hace:
+- no auto-aplica roadmap/scenario/program/manager
+- no ejecuta broker/exchange real
+- no introduce planner black-box

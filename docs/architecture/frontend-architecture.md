@@ -1272,3 +1272,23 @@ No opaque auto-apply behavior is introduced in the frontend.
 ## `/autonomy-intake` frontend route (new)
 
 The frontend now includes `/autonomy-intake` as the governed backlog-to-planning board. It shows intake candidates, proposal history, recommendation feed, and summary metrics while preserving manual-first emission/acknowledgement controls and trace drill-down links.
+
+## `/autonomy-planning-review` frontend layer (new)
+
+La ruta `/autonomy-planning-review` cierra visualmente el loop de planificación iniciado en `/autonomy-intake`.
+
+### Layout
+- header técnico con disclaimer manual-first / no opaque auto-apply
+- summary cards: emitted, pending, acknowledged, accepted, deferred, rejected
+- tabla central de candidates/resolutions con badges de estado
+- panel de recommendations con `ACKNOWLEDGE_PROPOSAL`, `MARK_ACCEPTED`, `REQUIRE_MANUAL_REVIEW`, etc.
+- acciones manuales: run review, acknowledge, accept, defer, reject
+
+### Navegabilidad
+- links directos hacia `trace`, `autonomy-intake`, `autonomy-backlog`, `cockpit`
+- drill-down por proposal/backlog/advisory/insight/campaign
+
+### UX states
+- loading/error explícitos
+- empty state explícito: “No emitted planning proposals currently require resolution tracking.”
+- `ACKNOWLEDGED` y `ACCEPTED` mostrados como estados válidos de gobernanza

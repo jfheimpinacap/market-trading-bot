@@ -79,4 +79,5 @@ urlpatterns = [
     path('autonomy-advisory-resolution/', include(('apps.autonomy_advisory_resolution.urls', 'autonomy_advisory_resolution'), namespace='autonomy_advisory_resolution')),
     path('autonomy-backlog/', include(('apps.autonomy_backlog.urls', 'autonomy_backlog'), namespace='autonomy_backlog')),
     path('autonomy-intake/', include(('apps.autonomy_intake.urls', 'autonomy_intake'), namespace='autonomy_intake')),
+    path('autonomy-planning-review/', include(('apps.autonomy_planning_review.urls', 'autonomy_planning_review'), namespace='autonomy_planning_review')),
 ]
