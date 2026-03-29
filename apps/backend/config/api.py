@@ -83,4 +83,5 @@ urlpatterns = [
     path('autonomy-decision/', include(('apps.autonomy_decision.urls', 'autonomy_decision'), namespace='autonomy_decision')),
     path('autonomy-package/', include(('apps.autonomy_package.urls', 'autonomy_package'), namespace='autonomy_package')),
     path('autonomy-package-review/', include(('apps.autonomy_package_review.urls', 'autonomy_package_review'), namespace='autonomy_package_review')),
+    path('autonomy-seed/', include(('apps.autonomy_seed.urls', 'autonomy_seed'), namespace='autonomy_seed')),
 ]

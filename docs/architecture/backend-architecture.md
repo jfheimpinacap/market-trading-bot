@@ -1684,3 +1684,28 @@ No reemplaza `autonomy_decision`; lo consume.
 5. `services/control.py` applies manual-first actions (acknowledge/adopt/defer/reject) without auto-applying roadmap/scenario/program/manager changes.
 
 This keeps a closed, traceable loop from decision packaging to package resolution while preserving conservative governance boundaries.
+
+## Autonomy seed architecture (new)
+
+`autonomy_seed` is the formal boundary after package adoption:
+
+`campaign → insight → advisory → backlog → intake → planning_review → decision → package → package_review(ADOPTED) → seed`
+
+### Data model
+- `GovernanceSeed`: persistent planning seed artifact linked to `governance_package` + `package_resolution`
+- `SeedRun`: auditable review pass summary
+- `SeedRecommendation`: recommendation-first output queue
+
+### Service split
+- `services/candidates.py`: selects ADOPTED package resolutions and builds seed candidates
+- `services/dedup.py`: duplicate guard by package + target scope
+- `services/recommendation.py`: deterministic recommendation mapping by target scope/blockers
+- `services/registration.py`: seed persistence construction (no downstream mutation)
+- `services/control.py`: manual-first register action with explicit policy checks
+- `services/run.py`: run orchestration + recommendation summary counters
+
+### Governance boundary
+- consumes `autonomy_package_review`, does not replace it
+- no re-registration of packages
+- no automatic mutation of roadmap/scenario/program/manager
+- output is explicit reusable seed artifacts for next-cycle planning input

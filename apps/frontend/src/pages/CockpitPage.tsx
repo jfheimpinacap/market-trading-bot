@@ -96,7 +96,7 @@ export function CockpitPage() {
         eyebrow="Operator cockpit"
         title="/cockpit"
         description="Single-pane operational command center for manual-first paper/sandbox supervision. Centralizes posture, incidents, governance, and trace-oriented drill-down without replacing specialized pages."
-        actions={<button className="secondary-button" type="button" onClick={() => void loadCockpit()}>Refresh cockpit</button>}
+        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => void loadCockpit()}>Refresh cockpit</button><button className="ghost-button" type="button" onClick={() => navigate('/autonomy-seed')}>Autonomy seed</button></div>}
       />
 
       <SectionCard eyebrow="Quick actions" title="Manual-first controls" description="Triggers existing operations; no new execution logic is introduced.">

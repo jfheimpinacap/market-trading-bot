@@ -1337,3 +1337,23 @@ Composition:
 - lightweight cross-navigation to `/autonomy-package`, `/autonomy-decision`, `/cockpit`, and `/trace`
 
 The page remains conservative and audit-focused: no automatic apply workflow, no hidden planner logic.
+
+## Autonomy seed UI architecture (new)
+
+Added `/autonomy-seed` as a dedicated governance board page with service-local state (no global state rewrite).
+
+### Frontend modules
+- `src/services/autonomySeed.ts`
+- `src/types/autonomySeed.ts`
+- `src/pages/autonomy-seed/AutonomySeedPage.tsx`
+
+### Integration points
+- links to `/autonomy-package-review`, `/autonomy-package`, `/autonomy-decision`, `/cockpit`, `/trace`
+- candidate rows provide trace roots for package/decision/campaign drill-down
+- status and recommendation badges remain aligned with existing autonomy governance pages
+
+### UX constraints
+- manual-first registration controls
+- recommendation-first posture
+- clear empty/loading/error states
+- no opaque auto-apply behavior in UI flow

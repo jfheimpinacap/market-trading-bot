@@ -1573,3 +1573,15 @@ Added `autonomy_package_review` as a formal post-registration governance layer.
 - emits manual-first recommendations (`ACKNOWLEDGE_PACKAGE`, `MARK_PACKAGE_ADOPTED`, etc.)
 - closes the package handoff loop with auditable run history and resolution records
 - keeps strict boundaries: no real money, no broker/exchange live execution, no opaque auto-apply into roadmap/scenario/program/manager
+
+### Autonomy seed board / adopted package registry (new)
+
+A new `autonomy_seed` layer now turns `autonomy_package_review` outcomes in `ADOPTED` state into explicit, auditable next-cycle planning seeds:
+
+- consumes `PackageResolution` from `/api/autonomy-package-review/*`
+- creates persistent `GovernanceSeed` artifacts (manual-first registration)
+- stores recommendation-first `SeedRun` and `SeedRecommendation` audit trails
+- classifies destination scope (`roadmap`, `scenario`, `program`, `manager`, `operator_review`) without auto-mutating those modules
+- keeps full trace continuity from package/decision lineage into registered seed artifacts
+
+Out of scope remains unchanged: no real money, no real broker/exchange execution, and no opaque auto-apply planner behavior.

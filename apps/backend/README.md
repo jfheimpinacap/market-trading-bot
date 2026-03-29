@@ -2471,3 +2471,28 @@ Core endpoints:
 - `POST /api/autonomy-package-review/reject/<package_id>/`
 
 Out of scope remains unchanged: real money, live broker execution, opaque auto-apply, enterprise multi-user orchestration.
+
+## Autonomy seed layer (new)
+
+`apps.autonomy_seed` provides the formal adopted-package-to-seed boundary for next-cycle planning.
+
+What it does:
+- consumes `autonomy_package_review.PackageResolution` records in `ADOPTED`
+- derives seed candidates and emits recommendation-first run output
+- registers persistent `GovernanceSeed` records manually (`POST /api/autonomy-seed/register/<package_id>/`)
+- prevents duplicates by package + target scope
+- keeps roadmap/scenario/program/manager untouched (seed artifact only)
+
+Key endpoints:
+- `GET /api/autonomy-seed/candidates/`
+- `POST /api/autonomy-seed/run-review/`
+- `GET /api/autonomy-seed/seeds/`
+- `GET /api/autonomy-seed/recommendations/`
+- `GET /api/autonomy-seed/summary/`
+- `POST /api/autonomy-seed/register/<package_id>/`
+- `POST /api/autonomy-seed/acknowledge/<seed_id>/`
+
+Non-goals:
+- no real broker/exchange execution
+- no real-money execution
+- no opaque auto-apply to roadmap/scenario/program/manager
