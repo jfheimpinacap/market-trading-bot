@@ -1178,3 +1178,14 @@ UI responsibilities:
 - render auditable report/findings/recommendations panels
 - preserve manual-first controls (`Run closeout review`, `Complete closeout`)
 - expose trace/approval/campaign navigation without auto-archive or opaque auto-learning
+
+## Followup governance route integration (new)
+
+`/autonomy-followup` is added as a focused post-closeout board:
+
+- consumes new service layer `services/autonomyFollowup.ts`
+- keeps page-owned state (no global store rewrite)
+- uses existing UI primitives (`PageHeader`, `SectionCard`, `StatusBadge`, `DataStateWrapper`, `EmptyState`)
+- links into existing modules (`/autonomy-closeout`, `/approvals`, `/cockpit`, `/trace`, `/autonomy-campaigns`)
+
+The route extends governance visibility without changing the existing manual-first architecture.

@@ -1474,3 +1474,24 @@ Boundaries:
 - does **not** replace `autonomy_disposition` as final disposition authority
 - does **not** auto-archive, auto-learn opaquely, or auto-apply roadmap changes
 - remains local-first, single-user, and paper/sandbox only
+
+## Autonomy closeout → followup handoff boundary (new)
+
+A dedicated `apps.autonomy_followup` app now governs knowledge-routing after closeout:
+
+- **Input:** `CampaignCloseoutReport` from `autonomy_closeout`
+- **Output:** auditable `CampaignFollowup` records + `FollowupRun` review snapshots + `FollowupRecommendation` guidance
+- **Service split:**
+  - `services/candidates.py` (candidate selection/readiness)
+  - `services/dedup.py` (duplicate avoidance)
+  - `services/recommendation.py` (deterministic recommendation rules)
+  - `services/emission.py` (artifact/request creation and linkage)
+  - `services/control.py` (manual-first campaign emission)
+  - `services/run.py` (run consolidation + recommendation summary)
+
+Integration contracts are explicit and conservative:
+- memory handoff writes `memory_retrieval.MemoryDocument`
+- postmortem handoff writes `approval_center.ApprovalRequest` stub for board routing
+- roadmap/scenario feedback writes a persisted feedback artifact id stub in closeout metadata
+
+No ML authority, no auto-apply roadmap updates, no live execution integrations.

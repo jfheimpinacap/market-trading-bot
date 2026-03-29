@@ -72,4 +72,5 @@ urlpatterns = [
     path('autonomy-recovery/', include(('apps.autonomy_recovery.urls', 'autonomy_recovery'), namespace='autonomy_recovery')),
     path('autonomy-disposition/', include(('apps.autonomy_disposition.urls', 'autonomy_disposition'), namespace='autonomy_disposition')),
     path('autonomy-closeout/', include(('apps.autonomy_closeout.urls', 'autonomy_closeout'), namespace='autonomy_closeout')),
+    path('autonomy-followup/', include(('apps.autonomy_followup.urls', 'autonomy_followup'), namespace='autonomy_followup')),
 ]
