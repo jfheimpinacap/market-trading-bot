@@ -1243,3 +1243,27 @@ A new page-level module (`/autonomy-insights`) was added without changing the ro
 - adds quick navigation continuity with `/autonomy-advisory`, `/autonomy-insights`, `/cockpit`, and `/trace`
 
 The UI is audit-friendly and intentionally avoids opaque auto-apply behavior.
+
+## Autonomy backlog board frontend architecture (new)
+
+A new route `/autonomy-backlog` is added as the governance backlog handoff surface.
+
+### Composition
+- Page: `pages/autonomy-backlog/AutonomyBacklogPage.tsx`
+- Service: `services/autonomyBacklog.ts`
+- Types: `types/autonomyBacklog.ts`
+
+### UX responsibilities
+- show summary cards for candidate/readiness/creation/prioritization posture
+- render candidates table with artifact/insight/campaign trace links
+- render backlog item history (`backlog_type`, `backlog_status`, `priority_level`, `target_scope`)
+- render recommendation queue with rationale/blockers/confidence
+- provide explicit manual actions (`Run review`, `Create`, `Prioritize`, `Defer`)
+- preserve loading/error/empty states, including: “No adopted autonomy advisories currently require backlog registration.”
+
+### Integrations
+- quick navigation from `/autonomy-advisory-resolution` to `/autonomy-backlog`
+- cockpit attention includes autonomy backlog pressure/criticality signal
+- trace drill-down links to advisory/insight/campaign roots
+
+No opaque auto-apply behavior is introduced in the frontend.

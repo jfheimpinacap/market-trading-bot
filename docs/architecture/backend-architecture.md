@@ -1566,3 +1566,31 @@ Key boundary:
 - run review produces `AdvisoryResolutionRun` counters and `AdvisoryResolutionRecommendation` queue
 
 This layer never emits new advisory artifacts and never auto-applies roadmap/scenario/program/manager changes. It only tracks and audits downstream resolution state.
+
+## Autonomy backlog architecture (new)
+
+`apps.autonomy_backlog` is the formal governance handoff layer after `autonomy_advisory_resolution`.
+
+### Inputs
+- `autonomy_advisory.AdvisoryArtifact`
+- `autonomy_advisory_resolution.AdvisoryResolution` (`ADOPTED`/`ACKNOWLEDGED` candidate states)
+- linked insight/campaign lineage from `autonomy_insights` and `autonomy_campaign`
+
+### Persistent entities
+- `GovernanceBacklogItem`
+- `BacklogRun`
+- `BacklogRecommendation`
+
+### Service split
+- `services/candidates.py`: candidate selection + readiness/blockers
+- `services/dedup.py`: duplicate detection by advisory artifact
+- `services/prioritization.py`: deterministic priority level assignment
+- `services/recommendation.py`: CREATE/PRIORITIZE/DEFER/SKIP/REVIEW/REORDER recommendations
+- `services/control.py`: manual actions (`create_backlog_item`, `mark_prioritized`, `mark_deferred`)
+- `services/run.py`: auditable review run consolidation
+
+### Boundary guarantees
+- does not replace advisory or advisory_resolution
+- does not re-emit advisory notes
+- does not auto-apply roadmap/scenario/program/manager updates
+- explicit/manual-first, local-first, paper/sandbox only

@@ -23,6 +23,7 @@ import { getAutonomySummary } from './autonomy';
 import { getAutonomyRolloutSummary } from './autonomyRollout';
 import { getAutonomyRoadmapSummary } from './autonomyRoadmap';
 import { getAutonomyCampaignSummary } from './autonomyCampaign';
+import { getAutonomyBacklogSummary } from './autonomyBacklog';
 import type { CockpitAttentionItem, CockpitPanelFailures, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -81,6 +82,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     autonomyRolloutSummary,
     autonomyRoadmapSummary,
     autonomyCampaignSummary,
+    autonomyBacklogSummary,
   ] = await Promise.all([
     withFallback('runtime', () => getRuntimeStatus(), failures, null, 'Runtime status unavailable.'),
     withFallback('incidents', () => getIncidentCurrentState(), failures, null, 'Incident posture unavailable.'),
@@ -115,6 +117,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     withFallback('autonomyRolloutSummary', () => getAutonomyRolloutSummary(), failures, null, 'Autonomy rollout summary unavailable.'),
     withFallback('autonomyRoadmapSummary', () => getAutonomyRoadmapSummary(), failures, null, 'Autonomy roadmap summary unavailable.'),
     withFallback('autonomyCampaignSummary', () => getAutonomyCampaignSummary(), failures, null, 'Autonomy campaign summary unavailable.'),
+    withFallback('autonomyBacklogSummary', () => getAutonomyBacklogSummary(), failures, null, 'Autonomy backlog summary unavailable.'),
   ]);
 
   return {
@@ -151,6 +154,7 @@ export async function getCockpitSummary(): Promise<CockpitSnapshot> {
     autonomyRolloutSummary,
     autonomyRoadmapSummary,
     autonomyCampaignSummary,
+    autonomyBacklogSummary,
     failures,
     lastUpdatedAt: new Date().toISOString(),
   };
@@ -333,6 +337,22 @@ export function getCockpitAttention(snapshot: CockpitSnapshot): CockpitAttention
   }
 
 
+
+  if ((snapshot.autonomyBacklogSummary?.critical_items ?? 0) > 0 || (snapshot.autonomyBacklogSummary?.ready_count ?? 0) > (snapshot.autonomyBacklogSummary?.prioritized_items ?? 0)) {
+    const critical = snapshot.autonomyBacklogSummary?.critical_items ?? 0;
+    const ready = snapshot.autonomyBacklogSummary?.ready_count ?? 0;
+    const prioritized = snapshot.autonomyBacklogSummary?.prioritized_items ?? 0;
+    items.push({
+      id: 'autonomy-backlog-pressure',
+      severity: critical > 0 ? 'HIGH' : 'MEDIUM',
+      title: 'Autonomy backlog requires governance review',
+      summary: `${critical} critical item(s), ${ready} ready candidate(s), ${prioritized} prioritized item(s) in /autonomy-backlog.`,
+      route: '/autonomy-backlog',
+      traceRootType: 'advisory_artifact',
+      traceRootId: '',
+    });
+  }
+
   if ((snapshot.autonomyRoadmapSummary?.latest_blocked_domains.length ?? 0) > 0) {
     items.push({
       id: 'autonomy-roadmap-blocked',
@@ -376,6 +396,7 @@ export function getCockpitQuickLinks() {
     { label: 'Autonomy manager', path: '/autonomy' },
     { label: 'Autonomy roadmap', path: '/autonomy-roadmap' },
     { label: 'Autonomy campaigns', path: '/autonomy-campaigns' },
+    { label: 'Autonomy backlog', path: '/autonomy-backlog' },
     { label: 'Autonomy activation', path: '/autonomy-activation' },
     { label: 'Autonomy interventions', path: '/autonomy-interventions' },
     { label: 'Trace explorer', path: '/trace' },

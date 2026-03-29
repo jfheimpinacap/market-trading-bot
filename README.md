@@ -1496,3 +1496,19 @@ A new `autonomy_advisory_resolution` layer closes the governance-note loop after
 - remains manual-first and recommendation-first (no opaque auto-apply to roadmap/scenario/program/manager)
 
 Explicit non-goals remain unchanged: no real money, no broker/exchange execution, no black-box planner, and no multi-user enterprise orchestration.
+
+### Autonomy backlog board / future-cycle planning handoff (new)
+
+Added `autonomy_backlog` as a formal bridge between `autonomy_advisory_resolution` and future governance cycles.
+
+What it adds:
+- consumes `ADOPTED` / `ACKNOWLEDGED` advisory resolutions as backlog candidates
+- creates auditable `GovernanceBacklogItem` records (roadmap/scenario/program/manager/operator_review targets)
+- stores run and recommendation artifacts (`BacklogRun`, `BacklogRecommendation`) with explicit counts and rationale
+- applies deterministic dedup + transparent priority heuristics (no ML and no black-box planner)
+- keeps actions manual-first (`run-review`, `create`, `prioritize`, optional `defer`)
+
+Hard boundaries:
+- no auto-apply mutations to roadmap/scenario/program/manager
+- no real-money execution and no live broker/exchange routing
+- local-first, single-user, paper/sandbox only

@@ -72,6 +72,7 @@ import { AutonomyFeedbackPage } from '../pages/AutonomyFeedbackPage';
 import { AutonomyInsightsPage } from '../pages/AutonomyInsightsPage';
 import { AutonomyAdvisoryPage } from '../pages/AutonomyAdvisoryPage';
 import { AutonomyAdvisoryResolutionPage } from '../pages/AutonomyAdvisoryResolutionPage';
+import { AutonomyBacklogPage } from '../pages/AutonomyBacklogPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -287,6 +288,13 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-advisory-resolution',
     description: 'Manual-first governance note acknowledgment and adoption tracker for emitted advisory artifacts with auditable resolution states.',
     component: AutonomyAdvisoryResolutionPage,
+  },
+
+  {
+    label: 'Autonomy Backlog',
+    path: '/autonomy-backlog',
+    description: 'Manual-first governance backlog board that converts adopted/acknowledged advisories into formal future-cycle backlog candidates without auto-apply.',
+    component: AutonomyBacklogPage,
   },
 
   {
