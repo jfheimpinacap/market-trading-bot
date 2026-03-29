@@ -1267,3 +1267,8 @@ A new route `/autonomy-backlog` is added as the governance backlog handoff surfa
 - trace drill-down links to advisory/insight/campaign roots
 
 No opaque auto-apply behavior is introduced in the frontend.
+
+
+## `/autonomy-intake` frontend route (new)
+
+The frontend now includes `/autonomy-intake` as the governed backlog-to-planning board. It shows intake candidates, proposal history, recommendation feed, and summary metrics while preserving manual-first emission/acknowledgement controls and trace drill-down links.

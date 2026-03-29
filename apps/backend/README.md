@@ -119,6 +119,31 @@ Endpoints:
 - `POST /api/autonomy-backlog/prioritize/<item_id>/`
 - `POST /api/autonomy-backlog/defer/<item_id>/`
 
+
+## Autonomy intake board layer (new)
+
+`apps.autonomy_intake` sits after `autonomy_backlog` and formalizes **backlog-to-planning proposals** while keeping manual-first apply governance.
+
+What it does:
+- consumes READY/PRIORITIZED `GovernanceBacklogItem` rows from `autonomy_backlog`
+- maps backlog types to planning proposal artifacts (`ROADMAP_PROPOSAL`, `SCENARIO_PROPOSAL`, `PROGRAM_REVIEW_PROPOSAL`, `MANAGER_REVIEW_PROPOSAL`, `OPERATOR_REVIEW_PROPOSAL`)
+- emits auditable `PlanningProposal`, `IntakeRecommendation`, and `IntakeRun` records
+- provides recommendation-first run summaries and duplicate protection by `backlog_item + target_scope`
+
+What it does not do:
+- no auto-apply to roadmap/scenario/program/manager
+- no broker/exchange execution
+- no opaque planner/ML authority
+
+Endpoints:
+- `GET /api/autonomy-intake/candidates/`
+- `POST /api/autonomy-intake/run-review/`
+- `GET /api/autonomy-intake/proposals/`
+- `GET /api/autonomy-intake/recommendations/`
+- `GET /api/autonomy-intake/summary/`
+- `POST /api/autonomy-intake/emit/<backlog_item_id>/`
+- `POST /api/autonomy-intake/acknowledge/<proposal_id>/`
+
 ## Policy rollout guard layer (new)
 
 `apps.policy_rollout` is intentionally adjacent to (not replacing) `policy_tuning` and `trust_calibration`:

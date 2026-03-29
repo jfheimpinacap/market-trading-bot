@@ -1423,3 +1423,19 @@ Límites explícitos:
 - no auto-apply opaco
 - no mutaciones automáticas de roadmap/scenario/program/manager
 - single-user, local-first, paper/sandbox only
+
+
+## Autonomy intake board en `/autonomy-intake` (new)
+
+Se agregó una ruta manual-first para convertir backlog formal en propuestas de planificación auditables.
+
+Incluye:
+- summary cards (candidates, ready, blocked, emitted, duplicate skipped, breakdown por target)
+- tabla de intake candidates con links de trace a backlog/advisory/insight/campaign
+- historial de `PlanningProposal` con estado (`PENDING_REVIEW`, `EMITTED`, `ACKNOWLEDGED`, etc.)
+- panel de recomendaciones (`EMIT_*`, `SKIP_DUPLICATE_PROPOSAL`, `REQUIRE_MANUAL_INTAKE_REVIEW`, `REORDER_INTAKE_PRIORITY`)
+- acciones manuales: `Run intake review`, `Emit proposal`, `Acknowledge`
+
+Límites explícitos:
+- no auto-apply opaco sobre roadmap/scenario/program/manager
+- local-first, single-user, paper/sandbox only
