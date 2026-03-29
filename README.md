@@ -1367,3 +1367,20 @@ What it does **not** add:
 - opaque mass auto-start
 - distributed scheduler orchestration
 - multi-user enterprise workflow
+
+### Autonomy operations monitor / active campaign runtime board (new)
+
+The platform now includes a formal `autonomy_operations` layer for **active campaign runtime supervision**.
+
+What it adds:
+- runtime snapshots for started campaigns (wave/step/checkpoint/progress/stall pressure)
+- explicit operational attention signals (`OPEN`/`ACKNOWLEDGED`)
+- auditable monitor runs and recommendation outputs (`CONTINUE`, `PAUSE`, `ESCALATE`, `REVIEW_FOR_ABORT`, etc.)
+- new operator route `/autonomy-operations` integrated with activation/campaign/approvals/trace/cockpit
+
+What it does not change:
+- `autonomy_campaign` remains execution authority
+- `autonomy_activation` remains dispatch/start authority
+- `autonomy_program` remains global posture authority
+
+Scope remains local-first, single-user, paper/sandbox only, with manual-first controls and no opaque auto-remediation.

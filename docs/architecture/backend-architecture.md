@@ -1365,3 +1365,31 @@ Boundary rules:
   - `ActivationRecommendation` for explainable dispatch guidance
 
 This keeps launch readiness and scheduler admission separate from final dispatch execution while preserving conservative, explainable controls.
+
+## Autonomy operations runtime supervision architecture (new)
+
+`apps.autonomy_operations` adds a formal, auditable runtime monitoring layer for active campaigns **after** activation/start.
+
+Model set:
+- `CampaignRuntimeSnapshot`
+- `CampaignAttentionSignal`
+- `OperationsRun`
+- `OperationsRecommendation`
+
+Design intent:
+- consume runtime context from `autonomy_campaign` (+ rollout/incidents/approvals signals)
+- classify runtime status explicitly (`ON_TRACK`, `CAUTION`, `STALLED`, `BLOCKED`, `WAITING_APPROVAL`, `OBSERVING`)
+- emit recommendation-first, manual-first operational guidance
+- keep orchestration transparent and deterministic (no ML/LLM authority)
+
+Integration boundaries:
+- `autonomy_campaign`: remains step/wave/checkpoint execution authority
+- `autonomy_activation`: remains dispatch/start handoff authority
+- `autonomy_program`: remains global multi-campaign posture authority
+- `approval_center`/`incident_commander`/`autonomy_rollout`: influence runtime pressure and signals
+
+Non-goals remain:
+- real-money execution
+- broker/exchange routing
+- opaque auto-remediation
+- distributed enterprise orchestration

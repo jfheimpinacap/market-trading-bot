@@ -1097,3 +1097,19 @@ Integration points:
 - links to `/autonomy-launch`, `/autonomy-scheduler`, `/autonomy-program`, `/autonomy-campaigns`, `/approvals`, `/trace`, `/cockpit`
 - service layer in `src/services/autonomyActivation.ts`
 - typed payloads in `src/types/autonomyActivation.ts`
+
+## Autonomy operations runtime board (new)
+
+A new route `/autonomy-operations` extends the existing autonomy control chain:
+`/autonomy-program` → `/autonomy-scheduler` → `/autonomy-launch` → `/autonomy-activation` → `/autonomy-operations`.
+
+Frontend composition:
+- `services/autonomyOperations.ts` for runtime/signals/recommendations/summary/actions
+- `types/autonomyOperations.ts` for explicit board payload contracts
+- `pages/autonomy-operations/AutonomyOperationsPage.tsx` for manual monitor + acknowledge workflows
+
+UX policy:
+- recommendation-only, manual-first
+- explicit loading/error/empty states
+- no hidden auto-remediation
+- trace/approval/campaign deep-linking from runtime and signal panels
