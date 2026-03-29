@@ -1594,3 +1594,14 @@ This layer never emits new advisory artifacts and never auto-applies roadmap/sce
 - does not re-emit advisory notes
 - does not auto-apply roadmap/scenario/program/manager updates
 - explicit/manual-first, local-first, paper/sandbox only
+
+
+## `autonomy_intake` backend layer (new)
+
+`apps.autonomy_intake` consumes formal `GovernanceBacklogItem` records from `autonomy_backlog` and creates governed `PlanningProposal` artifacts for roadmap/scenario/program/manager/operator review destinations.
+
+Design constraints:
+- recommendation-first and manual-first actions (`run-review`, explicit `emit`, optional `acknowledge`)
+- no opaque auto-apply to destination modules
+- explicit dedup by `backlog_item + target_scope`
+- auditable runs (`IntakeRun`) and recommendation history (`IntakeRecommendation`)

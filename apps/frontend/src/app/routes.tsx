@@ -73,6 +73,7 @@ import { AutonomyInsightsPage } from '../pages/AutonomyInsightsPage';
 import { AutonomyAdvisoryPage } from '../pages/AutonomyAdvisoryPage';
 import { AutonomyAdvisoryResolutionPage } from '../pages/AutonomyAdvisoryResolutionPage';
 import { AutonomyBacklogPage } from '../pages/AutonomyBacklogPage';
+import { AutonomyIntakePage } from '../pages/AutonomyIntakePage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -295,6 +296,13 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-backlog',
     description: 'Manual-first governance backlog board that converts adopted/acknowledged advisories into formal future-cycle backlog candidates without auto-apply.',
     component: AutonomyBacklogPage,
+  },
+
+  {
+    label: 'Autonomy Intake',
+    path: '/autonomy-intake',
+    description: 'Governed backlog-to-planning proposal intake board that emits auditable roadmap/scenario/program/manager review proposals without auto-apply.',
+    component: AutonomyIntakePage,
   },
 
   {

@@ -397,6 +397,7 @@ export function getCockpitQuickLinks() {
     { label: 'Autonomy roadmap', path: '/autonomy-roadmap' },
     { label: 'Autonomy campaigns', path: '/autonomy-campaigns' },
     { label: 'Autonomy backlog', path: '/autonomy-backlog' },
+    { label: 'Autonomy intake', path: '/autonomy-intake' },
     { label: 'Autonomy activation', path: '/autonomy-activation' },
     { label: 'Autonomy interventions', path: '/autonomy-interventions' },
     { label: 'Trace explorer', path: '/trace' },

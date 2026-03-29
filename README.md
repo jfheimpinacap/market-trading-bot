@@ -1512,3 +1512,9 @@ Hard boundaries:
 - no auto-apply mutations to roadmap/scenario/program/manager
 - no real-money execution and no live broker/exchange routing
 - local-first, single-user, paper/sandbox only
+
+
+## Autonomy intake board (new)
+
+`autonomy_intake` adds a governed handoff between `autonomy_backlog` and planning surfaces.
+It consumes READY/PRIORITIZED backlog items and emits auditable planning proposals (roadmap/scenario/program/manager/operator review) with manual-first controls and duplicate protection, without auto-applying downstream changes.
