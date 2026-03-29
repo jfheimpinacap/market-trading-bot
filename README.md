@@ -1532,3 +1532,19 @@ Qué **no** hace:
 - no auto-aplica roadmap/scenario/program/manager
 - no ejecuta broker/exchange real
 - no introduce planner black-box
+
+## autonomy_decision: accepted proposal registry and decision packages (new)
+
+`autonomy_decision` añade la capa formal posterior a `autonomy_planning_review` para convertir proposals `ACCEPTED` en decisiones persistidas y auditables para el siguiente ciclo.
+
+Qué hace:
+- consume `PlanningProposalResolution` en estado `ACCEPTED`
+- genera candidatos, recomendaciones y runs auditables de decisión
+- registra `GovernanceDecision` por destino (`roadmap`, `scenario`, `program`, `manager`, `operator_review`)
+- mantiene trazabilidad proposal/backlog/advisory/insight/campaign y links a trace
+- mantiene manual-first (sin auto-apply en módulos destino)
+
+Fuera de alcance:
+- dinero real / broker-exchange real
+- auto-apply opaco a roadmap/scenario/program/manager
+- planner black-box / multiusuario enterprise

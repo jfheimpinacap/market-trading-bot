@@ -1292,3 +1292,18 @@ La ruta `/autonomy-planning-review` cierra visualmente el loop de planificación
 - loading/error explícitos
 - empty state explícito: “No emitted planning proposals currently require resolution tracking.”
 - `ACKNOWLEDGED` y `ACCEPTED` mostrados como estados válidos de gobernanza
+
+## `/autonomy-decision` frontend architecture (new)
+
+Composición:
+- Page: `pages/autonomy-decision/AutonomyDecisionPage.tsx`
+- Service: `services/autonomyDecision.ts`
+- Types: `types/autonomyDecision.ts`
+
+La UI centraliza candidatos, historial de decisiones y recomendaciones con acciones explícitamente manuales (`run-review`, `register`, `acknowledge`) y drill-down a `/trace`.
+
+Integración ligera:
+- quick links desde `/autonomy-planning-review` y `/cockpit`
+- navegación cruzada con intake/backlog/cockpit/trace
+
+No se introduce store global nuevo ni auto-aplicación opaca de cambios a roadmap/scenario/program/manager.

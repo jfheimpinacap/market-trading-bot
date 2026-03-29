@@ -2402,3 +2402,29 @@ API endpoints:
 - `POST /api/autonomy-planning-review/accept/<proposal_id>/`
 - `POST /api/autonomy-planning-review/defer/<proposal_id>/`
 - `POST /api/autonomy-planning-review/reject/<proposal_id>/`
+
+## `autonomy_decision` backend module (new)
+
+`apps.autonomy_decision` formaliza el paso de `ACCEPTED planning proposals` a `GovernanceDecision` persistida y reusable para ciclos futuros.
+
+Entidades:
+- `GovernanceDecision`
+- `DecisionRun`
+- `DecisionRecommendation`
+
+Servicios:
+- `services/candidates.py`: selecciona ACCEPTED resolutions elegibles
+- `services/dedup.py`: evita duplicados por `planning_proposal + target_scope`
+- `services/recommendation.py`: emite recomendaciones explícitas de registro/manual review/reorder
+- `services/registration.py`: crea artifacts de decisión persistidos
+- `services/control.py`: acciones manual-first `register` / `acknowledge`
+- `services/run.py`: consolidación de run auditable + recommendation summary
+
+API mínima:
+- `GET /api/autonomy-decision/candidates/`
+- `POST /api/autonomy-decision/run-review/`
+- `GET /api/autonomy-decision/decisions/`
+- `GET /api/autonomy-decision/recommendations/`
+- `GET /api/autonomy-decision/summary/`
+- `POST /api/autonomy-decision/register/<proposal_id>/`
+- `POST /api/autonomy-decision/acknowledge/<decision_id>/`
