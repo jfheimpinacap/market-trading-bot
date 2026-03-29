@@ -1113,3 +1113,18 @@ UX policy:
 - explicit loading/error/empty states
 - no hidden auto-remediation
 - trace/approval/campaign deep-linking from runtime and signal panels
+
+
+### Autonomy interventions board (new)
+
+A dedicated `/autonomy-interventions` page was added as a thin frontend boundary over backend intervention APIs:
+
+- service layer: `services/autonomyInterventions.ts`
+- typed payloads: `types/autonomyInterventions.ts`
+- route/page: `pages/autonomy-interventions/AutonomyInterventionsPage.tsx`
+
+UI intent:
+- show intervention readiness and blockers
+- keep actions explicit and operator-driven
+- bridge to `/autonomy-campaigns`, `/approvals`, and `/trace` for drill-down
+- avoid hidden remediation automation

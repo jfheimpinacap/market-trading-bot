@@ -63,6 +63,7 @@ import { AutonomySchedulerPage } from '../pages/AutonomySchedulerPage';
 import { AutonomyLaunchPage } from '../pages/AutonomyLaunchPage';
 import { AutonomyActivationPage } from '../pages/AutonomyActivationPage';
 import { AutonomyOperationsPage } from '../pages/AutonomyOperationsPage';
+import { AutonomyInterventionsPage } from '../pages/AutonomyInterventionsPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -318,6 +319,13 @@ export const appRoutes: AppRoute[] = [
     description: 'Authorized start handoff gateway that revalidates dispatch constraints and records auditable campaign activation outcomes.',
     component: AutonomyActivationPage,
   },
+  {
+    label: 'Autonomy Interventions',
+    path: '/autonomy-interventions',
+    description: 'Manual-first active campaign action board for auditable pause/resume/escalate/abort-review/continue interventions.',
+    component: AutonomyInterventionsPage,
+  },
+
   {
     label: 'Autonomy Operations',
     path: '/autonomy-operations',

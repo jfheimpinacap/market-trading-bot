@@ -68,4 +68,5 @@ urlpatterns = [
     path('autonomy-launch/', include(('apps.autonomy_launch.urls', 'autonomy_launch'), namespace='autonomy_launch')),
     path('autonomy-activation/', include(('apps.autonomy_activation.urls', 'autonomy_activation'), namespace='autonomy_activation')),
     path('autonomy-operations/', include(('apps.autonomy_operations.urls', 'autonomy_operations'), namespace='autonomy_operations')),
+    path('autonomy-interventions/', include(('apps.autonomy_intervention.urls', 'autonomy_intervention'), namespace='autonomy_intervention')),
 ]

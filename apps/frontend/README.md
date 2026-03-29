@@ -1283,3 +1283,16 @@ Estado UX:
 - empty state explícito para ausencia de campañas activas
 - `ON_TRACK` y `ACKNOWLEDGED` visibles como estados válidos
 - sin auto-remediación opaca
+
+
+## Autonomy interventions in `/autonomy-interventions` (new)
+
+New route `/autonomy-interventions` provides an active campaign action board for manual-first operational remediation.
+
+Includes:
+- summary cards: open/approval-required/ready/blocked/recent actions/campaigns needing intervention
+- requests table: campaign, action, source, severity, blockers, rationale, reason codes, and links to campaign/approvals/trace
+- action history: executed_by, executed_at, result summary, failure message
+- explicit controls: run intervention review, create manual request, execute request, cancel request
+
+Scope guardrails remain explicit: paper/sandbox only, manual-first, and no opaque auto-remediation.

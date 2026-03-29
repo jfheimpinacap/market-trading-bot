@@ -1393,3 +1393,21 @@ Non-goals remain:
 - broker/exchange routing
 - opaque auto-remediation
 - distributed enterprise orchestration
+
+
+## Autonomy intervention control layer (new)
+
+`apps.autonomy_intervention` is the formal manual remediation gateway for active campaigns.
+
+Data model:
+- `CampaignInterventionRequest`: intervention intent, status, rationale, blockers, source linkage.
+- `CampaignInterventionAction`: execution attempt + operational result envelope.
+- `InterventionOutcome`: explicit before/after state outcome record.
+- `InterventionRun`: periodic review summary for the intervention board.
+
+Integration boundaries:
+- consumes `autonomy_operations` recommendations/signals (does not replace monitoring).
+- invokes minimal `autonomy_campaign` controls for pause/resume flows.
+- respects `autonomy_program` posture constraints (`FROZEN` blocks non-conservative actions).
+- opens `approval_center` requests for sensitive intervention actions.
+- preserves traceability via campaign/approval/trace linkable metadata and IDs.
