@@ -1354,3 +1354,14 @@ A new manual-first governance board now connects closeout outputs to formal hand
 - manual actions: `Run followup review` and `Emit followup`
 
 Navigation is lightly integrated from `/autonomy-closeout` and `/cockpit` without redesigning existing pages.
+
+## Autonomy feedback board en `/autonomy-feedback` (new)
+
+Nueva vista para cerrar el knowledge loop posterior al handoff de `autonomy_followup`:
+
+- summary cards: emitted, pending, in progress, completed, blocked y closed loop.
+- tabla de candidates con `downstream_status`, artifact link, blockers y links a campaign/closeout/trace.
+- panel de resolutions + recommendations para revisión manual-first.
+- acción `Run feedback review` y `Complete resolution` (manual, auditado).
+
+Integra `autonomy_followup`, `autonomy_closeout`, `approval_center`, `memory_retrieval`, `trace` y `cockpit` sin rediseñar arquitectura.

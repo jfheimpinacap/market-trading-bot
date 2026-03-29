@@ -2236,3 +2236,26 @@ Main endpoints:
 - `POST /api/autonomy-followup/emit/<campaign_id>/`
 
 Scope remains manual-first, local-first, paper/sandbox only.
+
+## Autonomy feedback governance layer (new)
+
+`apps.autonomy_feedback` adds formal post-handoff resolution governance without replacing `autonomy_followup` emission.
+
+Core entities:
+- `FollowupResolution`: auditable per-followup downstream status and resolution decision.
+- `FeedbackRun`: run-level consolidation counters (`pending`, `in_progress`, `completed`, `blocked`, `rejected`, `closed_loop`).
+- `FeedbackRecommendation`: review/complete/pending/reorder guidance.
+
+Endpoints:
+- `GET /api/autonomy-feedback/candidates/`
+- `POST /api/autonomy-feedback/run-review/`
+- `GET /api/autonomy-feedback/resolutions/`
+- `GET /api/autonomy-feedback/recommendations/`
+- `GET /api/autonomy-feedback/summary/`
+- `POST /api/autonomy-feedback/complete/<followup_id>/`
+
+Safety boundary:
+- manual-first only
+- paper/sandbox scope only
+- no auto-apply roadmap/scenario changes
+- no opaque/black-box planner behavior

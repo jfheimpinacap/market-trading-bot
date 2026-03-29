@@ -94,7 +94,7 @@ export function AutonomyFollowupPage() {
         eyebrow="Autonomy followup board"
         title="/autonomy-followup"
         description="Manual-first closeout handoff emitter and knowledge-routing governance. No opaque auto-learning, no auto-apply roadmap changes."
-        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run followup review</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-closeout')}>Closeout</button><button className="secondary-button" type="button" onClick={() => navigate('/approvals')}>Approvals</button><button className="ghost-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button></div>}
+        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run followup review</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-feedback')}>Feedback board</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-closeout')}>Closeout</button><button className="secondary-button" type="button" onClick={() => navigate('/approvals')}>Approvals</button><button className="ghost-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button></div>}
       />
 
       {message ? <p className="success-text">{message}</p> : null}

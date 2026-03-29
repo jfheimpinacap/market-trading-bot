@@ -1189,3 +1189,13 @@ UI responsibilities:
 - links into existing modules (`/autonomy-closeout`, `/approvals`, `/cockpit`, `/trace`, `/autonomy-campaigns`)
 
 The route extends governance visibility without changing the existing manual-first architecture.
+
+## Autonomy feedback frontend surface (new)
+
+The `/autonomy-feedback` route adds a focused governance board for post-followup resolution tracking.
+
+- service boundary: `services/autonomyFeedback.ts`
+- typed payloads: `types/autonomyFeedback.ts`
+- UI board: `pages/autonomy-feedback/AutonomyFeedbackPage.tsx`
+
+Design intent: connect existing modules (`autonomy-followup`, `autonomy-closeout`, `cockpit`, `approvals`, `trace`) with explicit manual actions and auditable status visibility, without introducing opaque automation or a new client-state framework.
