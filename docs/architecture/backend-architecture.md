@@ -1308,3 +1308,27 @@ Non-goals:
 - no replacement of campaign internals
 - no opaque auto-planner or mass auto-apply
 - no real-money/real-execution pathways
+
+## Autonomy scheduler architecture (new)
+
+`apps.autonomy_scheduler` adds a conservative admission-governance layer for campaign intake.
+
+### Responsibilities
+- Queue consolidation for campaign candidates (`services/queue.py`)
+- Safe-start window resolution (`services/windows.py`)
+- Simple visible scoring (`services/prioritization.py`)
+- Explicit block/defer/ready admission evaluation (`services/admission.py`)
+- Auditable planning runs + recommendation generation (`services/planning.py`)
+- Manual apply controls (admit/defer + optional approval request) (`services/control.py`)
+
+### Integration boundaries
+- Consumes `autonomy_program` posture/health constraints as superior authority.
+- Consumes `autonomy_campaign` metadata/dependencies and does not execute campaign waves.
+- May open `approval_center` requests for sensitive admits.
+- Surfaces explicit block reasons for incidents/degraded/locked domains/window constraints.
+
+### Non-goals
+- No auto-start orchestration engine.
+- No distributed scheduler.
+- No black-box optimization or ML planner.
+- No real-money execution scope.

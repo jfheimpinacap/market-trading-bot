@@ -1320,3 +1320,20 @@ What it does **not** add:
 - real execution
 - opaque multi-campaign mass auto-orchestration
 - black-box planner behavior
+
+### Autonomy scheduler / campaign admission board (new)
+
+A dedicated `autonomy_scheduler` layer now governs **pending campaign admission** into the autonomy program:
+
+- explicit campaign admission queue and statuses (`PENDING`, `READY`, `DEFERRED`, `BLOCKED`, `ADMITTED`, `EXPIRED`)
+- formal safe-start windows (`OPEN`, `UPCOMING`, `CLOSED`, `FROZEN`) with capacity and posture/domain constraints
+- auditable scheduler planning runs + recommendation records
+- recommendation-first actions (`SAFE_TO_ADMIT_NEXT`, `WAIT_FOR_WINDOW`, `BLOCK_ADMISSION`, `REORDER_ADMISSION_QUEUE`, `REQUIRE_APPROVAL_TO_ADMIT`)
+- manual-first controls for admit/defer (no mass auto-start)
+
+This module is intentionally adjacent to existing autonomy layers:
+- `autonomy_campaign`: still owns campaign execution internals
+- `autonomy_program`: still owns active campaign coexistence posture/rules
+- `autonomy_scheduler`: now owns candidate admission ordering and safe-start timing
+
+Still out of scope: real-money execution, real broker routing, distributed schedulers, opaque planners, multi-user orchestration.

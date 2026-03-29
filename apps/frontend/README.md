@@ -1210,3 +1210,22 @@ Se mantiene el mismo boundary:
 - sin auto-orquestación opaca multi-campaña
 - sin dinero real ni ejecución real
 - single-user local-first
+
+## Autonomy scheduler UI (new)
+
+The frontend now includes `/autonomy-scheduler` as a dedicated campaign-admission board.
+
+Key UX sections:
+- posture + active window cards
+- candidate queue table with blockers and manual admit/defer actions
+- recommendation stream (`WAIT_FOR_WINDOW`, `SAFE_TO_ADMIT_NEXT`, `BLOCK_ADMISSION`, etc.)
+- safe-start windows panel
+
+Service integration:
+- `src/services/autonomyScheduler.ts`
+- `src/types/autonomyScheduler.ts`
+
+Route boundary:
+- `autonomy_program` remains active-campaign coexistence control
+- `autonomy_scheduler` governs pending campaign admission ordering and safe-start windows
+- no opaque auto-start is introduced
