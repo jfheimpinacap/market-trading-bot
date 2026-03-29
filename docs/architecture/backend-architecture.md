@@ -40,6 +40,27 @@ The backend is a local-first Django service inside the monorepo. Its current res
 - `apps.research_agent`: scan/research boundary for RSS + Reddit + optional X/Twitter adapter ingestion, local LLM structured analysis, social-signal normalization, heuristic market linking, and conservative mixed-source candidate fusion.
 - `apps.position_manager`: post-entry holding governance boundary that consumes risk watch + prediction/research drift context to produce auditable HOLD/REDUCE/CLOSE/REVIEW decisions and explicit paper-only exit plans.
 - `apps.policy_rollout`: post-change governance boundary that evaluates applied policy tuning impact against baseline metrics and emits recommendation-first keep/monitor/rollback guidance with manual rollback support.
+- `apps.autonomy_advisory`: insight-to-artifact governance boundary that consumes reviewed autonomy insights, emits auditable advisory notes/stubs, and tracks dedup/manual blockers/run summaries.
+
+## Autonomy advisory architecture (new)
+
+`apps.autonomy_advisory` is intentionally adjacent to `apps.autonomy_insights`:
+
+- `autonomy_insights` continues to synthesize lessons/patterns and produce insight recommendations.
+- `autonomy_advisory` consumes those reviewed insights and emits formal advisory artifacts.
+
+Service split:
+- `services/candidates.py`: reviewed-readiness and candidate projection
+- `services/dedup.py`: emitted-artifact duplicate checks
+- `services/recommendation.py`: recommendation-first advisory suggestions
+- `services/emission.py`: artifact creation and optional memory note persistence
+- `services/control.py`: manual emit action per insight
+- `services/run.py`: auditable run-level consolidation and summary counters
+
+Boundary guarantees:
+- no auto-apply mutations in roadmap/scenario/program/manager
+- no opaque planner/ML authority
+- local-first, single-user, paper/sandbox constraints preserved
 
 ## Policy rollout architecture (new)
 
