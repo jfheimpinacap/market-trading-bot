@@ -2044,3 +2044,31 @@ Design boundaries:
 - keeps `autonomy_campaign` as campaign execution engine (waves/steps/checkpoints)
 - manual-first apply: no opaque auto-start or mass orchestration
 - paper/sandbox only, local-first, single-user
+
+
+## Autonomy launch app (new)
+
+`apps.autonomy_launch` is a formal preflight start gate that complements existing autonomy layers:
+
+- `autonomy_scheduler` still governs admission queue + windows
+- `autonomy_program` still governs global concurrency posture
+- `autonomy_campaign` still owns campaign execution (waves/steps/checkpoints)
+- `autonomy_launch` adds **start authorization decisioning** for admitted campaigns
+
+Core entities:
+- `LaunchReadinessSnapshot`
+- `LaunchAuthorization`
+- `LaunchRun`
+- `LaunchRecommendation`
+
+Endpoints:
+- `GET /api/autonomy-launch/candidates/`
+- `POST /api/autonomy-launch/run-preflight/`
+- `GET /api/autonomy-launch/readiness/`
+- `GET /api/autonomy-launch/recommendations/`
+- `GET /api/autonomy-launch/authorizations/`
+- `GET /api/autonomy-launch/summary/`
+- `POST /api/autonomy-launch/authorize/<campaign_id>/`
+- `POST /api/autonomy-launch/hold/<campaign_id>/`
+
+Non-goals remain explicit: no real-money execution, no opaque auto-start, no distributed scheduler, no multi-user complexity.

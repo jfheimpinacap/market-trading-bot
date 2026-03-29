@@ -1332,3 +1332,22 @@ Non-goals:
 - No distributed scheduler.
 - No black-box optimization or ML planner.
 - No real-money execution scope.
+
+
+## Autonomy launch start-gate architecture (new)
+
+`apps.autonomy_launch` introduces a conservative, auditable layer between campaign admission and campaign start.
+
+Service split:
+- `services/candidates.py`: admitted/ready launch candidate selection
+- `services/preflight.py`: explicit preflight checks (posture/window/conflicts/dependencies/approvals/incidents/degraded/rollout pressure)
+- `services/readiness.py`: snapshot + simple readiness scoring
+- `services/recommendation.py`: recommendation emission (`START_NOW`, `HOLD`, `WAIT`, `BLOCK`, `REORDER`)
+- `services/authorization.py`: formal authorization records + approval request linkage when needed
+- `services/control.py`: manual-first authorize/hold actions
+
+Boundary rules:
+- does not replace scheduler queue/admit/defer
+- does not replace program concurrency authority
+- does not replace campaign execution engine
+- does not implement opaque auto-start orchestration
