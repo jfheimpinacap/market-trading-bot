@@ -1605,3 +1605,25 @@ Design constraints:
 - no opaque auto-apply to destination modules
 - explicit dedup by `backlog_item + target_scope`
 - auditable runs (`IntakeRun`) and recommendation history (`IntakeRecommendation`)
+
+## `autonomy_planning_review` backend layer (new)
+
+`apps.autonomy_planning_review` se ubica **después de** `autonomy_intake` y agrega una frontera de gobernanza para resolución posterior de planning proposals.
+
+### Responsabilidades
+- consumir proposals ya emitidas/ready/acknowledged/blocked desde `autonomy_intake`
+- derivar `downstream_status` y `ready_for_resolution` con reglas explícitas (sin ML/LLM)
+- persistir `PlanningProposalResolution` de forma auditable
+- exponer acciones manual-first (`acknowledge`, `accept`, `defer`, `reject`)
+- registrar `PlanningReviewRun` + `PlanningReviewRecommendation`
+
+### Integración
+- fuente: `autonomy_intake.PlanningProposal`
+- vínculos de trazabilidad: backlog/advisory/insight/campaign
+- destino: tracking de resolución (no auto-apply)
+
+### Garantías de diseño
+- evita duplicar cierres cuando ya existe `ACCEPTED`/`CLOSED`
+- distingue `ACKNOWLEDGED` vs `ACCEPTED`
+- permite `UNKNOWN/PENDING` cuando falta señal downstream
+- conserva modelo local-first, single-user, sandbox/paper-only

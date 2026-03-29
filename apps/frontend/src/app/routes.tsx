@@ -74,6 +74,7 @@ import { AutonomyAdvisoryPage } from '../pages/AutonomyAdvisoryPage';
 import { AutonomyAdvisoryResolutionPage } from '../pages/AutonomyAdvisoryResolutionPage';
 import { AutonomyBacklogPage } from '../pages/AutonomyBacklogPage';
 import { AutonomyIntakePage } from '../pages/AutonomyIntakePage';
+import { AutonomyPlanningReviewPage } from '../pages/AutonomyPlanningReviewPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -303,6 +304,12 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-intake',
     description: 'Governed backlog-to-planning proposal intake board that emits auditable roadmap/scenario/program/manager review proposals without auto-apply.',
     component: AutonomyIntakePage,
+  },
+  {
+    label: 'Autonomy Planning Review',
+    path: '/autonomy-planning-review',
+    description: 'Manual-first planning proposal resolution board that tracks downstream acknowledged/accepted/deferred/rejected outcomes without opaque auto-apply.',
+    component: AutonomyPlanningReviewPage,
   },
 
   {

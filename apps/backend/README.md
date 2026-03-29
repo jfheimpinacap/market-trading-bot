@@ -2380,3 +2380,25 @@ Endpoints:
 - `POST /api/autonomy-advisory-resolution/reject/<artifact_id>/`
 
 Boundary: manual-first resolution tracking only; no auto-apply to downstream roadmap/scenario/program/manager modules.
+
+## autonomy_planning_review backend module (new)
+
+`apps.autonomy_planning_review` closes the planning handoff loop after `autonomy_intake` emission.
+
+It **consumes existing `PlanningProposal` records** and adds an auditable downstream resolution layer:
+- `PlanningProposalResolution` (`PENDING`, `ACKNOWLEDGED`, `ACCEPTED`, `DEFERRED`, `REJECTED`, `BLOCKED`, `CLOSED`)
+- `PlanningReviewRun`
+- `PlanningReviewRecommendation`
+
+It does **not** re-emit proposals and does **not** auto-apply roadmap/scenario/program/manager changes.
+
+API endpoints:
+- `GET /api/autonomy-planning-review/candidates/`
+- `POST /api/autonomy-planning-review/run-review/`
+- `GET /api/autonomy-planning-review/resolutions/`
+- `GET /api/autonomy-planning-review/recommendations/`
+- `GET /api/autonomy-planning-review/summary/`
+- `POST /api/autonomy-planning-review/acknowledge/<proposal_id>/`
+- `POST /api/autonomy-planning-review/accept/<proposal_id>/`
+- `POST /api/autonomy-planning-review/defer/<proposal_id>/`
+- `POST /api/autonomy-planning-review/reject/<proposal_id>/`
