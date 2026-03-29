@@ -2019,3 +2019,28 @@ Boundary guarantees:
 - paper/sandbox only
 - no real-money or real-execution path
 - no opaque multi-campaign auto-orchestration planner
+
+## Autonomy scheduler (new)
+
+A new backend module `apps.autonomy_scheduler` adds a formal campaign-admission layer between roadmap/scenario candidate generation and active program execution.
+
+It introduces:
+- `CampaignAdmission`: admission queue record per campaign (pending/ready/deferred/blocked/admitted/expired).
+- `ChangeWindow`: safe-start windows with posture/domain constraints and admission capacity.
+- `SchedulerRun`: auditable scheduler planning runs that snapshot queue/posture/window state.
+- `AdmissionRecommendation`: explicit ADMIT/DEFER/HOLD/WAIT/BLOCK/REORDER recommendation records.
+
+Core endpoints:
+- `GET /api/autonomy-scheduler/queue/`
+- `GET /api/autonomy-scheduler/windows/`
+- `POST /api/autonomy-scheduler/run-plan/`
+- `GET /api/autonomy-scheduler/recommendations/`
+- `GET /api/autonomy-scheduler/summary/`
+- `POST /api/autonomy-scheduler/admit/<campaign_id>/`
+- `POST /api/autonomy-scheduler/defer/<campaign_id>/`
+
+Design boundaries:
+- keeps `autonomy_program` as authority for active campaign coexistence posture
+- keeps `autonomy_campaign` as campaign execution engine (waves/steps/checkpoints)
+- manual-first apply: no opaque auto-start or mass orchestration
+- paper/sandbox only, local-first, single-user

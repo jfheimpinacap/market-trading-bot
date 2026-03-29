@@ -1053,3 +1053,19 @@ Integration:
 Non-goals preserved:
 - no opaque multi-campaign auto-orchestration UX
 - no real-execution UI paths
+
+## Autonomy scheduler frontend route (new)
+
+A new `/autonomy-scheduler` route extends the autonomy control surface without replacing existing pages.
+
+### UI composition
+- Header + manual-first safety note.
+- Posture/window summary cards.
+- Central admission queue table (status, scores, blockers, links, admit/defer actions).
+- Recommendation panel with reason codes/blockers/confidence.
+- Safe-start windows panel.
+
+### Integration
+- Linked from autonomy program/campaign pages and cockpit.
+- Uses dedicated API service file (`services/autonomyScheduler.ts`) and typed contracts (`types/autonomyScheduler.ts`).
+- Keeps existing route boundaries intact (`autonomy_program` vs `autonomy_campaign` vs `autonomy_scheduler`).
