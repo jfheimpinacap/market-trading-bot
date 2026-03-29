@@ -1336,3 +1336,19 @@ UX boundaries:
 
 Integration links:
 - connected to interventions, operations, campaigns, approvals, cockpit, and trace explorer.
+
+
+## Autonomy disposition board en `/autonomy-disposition` (new)
+
+Nueva vista técnica para governanza de cierre/retire final de campañas:
+
+- summary cards (candidates, ready-to-close/abort/retire, review, approvals)
+- candidates table con readiness, blockers, gates y recomendación
+- recommendations panel y dispositions history auditables
+- acciones manual-first: `Run disposition review`, `Request approval`, `Apply disposition`
+
+Integraciones de navegación ligera:
+- links hacia `/autonomy-campaigns`, `/autonomy-recovery`, `/autonomy-interventions`, `/approvals`, `/trace`, `/cockpit`
+- quick link desde cockpit y desde autonomía recovery hacia `/autonomy-disposition`
+
+Fuera de alcance: auto-close opaco, auto-abort opaco, dinero real, ejecución real broker/exchange, multiusuario complejo.
