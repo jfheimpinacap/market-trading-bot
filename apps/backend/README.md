@@ -2201,3 +2201,24 @@ Endpoints:
 - `GET /api/autonomy-recovery/summary/`
 - `POST /api/autonomy-recovery/request-resume-approval/<campaign_id>/`
 - `POST /api/autonomy-recovery/request-close-approval/<campaign_id>/`
+
+
+## Autonomy disposition governance layer (new)
+
+`apps.autonomy_disposition` formalizes the final campaign exit/disposition step after operations/intervention/recovery:
+
+- models: `CampaignDisposition`, `DispositionRun`, `DispositionRecommendation`
+- services: candidates, readiness, recommendation, apply, control, run
+- endpoints:
+  - `GET /api/autonomy-disposition/candidates/`
+  - `POST /api/autonomy-disposition/run-review/`
+  - `GET /api/autonomy-disposition/recommendations/`
+  - `GET /api/autonomy-disposition/dispositions/`
+  - `GET /api/autonomy-disposition/summary/`
+  - `POST /api/autonomy-disposition/request-approval/<campaign_id>/`
+  - `POST /api/autonomy-disposition/apply/<campaign_id>/`
+
+Boundaries:
+- manual-first, no opaque auto-close/abort/retire
+- no real-money or live broker/exchange execution
+- reuses recovery/intervention/operations/campaign/program context instead of replacing those layers

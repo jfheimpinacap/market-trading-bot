@@ -1164,3 +1164,20 @@ Boundary rules in UI:
 - no auto-resume or auto-abort controls
 - clear empty/loading/error handling
 - status badges distinguish `READY_TO_RESUME`, `KEEP_PAUSED`, `BLOCKED`, `REVIEW_ABORT`, `CLOSE_CANDIDATE`, and readiness grades.
+
+
+## Autonomy disposition UI architecture (new)
+
+A dedicated `/autonomy-disposition` route extends the autonomy governance sequence with final lifecycle disposition controls:
+
+- service boundary: `services/autonomyDisposition.ts`
+- type boundary: `types/autonomyDisposition.ts`
+- page boundary: `pages/autonomy-disposition/AutonomyDispositionPage.tsx`
+
+UI responsibilities:
+- show disposition summary and candidate readiness state
+- keep blockers and pending gates visible
+- expose recommendation and disposition history panels
+- provide manual-first actions (`run review`, `request approval`, `apply`)
+
+Integration remains lightweight through navigation links to campaign, approvals, trace, recovery/interventions, and cockpit without redesigning existing autonomy pages.

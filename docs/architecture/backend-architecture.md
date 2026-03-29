@@ -1462,3 +1462,26 @@ Integration boundaries:
 - routes sensitive actions through `approval_center`
 - leaves actual pause/resume/abort execution to intervention/campaign flows
 - keeps traceability through campaign identifiers and recommendation metadata
+
+
+## Autonomy disposition architecture (new)
+
+`apps.autonomy_disposition` adds a conservative closure committee layer after active campaign operations:
+
+- **Input context:** latest recovery snapshot, latest intervention outcome, latest runtime snapshot, pending approvals/checkpoints, unresolved incident pressure.
+- **Decision artifacts:**
+  - `CampaignDisposition` (formal final disposition decision)
+  - `DispositionRun` (auditable consolidation run)
+  - `DispositionRecommendation` (explicit close/abort/retire/keep-open recommendations)
+- **Service split:**
+  - `services/candidates.py`: candidate selection/context hydration
+  - `services/readiness.py`: readiness + closure risk + blockers
+  - `services/recommendation.py`: deterministic recommendation and disposition mapping
+  - `services/run.py`: run creation + recommendation summary
+  - `services/control.py`: approval request and manual apply controls
+  - `services/apply.py`: auditable state transition apply (manual-first)
+
+Boundary rules:
+- does not replace `autonomy_recovery` evaluation or `autonomy_intervention` runtime actions
+- does not replace `autonomy_campaign` engine or `autonomy_program` posture authority
+- no opaque auto-close/auto-abort/auto-retire and no real execution path

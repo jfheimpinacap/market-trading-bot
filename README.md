@@ -1424,3 +1424,15 @@ The stack now includes a formal `autonomy_recovery` governance layer for campaig
 - frontend route `/autonomy-recovery` for operator review and traceable next actions
 
 Scope remains unchanged: local-first, single-user, paper/sandbox only, with no real broker/exchange execution and no opaque auto-recovery.
+
+
+### Autonomy disposition board / campaign closure committee (new)
+
+The platform now includes a formal `autonomy_disposition` governance layer for final campaign lifecycle disposition:
+
+- consolidates campaigns that are ready to close, abort, retire, or remain open
+- records auditable `CampaignDisposition` outcomes with rationale, blockers, and before/after state
+- generates disposition runs + recommendations and supports approval-center gating for sensitive actions
+- exposes a dedicated UI route at `/autonomy-disposition` for manual-first review and apply
+
+This layer consumes recovery/intervention/operations context and does **not** replace campaign execution, recovery evaluation, or program posture authority. Scope remains local-first, single-user, and paper/sandbox only.

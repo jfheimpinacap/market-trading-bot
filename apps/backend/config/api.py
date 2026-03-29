@@ -70,4 +70,5 @@ urlpatterns = [
     path('autonomy-operations/', include(('apps.autonomy_operations.urls', 'autonomy_operations'), namespace='autonomy_operations')),
     path('autonomy-interventions/', include(('apps.autonomy_intervention.urls', 'autonomy_intervention'), namespace='autonomy_intervention')),
     path('autonomy-recovery/', include(('apps.autonomy_recovery.urls', 'autonomy_recovery'), namespace='autonomy_recovery')),
+    path('autonomy-disposition/', include(('apps.autonomy_disposition.urls', 'autonomy_disposition'), namespace='autonomy_disposition')),
 ]
