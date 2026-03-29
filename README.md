@@ -1411,3 +1411,16 @@ The stack now includes `autonomy_intervention` to formalize manual operational a
 
 Non-goals remain unchanged: no real broker/exchange execution, no real money, and no opaque auto-remediation.
 >>>>>>> origin/main
+
+### Autonomy recovery board / paused campaign resolution (new)
+
+The stack now includes a formal `autonomy_recovery` governance layer for campaigns that are paused, blocked, escalated, or pending disposition after intervention:
+
+- candidate discovery for paused/blocked/recently intervened campaigns
+- explicit blocker consolidation (approvals/checkpoints/incidents/program posture/domain locks)
+- auditable recovery snapshots + runs + recommendations
+- conservative recommendations: keep paused, resume-ready, require more recovery, review-for-abort, close-candidate, and recovery-priority reorder
+- manual-first approval hooks for sensitive resume/close decisions
+- frontend route `/autonomy-recovery` for operator review and traceable next actions
+
+Scope remains unchanged: local-first, single-user, paper/sandbox only, with no real broker/exchange execution and no opaque auto-recovery.
