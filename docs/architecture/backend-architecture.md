@@ -1648,3 +1648,27 @@ Garantías:
 - sin auto-apply opaco
 - sin mutaciones automáticas de módulos destino
 - local-first, single-user, paper/sandbox only
+
+## `autonomy_package` architecture (new)
+
+`apps.autonomy_package` agrega una capa formal entre `autonomy_decision` y la próxima iteración de planificación.
+No reemplaza `autonomy_decision`; lo consume.
+
+### Modelos
+- `GovernancePackage`: bundle persistido y auditable, con `package_type`, `package_status`, `target_scope`, `grouping_key`, `linked_decisions`.
+- `PackageRun`: corrida auditable de consolidación y métricas.
+- `PackageRecommendation`: recomendaciones explícitas para register/skip/manual review/reorder.
+
+### Servicios
+- `candidates.py`: selecciona decisiones `REGISTERED/ACKNOWLEDGED` listas para packaging.
+- `grouping.py`: agrupación por `target_scope + grouping_key` y prioridad.
+- `dedup.py`: detecta duplicates con `grouping_key + target_scope`.
+- `recommendation.py`: recomendaciones transparentes por target y estado.
+- `registration.py`: crea `GovernancePackage` y enlaza decisiones de origen.
+- `control.py`: API manual-first para registrar package por decisión.
+- `run.py`: ejecuta revisión, registra recomendaciones y consolida summary.
+
+### Restricciones
+- no dinero real
+- no ejecución real broker/exchange
+- no auto-apply opaco a roadmap/scenario/program/manager
