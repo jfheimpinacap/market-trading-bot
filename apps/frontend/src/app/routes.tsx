@@ -68,6 +68,7 @@ import { AutonomyRecoveryPage } from '../pages/AutonomyRecoveryPage';
 import { AutonomyDispositionPage } from '../pages/AutonomyDispositionPage';
 import { AutonomyCloseoutPage } from '../pages/AutonomyCloseoutPage';
 import { AutonomyFollowupPage } from '../pages/AutonomyFollowupPage';
+import { AutonomyFeedbackPage } from '../pages/AutonomyFeedbackPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -255,6 +256,13 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-followup',
     description: 'Manual-first closeout handoff emitter and knowledge routing governance for memory, postmortem, and roadmap/scenario feedback artifacts.',
     component: AutonomyFollowupPage,
+  },
+
+  {
+    label: 'Autonomy Feedback',
+    path: '/autonomy-feedback',
+    description: 'Manual-first follow-up resolution tracker that monitors emitted handoffs and closes campaign knowledge loops with auditable status.',
+    component: AutonomyFeedbackPage,
   },
 
   {

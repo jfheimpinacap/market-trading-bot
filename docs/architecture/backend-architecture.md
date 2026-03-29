@@ -1495,3 +1495,17 @@ Integration contracts are explicit and conservative:
 - roadmap/scenario feedback writes a persisted feedback artifact id stub in closeout metadata
 
 No ML authority, no auto-apply roadmap updates, no live execution integrations.
+
+## Autonomy feedback architecture (new)
+
+`apps.autonomy_feedback` is the post-emission governance layer for campaign follow-ups. It does not emit follow-ups; it tracks whether emitted handoffs were actually resolved.
+
+Service split:
+- `services/candidates.py`: selects emitted follow-ups as tracking candidates.
+- `services/status.py`: explicit downstream status derivation from linked memory/postmortem/feedback artifacts.
+- `services/recommendation.py`: review/complete/manual/pending/reorder recommendation generation.
+- `services/control.py`: manual completion controls (`complete/<followup_id>`).
+- `services/run.py`: auditable run consolidation + summary counters.
+
+Key boundary:
+- explicit/manual-first rules only, no ML/LLM authority, no automatic roadmap/scenario application.

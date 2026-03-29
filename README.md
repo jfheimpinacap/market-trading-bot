@@ -1449,3 +1449,14 @@ The platform now adds a formal `autonomy_followup` layer that sits after `autono
 - provides `/autonomy-followup` UI + `/api/autonomy-followup/*` endpoints for candidates, run-review, summary, recommendations, and campaign emission
 
 Still out of scope: real-money execution, broker/exchange live routing, opaque auto-learning, and auto-apply roadmap mutations.
+
+### Autonomy feedback board / knowledge-loop completion governance (new)
+
+A new `autonomy_feedback` layer now tracks *post-emission* follow-up resolution status for campaigns.
+
+- `autonomy_followup` still emits handoffs (`EMITTED`, `DUPLICATE_SKIPPED`).
+- `autonomy_feedback` consumes emitted follow-ups and tracks downstream status (`PENDING`, `IN_PROGRESS`, `COMPLETED`, `BLOCKED`, `REJECTED`, `UNKNOWN`).
+- manual-first run endpoint creates auditable resolution records, recommendation records, and summary counts for closed-loop governance.
+- frontend route `/autonomy-feedback` exposes summary cards, candidate/resolution tracking, recommendation queue, and manual completion action.
+
+Out of scope remains unchanged: real money, real broker/exchange execution, opaque auto-learning, and automatic roadmap/scenario apply.
