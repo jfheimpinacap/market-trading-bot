@@ -1548,3 +1548,18 @@ Fuera de alcance:
 - dinero real / broker-exchange real
 - auto-apply opaco a roadmap/scenario/program/manager
 - planner black-box / multiusuario enterprise
+
+## autonomy_package: decision bundle registry and next-cycle planning seeds (new)
+
+`autonomy_package` extiende el loop `autonomy_decision` con una capa de bundles explícitos y auditables para reutilizar decisiones formales en el siguiente ciclo de planificación.
+
+- consume `GovernanceDecision` ya `REGISTERED/ACKNOWLEDGED`
+- agrupa decisiones relacionadas por `target_scope + grouping_key`
+- evita duplicados con dedupe explícito
+- persiste `GovernancePackage`, `PackageRun`, `PackageRecommendation`
+- mantiene un flujo `manual-first` y `recommendation-first`
+- **no** auto-aplica cambios a roadmap/scenario/program/manager
+- **no** agrega ejecución real broker/exchange
+
+Ruta UI: `/autonomy-package`.
+API base: `/api/autonomy-package/*`.

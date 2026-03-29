@@ -143,6 +143,7 @@ LOCAL_APPS = [
     'apps.autonomy_intake',
     'apps.autonomy_planning_review',
     'apps.autonomy_decision',
+    'apps.autonomy_package',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

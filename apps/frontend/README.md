@@ -1468,3 +1468,16 @@ Nueva vista manual-first para registrar decisiones de gobernanza a partir de pro
 - acciones manuales: `Run decision review`, `Register decision`, `Acknowledge`
 
 Mantiene límites: no auto-apply opaco y no mutación automática de roadmap/scenario/program/manager.
+
+## Autonomy package board en `/autonomy-package` (new)
+
+Nueva vista manual-first para registrar bundles reutilizables desde decisiones de gobernanza existentes.
+
+Incluye:
+- summary cards (candidates/ready/blocked/registered/duplicates/by target)
+- candidates table con links de trace
+- historial de packages con estados auditables
+- recommendations panel con rationale/blockers/confidence
+- acciones manuales: `Run package review`, `Register package`, `Acknowledge`
+
+La ruta no hace auto-apply sobre roadmap/scenario/program/manager.

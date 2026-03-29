@@ -2428,3 +2428,23 @@ API mínima:
 - `GET /api/autonomy-decision/summary/`
 - `POST /api/autonomy-decision/register/<proposal_id>/`
 - `POST /api/autonomy-decision/acknowledge/<decision_id>/`
+
+## `autonomy_package` backend module (new)
+
+`apps.autonomy_package` consume decisiones formales registradas en `autonomy_decision` y las transforma en bundles/packages persistidos para el próximo ciclo de planificación.
+
+### Qué hace
+- genera candidatos de package desde `GovernanceDecision`
+- aplica grouping transparente por `target_scope/grouping_key/priority`
+- evita paquetes duplicados por `grouping_key + target_scope`
+- emite recomendaciones de registro/manual review/priority reorder
+- registra `GovernancePackage` sin mutar automáticamente roadmap/scenario/program/manager
+
+### Endpoints
+- `GET /api/autonomy-package/candidates/`
+- `POST /api/autonomy-package/run-review/`
+- `GET /api/autonomy-package/packages/`
+- `GET /api/autonomy-package/recommendations/`
+- `GET /api/autonomy-package/summary/`
+- `POST /api/autonomy-package/register/<decision_id>/`
+- `POST /api/autonomy-package/acknowledge/<id>/`

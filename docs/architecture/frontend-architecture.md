@@ -1307,3 +1307,20 @@ Integración ligera:
 - navegación cruzada con intake/backlog/cockpit/trace
 
 No se introduce store global nuevo ni auto-aplicación opaca de cambios a roadmap/scenario/program/manager.
+
+## `/autonomy-package` frontend layer (new)
+
+La ruta `/autonomy-package` implementa el board de decision bundles para el siguiente ciclo.
+
+### Integración
+- consume `/api/autonomy-package/candidates|run-review|packages|recommendations|summary|register|acknowledge`
+- conecta con `/autonomy-decision`, `/autonomy-planning-review`, `/cockpit`, `/trace`
+- añade quick link de cockpit hacia `/autonomy-package`
+
+### UX
+- header con disclaimer manual-first y no opaque auto-apply
+- cards de resumen
+- tabla de candidatos con links de trace
+- historial de packages
+- panel de recomendaciones
+- estados explícitos READY/BLOCKED/REGISTERED/DUPLICATE_SKIPPED/ACKNOWLEDGED

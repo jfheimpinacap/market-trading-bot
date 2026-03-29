@@ -116,7 +116,7 @@ export function AutonomyDecisionPage() {
         eyebrow="Autonomy decision board"
         title="/autonomy-decision"
         description="Accepted proposal registry and future-cycle decision package board. Manual-first, recommendation-first, auditable, and explicitly no opaque auto-apply into roadmap/scenario/program/manager."
-        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run decision review</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-planning-review')}>Planning review</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-intake')}>Intake</button><button className="secondary-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button><button className="ghost-button" type="button" onClick={() => navigate('/trace')}>Trace</button></div>}
+        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run decision review</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-planning-review')}>Planning review</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-intake')}>Intake</button><button className="secondary-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-package')}>Autonomy package</button><button className="ghost-button" type="button" onClick={() => navigate('/trace')}>Trace</button></div>}
       />
 
       {message ? <p className="success-text">{message}</p> : null}
