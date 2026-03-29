@@ -1242,3 +1242,21 @@ Nueva ruta técnica para control de inicio manual-first entre admission y start 
 - acciones explícitas: `Run preflight`, `Authorize`, `Hold`
 
 Integración ligera incluida con `/autonomy-scheduler`, `/autonomy-program`, `/autonomy-campaigns`, `/cockpit`, `/approvals` y `/trace`.
+
+## Autonomy activation board en `/autonomy-activation` (new)
+
+Se agrega una vista de dispatch manual-first para cerrar el ciclo `launch authorization -> campaign start` sin reemplazar `autonomy_launch`, `autonomy_scheduler`, `autonomy_program` ni `autonomy_campaign`.
+
+Incluye:
+- summary cards de readiness/blocked/expired/started/failed
+- panel de candidates autorizados con blockers y links a campaign/approvals/trace
+- panel de recomendaciones (`DISPATCH_NOW`, `BLOCK_DISPATCH`, `WAIT_FOR_WINDOW`, etc.)
+- historial de activaciones con estados auditable (`STARTED`, `BLOCKED`, `FAILED`, `EXPIRED`)
+- acciones explícitas: `Run dispatch review` y `Dispatch`
+
+Servicios nuevos:
+- `src/services/autonomyActivation.ts`
+- endpoints `/api/autonomy-activation/*`
+
+Integración ligera:
+- quick links desde `/autonomy-launch`, `/autonomy-scheduler` y cockpit hacia `/autonomy-activation`.

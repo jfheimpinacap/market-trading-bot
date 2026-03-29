@@ -61,6 +61,7 @@ import { AutonomyCampaignsPage } from '../pages/AutonomyCampaignsPage';
 import { AutonomyProgramPage } from '../pages/AutonomyProgramPage';
 import { AutonomySchedulerPage } from '../pages/AutonomySchedulerPage';
 import { AutonomyLaunchPage } from '../pages/AutonomyLaunchPage';
+import { AutonomyActivationPage } from '../pages/AutonomyActivationPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -309,6 +310,12 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-launch',
     description: 'Preflight launch control board for admitted campaigns with explicit readiness checks, blockers, and manual start authorization decisions.',
     component: AutonomyLaunchPage,
+  },
+  {
+    label: 'Autonomy Activation',
+    path: '/autonomy-activation',
+    description: 'Authorized start handoff gateway that revalidates dispatch constraints and records auditable campaign activation outcomes.',
+    component: AutonomyActivationPage,
   },
   {
     label: 'Autonomy Campaigns',

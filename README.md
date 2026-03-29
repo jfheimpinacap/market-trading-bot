@@ -1350,3 +1350,20 @@ A new `autonomy_launch` layer now sits between `autonomy_scheduler` admission an
 - powers a new operator board at `/autonomy-launch` for readiness, blockers, recommendations, and authorization state
 
 Scope remains unchanged: local-first, single-user, paper/sandbox only, and no opaque mass auto-start orchestration.
+
+### Autonomy activation gateway / authorized start handoff (new)
+
+A new `autonomy_activation` layer now sits after `autonomy_launch` authorization and before `autonomy_campaign.start`.
+
+What it adds:
+- consumes `LaunchAuthorization(AUTHORIZED)` records
+- revalidates posture/window/conflicts/incidents at actual dispatch time
+- executes explicit, auditable manual dispatch into campaign start
+- records activation outcomes (`STARTED`, `BLOCKED`, `FAILED`, `EXPIRED`)
+- emits dispatch recommendations and run summaries for cockpit/trace visibility
+
+What it does **not** add:
+- real-money/live broker execution
+- opaque mass auto-start
+- distributed scheduler orchestration
+- multi-user enterprise workflow
