@@ -1260,3 +1260,26 @@ Servicios nuevos:
 
 Integración ligera:
 - quick links desde `/autonomy-launch`, `/autonomy-scheduler` y cockpit hacia `/autonomy-activation`.
+
+## Autonomy operations board en `/autonomy-operations` (new)
+
+Nueva ruta técnica para supervisar campañas de autonomía activas en runtime.
+
+Incluye:
+- header operativo con recordatorio manual-first
+- summary cards: active/on-track/stalled/blocked/waiting-approval/observing/open-signals
+- runtime table con wave/step/checkpoint/last-progress/stall/blockers
+- panel de attention signals (`OPEN`, `ACKNOWLEDGED`) con acción **Acknowledge**
+- panel de recomendaciones (`CONTINUE_CAMPAIGN`, `PAUSE_CAMPAIGN`, `ESCALATE_TO_APPROVAL`, `REVIEW_FOR_ABORT`, etc.)
+- botón manual **Run monitor**
+
+Integración ligera:
+- enlace rápido desde `/autonomy-activation`
+- enlace rápido desde `/cockpit`
+- links por fila hacia `/autonomy-campaigns`, `/approvals` y `/trace`
+
+Estado UX:
+- loading/error explícitos
+- empty state explícito para ausencia de campañas activas
+- `ON_TRACK` y `ACKNOWLEDGED` visibles como estados válidos
+- sin auto-remediación opaca

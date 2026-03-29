@@ -2097,3 +2097,36 @@ Out of scope (unchanged):
 - broker/exchange live dispatch
 - opaque mass auto-start
 - distributed orchestration
+
+## Autonomy operations monitor layer (new)
+
+Added `apps.autonomy_operations` as a focused runtime supervision boundary for **already started** campaigns.
+
+Responsibilities:
+- monitor active campaign runtime state (`RUNNING`/`PAUSED`/`BLOCKED`)
+- persist `CampaignRuntimeSnapshot` rows with wave/step/checkpoint/progress/blockers pressure
+- emit `CampaignAttentionSignal` entries (`OPEN`/`ACKNOWLEDGED`) for stalled/blocking/approval/incident/degraded/rollout pressure
+- create auditable `OperationsRun` and `OperationsRecommendation` outputs
+
+Endpoints:
+- `GET /api/autonomy-operations/runtime/`
+- `POST /api/autonomy-operations/run-monitor/`
+- `GET /api/autonomy-operations/signals/`
+- `GET /api/autonomy-operations/recommendations/`
+- `GET /api/autonomy-operations/summary/`
+- `POST /api/autonomy-operations/signals/<signal_id>/acknowledge/`
+
+Service split:
+- `services/runtime.py`: select active campaigns + build runtime context
+- `services/progress.py`: progress score + stalled duration + runtime status classification
+- `services/attention.py`: explicit signal generation
+- `services/recommendation.py`: manual-first continue/pause/escalate/review guidance
+- `services/control.py`: manual signal acknowledgment
+- `services/run.py`: orchestrate snapshot + signals + recommendations + run summary
+
+Boundary clarifications:
+- does **not** replace `autonomy_campaign` execution
+- does **not** replace `autonomy_activation` dispatch/start handoff
+- does **not** replace `autonomy_program` posture authority
+- recommendation-only/manual-first (no opaque auto-remediation)
+- still paper/sandbox/local-first only
