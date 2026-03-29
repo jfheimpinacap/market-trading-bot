@@ -1458,3 +1458,19 @@ Boundary rules:
 - does not replace `autonomy_recovery` evaluation or `autonomy_intervention` runtime actions
 - does not replace `autonomy_campaign` engine or `autonomy_program` posture authority
 - no opaque auto-close/auto-abort/auto-retire and no real execution path
+
+
+### Autonomy closeout board / campaign archive dossier (new)
+
+The platform now includes `autonomy_closeout`, a post-disposition governance layer that converts final campaign outcomes into auditable closeout dossiers and reusable learning handoffs:
+
+- consolidates post-disposition closeout candidates with explicit ready/blocked posture
+- persists `CampaignCloseoutReport`, `CloseoutFinding`, `CloseoutRun`, and `CloseoutRecommendation`
+- derives structured lifecycle/blocker/incident/intervention/recovery summaries
+- emits explicit handoff stubs for `memory_retrieval`, `postmortem-board`, and roadmap/scenario feedback
+- keeps completion manual-first (`POST /api/autonomy-closeout/complete/<campaign_id>/`) with blocker/approval checks
+
+Boundaries:
+- does **not** replace `autonomy_disposition` as final disposition authority
+- does **not** auto-archive, auto-learn opaquely, or auto-apply roadmap changes
+- remains local-first, single-user, and paper/sandbox only

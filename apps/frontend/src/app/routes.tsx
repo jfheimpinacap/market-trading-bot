@@ -66,6 +66,7 @@ import { AutonomyOperationsPage } from '../pages/AutonomyOperationsPage';
 import { AutonomyInterventionsPage } from '../pages/AutonomyInterventionsPage';
 import { AutonomyRecoveryPage } from '../pages/AutonomyRecoveryPage';
 import { AutonomyDispositionPage } from '../pages/AutonomyDispositionPage';
+import { AutonomyCloseoutPage } from '../pages/AutonomyCloseoutPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -239,6 +240,13 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-disposition',
     description: 'Manual-first campaign closure committee for final close/abort/retire decisions with auditable rationale, approvals, and apply controls.',
     component: AutonomyDispositionPage,
+  },
+
+  {
+    label: 'Autonomy Closeout',
+    path: '/autonomy-closeout',
+    description: 'Post-disposition campaign archive dossier board with findings, recommendations and explicit memory/postmortem/roadmap handoff governance.',
+    component: AutonomyCloseoutPage,
   },
 
   {
