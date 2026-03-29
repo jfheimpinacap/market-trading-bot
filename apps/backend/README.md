@@ -72,6 +72,25 @@ apps/backend/
 - `apps.research_agent`: narrative scan/research layer with RSS + Reddit + optional X/Twitter adapter ingestion, local LLM structured analysis, social normalization, heuristic market linking, and shortlist candidate generation for paper/demo workflows.
 - `apps.position_manager`: position lifecycle manager / exit decision engine that governs open paper positions with HOLD/REDUCE/CLOSE/REVIEW_REQUIRED decisions and auditable exit plans.
 - `apps.policy_rollout`: post-change rollout guard for applied policy-tuning candidates, with baseline/post snapshots, before/after delta comparison, recommendation-first outcomes, and manual rollback audit loop.
+- `apps.autonomy_advisory`: advisory registry that consumes reviewed autonomy insights and emits auditable manual-first artifacts/notes with dedup, blockers, run summaries, and target routing visibility.
+
+## Autonomy advisory layer (new)
+
+`apps.autonomy_advisory` sits after `autonomy_insights` synthesis and before any manual downstream governance action:
+
+- consumes reviewed `CampaignInsight` records
+- computes advisory candidates and recommendation queue
+- emits auditable artifacts (`EMITTED`, `BLOCKED`, `DUPLICATE_SKIPPED`, etc.)
+- creates formal memory precedent notes when target is `memory`
+- keeps roadmap/scenario/program/manager routing as note/stub emission only (no auto apply)
+
+Endpoints:
+- `GET /api/autonomy-advisory/candidates/`
+- `POST /api/autonomy-advisory/run-review/`
+- `GET /api/autonomy-advisory/artifacts/`
+- `GET /api/autonomy-advisory/recommendations/`
+- `GET /api/autonomy-advisory/summary/`
+- `POST /api/autonomy-advisory/emit/<insight_id>/`
 
 ## Policy rollout guard layer (new)
 

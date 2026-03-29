@@ -75,4 +75,5 @@ urlpatterns = [
     path('autonomy-followup/', include(('apps.autonomy_followup.urls', 'autonomy_followup'), namespace='autonomy_followup')),
     path('autonomy-feedback/', include(('apps.autonomy_feedback.urls', 'autonomy_feedback'), namespace='autonomy_feedback')),
     path('autonomy-insights/', include(('apps.autonomy_insights.urls', 'autonomy_insights'), namespace='autonomy_insights')),
+    path('autonomy-advisory/', include(('apps.autonomy_advisory.urls', 'autonomy_advisory'), namespace='autonomy_advisory')),
 ]

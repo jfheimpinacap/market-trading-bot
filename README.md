@@ -144,6 +144,17 @@ A new desktop-first `/cockpit` route now provides a **single-pane operational co
 
 Scope remains unchanged: local-first, single-user, paper/sandbox only, and no real-money execution.
 
+### Autonomy advisory board / insight action emitter (new)
+
+The platform now includes a formal `autonomy_advisory` layer (`/api/autonomy-advisory/*` + `/autonomy-advisory`) to convert reviewed `autonomy_insights` outputs into auditable manual-first artifacts:
+
+- consumes `CampaignInsight` and recommendation targets from `autonomy_insights`
+- emits formal artifacts (`MEMORY_PRECEDENT_NOTE`, `ROADMAP_GOVERNANCE_NOTE`, `SCENARIO_CAUTION_NOTE`, `PROGRAM_POLICY_NOTE`, `MANAGER_REVIEW_NOTE`)
+- tracks advisory runs, recommendation queue, blocked/manual-review states, and duplicate-skip outcomes
+- keeps explicit links/stubs toward memory/feedback/program contexts without auto-applying changes
+
+Out of scope remains explicit: no real-money trading, no real broker/exchange execution, no opaque auto-apply, and no black-box planner.
+
 ### Policy rollout guard / post-change baselining loop (new)
 
 The stack now includes a dedicated `policy_rollout` layer (`/api/policy-rollout/*` + `/policy-rollout`) that closes the post-change governance loop after `policy_tuning` apply:

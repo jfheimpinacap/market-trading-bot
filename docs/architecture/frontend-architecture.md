@@ -198,6 +198,17 @@ The `/policy-rollout` route is the post-change monitoring board for applied poli
 - expose manual rollback control with approval/trace-oriented navigation
 - keep empty/loading/error states explicit and audit-friendly
 
+### Autonomy advisory
+
+The new `/autonomy-advisory` route adds a dedicated insight-action emission board without redesigning the shell:
+
+- integrates `services/autonomyAdvisory.ts` for candidates, run-review, artifacts, recommendations, summary, and manual emit actions
+- renders manual-first summary cards + candidate routing table + artifact history + recommendation queue
+- keeps states explicit (`READY`, `BLOCKED`, `EMITTED`, `DUPLICATE_SKIPPED`, `ACKNOWLEDGED`)
+- links into `/autonomy-insights`, `/cockpit`, and `/trace` for drill-down continuity
+
+Design intent remains conservative: no auto-apply, no opaque automation, and no real-execution behaviors.
+
 ### Research
 
 The `/research` route acts as the scan/research operator console:

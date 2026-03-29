@@ -218,6 +218,18 @@ El cockpit compone servicios ya existentes (sin backend monolítico nuevo):
 - promotion, champion-challenger
 - trace summary + query runs
 
+## Autonomy advisory board en `/autonomy-advisory` (new)
+
+Se agregó una vista formal de emisión advisory para cerrar el loop entre insights y artefactos manuales auditables:
+
+- summary cards de candidates/ready/blocked/emitted/duplicate-skipped + notas por target
+- tabla central de candidates con blockers, artifact existente y acciones de emisión manual
+- historial de advisory artifacts con estado, target, vínculos y rationale
+- panel de recomendaciones advisory (emit/skip/manual-review/reorder)
+- quick links a `/autonomy-insights`, `/autonomy-feedback`, `/autonomy-closeout`, `/cockpit` y `/trace`
+
+Límites se mantienen explícitos: recommendation-first, manual-first, local-first, paper/sandbox only; sin auto-apply opaco.
+
 ## Policy rollout monitor en `/policy-rollout` (new)
 
 Nueva ruta técnica para cerrar el loop post-change de automation policy tuning:

@@ -70,6 +70,7 @@ import { AutonomyCloseoutPage } from '../pages/AutonomyCloseoutPage';
 import { AutonomyFollowupPage } from '../pages/AutonomyFollowupPage';
 import { AutonomyFeedbackPage } from '../pages/AutonomyFeedbackPage';
 import { AutonomyInsightsPage } from '../pages/AutonomyInsightsPage';
+import { AutonomyAdvisoryPage } from '../pages/AutonomyAdvisoryPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -271,6 +272,12 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-insights',
     description: 'Cross-campaign lessons registry and governance synthesis board derived from closed campaign lifecycle evidence with manual-first recommendations.',
     component: AutonomyInsightsPage,
+  },
+  {
+    label: 'Autonomy Advisory',
+    path: '/autonomy-advisory',
+    description: 'Insight action emitter and governance note registry that turns reviewed insights into auditable manual-first advisory artifacts.',
+    component: AutonomyAdvisoryPage,
   },
 
   {

@@ -96,7 +96,7 @@ export function AutonomyInsightsPage() {
         eyebrow="Autonomy insights board"
         title="/autonomy-insights"
         description="Cross-campaign lessons registry and governance synthesis. Manual-first recommendation layer only; no opaque auto-learning and no automatic roadmap/scenario/program apply."
-        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run insights review</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-feedback')}>Autonomy feedback</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-closeout')}>Autonomy closeout</button><button className="secondary-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button><button className="ghost-button" type="button" onClick={() => navigate('/trace')}>Trace</button></div>}
+        actions={<div className="button-row"><button className="primary-button" type="button" disabled={busy} onClick={() => void runReview()}>Run insights review</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-advisory')}>Autonomy advisory</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-feedback')}>Autonomy feedback</button><button className="secondary-button" type="button" onClick={() => navigate('/autonomy-closeout')}>Autonomy closeout</button><button className="secondary-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button><button className="ghost-button" type="button" onClick={() => navigate('/trace')}>Trace</button></div>}
       />
 
       {message ? <p className="success-text">{message}</p> : null}
