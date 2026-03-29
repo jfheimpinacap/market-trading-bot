@@ -67,6 +67,7 @@ import { AutonomyInterventionsPage } from '../pages/AutonomyInterventionsPage';
 import { AutonomyRecoveryPage } from '../pages/AutonomyRecoveryPage';
 import { AutonomyDispositionPage } from '../pages/AutonomyDispositionPage';
 import { AutonomyCloseoutPage } from '../pages/AutonomyCloseoutPage';
+import { AutonomyFollowupPage } from '../pages/AutonomyFollowupPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -247,6 +248,13 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-closeout',
     description: 'Post-disposition campaign archive dossier board with findings, recommendations and explicit memory/postmortem/roadmap handoff governance.',
     component: AutonomyCloseoutPage,
+  },
+
+  {
+    label: 'Autonomy Followup',
+    path: '/autonomy-followup',
+    description: 'Manual-first closeout handoff emitter and knowledge routing governance for memory, postmortem, and roadmap/scenario feedback artifacts.',
+    component: AutonomyFollowupPage,
   },
 
   {

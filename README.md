@@ -1438,3 +1438,14 @@ Boundaries:
 - does **not** replace `autonomy_disposition` as final disposition authority
 - does **not** auto-archive, auto-learn opaquely, or auto-apply roadmap changes
 - remains local-first, single-user, and paper/sandbox only
+
+### Autonomy followup board (new)
+
+The platform now adds a formal `autonomy_followup` layer that sits after `autonomy_closeout`:
+
+- consumes closeout reports/findings/recommendation context (without replacing closeout)
+- emits auditable manual-first handoffs to memory, postmortem request routing, and roadmap/scenario feedback stubs
+- records followup history (`EMITTED`, `BLOCKED`, `DUPLICATE_SKIPPED`, etc.) and deduplicates repeated emissions
+- provides `/autonomy-followup` UI + `/api/autonomy-followup/*` endpoints for candidates, run-review, summary, recommendations, and campaign emission
+
+Still out of scope: real-money execution, broker/exchange live routing, opaque auto-learning, and auto-apply roadmap mutations.

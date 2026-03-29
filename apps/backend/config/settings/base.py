@@ -134,6 +134,7 @@ LOCAL_APPS = [
     'apps.autonomy_recovery',
     'apps.autonomy_disposition',
     'apps.autonomy_closeout',
+    'apps.autonomy_followup',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

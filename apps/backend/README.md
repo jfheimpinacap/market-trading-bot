@@ -2214,3 +2214,25 @@ Boundaries:
 - does **not** replace `autonomy_disposition` as final disposition authority
 - does **not** auto-archive, auto-learn opaquely, or auto-apply roadmap changes
 - remains local-first, single-user, and paper/sandbox only
+
+## Autonomy followup governance layer (new)
+
+`apps.autonomy_followup` formalizes post-closeout handoff emission without changing closeout ownership:
+
+- `autonomy_closeout` remains the dossier/finding producer
+- `autonomy_followup` consumes ready closeout reports and emits explicit followups
+- dedup rules avoid repeated emission when linked artifacts already exist
+- emitted artifacts are traceable and persisted:
+  - memory document (`memory_retrieval.MemoryDocument`)
+  - postmortem formal request stub (`approval_center.ApprovalRequest`)
+  - roadmap/scenario feedback artifact id stub on closeout metadata
+
+Main endpoints:
+- `GET /api/autonomy-followup/candidates/`
+- `POST /api/autonomy-followup/run-review/`
+- `GET /api/autonomy-followup/followups/`
+- `GET /api/autonomy-followup/recommendations/`
+- `GET /api/autonomy-followup/summary/`
+- `POST /api/autonomy-followup/emit/<campaign_id>/`
+
+Scope remains manual-first, local-first, paper/sandbox only.

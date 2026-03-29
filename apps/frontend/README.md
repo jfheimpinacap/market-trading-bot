@@ -1342,3 +1342,15 @@ Nueva vista manual-first para cierre formal post-disposition:
 - recommendations explícitas (`COMPLETE_CLOSEOUT`, `SEND_TO_POSTMORTEM`, `INDEX_IN_MEMORY`, `PREPARE_ROADMAP_FEEDBACK`, `REQUIRE_MANUAL_CLOSEOUT_REVIEW`, `KEEP_OPEN_FOR_FOLLOWUP`)
 - acción manual `Complete closeout` por campaña y `Run closeout review`
 - quick links hacia `/autonomy-campaigns`, `/autonomy-disposition`, `/autonomy-recovery`, `/autonomy-interventions`, `/approvals`, `/trace`, `/cockpit`
+
+## Autonomy followup UI in `/autonomy-followup` (new)
+
+A new manual-first governance board now connects closeout outputs to formal handoff emission:
+
+- summary cards for candidate/ready/blocked/emitted/duplicate counts
+- candidates table with readiness, required followups, linked artifacts, blockers, and trace links
+- followup history panel (`EMITTED`, `DUPLICATE_SKIPPED`, `BLOCKED`, etc.)
+- recommendation panel (`EMIT_*`, `REQUIRE_MANUAL_REVIEW`, `SKIP_DUPLICATE_FOLLOWUP`)
+- manual actions: `Run followup review` and `Emit followup`
+
+Navigation is lightly integrated from `/autonomy-closeout` and `/cockpit` without redesigning existing pages.
