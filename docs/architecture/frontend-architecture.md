@@ -1324,3 +1324,16 @@ La ruta `/autonomy-package` implementa el board de decision bundles para el sigu
 - historial de packages
 - panel de recomendaciones
 - estados explícitos READY/BLOCKED/REGISTERED/DUPLICATE_SKIPPED/ACKNOWLEDGED
+
+## Autonomy package review UI architecture (new)
+
+The frontend adds a dedicated `/autonomy-package-review` page backed by `src/services/autonomyPackageReview.ts`.
+
+Composition:
+- `PageHeader` + manual run trigger
+- summary metrics cards from `/api/autonomy-package-review/summary/`
+- central candidates/resolution table (status badges + manual actions)
+- recommendations and resolution history panels
+- lightweight cross-navigation to `/autonomy-package`, `/autonomy-decision`, `/cockpit`, and `/trace`
+
+The page remains conservative and audit-focused: no automatic apply workflow, no hidden planner logic.

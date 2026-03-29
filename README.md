@@ -1563,3 +1563,13 @@ Fuera de alcance:
 
 Ruta UI: `/autonomy-package`.
 API base: `/api/autonomy-package/*`.
+
+## Autonomy package review board (new)
+
+Added `autonomy_package_review` as a formal post-registration governance layer.
+
+- consumes already registered `GovernancePackage` rows from `autonomy_package`
+- tracks downstream states: `PENDING`, `ACKNOWLEDGED`, `ADOPTED`, `DEFERRED`, `REJECTED`, `BLOCKED`, `CLOSED`
+- emits manual-first recommendations (`ACKNOWLEDGE_PACKAGE`, `MARK_PACKAGE_ADOPTED`, etc.)
+- closes the package handoff loop with auditable run history and resolution records
+- keeps strict boundaries: no real money, no broker/exchange live execution, no opaque auto-apply into roadmap/scenario/program/manager

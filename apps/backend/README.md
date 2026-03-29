@@ -2448,3 +2448,26 @@ API mínima:
 - `GET /api/autonomy-package/summary/`
 - `POST /api/autonomy-package/register/<decision_id>/`
 - `POST /api/autonomy-package/acknowledge/<id>/`
+
+## Autonomy package review (`/api/autonomy-package-review/*`)
+
+`autonomy_package_review` is the downstream resolution tracker for governance packages.
+
+Scope:
+- consumes bundles from `autonomy_package` (does not replace registration/dedup)
+- persists `PackageResolution`, `PackageReviewRun`, and `PackageReviewRecommendation`
+- keeps manual-first controls: acknowledge/adopt/defer/reject
+- provides auditable summary and recommendation history
+
+Core endpoints:
+- `GET /api/autonomy-package-review/candidates/`
+- `POST /api/autonomy-package-review/run-review/`
+- `GET /api/autonomy-package-review/resolutions/`
+- `GET /api/autonomy-package-review/recommendations/`
+- `GET /api/autonomy-package-review/summary/`
+- `POST /api/autonomy-package-review/acknowledge/<package_id>/`
+- `POST /api/autonomy-package-review/adopt/<package_id>/`
+- `POST /api/autonomy-package-review/defer/<package_id>/`
+- `POST /api/autonomy-package-review/reject/<package_id>/`
+
+Out of scope remains unchanged: real money, live broker execution, opaque auto-apply, enterprise multi-user orchestration.
