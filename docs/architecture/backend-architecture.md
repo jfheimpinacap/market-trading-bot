@@ -1672,3 +1672,15 @@ No reemplaza `autonomy_decision`; lo consume.
 - no dinero real
 - no ejecución real broker/exchange
 - no auto-apply opaco a roadmap/scenario/program/manager
+
+## Autonomy package review architecture (new)
+
+`autonomy_package_review` extends the autonomy governance chain after package registration:
+
+1. `autonomy_package` registers and deduplicates `GovernancePackage` bundles.
+2. `autonomy_package_review` consumes those bundles as review candidates.
+3. `services/status.py` derives explicit downstream state and readiness.
+4. `services/run.py` creates auditable `PackageReviewRun` snapshots and recommendations.
+5. `services/control.py` applies manual-first actions (acknowledge/adopt/defer/reject) without auto-applying roadmap/scenario/program/manager changes.
+
+This keeps a closed, traceable loop from decision packaging to package resolution while preserving conservative governance boundaries.

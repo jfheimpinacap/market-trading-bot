@@ -1481,3 +1481,15 @@ Incluye:
 - acciones manuales: `Run package review`, `Register package`, `Acknowledge`
 
 La ruta no hace auto-apply sobre roadmap/scenario/program/manager.
+
+### Autonomy package review route
+
+New page: `/autonomy-package-review`
+
+- summary cards for registered/pending/acknowledged/adopted/deferred/rejected packages
+- candidates + resolution table with manual actions
+- recommendation panel and resolution history
+- explicit empty state when no registered packages require tracking
+- quick integration links to `/autonomy-package`, `/autonomy-decision`, `/cockpit`, `/trace`
+
+Design constraints remain: manual-first, recommendation-first, paper/sandbox only, no opaque auto-apply.
