@@ -1082,3 +1082,18 @@ A dedicated `/autonomy-launch` route now handles the preflight start-gate workfl
 - connect to source-of-truth pages (`/autonomy-scheduler`, `/autonomy-program`, `/autonomy-campaigns`, `/approvals`, `/trace`)
 
 The route follows the existing desktop-first technical card/table style and intentionally avoids introducing a new orchestration UX framework.
+
+## Autonomy activation dispatch board UX boundary (new)
+
+A dedicated `/autonomy-activation` route closes the final gap between authorization and actual campaign start.
+
+Design goals:
+- manual-first dispatch (no opaque bulk auto-start)
+- explicit revalidation status (`READY_TO_DISPATCH`, `WAITING`, `BLOCKED`, `EXPIRED`)
+- visible blockers/reason codes and recommendation rationale
+- auditable activation history (`STARTED`, `FAILED`, `BLOCKED`, `EXPIRED`)
+
+Integration points:
+- links to `/autonomy-launch`, `/autonomy-scheduler`, `/autonomy-program`, `/autonomy-campaigns`, `/approvals`, `/trace`, `/cockpit`
+- service layer in `src/services/autonomyActivation.ts`
+- typed payloads in `src/types/autonomyActivation.ts`

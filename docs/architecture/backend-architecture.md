@@ -1351,3 +1351,17 @@ Boundary rules:
 - does not replace program concurrency authority
 - does not replace campaign execution engine
 - does not implement opaque auto-start orchestration
+
+## Autonomy activation gateway architecture (new)
+
+`apps.autonomy_activation` provides the final manual-first dispatch boundary:
+
+- **Inputs:** launch authorizations (`autonomy_launch`), queue/window posture (`autonomy_scheduler`), global posture/conflicts (`autonomy_program`), incident/degraded context (`incident_commander`)
+- **Core flow:** candidates -> revalidation -> recommendation -> dispatch handoff -> outcome persistence
+- **Dispatch target:** `autonomy_campaign.services.start_campaign`
+- **Audit artifacts:**
+  - `CampaignActivation` for attempt/outcome lifecycle
+  - `ActivationRun` for review snapshots
+  - `ActivationRecommendation` for explainable dispatch guidance
+
+This keeps launch readiness and scheduler admission separate from final dispatch execution while preserving conservative, explainable controls.

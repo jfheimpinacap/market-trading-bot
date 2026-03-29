@@ -2072,3 +2072,28 @@ Endpoints:
 - `POST /api/autonomy-launch/hold/<campaign_id>/`
 
 Non-goals remain explicit: no real-money execution, no opaque auto-start, no distributed scheduler, no multi-user complexity.
+
+## Autonomy activation app (new)
+
+`apps.autonomy_activation` is the formal authorized start handoff between `autonomy_launch` and `autonomy_campaign.start`.
+
+Responsibilities:
+- consume valid `LaunchAuthorization` records (`AUTHORIZED` only)
+- revalidate dispatch constraints right before handoff (program posture, window state, conflicts, incidents, degraded pressure)
+- execute explicit manual-first dispatch to campaign start
+- persist auditable outcomes (`STARTED`, `BLOCKED`, `FAILED`, `EXPIRED`) in `CampaignActivation`
+- maintain review snapshots (`ActivationRun`) and dispatch recommendations (`ActivationRecommendation`)
+
+API:
+- `GET /api/autonomy-activation/candidates/`
+- `POST /api/autonomy-activation/run-dispatch-review/`
+- `GET /api/autonomy-activation/recommendations/`
+- `GET /api/autonomy-activation/activations/`
+- `GET /api/autonomy-activation/summary/`
+- `POST /api/autonomy-activation/dispatch/<campaign_id>/`
+
+Out of scope (unchanged):
+- real-money execution
+- broker/exchange live dispatch
+- opaque mass auto-start
+- distributed orchestration
