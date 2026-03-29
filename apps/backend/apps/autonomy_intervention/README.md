@@ -1,6 +1,5 @@
 # autonomy_intervention
 
-<<<<<<< HEAD
 Manual-first gateway for active autonomy campaign interventions.
 
 ## Scope
@@ -13,19 +12,3 @@ Manual-first gateway for active autonomy campaign interventions.
 - Real broker/exchange execution.
 - Automatic opaque remediation.
 - Multi-user arbitration.
-=======
-Manual-first autonomy intervention control layer for active autonomy campaigns.
-
-## Scope
-
-- Intake and persistence for intervention requests.
-- Safe execution gateway for pause/resume/escalate/review-for-abort/clear-to-continue.
-- Outcome and action audit trail.
-- Summary/run review for intervention board.
-
-## Out of scope
-
-- No real broker/exchange execution.
-- No opaque auto-remediation.
-- No multi-user orchestration.
->>>>>>> origin/main

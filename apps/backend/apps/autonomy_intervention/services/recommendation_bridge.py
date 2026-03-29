@@ -1,7 +1,6 @@
 from apps.autonomy_intervention.models import InterventionRequestedAction
 
 
-<<<<<<< HEAD
 def recommendation_to_requested_action(recommendation_type: str | None) -> str | None:
     mapping = {
         'PAUSE_CAMPAIGN': InterventionRequestedAction.PAUSE_CAMPAIGN,
@@ -22,16 +21,3 @@ def requested_action_to_action_type(requested_action: str) -> str:
         InterventionRequestedAction.CLEAR_TO_CONTINUE: 'continue_clearance',
     }
     return mapping[requested_action]
-=======
-RECOMMENDATION_TO_ACTION = {
-    'PAUSE_CAMPAIGN': InterventionRequestedAction.PAUSE_CAMPAIGN,
-    'RESUME_CAMPAIGN': InterventionRequestedAction.RESUME_CAMPAIGN,
-    'ESCALATE_TO_APPROVAL': InterventionRequestedAction.ESCALATE_TO_APPROVAL,
-    'REVIEW_FOR_ABORT': InterventionRequestedAction.REVIEW_FOR_ABORT,
-    'CLEAR_TO_CONTINUE': InterventionRequestedAction.CLEAR_TO_CONTINUE,
-}
-
-
-def map_recommendation_to_action(recommendation_type: str) -> str | None:
-    return RECOMMENDATION_TO_ACTION.get(recommendation_type)
->>>>>>> origin/main

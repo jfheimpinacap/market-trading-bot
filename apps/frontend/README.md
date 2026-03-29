@@ -1284,7 +1284,6 @@ Estado UX:
 - `ON_TRACK` y `ACKNOWLEDGED` visibles como estados válidos
 - sin auto-remediación opaca
 
-<<<<<<< HEAD
 
 ## Autonomy interventions in `/autonomy-interventions` (new)
 
@@ -1297,27 +1296,6 @@ Includes:
 - explicit controls: run intervention review, create manual request, execute request, cancel request
 
 Scope guardrails remain explicit: paper/sandbox only, manual-first, and no opaque auto-remediation.
-=======
-## Autonomy interventions UI (new)
-
-Added `/autonomy-interventions` as an active campaign action board and manual remediation gateway.
-
-The page provides:
-- summary cards (open, approval-required, ready, blocked, recent, campaigns needing intervention)
-- request table with source/action/severity/status/blockers/rationale
-- action history table with actor/time/result/failure
-- explicit manual actions: run intervention review, create manual request, execute request
-
-Integration links:
-- `/autonomy-operations`
-- `/autonomy-campaigns`
-- `/autonomy-program`
-- `/approvals`
-- `/trace`
-- `/cockpit`
-
-Scope remains local-first, single-user, paper/sandbox only.
->>>>>>> origin/main
 
 ## Autonomy recovery route in `/autonomy-recovery` (new)
 
