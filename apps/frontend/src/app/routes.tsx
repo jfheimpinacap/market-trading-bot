@@ -63,6 +63,7 @@ import { AutonomySchedulerPage } from '../pages/AutonomySchedulerPage';
 import { AutonomyLaunchPage } from '../pages/AutonomyLaunchPage';
 import { AutonomyActivationPage } from '../pages/AutonomyActivationPage';
 import { AutonomyOperationsPage } from '../pages/AutonomyOperationsPage';
+import { AutonomyInterventionsPage } from '../pages/AutonomyInterventionsPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -228,6 +229,13 @@ export const appRoutes: AppRoute[] = [
     path: '/connectors',
     description: 'Venue connector certification suite and adapter qualification harness for sandbox-only readiness toward a future read-only phase.',
     component: ConnectorsPage,
+  },
+
+  {
+    label: 'Autonomy Interventions',
+    path: '/autonomy-interventions',
+    description: 'Manual remediation gateway for active autonomy campaigns with auditable pause/resume/escalate/review controls.',
+    component: AutonomyInterventionsPage,
   },
 
   {
