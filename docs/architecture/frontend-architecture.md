@@ -1231,3 +1231,15 @@ A new page-level module (`/autonomy-insights`) was added without changing the ro
 - no automatic changes to roadmap/scenario/program/manager flows
 - no opaque auto-learning behavior
 - still local-first and desktop-first
+
+
+### Autonomy advisory resolution board UI
+
+`/autonomy-advisory-resolution` extends the autonomy workflow after `/autonomy-advisory` emission:
+
+- fetches candidates/resolutions/recommendations/summary through `services/autonomyAdvisoryResolution.ts`
+- exposes manual-first actions (`acknowledge`, `adopt`, `defer`, `reject`)
+- keeps empty/loading/error states explicit, including a no-pending-notes message
+- adds quick navigation continuity with `/autonomy-advisory`, `/autonomy-insights`, `/cockpit`, and `/trace`
+
+The UI is audit-friendly and intentionally avoids opaque auto-apply behavior.

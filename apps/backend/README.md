@@ -2302,3 +2302,29 @@ Hard boundaries:
 - no auto-learning authority
 - no automatic roadmap/scenario/program/manager apply
 - no real-money or real broker/exchange execution
+
+
+## Autonomy advisory resolution layer (new)
+
+`apps.autonomy_advisory_resolution` is a dedicated post-emission governance tracker that complements `apps.autonomy_advisory`:
+
+- `autonomy_advisory` continues to emit/deduplicate advisory artifacts
+- `autonomy_advisory_resolution` consumes those emitted artifacts and tracks what happened after emission
+
+Core entities:
+- `AdvisoryResolution`
+- `AdvisoryResolutionRun`
+- `AdvisoryResolutionRecommendation`
+
+Endpoints:
+- `GET /api/autonomy-advisory-resolution/candidates/`
+- `POST /api/autonomy-advisory-resolution/run-review/`
+- `GET /api/autonomy-advisory-resolution/resolutions/`
+- `GET /api/autonomy-advisory-resolution/recommendations/`
+- `GET /api/autonomy-advisory-resolution/summary/`
+- `POST /api/autonomy-advisory-resolution/acknowledge/<artifact_id>/`
+- `POST /api/autonomy-advisory-resolution/adopt/<artifact_id>/`
+- `POST /api/autonomy-advisory-resolution/defer/<artifact_id>/`
+- `POST /api/autonomy-advisory-resolution/reject/<artifact_id>/`
+
+Boundary: manual-first resolution tracking only; no auto-apply to downstream roadmap/scenario/program/manager modules.

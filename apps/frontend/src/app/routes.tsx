@@ -71,6 +71,7 @@ import { AutonomyFollowupPage } from '../pages/AutonomyFollowupPage';
 import { AutonomyFeedbackPage } from '../pages/AutonomyFeedbackPage';
 import { AutonomyInsightsPage } from '../pages/AutonomyInsightsPage';
 import { AutonomyAdvisoryPage } from '../pages/AutonomyAdvisoryPage';
+import { AutonomyAdvisoryResolutionPage } from '../pages/AutonomyAdvisoryResolutionPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -278,6 +279,14 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-advisory',
     description: 'Insight action emitter and governance note registry that turns reviewed insights into auditable manual-first advisory artifacts.',
     component: AutonomyAdvisoryPage,
+  },
+
+
+  {
+    label: 'Autonomy Advisory Resolution',
+    path: '/autonomy-advisory-resolution',
+    description: 'Manual-first governance note acknowledgment and adoption tracker for emitted advisory artifacts with auditable resolution states.',
+    component: AutonomyAdvisoryResolutionPage,
   },
 
   {

@@ -1554,3 +1554,15 @@ Key boundary:
 - pending key follow-ups block synthesis for that campaign
 - recommendation-first outputs only (no auto-apply)
 - no ML/LLM authority in decision logic
+
+
+## Autonomy advisory resolution architecture
+
+`autonomy_advisory_resolution` is the formal post-emission governance boundary for advisory artifacts:
+
+- candidate selection uses emitted/blocked `AdvisoryArtifact` records from `autonomy_advisory`
+- status evaluation uses explicit deterministic rules (no ML/LLM authority)
+- manual control endpoints persist acknowledgment/adoption/defer/reject decisions in `AdvisoryResolution`
+- run review produces `AdvisoryResolutionRun` counters and `AdvisoryResolutionRecommendation` queue
+
+This layer never emits new advisory artifacts and never auto-applies roadmap/scenario/program/manager changes. It only tracks and audits downstream resolution state.
