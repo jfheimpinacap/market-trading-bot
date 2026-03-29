@@ -75,6 +75,7 @@ import { AutonomyAdvisoryResolutionPage } from '../pages/AutonomyAdvisoryResolut
 import { AutonomyBacklogPage } from '../pages/AutonomyBacklogPage';
 import { AutonomyIntakePage } from '../pages/AutonomyIntakePage';
 import { AutonomyPlanningReviewPage } from '../pages/AutonomyPlanningReviewPage';
+import { AutonomyDecisionPage } from '../pages/AutonomyDecisionPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -310,6 +311,12 @@ export const appRoutes: AppRoute[] = [
     path: '/autonomy-planning-review',
     description: 'Manual-first planning proposal resolution board that tracks downstream acknowledged/accepted/deferred/rejected outcomes without opaque auto-apply.',
     component: AutonomyPlanningReviewPage,
+  },
+  {
+    label: 'Autonomy Decision',
+    path: '/autonomy-decision',
+    description: 'Accepted proposal registry and governance decision package board that formalizes accepted proposals into auditable future-cycle artifacts with manual registration only.',
+    component: AutonomyDecisionPage,
   },
 
   {

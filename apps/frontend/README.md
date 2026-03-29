@@ -1456,3 +1456,15 @@ Incluye:
 - panel de recommendations
 - acciones manuales `Acknowledge`, `Accept`, `Defer`, `Reject`
 - links de trazabilidad hacia backlog/advisory/insight/campaign/proposal/trace
+
+## Autonomy decision board en `/autonomy-decision` (new)
+
+Nueva vista manual-first para registrar decisiones de gobernanza a partir de proposals ACCEPTED:
+
+- summary cards: candidates/ready/blocked/registered/duplicate + breakdown por target
+- candidates panel con proposal/backlog/insight/campaign/priority/blockers y trace links
+- decisions history con `decision_type`, `decision_status`, `target_scope`, `registered_at`
+- recommendations panel (`REGISTER_*`, `SKIP_DUPLICATE_DECISION`, `REQUIRE_MANUAL_DECISION_REVIEW`, `REORDER_DECISION_PRIORITY`)
+- acciones manuales: `Run decision review`, `Register decision`, `Acknowledge`
+
+Mantiene límites: no auto-apply opaco y no mutación automática de roadmap/scenario/program/manager.

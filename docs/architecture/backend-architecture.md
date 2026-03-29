@@ -1627,3 +1627,24 @@ Design constraints:
 - distingue `ACKNOWLEDGED` vs `ACCEPTED`
 - permite `UNKNOWN/PENDING` cuando falta señal downstream
 - conserva modelo local-first, single-user, sandbox/paper-only
+
+## `autonomy_decision` architecture (new)
+
+`apps.autonomy_decision` se ubica entre `autonomy_planning_review` y la ejecución manual posterior sobre roadmap/scenario/program/manager.
+
+Cadena de trazabilidad preservada:
+`campaign → insight → advisory → backlog → intake → planning_review(ACCEPTED) → decision`.
+
+Split de servicios:
+- `candidates.py`: accepted proposals candidatas
+- `dedup.py`: control de duplicado por proposal/scope
+- `recommendation.py`: reglas determinísticas de recomendación
+- `registration.py`: persistencia de governance decision package/note
+- `control.py`: endpoints manuales (register/acknowledge)
+- `run.py`: run auditable y summary
+
+Garantías:
+- sin ML/LLM autoritativo
+- sin auto-apply opaco
+- sin mutaciones automáticas de módulos destino
+- local-first, single-user, paper/sandbox only
