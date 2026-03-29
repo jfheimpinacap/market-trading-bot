@@ -1128,3 +1128,4 @@ UX principles kept:
 - clear loading/error/empty states
 - status/action badges for OPEN/APPROVAL_REQUIRED/READY/EXECUTED/BLOCKED/REJECTED and intervention action types
 - cross-links to campaigns, approvals, trace, operations, and cockpit
+- cockpit quick links include both `/autonomy-operations` and `/autonomy-interventions` for fast operator escalation routing
