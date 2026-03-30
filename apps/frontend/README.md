@@ -1829,6 +1829,6 @@ The certification page now includes a manual baseline response actions/tracking 
 - routing actions
 - downstream tracking records
 - action recommendations
-- summary cards and manual action buttons (run, route, update tracking)
+- summary cards and manual action buttons (run, route, update tracking, close case)
 
 This UI is manual-first, local-first, and paper-only. It does not auto-route, auto-retune, auto-rollback, or auto-promote.

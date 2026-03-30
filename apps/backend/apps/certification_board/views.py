@@ -74,6 +74,7 @@ from apps.certification_board.serializers import (
     RunBaselineResponseReviewRequestSerializer,
     RunBaselineResponseActionsRequestSerializer,
     RouteResponseCaseRequestSerializer,
+    CloseResponseCaseRequestSerializer,
     UpdateResponseTrackingRequestSerializer,
     RunBaselineConfirmationReviewRequestSerializer,
     RunPostRolloutReviewRequestSerializer,
@@ -99,6 +100,7 @@ from apps.certification_board.services import (
     build_baseline_response_summary,
     build_baseline_response_action_summary,
     create_tracking_record,
+    close_response_case_no_action,
     run_baseline_response_review,
     run_baseline_activation_review,
     run_baseline_confirmation_review,
@@ -733,6 +735,20 @@ class ResponseCaseTrackingRecordListView(generics.ListAPIView):
         ).order_by('-created_at', '-id')[:500]
 
 
+class ResponseRoutingActionDetailView(generics.RetrieveAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseRoutingActionSerializer
+    queryset = ResponseRoutingAction.objects.select_related('linked_candidate', 'linked_response_case').order_by('-created_at', '-id')
+
+
+class ResponseCaseTrackingRecordDetailView(generics.RetrieveAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseCaseTrackingRecordSerializer
+    queryset = ResponseCaseTrackingRecord.objects.select_related('linked_response_case', 'linked_routing_action').order_by('-created_at', '-id')
+
+
 class ResponseActionRecommendationListView(generics.ListAPIView):
     authentication_classes = []
     permission_classes = []
@@ -834,6 +850,27 @@ class UpdateResponseTrackingView(APIView):
         } and action:
             action.action_status = ResponseRoutingActionStatus.CLOSED
             action.save(update_fields=['action_status', 'updated_at'])
+        return Response(ResponseCaseTrackingRecordSerializer(tracking).data, status=status.HTTP_200_OK)
+
+
+class CloseResponseCaseView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, case_id: int, *args, **kwargs):
+        response_case = BaselineResponseCase.objects.get(pk=case_id)
+        serializer = CloseResponseCaseRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        action = ResponseRoutingAction.objects.filter(linked_response_case=response_case).order_by('-created_at', '-id').first()
+        tracking = close_response_case_no_action(
+            response_case=response_case,
+            routing_action=action,
+            tracked_by=payload.get('tracked_by', 'operator-ui'),
+            tracking_notes=payload.get('tracking_notes') or 'Case closed manually with no downstream action.',
+            linked_downstream_reference=payload.get('linked_downstream_reference', ''),
+            metadata={**(payload.get('metadata') or {}), 'source': 'close-response-case'},
+        )
         return Response(ResponseCaseTrackingRecordSerializer(tracking).data, status=status.HTTP_200_OK)
 
 

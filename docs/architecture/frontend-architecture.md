@@ -1652,7 +1652,7 @@ UX constraints retained:
 - response routing actions panel
 - response tracking records panel
 - response action recommendations panel
-- manual operator controls for running actions review, routing case handoff, and updating tracking
+- manual operator controls for running actions review, routing case handoff, updating tracking, and closing cases with no action
 
 Frontend service module: `src/services/baselineResponseActions.ts`.
 

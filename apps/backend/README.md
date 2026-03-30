@@ -2970,6 +2970,9 @@ New API endpoints:
 - `GET /api/certification/response-action-summary/`
 - `POST /api/certification/route-response-case/<case_id>/`
 - `POST /api/certification/update-response-tracking/<case_id>/`
+- `POST /api/certification/close-response-case/<case_id>/`
+- `GET /api/certification/response-routing-actions/<id>/`
+- `GET /api/certification/response-tracking-records/<id>/`
 
 Scope:
 - consumes `BaselineResponseCase + ResponseRoutingDecision`

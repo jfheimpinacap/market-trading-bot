@@ -44,10 +44,13 @@ from apps.certification_board.views import (
     ResponseActionRecommendationListView,
     ResponseCaseTrackingRecordListView,
     ResponseRoutingActionListView,
+    ResponseRoutingActionDetailView,
     RunBaselineResponseActionsView,
     BaselineResponseActionSummaryView,
     RouteResponseCaseView,
     UpdateResponseTrackingView,
+    ResponseCaseTrackingRecordDetailView,
+    CloseResponseCaseView,
     ResponseRoutingDecisionListView,
 )
 
@@ -93,11 +96,14 @@ urlpatterns = [
     path('run-baseline-response-actions/', RunBaselineResponseActionsView.as_view(), name='run-baseline-response-actions'),
     path('response-action-candidates/', ResponseActionCandidateListView.as_view(), name='response-action-candidates'),
     path('response-routing-actions/', ResponseRoutingActionListView.as_view(), name='response-routing-actions'),
+    path('response-routing-actions/<int:pk>/', ResponseRoutingActionDetailView.as_view(), name='response-routing-action-detail'),
     path('response-tracking-records/', ResponseCaseTrackingRecordListView.as_view(), name='response-tracking-records'),
+    path('response-tracking-records/<int:pk>/', ResponseCaseTrackingRecordDetailView.as_view(), name='response-tracking-record-detail'),
     path('response-action-recommendations/', ResponseActionRecommendationListView.as_view(), name='response-action-recommendations'),
     path('response-action-summary/', BaselineResponseActionSummaryView.as_view(), name='response-action-summary'),
     path('route-response-case/<int:case_id>/', RouteResponseCaseView.as_view(), name='route-response-case'),
     path('update-response-tracking/<int:case_id>/', UpdateResponseTrackingView.as_view(), name='update-response-tracking'),
+    path('close-response-case/<int:case_id>/', CloseResponseCaseView.as_view(), name='close-response-case'),
     path('activate-baseline/<int:confirmation_id>/', ActivatePaperBaselineView.as_view(), name='activate-baseline'),
     path('rollback-activation/<int:activation_id>/', RollbackBaselineActivationView.as_view(), name='rollback-activation'),
 ]

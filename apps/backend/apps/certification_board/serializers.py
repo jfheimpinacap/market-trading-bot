@@ -6,6 +6,8 @@ from apps.certification_board.models import (
     ResponseActionRecommendation,
     ResponseCaseTrackingRecord,
     ResponseRoutingAction,
+    ResponseRoutingActionType,
+    ResponseCaseDownstreamStatus,
     BaselineResponseCase,
     BaselineResponseRecommendation,
     BaselineResponseRun,
@@ -303,7 +305,10 @@ class ResponseActionRecommendationSerializer(serializers.ModelSerializer):
 
 
 class RouteResponseCaseRequestSerializer(serializers.Serializer):
-    action_type = serializers.CharField(required=False, allow_blank=True)
+    action_type = serializers.ChoiceField(
+        choices=ResponseRoutingActionType.choices,
+        required=False,
+    )
     routing_target = serializers.CharField(required=False, allow_blank=True)
     rationale = serializers.CharField(required=False, allow_blank=True, default='')
     reason_codes = serializers.ListField(child=serializers.CharField(), required=False)
@@ -313,8 +318,15 @@ class RouteResponseCaseRequestSerializer(serializers.Serializer):
 
 
 class UpdateResponseTrackingRequestSerializer(serializers.Serializer):
-    downstream_status = serializers.CharField()
+    downstream_status = serializers.ChoiceField(choices=ResponseCaseDownstreamStatus.choices)
     tracking_notes = serializers.CharField(required=False, allow_blank=True, default='')
     tracked_by = serializers.CharField(required=False, default='operator-ui')
+    linked_downstream_reference = serializers.CharField(required=False, allow_blank=True, default='')
+    metadata = serializers.DictField(required=False)
+
+
+class CloseResponseCaseRequestSerializer(serializers.Serializer):
+    tracked_by = serializers.CharField(required=False, default='operator-ui')
+    tracking_notes = serializers.CharField(required=False, allow_blank=True, default='')
     linked_downstream_reference = serializers.CharField(required=False, allow_blank=True, default='')
     metadata = serializers.DictField(required=False)
