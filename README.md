@@ -1826,3 +1826,24 @@ Boundary remains strict:
 - no auto-apply
 - no live trading / real money
 - manual-first, local-first, paper/sandbox-only.
+
+### Manual rollout execution board / checkpoint outcome control (new)
+
+`promotion_committee` now includes a post-preparation manual execution loop for rollout governance:
+
+- consumes existing `ManualRolloutPlan` + `RolloutCheckpointPlan` (no duplication of rollout prep)
+- creates auditable execution entities: `RolloutExecutionRun`, `RolloutExecutionRecord`, `CheckpointOutcomeRecord`, `PostRolloutStatus`, `RolloutExecutionRecommendation`
+- adds explicit API surface for manual execution review, execute, checkpoint outcome recording, and manual close
+- keeps all decisions manual-first, paper-only, local-first, and reversible
+- treats evaluation/risk/trust/policy signals as bounded context only (no auto-rollout, no silent auto-rollback)
+
+New API endpoints:
+- `POST /api/promotion/run-rollout-execution/`
+- `GET /api/promotion/rollout-executions/`
+- `GET /api/promotion/checkpoint-outcomes/`
+- `GET /api/promotion/post-rollout-status/`
+- `GET /api/promotion/rollout-execution-recommendations/`
+- `GET /api/promotion/rollout-execution-summary/`
+- `POST /api/promotion/execute-rollout/<plan_id>/`
+- `POST /api/promotion/record-checkpoint-outcome/<checkpoint_id>/`
+- `POST /api/promotion/close-rollout/<execution_id>/`

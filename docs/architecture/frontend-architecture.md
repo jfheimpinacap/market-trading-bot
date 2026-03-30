@@ -1560,3 +1560,14 @@ Implementation notes:
 - existing promotion/adoption data flow is preserved (no frontend rewrite)
 - explicit operator actions only (`Run rollout prep`, `Prepare rollout`, `Rollback`)
 - conservative UI language to reinforce manual-first and paper-only constraints
+
+## Promotion post-rollout UI extension (new)
+
+`/promotion` now carries both rollout preparation and rollout execution control in one conservative board:
+
+- preparation remains source of truth for plan/checkpoint generation
+- execution panel tracks real manual progress and outcomes
+- post-rollout statuses make caution/review/rollback states visible as valid governance outcomes
+- operator actions are explicit (`run review`, `execute`, `record checkpoint`, `close`)
+
+No autonomous execution behavior was introduced.

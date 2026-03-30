@@ -335,6 +335,49 @@ class RolloutPreparationRecommendationType(models.TextChoices):
     REORDER_ROLLOUT_PRIORITY = 'REORDER_ROLLOUT_PRIORITY', 'Reorder rollout priority'
 
 
+class RolloutExecutionStatus(models.TextChoices):
+    READY = 'READY', 'Ready'
+    EXECUTING = 'EXECUTING', 'Executing'
+    EXECUTED = 'EXECUTED', 'Executed'
+    PAUSED = 'PAUSED', 'Paused'
+    FAILED = 'FAILED', 'Failed'
+    ROLLBACK_RECOMMENDED = 'ROLLBACK_RECOMMENDED', 'Rollback recommended'
+    REVERTED = 'REVERTED', 'Reverted'
+
+
+class CheckpointOutcomeStatus(models.TextChoices):
+    PASSED = 'PASSED', 'Passed'
+    FAILED = 'FAILED', 'Failed'
+    WARNING = 'WARNING', 'Warning'
+    SKIPPED = 'SKIPPED', 'Skipped'
+
+
+class CheckpointTriggeredAction(models.TextChoices):
+    CONTINUE = 'CONTINUE', 'Continue'
+    PAUSE = 'PAUSE', 'Pause'
+    REQUIRE_REVIEW = 'REQUIRE_REVIEW', 'Require review'
+    RECOMMEND_ROLLBACK = 'RECOMMEND_ROLLBACK', 'Recommend rollback'
+
+
+class PostRolloutStatusType(models.TextChoices):
+    HEALTHY = 'HEALTHY', 'Healthy'
+    CAUTION = 'CAUTION', 'Caution'
+    REVIEW_REQUIRED = 'REVIEW_REQUIRED', 'Review required'
+    ROLLBACK_RECOMMENDED = 'ROLLBACK_RECOMMENDED', 'Rollback recommended'
+    REVERTED = 'REVERTED', 'Reverted'
+    INCOMPLETE = 'INCOMPLETE', 'Incomplete'
+
+
+class RolloutExecutionRecommendationType(models.TextChoices):
+    EXECUTE_NEXT_STAGE = 'EXECUTE_NEXT_STAGE', 'Execute next stage'
+    PAUSE_AND_REVIEW = 'PAUSE_AND_REVIEW', 'Pause and review'
+    MARK_ROLLOUT_HEALTHY = 'MARK_ROLLOUT_HEALTHY', 'Mark rollout healthy'
+    RECOMMEND_MANUAL_ROLLBACK = 'RECOMMEND_MANUAL_ROLLBACK', 'Recommend manual rollback'
+    REQUIRE_MORE_OBSERVATION = 'REQUIRE_MORE_OBSERVATION', 'Require more observation'
+    CLOSE_ROLLOUT = 'CLOSE_ROLLOUT', 'Close rollout'
+    REORDER_ROLLOUT_EXECUTION_PRIORITY = 'REORDER_ROLLOUT_EXECUTION_PRIORITY', 'Reorder rollout execution priority'
+
+
 class PromotionAdoptionRun(TimeStampedModel):
     started_at = models.DateTimeField()
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -539,6 +582,97 @@ class RolloutPreparationRecommendation(TimeStampedModel):
         ManualRolloutPlan, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations'
     )
     recommendation_type = models.CharField(max_length=36, choices=RolloutPreparationRecommendationType.choices)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=6, decimal_places=4, default=0)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class RolloutExecutionRun(TimeStampedModel):
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    linked_rollout_preparation_run = models.ForeignKey(
+        RolloutPreparationRun, null=True, blank=True, on_delete=models.SET_NULL, related_name='execution_runs'
+    )
+    plan_count = models.PositiveIntegerField(default=0)
+    executed_count = models.PositiveIntegerField(default=0)
+    paused_count = models.PositiveIntegerField(default=0)
+    failed_count = models.PositiveIntegerField(default=0)
+    rollback_recommended_count = models.PositiveIntegerField(default=0)
+    rollback_executed_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class RolloutExecutionRecord(TimeStampedModel):
+    execution_run = models.ForeignKey(RolloutExecutionRun, on_delete=models.CASCADE, related_name='execution_records')
+    linked_rollout_plan = models.OneToOneField(
+        ManualRolloutPlan, on_delete=models.CASCADE, related_name='execution_record'
+    )
+    execution_status = models.CharField(max_length=24, choices=RolloutExecutionStatus.choices, default=RolloutExecutionStatus.READY)
+    executed_step_count = models.PositiveIntegerField(default=0)
+    executed_by = models.CharField(max_length=64, blank=True)
+    executed_at = models.DateTimeField(null=True, blank=True)
+    execution_notes = models.TextField(blank=True)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class CheckpointOutcomeRecord(TimeStampedModel):
+    linked_rollout_execution = models.ForeignKey(
+        RolloutExecutionRecord, on_delete=models.CASCADE, related_name='checkpoint_outcomes'
+    )
+    linked_checkpoint_plan = models.ForeignKey(
+        RolloutCheckpointPlan, on_delete=models.CASCADE, related_name='outcome_records'
+    )
+    outcome_status = models.CharField(max_length=16, choices=CheckpointOutcomeStatus.choices)
+    observed_metrics = models.JSONField(default=dict, blank=True)
+    outcome_rationale = models.CharField(max_length=255)
+    triggered_action = models.CharField(max_length=24, choices=CheckpointTriggeredAction.choices)
+    recorded_by = models.CharField(max_length=64, blank=True)
+    recorded_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class PostRolloutStatus(TimeStampedModel):
+    linked_rollout_execution = models.ForeignKey(
+        RolloutExecutionRecord, on_delete=models.CASCADE, related_name='post_rollout_statuses'
+    )
+    status = models.CharField(max_length=24, choices=PostRolloutStatusType.choices)
+    status_rationale = models.CharField(max_length=255)
+    linked_checkpoint_outcomes = models.JSONField(default=list, blank=True)
+    observed_drift_flags = models.JSONField(default=list, blank=True)
+    observed_risk_flags = models.JSONField(default=list, blank=True)
+    observed_calibration_flags = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class RolloutExecutionRecommendation(TimeStampedModel):
+    execution_run = models.ForeignKey(
+        RolloutExecutionRun, on_delete=models.CASCADE, related_name='execution_recommendations'
+    )
+    target_execution = models.ForeignKey(
+        RolloutExecutionRecord, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations'
+    )
+    recommendation_type = models.CharField(max_length=40, choices=RolloutExecutionRecommendationType.choices)
     rationale = models.CharField(max_length=255)
     reason_codes = models.JSONField(default=list, blank=True)
     confidence = models.DecimalField(max_digits=6, decimal_places=4, default=0)

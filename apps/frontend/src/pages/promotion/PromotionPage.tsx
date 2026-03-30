@@ -12,6 +12,17 @@ import {
   runPromotionAdoptionReview,
 } from '../../services/promotionAdoption';
 import {
+  closePromotionRollout,
+  executePromotionRollout,
+  getPromotionCheckpointOutcomes,
+  getPromotionPostRolloutStatus,
+  getPromotionRolloutExecutionRecommendations,
+  getPromotionRolloutExecutionSummary,
+  getPromotionRolloutExecutions,
+  recordPromotionCheckpointOutcome,
+  runPromotionRolloutExecutionReview,
+} from '../../services/promotionRolloutExecution';
+import {
   getPromotionCheckpointPlans,
   getPromotionRollbackExecutions,
   getPromotionRolloutCandidates,
@@ -26,9 +37,14 @@ import type {
   ManualAdoptionAction,
   ManualRollbackExecution,
   ManualRolloutPlan,
+  PostRolloutStatus,
   PromotionAdoptionSummary,
+  PromotionRolloutExecutionSummary,
   PromotionRolloutSummary,
+  RolloutExecutionRecord,
+  RolloutExecutionRecommendation,
   RolloutActionCandidate,
+  CheckpointOutcomeRecord,
   RolloutCheckpointPlan,
   RolloutPreparationRecommendation,
 } from '../../types/promotion';
@@ -36,19 +52,24 @@ import type {
 const statusBadgeClass = (status: string) => {
   if (['RESOLVED', 'READY_TO_APPLY', 'READY', 'EXECUTED', 'ROLLBACK_AVAILABLE', 'APPLY_CHANGE_MANUALLY', 'ROLLBACK_READY', 'DIRECT_APPLY_OK'].includes(status)) return 'signal-badge signal-badge--actionable';
   if (['BLOCKED', 'REQUIRE_TARGET_MAPPING', 'DEFER_ADOPTION', 'REQUIRE_TARGET_RECHECK', 'ROLLOUT_REQUIRED'].includes(status)) return 'signal-badge signal-badge--bearish';
-  if (['PARTIAL', 'PROPOSED', 'PREPARE_ROLLOUT_PLAN', 'PREPARE_ROLLBACK', 'REQUIRE_ROLLOUT_CHECKPOINTS', 'ROLLOUT_RECOMMENDED'].includes(status)) return 'signal-badge signal-badge--monitor';
+  if (['PARTIAL', 'PROPOSED', 'PREPARE_ROLLOUT_PLAN', 'PREPARE_ROLLBACK', 'REQUIRE_ROLLOUT_CHECKPOINTS', 'ROLLOUT_RECOMMENDED', 'CAUTION', 'REVIEW_REQUIRED', 'PAUSE_AND_REVIEW', 'REQUIRE_MORE_OBSERVATION'].includes(status)) return 'signal-badge signal-badge--monitor';
   return 'signal-badge signal-badge--neutral';
 };
 
 export function PromotionPage() {
   const [summary, setSummary] = useState<PromotionAdoptionSummary | null>(null);
   const [rolloutSummary, setRolloutSummary] = useState<PromotionRolloutSummary | null>(null);
+  const [executionSummary, setExecutionSummary] = useState<PromotionRolloutExecutionSummary | null>(null);
   const [actions, setActions] = useState<ManualAdoptionAction[]>([]);
   const [rolloutCandidates, setRolloutCandidates] = useState<RolloutActionCandidate[]>([]);
   const [rolloutPlans, setRolloutPlans] = useState<ManualRolloutPlan[]>([]);
   const [checkpointPlans, setCheckpointPlans] = useState<RolloutCheckpointPlan[]>([]);
   const [rollbackExecutions, setRollbackExecutions] = useState<ManualRollbackExecution[]>([]);
   const [rolloutRecommendations, setRolloutRecommendations] = useState<RolloutPreparationRecommendation[]>([]);
+  const [rolloutExecutions, setRolloutExecutions] = useState<RolloutExecutionRecord[]>([]);
+  const [checkpointOutcomes, setCheckpointOutcomes] = useState<CheckpointOutcomeRecord[]>([]);
+  const [postRolloutStatuses, setPostRolloutStatuses] = useState<PostRolloutStatus[]>([]);
+  const [executionRecommendations, setExecutionRecommendations] = useState<RolloutExecutionRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -57,7 +78,7 @@ export function PromotionPage() {
     setLoading(true);
     setError(null);
     try {
-      const [summaryRes, actionsRes, rolloutSummaryRes, rolloutCandidatesRes, rolloutPlansRes, checkpointRes, rollbackExecRes, rolloutRecommendationRes] = await Promise.all([
+      const [summaryRes, actionsRes, rolloutSummaryRes, rolloutCandidatesRes, rolloutPlansRes, checkpointRes, rollbackExecRes, rolloutRecommendationRes, executionSummaryRes, rolloutExecutionsRes, checkpointOutcomesRes, postRolloutStatusesRes, executionRecommendationsRes] = await Promise.all([
         getPromotionAdoptionSummary(),
         getPromotionAdoptionActions(),
         getPromotionRolloutSummary(),
@@ -66,15 +87,25 @@ export function PromotionPage() {
         getPromotionCheckpointPlans(),
         getPromotionRollbackExecutions(),
         getPromotionRolloutRecommendations(),
+        getPromotionRolloutExecutionSummary(),
+        getPromotionRolloutExecutions(),
+        getPromotionCheckpointOutcomes(),
+        getPromotionPostRolloutStatus(),
+        getPromotionRolloutExecutionRecommendations(),
       ]);
       setSummary(summaryRes);
       setRolloutSummary(rolloutSummaryRes);
+      setExecutionSummary(executionSummaryRes);
       setActions(actionsRes);
       setRolloutCandidates(rolloutCandidatesRes);
       setRolloutPlans(rolloutPlansRes);
       setCheckpointPlans(checkpointRes);
       setRollbackExecutions(rollbackExecRes);
       setRolloutRecommendations(rolloutRecommendationRes);
+      setRolloutExecutions(rolloutExecutionsRes);
+      setCheckpointOutcomes(checkpointOutcomesRes);
+      setPostRolloutStatuses(postRolloutStatusesRes);
+      setExecutionRecommendations(executionRecommendationsRes);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load promotion adoption board state.');
     } finally {
@@ -84,6 +115,59 @@ export function PromotionPage() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  const onRunRolloutExecutionReview = useCallback(async () => {
+    setMessage(null);
+    setError(null);
+    try {
+      await runPromotionRolloutExecutionReview({ actor: 'promotion_ui', metadata: { initiated_from: 'promotion_ui' } });
+      setMessage('Manual rollout execution review completed. Ready plans were mapped to execution records (no auto-execute).');
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not run rollout execution review.');
+    }
+  }, [load]);
+
+  const onExecuteRollout = useCallback(async (planId: number) => {
+    setMessage(null);
+    setError(null);
+    try {
+      await executePromotionRollout(planId, { actor: 'operator', notes: 'Manual execution from promotion board.' });
+      setMessage(`Rollout plan #${planId} execution recorded.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not execute rollout manually.');
+    }
+  }, [load]);
+
+  const onRecordCheckpoint = useCallback(async (checkpointId: number) => {
+    setMessage(null);
+    setError(null);
+    try {
+      await recordPromotionCheckpointOutcome(checkpointId, {
+        actor: 'operator',
+        outcome_status: 'PASSED',
+        outcome_rationale: 'Manual operator review confirms checkpoint passed.',
+        observed_metrics: { source: 'manual_promotion_ui' },
+      });
+      setMessage(`Checkpoint #${checkpointId} outcome recorded.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not record checkpoint outcome.');
+    }
+  }, [load]);
+
+  const onCloseRollout = useCallback(async (executionId: number) => {
+    setMessage(null);
+    setError(null);
+    try {
+      await closePromotionRollout(executionId, { actor: 'operator', notes: 'Manual closure from promotion board.' });
+      setMessage(`Rollout execution #${executionId} was manually closed.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not close rollout execution.');
+    }
   }, [load]);
 
   const onRunAdoptionReview = useCallback(async () => {
@@ -166,11 +250,22 @@ export function PromotionPage() {
             <article className="dashboard-stat-card"><span>Rollback executed</span><strong>{rolloutSummary?.rollback_executed ?? 0}</strong></article>
           </div>
         </SectionCard>
+        <SectionCard eyebrow="Execution summary" title="Manual post-rollout safety loop" description="Manual-first execution tracking, checkpoint outcomes, post-rollout safety status and bounded recommendations.">
+          <div className="dashboard-stat-grid">
+            <article className="dashboard-stat-card"><span>Rollout plans ready</span><strong>{executionSummary?.rollout_plans_ready ?? 0}</strong></article>
+            <article className="dashboard-stat-card"><span>Executions running</span><strong>{executionSummary?.executions_running ?? 0}</strong></article>
+            <article className="dashboard-stat-card"><span>Healthy rollouts</span><strong>{executionSummary?.healthy_rollouts ?? 0}</strong></article>
+            <article className="dashboard-stat-card"><span>Review required</span><strong>{executionSummary?.review_required ?? 0}</strong></article>
+            <article className="dashboard-stat-card"><span>Rollback recommended</span><strong>{executionSummary?.rollback_recommended ?? 0}</strong></article>
+            <article className="dashboard-stat-card"><span>Rollback executed</span><strong>{executionSummary?.rollback_executed ?? 0}</strong></article>
+          </div>
+        </SectionCard>
 
         <SectionCard eyebrow="Actions" title="Manual controls" description="Operator actions only. No silent apply and no automatic rollout.">
           <div className="button-row">
             <button className="primary-button" type="button" onClick={() => void onRunAdoptionReview()}>Run adoption review</button>
             <button className="secondary-button" type="button" onClick={() => void onRunRolloutPrep()}>Run rollout prep</button>
+            <button className="secondary-button" type="button" onClick={() => void onRunRolloutExecutionReview()}>Run rollout execution review</button>
             {message ? <span className="muted-text">{message}</span> : null}
           </div>
         </SectionCard>
@@ -191,16 +286,44 @@ export function PromotionPage() {
 
         <SectionCard eyebrow="Rollout plans" title="Manual rollout plans" description="Staged manual plans with monitoring intent and rollout-manager bridge metadata.">
           {!rolloutPlans.length ? <p className="muted-text">No rollout plans prepared yet.</p> : (
-            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Plan type</th><th>Status</th><th>Staged steps</th><th>Monitoring intent</th><th>Executed by</th><th>Executed at</th><th>Rationale</th></tr></thead><tbody>
-              {rolloutPlans.map((item) => <tr key={item.id}><td>{item.rollout_plan_type}</td><td><span className={statusBadgeClass(item.rollout_status)}>{item.rollout_status}</span></td><td><code>{JSON.stringify(item.staged_steps)}</code></td><td><code>{JSON.stringify(item.monitoring_intent)}</code></td><td>{item.executed_by || 'n/a'}</td><td>{item.executed_at || 'n/a'}</td><td>{item.rollout_rationale}</td></tr>)}
+            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Plan type</th><th>Status</th><th>Staged steps</th><th>Monitoring intent</th><th>Executed by</th><th>Executed at</th><th>Rationale</th><th>Manual action</th></tr></thead><tbody>
+              {rolloutPlans.map((item) => <tr key={item.id}><td>{item.rollout_plan_type}</td><td><span className={statusBadgeClass(item.rollout_status)}>{item.rollout_status}</span></td><td><code>{JSON.stringify(item.staged_steps)}</code></td><td><code>{JSON.stringify(item.monitoring_intent)}</code></td><td>{item.executed_by || 'n/a'}</td><td>{item.executed_at || 'n/a'}</td><td>{item.rollout_rationale}</td><td><button className="secondary-button" type="button" onClick={() => void onExecuteRollout(item.id)}>Execute rollout</button></td></tr>)}
             </tbody></table></div>
           )}
         </SectionCard>
 
         <SectionCard eyebrow="Checkpoints" title="Rollout checkpoint plans" description="Pre/post checks, drift, calibration and rollback readiness are explicit.">
           {!checkpointPlans.length ? <p className="muted-text">No checkpoint plans generated yet.</p> : (
-            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Plan</th><th>Checkpoint type</th><th>Status</th><th>Rationale</th></tr></thead><tbody>
-              {checkpointPlans.map((item) => <tr key={item.id}><td>#{item.linked_rollout_plan}</td><td>{item.checkpoint_type}</td><td><span className={statusBadgeClass(item.checkpoint_status)}>{item.checkpoint_status}</span></td><td>{item.checkpoint_rationale}</td></tr>)}
+            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Plan</th><th>Checkpoint type</th><th>Status</th><th>Rationale</th><th>Record outcome</th></tr></thead><tbody>
+              {checkpointPlans.map((item) => <tr key={item.id}><td>#{item.linked_rollout_plan}</td><td>{item.checkpoint_type}</td><td><span className={statusBadgeClass(item.checkpoint_status)}>{item.checkpoint_status}</span></td><td>{item.checkpoint_rationale}</td><td><button className="secondary-button" type="button" onClick={() => void onRecordCheckpoint(item.id)}>Record checkpoint outcome</button></td></tr>)}
+            </tbody></table></div>
+          )}
+        </SectionCard>
+        <SectionCard eyebrow="Rollout executions" title="Manual rollout execution records" description="Execution run records the real manual rollout path, notes, actor and staged progress.">
+          {!rolloutExecutions.length ? <p className="muted-text">No manual rollout executions are available yet. Run rollout execution review to track checkpoint outcomes and post-rollout safety.</p> : (
+            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Plan</th><th>Status</th><th>Steps</th><th>Executed by</th><th>Executed at</th><th>Notes</th><th>Links</th><th>Close</th></tr></thead><tbody>
+              {rolloutExecutions.map((item) => <tr key={item.id}><td>#{item.linked_rollout_plan}</td><td><span className={statusBadgeClass(item.execution_status)}>{item.execution_status}</span></td><td>{item.executed_step_count}</td><td>{item.executed_by || 'n/a'}</td><td>{item.executed_at || 'n/a'}</td><td>{item.execution_notes || item.rationale}</td><td><div className="button-row"><button className="chip-button" type="button" onClick={() => navigate('/tuning')}>Tuning</button><button className="chip-button" type="button" onClick={() => navigate('/evaluation')}>Evaluation</button><button className="chip-button" type="button" onClick={() => navigate('/experiments')}>Experiments</button><button className="chip-button" type="button" onClick={() => navigate('/trace')}>Trace</button></div></td><td><button className="secondary-button" type="button" onClick={() => void onCloseRollout(item.id)}>Close rollout</button></td></tr>)}
+            </tbody></table></div>
+          )}
+        </SectionCard>
+        <SectionCard eyebrow="Checkpoint outcomes" title="Recorded checkpoint outcomes" description="Checkpoint plans become auditable real outcomes with explicit triggered actions.">
+          {!checkpointOutcomes.length ? <p className="muted-text">No checkpoint outcomes recorded yet.</p> : (
+            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Execution</th><th>Checkpoint</th><th>Outcome</th><th>Triggered action</th><th>Rationale</th><th>Recorded by</th><th>Recorded at</th></tr></thead><tbody>
+              {checkpointOutcomes.map((item) => <tr key={item.id}><td>#{item.linked_rollout_execution}</td><td>#{item.linked_checkpoint_plan}</td><td><span className={statusBadgeClass(item.outcome_status)}>{item.outcome_status}</span></td><td><span className={statusBadgeClass(item.triggered_action)}>{item.triggered_action}</span></td><td>{item.outcome_rationale}</td><td>{item.recorded_by || 'n/a'}</td><td>{item.recorded_at || 'n/a'}</td></tr>)}
+            </tbody></table></div>
+          )}
+        </SectionCard>
+        <SectionCard eyebrow="Post-rollout status" title="Safety state after manual execution" description="Bounded drift/risk/calibration signals are visible context only; rollback remains manual.">
+          {!postRolloutStatuses.length ? <p className="muted-text">No post-rollout status snapshots yet.</p> : (
+            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Execution</th><th>Status</th><th>Drift flags</th><th>Risk flags</th><th>Calibration flags</th><th>Rationale</th></tr></thead><tbody>
+              {postRolloutStatuses.map((item) => <tr key={item.id}><td>#{item.linked_rollout_execution}</td><td><span className={statusBadgeClass(item.status)}>{item.status}</span></td><td>{item.observed_drift_flags.join(', ') || 'None'}</td><td>{item.observed_risk_flags.join(', ') || 'None'}</td><td>{item.observed_calibration_flags.join(', ') || 'None'}</td><td>{item.status_rationale}</td></tr>)}
+            </tbody></table></div>
+          )}
+        </SectionCard>
+        <SectionCard eyebrow="Execution recommendations" title="Manual execution recommendations" description="Conservative bounded guidance for continue/pause/review/rollback/close decisions.">
+          {!executionRecommendations.length ? <p className="muted-text">No rollout execution recommendations yet.</p> : (
+            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Recommendation</th><th>Execution</th><th>Rationale</th><th>Reason codes</th><th>Confidence</th></tr></thead><tbody>
+              {executionRecommendations.map((item) => <tr key={item.id}><td><span className={statusBadgeClass(item.recommendation_type)}>{item.recommendation_type}</span></td><td>{item.target_execution ? `execution #${item.target_execution}` : 'global'}</td><td>{item.rationale}</td><td>{item.reason_codes.join(', ') || 'None'}</td><td>{item.confidence}</td></tr>)}
             </tbody></table></div>
           )}
         </SectionCard>

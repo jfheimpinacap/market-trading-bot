@@ -8,8 +8,11 @@ from apps.promotion_committee.serializers import (
     AdoptionActionCandidateSerializer,
     AdoptionActionRecommendationSerializer,
     AdoptionRollbackPlanSerializer,
+    CheckpointOutcomeRecordSerializer,
+    CheckpointOutcomeRequestSerializer,
     GovernedPromotionRunRequestSerializer,
     ManualAdoptionActionSerializer,
+    PostRolloutStatusSerializer,
     PromotionApplyRequestSerializer,
     PromotionAdoptionRunSerializer,
     PromotionRollbackRequestSerializer,
@@ -21,6 +24,10 @@ from apps.promotion_committee.serializers import (
     PromotionReviewRunSerializer,
     RolloutActionCandidateSerializer,
     RolloutCheckpointPlanSerializer,
+    RolloutExecutionActionSerializer,
+    RolloutExecutionRecommendationSerializer,
+    RolloutExecutionRecordSerializer,
+    RolloutExecutionRunSerializer,
     RolloutPreparationRecommendationSerializer,
     RolloutPreparationRunSerializer,
     ManualRollbackExecutionSerializer,
@@ -38,6 +45,13 @@ from apps.promotion_committee.services import (
     run_rollout_preparation,
     build_rollout_preparation_summary,
     execute_manual_rollback,
+    build_rollout_execution_summary,
+    close_rollout_execution,
+    consolidate_post_rollout_status,
+    execute_rollout_plan,
+    record_checkpoint_outcome,
+    run_rollout_execution_review,
+    generate_execution_recommendations,
 )
 from apps.promotion_committee.models import (
     AdoptionActionCandidate,
@@ -54,6 +68,11 @@ from apps.promotion_committee.models import (
     ManualRollbackExecution,
     RolloutPreparationRecommendation,
     RolloutPreparationRun,
+    CheckpointOutcomeRecord,
+    PostRolloutStatus,
+    RolloutExecutionRecommendation,
+    RolloutExecutionRecord,
+    RolloutExecutionRun,
 )
 
 
@@ -408,3 +427,150 @@ class PromotionRollbackActionView(APIView):
         action = ManualAdoptionAction.objects.get(pk=action_id)
         execution = execute_manual_rollback(action=action, actor=serializer.validated_data.get('actor', 'operator'))
         return Response(ManualRollbackExecutionSerializer(execution).data, status=status.HTTP_200_OK)
+
+
+class PromotionRunRolloutExecutionView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = GovernedPromotionRunRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_rollout_execution_review(
+            actor=serializer.validated_data.get('actor', 'promotion_ui'),
+            metadata=serializer.validated_data.get('metadata') or {},
+        )
+        return Response(RolloutExecutionRunSerializer(run).data, status=status.HTTP_201_CREATED)
+
+
+class PromotionRolloutExecutionsView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RolloutExecutionRecordSerializer
+
+    def get_queryset(self):
+        return RolloutExecutionRecord.objects.select_related('execution_run', 'linked_rollout_plan').order_by('-created_at', '-id')[:300]
+
+
+class PromotionCheckpointOutcomesView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = CheckpointOutcomeRecordSerializer
+
+    def get_queryset(self):
+        return CheckpointOutcomeRecord.objects.select_related('linked_rollout_execution', 'linked_checkpoint_plan').order_by('-created_at', '-id')[:400]
+
+
+class PromotionPostRolloutStatusView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PostRolloutStatusSerializer
+
+    def get_queryset(self):
+        return PostRolloutStatus.objects.select_related('linked_rollout_execution').order_by('-created_at', '-id')[:300]
+
+
+class PromotionRolloutExecutionRecommendationsView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RolloutExecutionRecommendationSerializer
+
+    def get_queryset(self):
+        return RolloutExecutionRecommendation.objects.select_related('execution_run', 'target_execution').order_by('-created_at', '-id')[:300]
+
+
+class PromotionRolloutExecutionSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        summary = build_rollout_execution_summary()
+        return Response(
+            {
+                'latest_run': RolloutExecutionRunSerializer(summary['latest_run']).data if summary['latest_run'] else None,
+                'rollout_plans_ready': summary['rollout_plans_ready'],
+                'executions_running': summary['executions_running'],
+                'healthy_rollouts': summary['healthy_rollouts'],
+                'review_required': summary['review_required'],
+                'rollback_recommended': summary['rollback_recommended'],
+                'rollback_executed': summary['rollback_executed'],
+                'recommendation_summary': summary['recommendation_summary'],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PromotionExecuteRolloutView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, plan_id: int, *args, **kwargs):
+        serializer = RolloutExecutionActionSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        plan = ManualRolloutPlan.objects.get(pk=plan_id)
+        execution = execute_rollout_plan(
+            plan=plan,
+            actor=serializer.validated_data.get('actor', 'operator'),
+            notes=serializer.validated_data.get('notes', ''),
+            rationale=serializer.validated_data.get('rationale', ''),
+        )
+        status_snapshot = consolidate_post_rollout_status(execution=execution)
+        generate_execution_recommendations(run=execution.execution_run)
+        return Response(
+            {
+                'execution': RolloutExecutionRecordSerializer(execution).data,
+                'post_rollout_status': PostRolloutStatusSerializer(status_snapshot).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PromotionRecordCheckpointOutcomeView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, checkpoint_id: int, *args, **kwargs):
+        serializer = CheckpointOutcomeRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        checkpoint = RolloutCheckpointPlan.objects.get(pk=checkpoint_id)
+        outcome = record_checkpoint_outcome(
+            checkpoint_plan=checkpoint,
+            outcome_status=serializer.validated_data['outcome_status'],
+            observed_metrics=serializer.validated_data.get('observed_metrics') or {},
+            rationale=serializer.validated_data.get('outcome_rationale', '') or 'Manual checkpoint outcome recorded.',
+            actor=serializer.validated_data.get('actor', 'operator'),
+            metadata=serializer.validated_data.get('metadata') or {},
+        )
+        status_snapshot = consolidate_post_rollout_status(execution=outcome.linked_rollout_execution)
+        generate_execution_recommendations(run=outcome.linked_rollout_execution.execution_run)
+        return Response(
+            {
+                'outcome': CheckpointOutcomeRecordSerializer(outcome).data,
+                'post_rollout_status': PostRolloutStatusSerializer(status_snapshot).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PromotionCloseRolloutView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, execution_id: int, *args, **kwargs):
+        serializer = RolloutExecutionActionSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        execution = RolloutExecutionRecord.objects.get(pk=execution_id)
+        execution = close_rollout_execution(
+            execution=execution,
+            actor=serializer.validated_data.get('actor', 'operator'),
+            notes=serializer.validated_data.get('notes', ''),
+        )
+        status_snapshot = consolidate_post_rollout_status(execution=execution)
+        generate_execution_recommendations(run=execution.execution_run)
+        return Response(
+            {
+                'execution': RolloutExecutionRecordSerializer(execution).data,
+                'post_rollout_status': PostRolloutStatusSerializer(status_snapshot).data,
+            },
+            status=status.HTTP_200_OK,
+        )
