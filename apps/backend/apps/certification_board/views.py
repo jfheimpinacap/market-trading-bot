@@ -4,6 +4,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.certification_board.models import (
+    BaselineHealthCandidate,
+    BaselineHealthRecommendation,
+    BaselineHealthRun,
+    BaselineHealthSignal,
+    BaselineHealthStatus,
     ActivePaperBindingRecord,
     BaselineActivationCandidate,
     BaselineActivationRecommendation,
@@ -30,6 +35,11 @@ from apps.certification_board.serializers import (
     BaselineActivationCandidateSerializer,
     BaselineActivationRecommendationSerializer,
     BaselineActivationRunSerializer,
+    BaselineHealthCandidateSerializer,
+    BaselineHealthRecommendationSerializer,
+    BaselineHealthRunSerializer,
+    BaselineHealthSignalSerializer,
+    BaselineHealthStatusSerializer,
     BaselineBindingSnapshotSerializer,
     BaselineConfirmationCandidateSerializer,
     BaselineConfirmationRecommendationSerializer,
@@ -45,6 +55,7 @@ from apps.certification_board.serializers import (
     RolloutCertificationRunSerializer,
     RollbackBaselineActivationRequestSerializer,
     RunBaselineActivationReviewRequestSerializer,
+    RunBaselineHealthReviewRequestSerializer,
     RunBaselineConfirmationReviewRequestSerializer,
     RunPostRolloutReviewRequestSerializer,
     RunCertificationReviewRequestSerializer,
@@ -57,6 +68,7 @@ from apps.certification_board.services import (
     get_current_certification,
     prepare_baseline_rollback,
     rollback_baseline_activation,
+    run_baseline_health_review,
     run_baseline_activation_review,
     run_baseline_confirmation_review,
     run_post_rollout_certification_review,
@@ -438,6 +450,101 @@ class BaselineActivationSummaryView(APIView):
                 'binding_recheck_required_count': BaselineActivationRecommendation.objects.filter(
                     recommendation_type='REQUIRE_BINDING_RECHECK'
                 ).count(),
+                'recommendation_summary': latest_run.recommendation_summary if latest_run else {},
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class RunBaselineHealthReviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunBaselineHealthReviewRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_baseline_health_review(
+            actor=serializer.validated_data.get('actor', 'operator-ui'),
+            metadata=serializer.validated_data.get('metadata') or {},
+        )
+        return Response(
+            {
+                'run': BaselineHealthRunSerializer(result['run']).data,
+                'candidate_count': len(result['candidates']),
+                'status_count': len(result['statuses']),
+                'signal_count': len(result['signals']),
+                'recommendation_count': len(result['recommendations']),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class BaselineHealthCandidateListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = BaselineHealthCandidateSerializer
+
+    def get_queryset(self):
+        return BaselineHealthCandidate.objects.select_related(
+            'review_run',
+            'linked_active_binding',
+            'linked_baseline_activation',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class BaselineHealthStatusListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = BaselineHealthStatusSerializer
+
+    def get_queryset(self):
+        return BaselineHealthStatus.objects.select_related(
+            'linked_candidate',
+            'linked_candidate__review_run',
+            'linked_candidate__linked_active_binding',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class BaselineHealthSignalListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = BaselineHealthSignalSerializer
+
+    def get_queryset(self):
+        return BaselineHealthSignal.objects.select_related(
+            'linked_status',
+            'linked_status__linked_candidate',
+        ).order_by('-created_at', '-id')[:1000]
+
+
+class BaselineHealthRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = BaselineHealthRecommendationSerializer
+
+    def get_queryset(self):
+        return BaselineHealthRecommendation.objects.select_related(
+            'review_run',
+            'target_status',
+            'target_status__linked_candidate',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class BaselineHealthSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        latest_run = BaselineHealthRun.objects.order_by('-started_at', '-id').first()
+        return Response(
+            {
+                'latest_run': BaselineHealthRunSerializer(latest_run).data if latest_run else None,
+                'active_baselines_reviewed': latest_run.active_binding_count if latest_run else 0,
+                'healthy_count': latest_run.healthy_count if latest_run else 0,
+                'under_watch_count': latest_run.watch_count if latest_run else 0,
+                'degraded_count': latest_run.degraded_count if latest_run else 0,
+                'review_required_count': latest_run.review_required_count if latest_run else 0,
+                'rollback_review_recommended_count': latest_run.rollback_review_count if latest_run else 0,
                 'recommendation_summary': latest_run.recommendation_summary if latest_run else {},
             },
             status=status.HTTP_200_OK,

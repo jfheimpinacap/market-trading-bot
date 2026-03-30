@@ -2066,3 +2066,20 @@ This enforces: `CERTIFIED_FOR_PAPER_BASELINE` does not auto-switch active baseli
 ## Paper baseline activation board
 
 The certification domain now includes a **paper baseline activation board** that sits after `PaperBaselineConfirmation=CONFIRMED`. It creates manual activation candidates, resolves active-binding replacement targets, records before/after snapshots, updates an explicit active paper binding registry, and keeps rollback reversible and auditable. This layer is manual-first, paper-only, local-first, and does not auto-switch champion, auto-promote, or execute live trading.
+
+## Active baseline health watch architecture (new)
+
+`certification_board` now extends beyond baseline activation with a post-activation health loop:
+
+`ActivePaperBindingRecord -> BaselineHealthCandidate -> BaselineHealthStatus -> BaselineHealthSignal -> BaselineHealthRecommendation`
+
+### Design
+- deterministic, conservative rule engine (no black-box planner)
+- signals consolidated from existing `evaluation_lab`, `risk_agent`, `opportunity_supervisor`
+- recommendation-first output for manual downstream actions (review, re-evaluation, tuning review, rollback review)
+
+### Boundaries
+- does not activate/deactivate baselines automatically
+- does not create tuning proposals automatically
+- does not perform rollback automatically
+- preserves paper-only and local-first governance

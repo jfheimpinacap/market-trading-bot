@@ -543,3 +543,162 @@ class BaselineActivationRecommendation(TimeStampedModel):
     class Meta:
         ordering = ['-created_at', '-id']
         indexes = [models.Index(fields=['recommendation_type', '-created_at'])]
+
+
+class BaselineHealthReadinessStatus(models.TextChoices):
+    READY = 'READY', 'Ready'
+    NEEDS_MORE_DATA = 'NEEDS_MORE_DATA', 'Needs more data'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class BaselineHealthStatusCode(models.TextChoices):
+    HEALTHY = 'HEALTHY', 'Healthy'
+    UNDER_WATCH = 'UNDER_WATCH', 'Under watch'
+    DEGRADED = 'DEGRADED', 'Degraded'
+    REVIEW_REQUIRED = 'REVIEW_REQUIRED', 'Review required'
+    ROLLBACK_REVIEW_RECOMMENDED = 'ROLLBACK_REVIEW_RECOMMENDED', 'Rollback review recommended'
+    INSUFFICIENT_DATA = 'INSUFFICIENT_DATA', 'Insufficient data'
+
+
+class BaselineHealthSignalType(models.TextChoices):
+    CALIBRATION_DRIFT = 'calibration_drift', 'Calibration drift'
+    RISK_PRECISION_DROP = 'risk_precision_drop', 'Risk precision drop'
+    SHORTLIST_QUALITY_DROP = 'shortlist_quality_drop', 'Shortlist quality drop'
+    OPPORTUNITY_CONVICTION_DROP = 'opportunity_conviction_drop', 'Opportunity conviction drop'
+    PROVIDER_BIAS_REAPPEARANCE = 'provider_bias_reappearance', 'Provider bias reappearance'
+    CATEGORY_BIAS_REAPPEARANCE = 'category_bias_reappearance', 'Category bias reappearance'
+    WATCHLIST_NOISE_INCREASE = 'watchlist_noise_increase', 'Watchlist noise increase'
+    ROLLBACK_PRESSURE = 'rollback_pressure', 'Rollback pressure'
+    INSUFFICIENT_OBSERVATION = 'insufficient_observation', 'Insufficient observation'
+
+
+class BaselineHealthSignalSeverity(models.TextChoices):
+    LOW = 'LOW', 'Low'
+    MEDIUM = 'MEDIUM', 'Medium'
+    HIGH = 'HIGH', 'High'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class BaselineHealthSignalDirection(models.TextChoices):
+    IMPROVING = 'improving', 'Improving'
+    STABLE = 'stable', 'Stable'
+    DEGRADING = 'degrading', 'Degrading'
+
+
+class BaselineHealthRecommendationType(models.TextChoices):
+    KEEP_BASELINE_ACTIVE = 'KEEP_BASELINE_ACTIVE', 'Keep baseline active'
+    KEEP_UNDER_WATCH = 'KEEP_UNDER_WATCH', 'Keep under watch'
+    REQUIRE_REEVALUATION = 'REQUIRE_REEVALUATION', 'Require re-evaluation'
+    OPEN_TUNING_REVIEW = 'OPEN_TUNING_REVIEW', 'Open tuning review'
+    REQUIRE_MANUAL_BASELINE_REVIEW = 'REQUIRE_MANUAL_BASELINE_REVIEW', 'Require manual baseline review'
+    PREPARE_ROLLBACK_REVIEW = 'PREPARE_ROLLBACK_REVIEW', 'Prepare rollback review'
+    REORDER_BASELINE_HEALTH_PRIORITY = 'REORDER_BASELINE_HEALTH_PRIORITY', 'Reorder baseline health priority'
+
+
+class BaselineHealthRun(TimeStampedModel):
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    linked_baseline_activation_run = models.ForeignKey(
+        BaselineActivationRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='baseline_health_runs',
+    )
+    active_binding_count = models.PositiveIntegerField(default=0)
+    healthy_count = models.PositiveIntegerField(default=0)
+    watch_count = models.PositiveIntegerField(default=0)
+    degraded_count = models.PositiveIntegerField(default=0)
+    review_required_count = models.PositiveIntegerField(default=0)
+    rollback_review_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class BaselineHealthCandidate(TimeStampedModel):
+    review_run = models.ForeignKey(BaselineHealthRun, on_delete=models.CASCADE, related_name='candidates')
+    linked_active_binding = models.ForeignKey(
+        ActivePaperBindingRecord, on_delete=models.CASCADE, related_name='baseline_health_candidates'
+    )
+    linked_baseline_activation = models.ForeignKey(
+        PaperBaselineActivation,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='baseline_health_candidates',
+    )
+    target_component = models.CharField(max_length=32)
+    target_scope = models.CharField(max_length=24)
+    active_binding_type = models.CharField(max_length=40, choices=BaselineBindingType.choices)
+    current_health_inputs = models.JSONField(default=dict, blank=True)
+    readiness_status = models.CharField(
+        max_length=20,
+        choices=BaselineHealthReadinessStatus.choices,
+        default=BaselineHealthReadinessStatus.NEEDS_MORE_DATA,
+    )
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['readiness_status', '-created_at'])]
+
+
+class BaselineHealthStatus(TimeStampedModel):
+    linked_candidate = models.ForeignKey(
+        BaselineHealthCandidate, on_delete=models.CASCADE, related_name='health_statuses'
+    )
+    health_status = models.CharField(max_length=40, choices=BaselineHealthStatusCode.choices)
+    calibration_health_score = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    risk_gate_health_score = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    opportunity_quality_health_score = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    drift_risk_score = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    regression_risk_score = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['health_status', '-created_at'])]
+
+
+class BaselineHealthSignal(TimeStampedModel):
+    linked_status = models.ForeignKey(
+        BaselineHealthStatus, on_delete=models.CASCADE, related_name='signals'
+    )
+    signal_type = models.CharField(max_length=40, choices=BaselineHealthSignalType.choices)
+    signal_severity = models.CharField(max_length=16, choices=BaselineHealthSignalSeverity.choices)
+    signal_direction = models.CharField(max_length=16, choices=BaselineHealthSignalDirection.choices)
+    evidence_summary = models.JSONField(default=dict, blank=True)
+    rationale = models.CharField(max_length=255)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['signal_type', 'signal_severity', '-created_at'])]
+
+
+class BaselineHealthRecommendation(TimeStampedModel):
+    review_run = models.ForeignKey(BaselineHealthRun, on_delete=models.CASCADE, related_name='recommendations')
+    target_status = models.ForeignKey(
+        BaselineHealthStatus,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    recommendation_type = models.CharField(max_length=48, choices=BaselineHealthRecommendationType.choices)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=6, decimal_places=4, default=0)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['recommendation_type', '-created_at'])]

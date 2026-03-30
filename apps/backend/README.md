@@ -2910,3 +2910,21 @@ Scope/constraints:
 ## Paper baseline activation board
 
 The certification domain now includes a **paper baseline activation board** that sits after `PaperBaselineConfirmation=CONFIRMED`. It creates manual activation candidates, resolves active-binding replacement targets, records before/after snapshots, updates an explicit active paper binding registry, and keeps rollback reversible and auditable. This layer is manual-first, paper-only, local-first, and does not auto-switch champion, auto-promote, or execute live trading.
+
+## Baseline health watch in certification_board (new)
+
+A post-activation health layer now runs inside `apps.certification_board` and reuses evaluation/risk/opportunity context instead of duplicating those runtimes.
+
+Service split:
+- `services/baseline_health/candidate_building.py`
+- `services/baseline_health/signals.py`
+- `services/baseline_health/health_status.py`
+- `services/baseline_health/recommendation.py`
+- `services/baseline_health/run.py`
+
+Intent:
+- active baseline != healthy forever
+- classify health as `HEALTHY`, `UNDER_WATCH`, `DEGRADED`, `REVIEW_REQUIRED`, `ROLLBACK_REVIEW_RECOMMENDED`, `INSUFFICIENT_DATA`
+- emit explicit recommendation-first follow-up (`KEEP_BASELINE_ACTIVE`, `REQUIRE_REEVALUATION`, `OPEN_TUNING_REVIEW`, `PREPARE_ROLLBACK_REVIEW`)
+
+Out of scope: auto-retune, auto-deactivate, auto-promote, auto-switch champion, live trading.

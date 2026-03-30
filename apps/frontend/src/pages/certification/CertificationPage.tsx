@@ -17,6 +17,14 @@ import {
   runBaselineActivationReview,
 } from '../../services/baselineActivation';
 import {
+  getBaselineHealthCandidates,
+  getBaselineHealthRecommendations,
+  getBaselineHealthSignals,
+  getBaselineHealthStatuses,
+  getBaselineHealthSummary,
+  runBaselineHealthReview,
+} from '../../services/baselineHealth';
+import {
   confirmPaperBaseline,
   getBaselineBindingSnapshots,
   getBaselineConfirmationCandidates,
@@ -39,6 +47,11 @@ import type {
   BaselineActivationCandidate,
   BaselineActivationRecommendationItem,
   BaselineActivationSummary,
+  BaselineHealthCandidate,
+  BaselineHealthRecommendationItem,
+  BaselineHealthSignal,
+  BaselineHealthStatus,
+  BaselineHealthSummary,
   BaselineBindingSnapshot,
   BaselineConfirmationCandidate,
   BaselineConfirmationRecommendationItem,
@@ -82,17 +95,23 @@ export function CertificationPage() {
   const [baselineActivations, setBaselineActivations] = useState<PaperBaselineActivation[]>([]);
   const [activeBindings, setActiveBindings] = useState<ActivePaperBindingRecord[]>([]);
   const [activationRecommendations, setActivationRecommendations] = useState<BaselineActivationRecommendationItem[]>([]);
+  const [healthSummary, setHealthSummary] = useState<BaselineHealthSummary | null>(null);
+  const [healthCandidates, setHealthCandidates] = useState<BaselineHealthCandidate[]>([]);
+  const [healthStatuses, setHealthStatuses] = useState<BaselineHealthStatus[]>([]);
+  const [healthSignals, setHealthSignals] = useState<BaselineHealthSignal[]>([]);
+  const [healthRecommendations, setHealthRecommendations] = useState<BaselineHealthRecommendationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runningBaseline, setRunningBaseline] = useState(false);
   const [runningActivation, setRunningActivation] = useState(false);
+  const [runningHealth, setRunningHealth] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [summaryRes, candidatesRes, evidenceRes, decisionsRes, recommendationsRes, baselineSummaryRes, baselineCandidatesRes, baselineConfirmationsRes, bindingSnapshotsRes, baselineRecommendationsRes, activationSummaryRes, activationCandidatesRes, baselineActivationsRes, activeBindingsRes, activationRecommendationsRes] = await Promise.all([
+      const [summaryRes, candidatesRes, evidenceRes, decisionsRes, recommendationsRes, baselineSummaryRes, baselineCandidatesRes, baselineConfirmationsRes, bindingSnapshotsRes, baselineRecommendationsRes, activationSummaryRes, activationCandidatesRes, baselineActivationsRes, activeBindingsRes, activationRecommendationsRes, healthSummaryRes, healthCandidatesRes, healthStatusesRes, healthSignalsRes, healthRecommendationsRes] = await Promise.all([
         getCertificationSummary(),
         getCertificationCandidates(),
         getCertificationEvidencePacks(),
@@ -108,6 +127,11 @@ export function CertificationPage() {
         getBaselineActivations(),
         getActivePaperBindings(),
         getBaselineActivationRecommendations(),
+        getBaselineHealthSummary(),
+        getBaselineHealthCandidates(),
+        getBaselineHealthStatuses(),
+        getBaselineHealthSignals(),
+        getBaselineHealthRecommendations(),
       ]);
       setSummary(summaryRes);
       setCandidates(candidatesRes);
@@ -124,6 +148,11 @@ export function CertificationPage() {
       setBaselineActivations(baselineActivationsRes);
       setActiveBindings(activeBindingsRes);
       setActivationRecommendations(activationRecommendationsRes);
+      setHealthSummary(healthSummaryRes);
+      setHealthCandidates(healthCandidatesRes);
+      setHealthStatuses(healthStatusesRes);
+      setHealthSignals(healthSignalsRes);
+      setHealthRecommendations(healthRecommendationsRes);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load certification stabilization state.');
     } finally {
@@ -194,6 +223,19 @@ export function CertificationPage() {
     }
   }, [load]);
 
+  const runHealthReview = useCallback(async () => {
+    setRunningHealth(true);
+    setError(null);
+    try {
+      await runBaselineHealthReview({ actor: 'certification_ui', metadata: { initiated_from: 'certification_ui' } });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not run baseline health review.');
+    } finally {
+      setRunningHealth(false);
+    }
+  }, [load]);
+
   const activateBaseline = useCallback(async (confirmationId: number) => {
     try {
       await activatePaperBaseline(confirmationId, { actor: 'certification_ui' });
@@ -228,6 +270,7 @@ export function CertificationPage() {
           <button type="button" className="primary-button" onClick={() => void runReview()} disabled={running}>{running ? 'Running…' : 'Run post-rollout review'}</button>
           <button type="button" className="secondary-button" onClick={() => void runBaselineReview()} disabled={runningBaseline} style={{ marginLeft: 8 }}>{runningBaseline ? 'Running…' : 'Run baseline confirmation'}</button>
           <button type="button" className="secondary-button" onClick={() => void runActivationReview()} disabled={runningActivation} style={{ marginLeft: 8 }}>{runningActivation ? 'Running…' : 'Run baseline activation'}</button>
+          <button type="button" className="secondary-button" onClick={() => void runHealthReview()} disabled={runningHealth} style={{ marginLeft: 8 }}>{runningHealth ? 'Running…' : 'Run baseline health review'}</button>
         </SectionCard>
 
         <SectionCard eyebrow="Summary" title="Stabilization outcomes" description="Latest review counters for certification, observation, manual review, rollback recommendation, and rejection.">
@@ -252,6 +295,17 @@ export function CertificationPage() {
           </div>
         </SectionCard>
 
+        <SectionCard eyebrow="Active baseline health watch" title="Degradation watch & re-evaluation trigger loop" description="Active baseline health is monitored continuously with recommendation-first governance. No auto-deactivate, no auto-retune, no auto-switch.">
+          <div className="cockpit-metric-grid">
+            <div><strong>Active baselines reviewed:</strong> {healthSummary?.active_baselines_reviewed ?? 0}</div>
+            <div><strong>Healthy:</strong> {healthSummary?.healthy_count ?? 0}</div>
+            <div><strong>Under watch:</strong> {healthSummary?.under_watch_count ?? 0}</div>
+            <div><strong>Degraded:</strong> {healthSummary?.degraded_count ?? 0}</div>
+            <div><strong>Review required:</strong> {healthSummary?.review_required_count ?? 0}</div>
+            <div><strong>Rollback review recommended:</strong> {healthSummary?.rollback_review_recommended_count ?? 0}</div>
+          </div>
+        </SectionCard>
+
         <SectionCard eyebrow="Baseline confirmation board" title="Manual paper baseline adoption" description="Certification decides readiness; this board confirms baseline manually with before/after snapshots, binding review, and rollback preparation. No auto-switch champion, no silent baseline apply.">
           <div className="cockpit-metric-grid">
             <div><strong>Certified decisions:</strong> {baselineSummary?.candidate_count ?? 0}</div>
@@ -268,6 +322,13 @@ export function CertificationPage() {
             eyebrow="No baseline candidates"
             title="No certified paper baseline candidates are available yet."
             description="Run baseline confirmation to prepare safe manual baseline adoption. BLOCKED and REQUIRE_BINDING_REVIEW are valid governance outcomes."
+          />
+        ) : null}
+        {activeBindings.length === 0 ? (
+          <EmptyState
+            eyebrow="No active baselines yet"
+            title="No active paper baselines are available yet."
+            description="Run baseline health review to monitor stability and degradation signals."
           />
         ) : null}
 
@@ -456,6 +517,68 @@ export function CertificationPage() {
                 {activationRecommendations.slice(0, 100).map((row) => (
                   <tr key={row.id}>
                     <td>{row.target_activation ? `#${row.target_activation}` : '—'}</td>
+                    <td><StatusBadge tone={toneFromState(row.recommendation_type)}>{row.recommendation_type}</StatusBadge></td>
+                    <td>{row.rationale}</td>
+                    <td>{row.reason_codes.join(', ') || '—'}</td>
+                    <td>{row.confidence}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Health candidates" title="Active baseline health candidates" description="Active binding candidates and readiness status with baseline lineage and blockers.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>ID</th><th>Component</th><th>Scope</th><th>Active binding</th><th>Readiness</th><th>Blockers</th><th>Trace links</th></tr></thead><tbody>
+                {healthCandidates.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.id}</td>
+                    <td>{row.target_component}</td>
+                    <td>{row.target_scope}</td>
+                    <td>#{row.linked_active_binding}</td>
+                    <td><StatusBadge tone={toneFromState(row.readiness_status)}>{row.readiness_status}</StatusBadge></td>
+                    <td>{row.blockers.join(', ') || '—'}</td>
+                    <td><button type="button" className="link-button" onClick={() => navigate('/evaluation')}>evaluation</button> · <button type="button" className="link-button" onClick={() => navigate('/tuning')}>tuning</button> · <button type="button" className="link-button" onClick={() => navigate('/experiments')}>experiments</button> · <button type="button" className="link-button" onClick={() => navigate('/trace')}>trace</button></td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Health status" title="Current baseline health status" description="Per-baseline health status with calibration/risk/opportunity quality and drift/regression risk scores.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Candidate</th><th>Status</th><th>Calibration</th><th>Risk gate</th><th>Opportunity quality</th><th>Drift risk</th><th>Regression risk</th><th>Rationale</th></tr></thead><tbody>
+                {healthStatuses.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_candidate}</td>
+                    <td><StatusBadge tone={toneFromState(row.health_status)}>{row.health_status}</StatusBadge></td>
+                    <td>{row.calibration_health_score}</td>
+                    <td>{row.risk_gate_health_score}</td>
+                    <td>{row.opportunity_quality_health_score}</td>
+                    <td>{row.drift_risk_score}</td>
+                    <td>{row.regression_risk_score}</td>
+                    <td>{row.rationale}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Health signals" title="Degradation and watch signals" description="Concrete signals that explain why a baseline is healthy, under watch, degraded or pending rollback review.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Status</th><th>Signal</th><th>Severity</th><th>Direction</th><th>Rationale</th><th>Evidence</th></tr></thead><tbody>
+                {healthSignals.slice(0, 150).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_status}</td>
+                    <td>{row.signal_type}</td>
+                    <td><StatusBadge tone={toneFromState(row.signal_severity)}>{row.signal_severity}</StatusBadge></td>
+                    <td>{row.signal_direction}</td>
+                    <td>{row.rationale}</td>
+                    <td>{JSON.stringify(row.evidence_summary).slice(0, 140)}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Health recommendations" title="Recommendation-first baseline health actions" description="Conservative recommendations to keep/watch/re-evaluate/tune/review rollback with manual apply only.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Status</th><th>Recommendation</th><th>Rationale</th><th>Reason codes</th><th>Confidence</th></tr></thead><tbody>
+                {healthRecommendations.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.target_status ? `#${row.target_status}` : '—'}</td>
                     <td><StatusBadge tone={toneFromState(row.recommendation_type)}>{row.recommendation_type}</StatusBadge></td>
                     <td>{row.rationale}</td>
                     <td>{row.reason_codes.join(', ') || '—'}</td>
