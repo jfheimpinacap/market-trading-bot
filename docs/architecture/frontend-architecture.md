@@ -1454,3 +1454,15 @@ Integration notes:
 - WATCH/EXPIRED states are first-class, not treated as errors
 
 UX boundary remains conservative: manual-first actions and recommendation-first guidance only.
+
+## Opportunity cycle frontend layer (new)
+
+A new route `/opportunity-cycle` is added as the operator-facing fused opportunity board.
+
+It reuses existing frontend architecture principles:
+- page-local state and explicit service calls (`services/opportunityCycle.ts`)
+- no new global store requirement
+- recommendation-first/manual-first UX language
+- direct links to scan/research/prediction/risk/cockpit/trace for traceability
+
+The page is intentionally conservative: no auto-execution controls and no hidden decisioning.

@@ -1685,3 +1685,14 @@ Scope remains unchanged:
 - no real money / no broker live execution
 - no opaque autonomous learning authority
 - no automatic model retraining
+
+### Opportunity cycle runtime hardening (new)
+
+A new auditable runtime layer is now available at `/api/opportunity-cycle/*` and `/opportunity-cycle`.
+
+- Consolidates upstream outputs from `research_agent`, `prediction_agent`, `risk_agent`, and `learning_memory` into fused opportunity assessments.
+- Emits explicit statuses (`READY_FOR_PROPOSAL`, `WATCH_ONLY`, `BLOCKED_BY_RISK`, `BLOCKED_BY_LEARNING`, `LOW_CONVICTION`, `NEEDS_REVIEW`).
+- Creates paper proposal handoffs and recommendation-first downstream actions (`SEND_TO_PROPOSAL_ENGINE`, `SEND_TO_EXECUTION_SIMULATOR`, watch/block/manual-review outcomes).
+- Preserves local-first, manual-first, paper-only boundaries.
+
+Out of scope remains unchanged: no broker/exchange live execution, no real-money trading, and no opaque auto-apply planner.

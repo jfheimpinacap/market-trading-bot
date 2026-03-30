@@ -4,6 +4,7 @@ import { PageHeader } from '../components/PageHeader';
 import { SectionCard } from '../components/SectionCard';
 import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
+import { navigate } from '../lib/router';
 import { getRiskAssessments, getRiskSummary, getRiskWatchEvents, runRiskAssessment, runRiskSizing, runRiskWatch } from '../services/riskAgent';
 import {
   getRiskApprovalDecisions,
@@ -171,6 +172,7 @@ export function RiskAgentPage() {
         <SectionCard eyebrow="Runtime review" title="Risk runtime controls" description="Manual trigger for prediction→risk runtime gating and recommendation-first handoff to execution simulator.">
           <div className="button-row">
             <button type="button" className="primary-button" disabled={busy} onClick={() => void handleRunRuntime()}>Run risk runtime review</button>
+            <button type="button" className="secondary-button" onClick={() => navigate('/opportunity-cycle')}>Open opportunity cycle</button>
             <label>
               Filter status
               <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>

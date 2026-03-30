@@ -1847,3 +1847,22 @@ Non-goals remain explicit:
 - ACTIVE/WATCH/EXPIRED/NEEDS_REVIEW pattern lifecycle visibility
 - no silent policy/risk/runtime mutation authority
 - no model retraining, no AutoML, no real-money execution
+
+## Opportunity cycle runtime architecture (new)
+
+`apps.opportunity_supervisor` now has two complementary layers:
+
+1. legacy `/api/opportunities/*` supervisor pipeline
+2. new `/api/opportunity-cycle/*` fusion runtime hardening pipeline
+
+The new pipeline consumes existing upstream runtime outputs (research/prediction/risk/learning) and does not replace their primary logic.
+
+Flow:
+- candidate consolidation (`candidate_building.py`)
+- fusion scoring + gating (`fusion.py`)
+- bounded portfolio-fit context (`portfolio_context.py`)
+- paper proposal handoff (`proposal_handoff.py`)
+- recommendation emission (`recommendation.py`)
+- run orchestration (`run.py`)
+
+No real-money or live-execution paths are introduced.

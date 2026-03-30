@@ -1608,3 +1608,18 @@ Design principles preserved:
 - manual-first
 - recommendation-first
 - no opaque auto-learning or auto-tuning behavior
+
+## Opportunity cycle board in `/opportunity-cycle` (new)
+
+The frontend now includes a dedicated `OpportunityCyclePage` and `services/opportunityCycle.ts`.
+
+What the board shows:
+- cycle summary cards (candidate/fused/ready/watch/blocked/sent-to-proposal)
+- fusion assessments table (probability, edge, conviction, risk clearance, learning drag, portfolio fit, final score)
+- paper proposal handoff table (status, direction, size, execution-sim recommendation)
+- recommendation table (proposal/watch/block/manual-review outcomes)
+
+UX guardrails:
+- explicit loading/error/empty states
+- manual trigger button for `run-review`
+- clear paper-only/manual-first language and no auto-trading behavior
