@@ -8,7 +8,13 @@ from rest_framework.test import APIClient
 
 from apps.markets.models import Event, Market, MarketSnapshot, Provider
 from apps.memory_retrieval.models import MemoryDocument
-from apps.prediction_agent.models import PredictionScore
+from apps.prediction_agent.models import (
+    PredictionRuntimeRecommendationType,
+    PredictionRuntimeRun,
+    PredictionScore,
+)
+from apps.prediction_agent.services.candidate_building import build_runtime_candidates
+from apps.prediction_agent.services.run import run_prediction_runtime_review
 from apps.prediction_agent.services.features import build_prediction_features
 from apps.prediction_agent.services.scoring import score_market_prediction
 from apps.research_agent.models import NarrativeItem, NarrativeSource, ResearchCandidate
@@ -111,3 +117,60 @@ class PredictionAgentTests(TestCase):
     def test_proposal_context_can_read_prediction_score(self):
         score = score_market_prediction(market=self.market, profile_slug='heuristic_baseline', triggered_by='test_context').score
         self.assertTrue(PredictionScore.objects.filter(id=score.id).exists())
+
+    def test_candidate_building_from_research_shortlist(self):
+        runtime_run = PredictionRuntimeRun.objects.create(started_at=timezone.now())
+        result = build_runtime_candidates(runtime_run=runtime_run)
+        self.assertGreaterEqual(len(result.candidates), 1)
+        self.assertEqual(result.blocked_count, 0)
+        self.assertEqual(result.candidates[0].linked_market_id, self.market.id)
+
+    @patch('apps.prediction_agent.services.model_runtime.get_active_model_artifact', return_value=None)
+    @patch('apps.memory_retrieval.services.retrieval.embed_text', return_value=[1.0, 0.0, 0.0])
+    def test_runtime_review_uses_heuristic_fallback_without_model(self, _retrieval_embed, _active_model):
+        run = run_prediction_runtime_review(triggered_by='test_runtime').runtime_run
+        self.assertGreaterEqual(run.scored_count, 1)
+        assessment = run.candidates.first().assessments.first()
+        self.assertEqual(assessment.model_mode, 'heuristic_only')
+        self.assertIn('MODEL_UNAVAILABLE_HEURISTIC_FALLBACK', assessment.reason_codes)
+
+    @patch('apps.prediction_agent.services.model_runtime.get_active_model_artifact')
+    @patch('apps.prediction_agent.services.model_runtime.predict_probability')
+    @patch('apps.memory_retrieval.services.retrieval.embed_text', return_value=[1.0, 0.0, 0.0])
+    def test_runtime_review_model_mode_when_active_model_exists(self, _retrieval_embed, mock_predict, mock_artifact):
+        class Artifact:
+            id = 99
+            name = 'xgb-demo'
+            version = 'v1'
+
+        class Prediction:
+            probability = Decimal('0.6100')
+
+        mock_artifact.return_value = Artifact()
+        mock_predict.return_value = Prediction()
+
+        run = run_prediction_runtime_review(triggered_by='test_runtime_model').runtime_run
+        assessment = run.candidates.first().assessments.first()
+        self.assertIn(assessment.model_mode, ['model_only', 'blended'])
+        self.assertTrue(assessment.calibrated_probability)
+
+    @patch('apps.memory_retrieval.services.retrieval.embed_text', return_value=[1.0, 0.0, 0.0])
+    def test_runtime_recommendation_and_summary_endpoint(self, _retrieval_embed):
+        run_prediction_runtime_review(triggered_by='test_runtime_recs')
+        summary_response = self.client.get(reverse('prediction_agent:runtime-summary'))
+        self.assertEqual(summary_response.status_code, 200)
+        self.assertIsNotNone(summary_response.json()['latest_run'])
+
+        rec_response = self.client.get(reverse('prediction_agent:runtime-recommendations'))
+        self.assertEqual(rec_response.status_code, 200)
+        rec_types = {item['recommendation_type'] for item in rec_response.json()}
+        self.assertTrue(
+            any(
+                rec in rec_types
+                for rec in [
+                    PredictionRuntimeRecommendationType.SEND_TO_RISK_ASSESSMENT,
+                    PredictionRuntimeRecommendationType.KEEP_FOR_MONITORING,
+                    PredictionRuntimeRecommendationType.IGNORE_LOW_CONFIDENCE,
+                ]
+            )
+        )

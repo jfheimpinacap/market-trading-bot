@@ -24,6 +24,12 @@ import {
   trainPredictionModel,
 } from '../services/prediction';
 import { getLlmStatus } from '../services/llm';
+import {
+  getPredictionRuntimeAssessments,
+  getPredictionRuntimeRecommendations,
+  getPredictionRuntimeSummary,
+  runPredictionRuntimeReview,
+} from '../services/predictionRuntime';
 import type { MarketListItem } from '../types/markets';
 import type {
   ActiveModelRecommendation,
@@ -32,6 +38,9 @@ import type {
   ModelGovernanceSummary,
   PredictionModelArtifact,
   PredictionProfile,
+  PredictionRuntimeAssessment,
+  PredictionRuntimeRecommendation,
+  PredictionRuntimeSummary,
   PredictionScore,
   PredictionSummary,
   PredictionTrainingRun,
@@ -74,6 +83,9 @@ export function PredictionPage() {
   const [comparisonRuns, setComparisonRuns] = useState<ModelComparisonRun[]>([]);
   const [recommendation, setRecommendation] = useState<ActiveModelRecommendation | null>(null);
   const [governanceSummary, setGovernanceSummary] = useState<ModelGovernanceSummary | null>(null);
+  const [runtimeSummary, setRuntimeSummary] = useState<PredictionRuntimeSummary | null>(null);
+  const [runtimeAssessments, setRuntimeAssessments] = useState<PredictionRuntimeAssessment[]>([]);
+  const [runtimeRecommendations, setRuntimeRecommendations] = useState<PredictionRuntimeRecommendation[]>([]);
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(initialMarketId);
   const [selectedProfile, setSelectedProfile] = useState<string>('heuristic_baseline');
   const [comparisonBaselineKey, setComparisonBaselineKey] = useState<string>('heuristic_baseline');
@@ -89,12 +101,14 @@ export function PredictionPage() {
   const [training, setTraining] = useState(false);
   const [activatingModelId, setActivatingModelId] = useState<number | null>(null);
   const [comparingModels, setComparingModels] = useState(false);
+  const [runningRuntimeReview, setRunningRuntimeReview] = useState(false);
+  const [runtimeStatusFilter, setRuntimeStatusFilter] = useState<string>('');
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [profilesRes, scoresRes, summaryRes, marketsRes, llmRes, trainingSummaryRes, trainingRunsRes, modelsRes, modelProfilesRes, comparisonRunsRes, recommendationRes, governanceSummaryRes] = await Promise.all([
+      const [profilesRes, scoresRes, summaryRes, marketsRes, llmRes, trainingSummaryRes, trainingRunsRes, modelsRes, modelProfilesRes, comparisonRunsRes, recommendationRes, governanceSummaryRes, runtimeSummaryRes] = await Promise.all([
         getPredictionProfiles(),
         getPredictionScores(),
         getPredictionSummary(),
@@ -107,6 +121,7 @@ export function PredictionPage() {
         getModelComparisons(),
         getActiveModelRecommendation(),
         getModelGovernanceSummary(),
+        getPredictionRuntimeSummary(),
       ]);
       setProfiles(profilesRes);
       setScores(scoresRes);
@@ -118,6 +133,19 @@ export function PredictionPage() {
       setComparisonRuns(comparisonRunsRes.slice(0, 20));
       setRecommendation(recommendationRes);
       setGovernanceSummary(governanceSummaryRes);
+      setRuntimeSummary(runtimeSummaryRes);
+      const runId = runtimeSummaryRes.latest_run?.id;
+      if (runId) {
+        const [assessmentsRes, recommendationsRes] = await Promise.all([
+          getPredictionRuntimeAssessments({ runId, status: runtimeStatusFilter || undefined }),
+          getPredictionRuntimeRecommendations({ runId }),
+        ]);
+        setRuntimeAssessments(assessmentsRes.slice(0, 100));
+        setRuntimeRecommendations(recommendationsRes.slice(0, 100));
+      } else {
+        setRuntimeAssessments([]);
+        setRuntimeRecommendations([]);
+      }
       setMarkets(marketsRes.slice(0, 200));
       setLlmReachable(Boolean(llmRes.reachable));
       if (!selectedMarketId && marketsRes.length > 0) {
@@ -131,7 +159,7 @@ export function PredictionPage() {
     } finally {
       setLoading(false);
     }
-  }, [result, selectedMarketId]);
+  }, [result, runtimeStatusFilter, selectedMarketId]);
 
   useEffect(() => {
     void load();
@@ -227,6 +255,19 @@ export function PredictionPage() {
 
   const recentScores = useMemo(() => scores.slice(0, 25), [scores]);
 
+  const runRuntimeReview = async () => {
+    setRunningRuntimeReview(true);
+    setError(null);
+    try {
+      await runPredictionRuntimeReview({ triggered_by: 'prediction_page_runtime_review' });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Runtime review failed.');
+    } finally {
+      setRunningRuntimeReview(false);
+    }
+  };
+
   return (
     <div className="page-stack">
       <PageHeader
@@ -257,6 +298,38 @@ export function PredictionPage() {
           </p>
           {llmReachable === false ? (
             <p style={{ marginTop: '0.75rem' }}><strong>Degraded narrative mode:</strong> prediction scoring still runs using market/momentum features if LLM-backed narrative refresh is unavailable.</p>
+          ) : null}
+        </SectionCard>
+
+        <SectionCard
+          eyebrow="Runtime hardening"
+          title="Prediction runtime review / edge confidence board"
+          description="Local-first/manual-first runtime layer. Combines active model (when available), heuristic fallback, narrative context, and precedent caution to emit auditable recommendations."
+        >
+          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+            <button type="button" className="secondary-button" disabled={runningRuntimeReview} onClick={() => void runRuntimeReview()}>
+              {runningRuntimeReview ? 'Running runtime review...' : 'Run prediction runtime review'}
+            </button>
+            <select value={runtimeStatusFilter} onChange={(e) => setRuntimeStatusFilter(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="STRONG_EDGE">STRONG_EDGE</option>
+              <option value="WEAK_EDGE">WEAK_EDGE</option>
+              <option value="LOW_CONFIDENCE">LOW_CONFIDENCE</option>
+              <option value="NO_EDGE">NO_EDGE</option>
+              <option value="CONFLICTED">CONFLICTED</option>
+              <option value="NEEDS_REVIEW">NEEDS_REVIEW</option>
+            </select>
+          </div>
+          <div className="system-metadata-grid">
+            <div><strong>Candidates seen:</strong> {runtimeSummary?.latest_run?.candidate_count ?? 0}</div>
+            <div><strong>Scored:</strong> {runtimeSummary?.latest_run?.scored_count ?? 0}</div>
+            <div><strong>Strong edge:</strong> {runtimeSummary?.latest_run?.high_edge_count ?? 0}</div>
+            <div><strong>Low confidence:</strong> {runtimeSummary?.latest_run?.low_confidence_count ?? 0}</div>
+            <div><strong>Sent to risk:</strong> {runtimeSummary?.latest_run?.sent_to_risk_count ?? 0}</div>
+            <div><strong>Sent to signal fusion:</strong> {runtimeSummary?.latest_run?.sent_to_signal_fusion_count ?? 0}</div>
+          </div>
+          {!runtimeSummary?.latest_run ? (
+            <p style={{ marginTop: '0.75rem' }}>No prediction runtime assessments are available yet. Run a runtime review to score shortlisted markets.</p>
           ) : null}
         </SectionCard>
 
@@ -454,6 +527,57 @@ export function PredictionPage() {
                           </>
                         );
                       })()}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard eyebrow="Runtime assessments" title="Calibrated probability + adjusted edge board" description="Assessment-level runtime outputs for prediction→risk/signal handoff.">
+          {runtimeAssessments.length === 0 ? (
+            <EmptyState eyebrow="No runtime assessments" title="No prediction runtime assessments are available yet." description="Run a runtime review to score shortlisted markets." />
+          ) : (
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>Market</th><th>Provider/Category</th><th>Market</th><th>Calibrated</th><th>Adjusted edge</th><th>Confidence</th><th>Uncertainty</th><th>Evidence</th><th>Precedent caution</th><th>Status</th><th>Links</th></tr></thead>
+                <tbody>
+                  {runtimeAssessments.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.candidate.market_title}</td>
+                      <td>{item.candidate.market_provider} / {item.candidate.category || '—'}</td>
+                      <td>{fmtPct(item.market_probability)}</td>
+                      <td>{fmtPct(item.calibrated_probability)}</td>
+                      <td>{fmtPct(item.adjusted_edge)}</td>
+                      <td>{fmtPct(item.confidence_score)}</td>
+                      <td>{fmtPct(item.uncertainty_score)}</td>
+                      <td>{fmtPct(item.evidence_quality_score)}</td>
+                      <td>{fmtPct(item.precedent_caution_score)}</td>
+                      <td><StatusBadge tone={item.prediction_status === 'STRONG_EDGE' ? 'ready' : item.prediction_status === 'LOW_CONFIDENCE' ? 'pending' : item.prediction_status === 'CONFLICTED' ? 'offline' : 'neutral'}>{item.prediction_status}</StatusBadge></td>
+                      <td><button className="link-button" type="button" onClick={() => navigate(`/markets/${item.candidate.market_slug}`)}>Market</button>{' · '}<button className="link-button" type="button" onClick={() => navigate('/research-agent')}>Research</button>{' · '}<button className="link-button" type="button" onClick={() => navigate('/risk-agent')}>Risk</button>{' · '}<button className="link-button" type="button" onClick={() => navigate('/trace')}>Trace</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard eyebrow="Runtime recommendations" title="Prediction runtime recommendations" description="Recommendation-first handoff. Prediction does not authorize execution nor bypass risk/policy/safety.">
+          {runtimeRecommendations.length === 0 ? (
+            <EmptyState eyebrow="No recommendations" title="Runtime recommendations appear after running runtime review." description="LOW_CONFIDENCE and NO_EDGE are valid outcomes, not bugs." />
+          ) : (
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>Recommendation</th><th>Rationale</th><th>Reason codes</th><th>Confidence</th></tr></thead>
+                <tbody>
+                  {runtimeRecommendations.map((item) => (
+                    <tr key={item.id}>
+                      <td><StatusBadge tone={item.recommendation_type === 'SEND_TO_RISK_ASSESSMENT' ? 'ready' : item.recommendation_type === 'IGNORE_LOW_CONFIDENCE' ? 'pending' : 'neutral'}>{item.recommendation_type}</StatusBadge></td>
+                      <td>{item.rationale}</td>
+                      <td>{item.reason_codes.join(', ') || '—'}</td>
+                      <td>{fmtPct(item.confidence)}</td>
                     </tr>
                   ))}
                 </tbody>
