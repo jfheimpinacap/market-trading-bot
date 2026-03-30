@@ -2658,3 +2658,32 @@ Optional manual controls:
 - `GET /api/learning/adjustments/<id>/`
 
 Boundaries remain strict: recommendation-first + manual-first apply, conservative bounded adjustments, no opaque auto policy/risk changes, no model retraining.
+
+## Opportunity cycle / signal fusion runtime hardening (new)
+
+`apps.opportunity_supervisor` now also exposes a dedicated runtime review boundary for fused opportunity readiness.
+
+Core entities:
+- `OpportunityCycleRuntimeRun`
+- `OpportunityFusionCandidate`
+- `OpportunityFusionAssessment`
+- `PaperOpportunityProposal`
+- `OpportunityRecommendation`
+
+Service split:
+- `services/candidate_building.py`
+- `services/fusion.py`
+- `services/portfolio_context.py`
+- `services/proposal_handoff.py`
+- `services/recommendation.py`
+- `services/run.py`
+
+New API:
+- `POST /api/opportunity-cycle/run-review/`
+- `GET /api/opportunity-cycle/candidates/`
+- `GET /api/opportunity-cycle/assessments/`
+- `GET /api/opportunity-cycle/proposals/`
+- `GET /api/opportunity-cycle/recommendations/`
+- `GET /api/opportunity-cycle/summary/`
+
+Boundary guarantees: recommendation-first, local-first, manual-first, paper-only.

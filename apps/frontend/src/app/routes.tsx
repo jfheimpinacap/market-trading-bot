@@ -36,6 +36,7 @@ import { SafetyPage } from '../pages/SafetyPage';
 import { SemiAutoPage } from '../pages/SemiAutoPage';
 import { SignalsPage } from '../pages/SignalsPage';
 import { OpportunitiesPage } from '../pages/OpportunitiesPage';
+import { OpportunityCyclePage } from '../pages/OpportunityCyclePage';
 import { MissionControlPage } from '../pages/MissionControlPage';
 import { PortfolioGovernorPage } from '../pages/PortfolioGovernorPage';
 import { ProfileManagerPage } from '../pages/ProfileManagerPage';
@@ -130,6 +131,12 @@ export const appRoutes: AppRoute[] = [
     path: '/signals',
     description: 'Signal fusion opportunity board with composite ranking, proposal gating, and paper/demo-only execution boundaries.',
     component: SignalsPage,
+  },
+  {
+    label: 'Opportunity Cycle',
+    path: '/opportunity-cycle',
+    description: 'Signal fusion runtime hardening board that evaluates proposal readiness and emits auditable paper-only handoffs.',
+    component: OpportunityCyclePage,
   },
   {
     label: 'Opportunities',

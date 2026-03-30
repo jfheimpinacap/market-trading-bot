@@ -388,6 +388,7 @@ export function getCockpitQuickLinks() {
     { label: 'Certification', path: '/certification' },
     { label: 'Rollout manager', path: '/rollout' },
     { label: 'Operator queue', path: '/operator-queue' },
+    { label: 'Opportunity cycle', path: '/opportunity-cycle' },
     { label: 'Runbooks', path: '/runbooks' },
     { label: 'Approvals', path: '/approvals' },
     { label: 'Automation policy', path: '/automation-policy' },
