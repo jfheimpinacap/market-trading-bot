@@ -5,48 +5,76 @@ import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
 import { PageHeader } from '../../components/PageHeader';
 import { SectionCard } from '../../components/SectionCard';
 import { navigate } from '../../lib/router';
-import { applyPromotionDecision, getCurrentPromotionRecommendation, getPromotionRuns, getPromotionSummary, runPromotionReview } from '../../services/promotion';
-import type { PromotionReviewRun, PromotionSummary } from '../../types/promotion';
+import {
+  getPromotionCases,
+  getPromotionEvidencePacks,
+  getPromotionRecommendations,
+  getPromotionSummary,
+  runPromotionReview,
+} from '../../services/promotionReview';
+import type {
+  GovernedPromotionSummary,
+  PromotionCase,
+  PromotionCaseStatus,
+  PromotionDecisionRecommendation,
+  PromotionEvidencePack,
+} from '../../types/promotion';
 
-const recommendationClass = (code: string) => {
-  if (code === 'PROMOTE_CHALLENGER') return 'signal-badge signal-badge--actionable';
-  if (code === 'KEEP_CURRENT_CHAMPION') return 'signal-badge signal-badge--monitor';
-  if (code === 'EXTEND_SHADOW_TEST') return 'signal-badge signal-badge--neutral';
-  if (code === 'REVERT_TO_CONSERVATIVE_STACK') return 'signal-badge signal-badge--bearish';
+const statusBadgeClass = (status: string) => {
+  if (status === 'APPROVED_FOR_MANUAL_ADOPTION' || status === 'READY_FOR_REVIEW' || status === 'STRONG' || status === 'APPROVE_FOR_MANUAL_ADOPTION') {
+    return 'signal-badge signal-badge--actionable';
+  }
+  if (status === 'NEEDS_MORE_DATA' || status === 'INSUFFICIENT' || status === 'DEFER_FOR_MORE_EVIDENCE') {
+    return 'signal-badge signal-badge--neutral';
+  }
+  if (status === 'DEFERRED' || status === 'MIXED' || status === 'SPLIT_SCOPE_AND_RETEST' || status === 'GROUP_WITH_RELATED_CHANGES') {
+    return 'signal-badge signal-badge--monitor';
+  }
+  if (status === 'REJECTED' || status === 'WEAK' || status === 'REJECT_CHANGE') {
+    return 'signal-badge signal-badge--bearish';
+  }
   return 'signal-badge signal-badge--neutral';
 };
 
-const asNumber = (v: unknown) => {
-  if (typeof v === 'number') return v;
-  if (typeof v === 'string') return Number(v);
-  return 0;
-};
-
 export function PromotionPage() {
-  const [summary, setSummary] = useState<PromotionSummary | null>(null);
-  const [current, setCurrent] = useState<PromotionReviewRun | null>(null);
-  const [runs, setRuns] = useState<PromotionReviewRun[]>([]);
+  const [summary, setSummary] = useState<GovernedPromotionSummary | null>(null);
+  const [cases, setCases] = useState<PromotionCase[]>([]);
+  const [evidencePacks, setEvidencePacks] = useState<PromotionEvidencePack[]>([]);
+  const [recommendations, setRecommendations] = useState<PromotionDecisionRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
-  const [applying, setApplying] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [decisionMode, setDecisionMode] = useState<'RECOMMENDATION_ONLY' | 'MANUAL_APPLY'>('RECOMMENDATION_ONLY');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [componentFilter, setComponentFilter] = useState<string>('ALL');
+  const [scopeFilter, setScopeFilter] = useState<string>('ALL');
+  const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [summaryRes, runsRes, currentRes] = await Promise.all([getPromotionSummary(), getPromotionRuns(), getCurrentPromotionRecommendation()]);
+      const query: Record<string, string> = {};
+      if (statusFilter !== 'ALL') query.case_status = statusFilter;
+      if (componentFilter !== 'ALL') query.target_component = componentFilter;
+      if (scopeFilter !== 'ALL') query.target_scope = scopeFilter;
+      if (priorityFilter !== 'ALL') query.priority_level = priorityFilter;
+      const [summaryRes, casesRes, evidenceRes, recommendationRes] = await Promise.all([
+        getPromotionSummary(),
+        getPromotionCases(query),
+        getPromotionEvidencePacks(),
+        getPromotionRecommendations(),
+      ]);
       setSummary(summaryRes);
-      setRuns(runsRes);
-      setCurrent(currentRes.current_recommendation);
+      setCases(casesRes);
+      setEvidencePacks(evidenceRes);
+      setRecommendations(recommendationRes);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load promotion committee state.');
+      setError(e instanceof Error ? e.message : 'Could not load promotion governance board state.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [componentFilter, priorityFilter, scopeFilter, statusFilter]);
 
   useEffect(() => {
     void load();
@@ -55,108 +83,88 @@ export function PromotionPage() {
   const onRun = useCallback(async () => {
     setRunning(true);
     setMessage(null);
+    setError(null);
     try {
-      const run = await runPromotionReview({ decision_mode: decisionMode, metadata: { initiated_from: 'promotion_ui' } });
-      setMessage(`Promotion review #${run.id} completed with ${run.recommendation_code}.`);
+      const run = await runPromotionReview({ actor: 'promotion_ui', metadata: { initiated_from: 'promotion_ui' } });
+      setMessage(`Promotion governance review #${run.id} completed.`);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not run promotion review.');
+      setError(e instanceof Error ? e.message : 'Could not run governed promotion review.');
     } finally {
       setRunning(false);
     }
-  }, [decisionMode, load]);
+  }, [load]);
 
-  const onApply = useCallback(async () => {
-    if (!current) return;
-    setApplying(true);
-    setMessage(null);
-    try {
-      await applyPromotionDecision(current.id, { actor: 'frontend_operator' });
-      setMessage(`Manual apply executed for review #${current.id}.`);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Manual apply failed.');
-    } finally {
-      setApplying(false);
-    }
-  }, [current, load]);
+  const evidenceByCase = useMemo(() => {
+    const rows = new Map<number, PromotionEvidencePack>();
+    evidencePacks.forEach((item) => {
+      if (!rows.has(item.linked_promotion_case)) rows.set(item.linked_promotion_case, item);
+    });
+    return rows;
+  }, [evidencePacks]);
 
-  const evidenceCards = useMemo(() => {
-    const metrics = current?.evidence_snapshot.execution_aware_metrics ?? {};
-    return [
-      { label: 'Execution-aware PnL Δ', value: asNumber(metrics.pnl_delta_execution_adjusted ?? 0).toFixed(2) },
-      { label: 'Fill rate Δ', value: asNumber(metrics.fill_rate_delta ?? 0).toFixed(4) },
-      { label: 'No-fill rate Δ', value: asNumber(metrics.no_fill_rate_delta ?? 0).toFixed(4) },
-      { label: 'Execution drag Δ', value: asNumber(metrics.execution_drag_delta ?? 0).toFixed(4) },
-      { label: 'Queue pressure Δ', value: asNumber(metrics.queue_pressure_delta ?? 0).toFixed(4) },
-      { label: 'Readiness', value: String(current?.evidence_snapshot.readiness_summary?.status ?? 'UNKNOWN'), badge: true },
-    ];
-  }, [current]);
+  const statusOptions: PromotionCaseStatus[] = ['READY_FOR_REVIEW', 'NEEDS_MORE_DATA', 'DEFERRED', 'REJECTED', 'APPROVED_FOR_MANUAL_ADOPTION'];
 
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Stack promotion committee"
+        eyebrow="Promotion governance board"
         title="/promotion"
-        description="Formal, auditable stack governance for paper/demo mode. Consolidates champion-challenger, readiness, execution realism, profile governance and precedents before any manual promotion decision."
-        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/champion-challenger')}>Open Champion Challenger</button><button className="secondary-button" type="button" onClick={() => navigate('/rollout')}>Open Rollout</button><button className="secondary-button" type="button" onClick={() => navigate('/profile-manager')}>Open Profile Manager</button><button className="secondary-button" type="button" onClick={() => navigate('/prediction')}>Open Prediction</button><button className="secondary-button" type="button" onClick={() => navigate('/readiness')}>Open Readiness</button><button type="button" className="secondary-button" onClick={() => navigate('/certification')}>Open Certification</button></div>}
+        description="Manual-first, local-first and paper-only adoption governance. This board prepares auditable promotion cases from validated experiment evidence. It never auto-promotes or auto-applies changes."
+        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/experiments')}>Open Experiments</button><button className="secondary-button" type="button" onClick={() => navigate('/cockpit')}>Open Cockpit</button><button className="secondary-button" type="button" onClick={() => navigate('/tuning')}>Open Tuning</button><button className="secondary-button" type="button" onClick={() => navigate('/trace')}>Open Trace</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
-        <SectionCard eyebrow="Current recommendation" title="Committee recommendation" description="Manual-first governance output. Recommendation only by default; no silent auto-switching.">
-          {!current ? <p className="muted-text">Run a promotion review to evaluate the current stack.</p> : (
-            <div className="system-metadata-grid">
-              <div><strong>Recommendation:</strong> <span className={recommendationClass(current.recommendation_code)}>{current.recommendation_code}</span></div>
-              <div><strong>Confidence:</strong> {current.confidence}</div>
-              <div><strong>Rationale:</strong> {current.rationale}</div>
-              <div><strong>Blocking constraints:</strong> {current.blocking_constraints.join(', ') || 'None'}</div>
-              <div><strong>Reason codes:</strong> {current.reason_codes.join(', ') || 'None'}</div>
-              <div><strong>Stack candidate:</strong> {current.evidence_snapshot.challenger_binding?.name ?? 'Not specified'}</div>
-            </div>
-          )}
-        </SectionCard>
-
-        <SectionCard eyebrow="Evidence summary" title="Consolidated stack evidence" description="Execution-aware deltas, readiness, profile context, portfolio stress and precedent signals.">
+        <SectionCard eyebrow="Summary" title="Adoption readiness overview" description="Cases reviewed and governance outcomes from the latest promotion review run.">
           <div className="dashboard-stat-grid">
-            {evidenceCards.map((card) => (
-              <article key={card.label} className="dashboard-stat-card">
-                <span>{card.label}</span>
-                <strong>{card.badge ? <span className={recommendationClass(String(card.value))}>{card.value}</span> : card.value}</strong>
-              </article>
-            ))}
+            <article className="dashboard-stat-card"><span>Cases reviewed</span><strong>{summary?.cases_reviewed ?? 0}</strong></article>
+            <article className="dashboard-stat-card"><span>Ready for review</span><strong>{summary?.ready_for_review ?? 0}</strong></article>
+            <article className="dashboard-stat-card"><span>Needs more data</span><strong>{summary?.needs_more_data ?? 0}</strong></article>
+            <article className="dashboard-stat-card"><span>Deferred</span><strong>{summary?.deferred ?? 0}</strong></article>
+            <article className="dashboard-stat-card"><span>Rejected</span><strong>{summary?.rejected ?? 0}</strong></article>
+            <article className="dashboard-stat-card"><span>High priority</span><strong>{summary?.high_priority ?? 0}</strong></article>
           </div>
-          {current?.evidence_snapshot.precedent_warnings?.length ? <p><strong>Precedent warnings:</strong> {current.evidence_snapshot.precedent_warnings.length} relevant memory warnings detected.</p> : <p className="muted-text">No high-similarity caution precedents were surfaced in the latest review.</p>}
         </SectionCard>
 
-        <SectionCard eyebrow="Run review" title="Review + optional manual apply" description="Default mode is recommendation-only; use manual apply explicitly for safe and auditable promotions.">
+        <SectionCard eyebrow="Actions" title="Run promotion review" description="Manual trigger for auditable promotion governance run. No automatic adoption is performed.">
           <div className="button-row">
-            <label className="field-group"><span>Decision mode</span><select className="select-input" value={decisionMode} onChange={(e) => setDecisionMode(e.target.value as 'RECOMMENDATION_ONLY' | 'MANUAL_APPLY')}><option value="RECOMMENDATION_ONLY">RECOMMENDATION_ONLY</option><option value="MANUAL_APPLY">MANUAL_APPLY</option></select></label>
-            <button className="primary-button" type="button" disabled={running} onClick={() => void onRun()}>{running ? 'Running review…' : 'Run promotion review'}</button>
-            <button className="secondary-button" type="button" disabled={applying || !current || current.decision_mode !== 'MANUAL_APPLY' || current.recommendation_code !== 'PROMOTE_CHALLENGER'} onClick={() => void onApply()}>{applying ? 'Applying…' : 'Manual apply review'}</button>
+            <button className="primary-button" type="button" disabled={running} onClick={() => void onRun()}>{running ? 'Running…' : 'Run promotion review'}</button>
+            <label className="field-group"><span>Component</span><input className="text-input" value={componentFilter} onChange={(event) => setComponentFilter(event.target.value)} placeholder="ALL / prediction / risk / calibration" /></label>
+            <label className="field-group"><span>Scope</span><input className="text-input" value={scopeFilter} onChange={(event) => setScopeFilter(event.target.value)} placeholder="ALL / global / provider / category" /></label>
+            <label className="field-group"><span>Status</span><select className="select-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">ALL</option>{statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}</select></label>
+            <label className="field-group"><span>Priority</span><select className="select-input" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option value="ALL">ALL</option><option value="LOW">LOW</option><option value="MEDIUM">MEDIUM</option><option value="HIGH">HIGH</option><option value="CRITICAL">CRITICAL</option></select></label>
             {message ? <span className="muted-text">{message}</span> : null}
           </div>
         </SectionCard>
 
-        <SectionCard eyebrow="Recent runs" title="Promotion review audit trail" description="Status, recommendation and evidence summary for each committee run.">
-          {runs.length === 0 ? (
+        <SectionCard eyebrow="Cases" title="Promotion cases" description="Formal adoption cases generated from experiment_lab comparisons and promotion recommendations.">
+          {!cases.length ? (
             <EmptyState
-              eyebrow="Promotion committee"
-              title="No promotion reviews yet"
-              description="Run a promotion review to evaluate the current stack. Inconclusive evidence is handled as EXTEND_SHADOW_TEST or MANUAL_REVIEW_REQUIRED, not as an error."
+              eyebrow="Promotion governance"
+              title="No governed promotion cases are available yet"
+              description="No governed promotion cases are available yet. Run promotion review to prepare manual adoption decisions."
             />
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
-                <thead><tr><th>ID</th><th>Status</th><th>Recommendation</th><th>Decision mode</th><th>Created</th><th>Summary</th></tr></thead>
+                <thead><tr><th>Component</th><th>Scope</th><th>Change type</th><th>Current</th><th>Proposed</th><th>Priority</th><th>Status</th><th>Blockers</th><th>Context</th></tr></thead>
                 <tbody>
-                  {runs.slice(0, 15).map((run) => (
-                    <tr key={run.id}>
-                      <td>#{run.id}</td>
-                      <td>{run.status}</td>
-                      <td><span className={recommendationClass(run.recommendation_code)}>{run.recommendation_code}</span></td>
-                      <td>{run.decision_mode}</td>
-                      <td>{new Date(run.created_at).toLocaleString()}</td>
-                      <td>{run.summary}</td>
+                  {cases.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.target_component}</td>
+                      <td>{item.target_scope}</td>
+                      <td>{item.change_type}</td>
+                      <td>{item.current_value || 'n/a'}</td>
+                      <td>{item.proposed_value || 'n/a'}</td>
+                      <td>{item.priority_level}</td>
+                      <td><span className={statusBadgeClass(item.case_status)}>{item.case_status}</span></td>
+                      <td>{item.blockers.join(', ') || 'None'}</td>
+                      <td>
+                        <div className="stacked-meta">
+                          <span>Experiment #{item.metadata.experiment_run_id ? String(item.metadata.experiment_run_id) : 'n/a'}</span>
+                          <span><button type="button" className="link-button" onClick={() => navigate('/experiments')}>Experiments</button> · <button type="button" className="link-button" onClick={() => navigate('/tuning')}>Tuning</button> · <button type="button" className="link-button" onClick={() => navigate('/evaluation')}>Evaluation</button> · <button type="button" className="link-button" onClick={() => navigate('/trace')}>Trace</button></span>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -165,7 +173,55 @@ export function PromotionPage() {
           )}
         </SectionCard>
 
-        {summary?.is_recommendation_stale ? <p className="muted-text">Current recommendation is stale; mission control should trigger a fresh promotion review.</p> : null}
+        <SectionCard eyebrow="Evidence" title="Evidence packs" description="Quantitative and rationale-focused pack for each case. NEEDS_MORE_DATA and DEFERRED are valid governance states.">
+          {!evidencePacks.length ? <p className="muted-text">No evidence packs generated yet.</p> : (
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>Case</th><th>Summary</th><th>Sample</th><th>Confidence</th><th>Risk of adoption</th><th>Expected benefit</th><th>Status</th></tr></thead>
+                <tbody>
+                  {evidencePacks.map((item) => (
+                    <tr key={item.id}>
+                      <td>#{item.linked_promotion_case}</td>
+                      <td>{item.summary}</td>
+                      <td>{item.sample_count}</td>
+                      <td>{item.confidence_score}</td>
+                      <td>{item.risk_of_adoption_score}</td>
+                      <td>{item.expected_benefit_score}</td>
+                      <td><span className={statusBadgeClass(item.evidence_status)}>{item.evidence_status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard eyebrow="Recommendations" title="Committee-facing recommendations" description="Explicit human recommendation outputs for manual adoption committee review.">
+          {!recommendations.length ? <p className="muted-text">No recommendations yet.</p> : (
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>Recommendation</th><th>Case</th><th>Rationale</th><th>Reason codes</th><th>Confidence</th></tr></thead>
+                <tbody>
+                  {recommendations.map((item) => (
+                    <tr key={item.id}>
+                      <td><span className={statusBadgeClass(item.recommendation_type)}>{item.recommendation_type}</span></td>
+                      <td>{item.target_case ? `#${item.target_case}` : 'Run-level'}</td>
+                      <td>{item.rationale}</td>
+                      <td>{item.reason_codes.join(', ') || 'None'}</td>
+                      <td>{item.confidence}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+
+        {!cases.length && !loading ? (
+          <p className="muted-text">No governed promotion cases are available yet. Run promotion review to prepare manual adoption decisions.</p>
+        ) : null}
+
+        <p className="muted-text">Manual-first safety rule: this board does not auto-promote challengers, does not auto-apply tuning changes and does not touch live money execution.</p>
       </DataStateWrapper>
     </div>
   );

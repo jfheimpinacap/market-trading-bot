@@ -1,7 +1,15 @@
 from rest_framework import serializers
 
 from apps.champion_challenger.serializers import StackProfileBindingSerializer
-from apps.promotion_committee.models import PromotionDecisionLog, PromotionReviewRun, StackEvidenceSnapshot
+from apps.promotion_committee.models import (
+    PromotionCase,
+    PromotionDecisionLog,
+    PromotionDecisionRecommendation,
+    PromotionEvidencePack,
+    PromotionReviewCycleRun,
+    PromotionReviewRun,
+    StackEvidenceSnapshot,
+)
 
 
 class StackEvidenceSnapshotSerializer(serializers.ModelSerializer):
@@ -39,3 +47,33 @@ class PromotionReviewRequestSerializer(serializers.Serializer):
 class PromotionApplyRequestSerializer(serializers.Serializer):
     actor = serializers.CharField(required=False, default='operator')
     notes = serializers.CharField(required=False, allow_blank=True, default='')
+
+
+class GovernedPromotionRunRequestSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='promotion_ui')
+    linked_experiment_run_id = serializers.IntegerField(required=False, min_value=1)
+    metadata = serializers.DictField(required=False)
+
+
+class PromotionReviewCycleRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PromotionReviewCycleRun
+        fields = '__all__'
+
+
+class PromotionCaseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PromotionCase
+        fields = '__all__'
+
+
+class PromotionEvidencePackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PromotionEvidencePack
+        fields = '__all__'
+
+
+class PromotionDecisionRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PromotionDecisionRecommendation
+        fields = '__all__'

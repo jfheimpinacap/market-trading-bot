@@ -2,7 +2,7 @@ import { requestJson } from './api/client';
 import type { PromotionReviewRun, PromotionSummary } from '../types/promotion';
 
 export function runPromotionReview(payload: Record<string, unknown>) {
-  return requestJson<PromotionReviewRun>('/api/promotion/run-review/', {
+  return requestJson<PromotionReviewRun>('/api/promotion/legacy-run-review/', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -21,7 +21,7 @@ export function getCurrentPromotionRecommendation() {
 }
 
 export function getPromotionSummary() {
-  return requestJson<PromotionSummary>('/api/promotion/summary/');
+  return requestJson<PromotionSummary>('/api/promotion/legacy-summary/');
 }
 
 export function applyPromotionDecision(id: number, payload: Record<string, unknown> = {}) {

@@ -85,6 +85,35 @@ Boundary guarantees:
 - paper/replay/evaluation evidence only
 - no automatic champion promotion
 
+## Promotion governance board layer (new)
+
+`apps.promotion_committee` now includes a formal manual-adoption governance loop that sits **after** `experiment_lab` validation:
+
+- `PromotionReviewCycleRun`: auditable run envelope for each governance review cycle.
+- `PromotionCase`: formal adoption case per validated challenger/proposal.
+- `PromotionEvidencePack`: consolidated quantitative + rationale evidence pack.
+- `PromotionDecisionRecommendation`: explicit committee-facing recommendation output.
+
+Service split:
+- `services/case_building.py`
+- `services/evidence_pack.py`
+- `services/readiness.py`
+- `services/recommendation.py`
+- `services/run.py`
+
+Endpoints:
+- `POST /api/promotion/run-review/`
+- `GET /api/promotion/cases/`
+- `GET /api/promotion/evidence-packs/`
+- `GET /api/promotion/recommendations/`
+- `GET /api/promotion/summary/`
+
+Boundary guarantees:
+- no auto-promote
+- no auto-apply
+- no real-money execution
+- validation evidence is translated into manual committee cases, not runtime mutation
+
 ## Internal structure
 
 ```text

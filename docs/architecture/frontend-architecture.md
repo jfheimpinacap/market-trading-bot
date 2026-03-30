@@ -1504,3 +1504,28 @@ Primary endpoints:
 - `GET /api/tuning/recommendations/`
 - `GET /api/tuning/summary/`
 - `GET /api/tuning/bundles/` (optional grouping panel)
+
+## Promotion governance board frontend (new)
+
+`/promotion` is now a formal manual-adoption review board (not an auto-promotion surface).
+
+Composition:
+- summary cards (cases reviewed, ready, needs-more-data, deferred, rejected, high-priority)
+- `PromotionCase` table with status/priority badges and context links (experiments/tuning/evaluation/trace)
+- `PromotionEvidencePack` table with confidence/risk/benefit/evidence-status
+- `PromotionDecisionRecommendation` table with rationale + reason codes + confidence
+- manual run button (`Run promotion review`) and scoped filters
+
+Service layer:
+- `src/services/promotionReview.ts`
+  - `runPromotionReview`
+  - `getPromotionCases`
+  - `getPromotionEvidencePacks`
+  - `getPromotionRecommendations`
+  - `getPromotionSummary`
+
+UX boundary:
+- local-first, single-user, paper-only
+- manual-first and recommendation-first
+- explicit empty/loading/error states
+- no auto-promote / no auto-apply controls
