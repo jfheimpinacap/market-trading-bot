@@ -2,7 +2,12 @@ from rest_framework import serializers
 
 from apps.champion_challenger.serializers import StackProfileBindingSerializer
 from apps.promotion_committee.models import (
+    AdoptionActionCandidate,
+    AdoptionActionRecommendation,
+    AdoptionRollbackPlan,
+    ManualAdoptionAction,
     PromotionCase,
+    PromotionAdoptionRun,
     PromotionDecisionLog,
     PromotionDecisionRecommendation,
     PromotionEvidencePack,
@@ -76,4 +81,34 @@ class PromotionEvidencePackSerializer(serializers.ModelSerializer):
 class PromotionDecisionRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = PromotionDecisionRecommendation
+        fields = '__all__'
+
+
+class PromotionAdoptionRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PromotionAdoptionRun
+        fields = '__all__'
+
+
+class AdoptionActionCandidateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AdoptionActionCandidate
+        fields = '__all__'
+
+
+class ManualAdoptionActionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ManualAdoptionAction
+        fields = '__all__'
+
+
+class AdoptionRollbackPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AdoptionRollbackPlan
+        fields = '__all__'
+
+
+class AdoptionActionRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AdoptionActionRecommendation
         fields = '__all__'

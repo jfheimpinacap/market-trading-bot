@@ -1683,3 +1683,26 @@ Primary endpoints:
 - `GET /api/tuning/recommendations/`
 - `GET /api/tuning/summary/`
 - `GET /api/tuning/bundles/` (optional grouping panel)
+
+## Promotion manual adoption UX (new)
+
+`/promotion` now includes a dedicated manual-adoption section on top of promotion governance:
+
+- summary cards: approved, ready, blocked, applied, rollback prepared, rollout handoff ready
+- adoption candidates table with target resolution + blockers
+- manual adoption actions table with before/after snapshots and explicit Apply button
+- rollback plans table
+- adoption recommendations table
+- clear empty/loading/error states including blocked/partial as valid outcomes
+
+Frontend service:
+- `src/services/promotionAdoption.ts`
+  - `runPromotionAdoptionReview()`
+  - `getPromotionAdoptionCandidates()`
+  - `getPromotionAdoptionActions()`
+  - `getPromotionRollbackPlans()`
+  - `getPromotionAdoptionRecommendations()`
+  - `getPromotionAdoptionSummary()`
+  - `applyPromotionCase(caseId)`
+
+The UI remains local-first, manual-first, and paper-only (no silent apply).

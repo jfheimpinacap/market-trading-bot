@@ -1773,3 +1773,25 @@ Primary endpoints:
 - `GET /api/tuning/recommendations/`
 - `GET /api/tuning/summary/`
 - `GET /api/tuning/bundles/` (optional grouping panel)
+
+### Promotion manual adoption action board / approved-change executor (new)
+
+`promotion_committee` now includes a formal **manual adoption action** layer between approval and any paper/demo change execution:
+
+- consumes `PromotionCase` items in `APPROVED_FOR_MANUAL_ADOPTION`
+- resolves target mapping (`policy_tuning`, `trust_calibration`, stack binding, or rollout handoff)
+- creates auditable manual actions with before/after snapshots
+- prepares rollback plans when risk or scope requires it
+- supports explicit operator apply records only (`POST /api/promotion/apply/<case_id>/`)
+- never auto-applies, never runs live execution, never auto-promotes
+
+New API endpoints:
+- `POST /api/promotion/run-adoption-review/`
+- `GET /api/promotion/adoption-candidates/`
+- `GET /api/promotion/adoption-actions/`
+- `GET /api/promotion/rollback-plans/`
+- `GET /api/promotion/adoption-recommendations/`
+- `GET /api/promotion/adoption-summary/`
+- `POST /api/promotion/apply/<case_id>/`
+
+This closes the governance gap: **approved case → explicit manual action → optional rollout handoff / rollback-ready record**.

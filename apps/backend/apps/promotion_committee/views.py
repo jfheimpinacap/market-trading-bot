@@ -5,8 +5,13 @@ from rest_framework.views import APIView
 
 from apps.promotion_committee.models import PromotionReviewRun
 from apps.promotion_committee.serializers import (
+    AdoptionActionCandidateSerializer,
+    AdoptionActionRecommendationSerializer,
+    AdoptionRollbackPlanSerializer,
     GovernedPromotionRunRequestSerializer,
+    ManualAdoptionActionSerializer,
     PromotionApplyRequestSerializer,
+    PromotionAdoptionRunSerializer,
     PromotionCaseSerializer,
     PromotionDecisionRecommendationSerializer,
     PromotionEvidencePackSerializer,
@@ -16,12 +21,24 @@ from apps.promotion_committee.serializers import (
 )
 from apps.promotion_committee.services import (
     apply_review_decision,
+    apply_manual_adoption_case,
+    build_adoption_summary,
     build_promotion_summary,
     get_current_recommendation,
     run_governed_promotion_review,
+    run_promotion_adoption_review,
     run_promotion_review,
 )
-from apps.promotion_committee.models import PromotionCase, PromotionDecisionRecommendation, PromotionEvidencePack, PromotionReviewCycleRun
+from apps.promotion_committee.models import (
+    AdoptionActionCandidate,
+    AdoptionActionRecommendation,
+    AdoptionRollbackPlan,
+    ManualAdoptionAction,
+    PromotionCase,
+    PromotionDecisionRecommendation,
+    PromotionEvidencePack,
+    PromotionReviewCycleRun,
+)
 
 
 class PromotionRunReviewView(APIView):
@@ -168,3 +185,91 @@ class GovernedPromotionSummaryView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class PromotionAdoptionRunReviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = GovernedPromotionRunRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_promotion_adoption_review(
+            actor=serializer.validated_data.get('actor', 'promotion_ui'),
+            metadata=serializer.validated_data.get('metadata') or {},
+        )
+        return Response(PromotionAdoptionRunSerializer(run).data, status=status.HTTP_201_CREATED)
+
+
+class PromotionAdoptionCandidatesView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = AdoptionActionCandidateSerializer
+
+    def get_queryset(self):
+        return AdoptionActionCandidate.objects.select_related('linked_promotion_case', 'adoption_run').order_by('-created_at', '-id')[:200]
+
+
+class PromotionAdoptionActionsView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ManualAdoptionActionSerializer
+
+    def get_queryset(self):
+        return ManualAdoptionAction.objects.select_related('linked_promotion_case', 'linked_candidate', 'adoption_run').order_by('-created_at', '-id')[:200]
+
+
+class PromotionRollbackPlansView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = AdoptionRollbackPlanSerializer
+
+    def get_queryset(self):
+        return AdoptionRollbackPlan.objects.select_related('linked_manual_action').order_by('-created_at', '-id')[:200]
+
+
+class PromotionAdoptionRecommendationsView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = AdoptionActionRecommendationSerializer
+
+    def get_queryset(self):
+        return AdoptionActionRecommendation.objects.select_related('adoption_run', 'linked_promotion_case', 'target_action').order_by('-created_at', '-id')[:200]
+
+
+class PromotionAdoptionSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        summary = build_adoption_summary()
+        return Response(
+            {
+                'latest_run': PromotionAdoptionRunSerializer(summary['latest_run']).data if summary['latest_run'] else None,
+                'approved_cases': summary['approved_cases'],
+                'ready_to_apply': summary['ready_to_apply'],
+                'blocked': summary['blocked'],
+                'applied': summary['applied'],
+                'rollback_prepared': summary['rollback_prepared'],
+                'rollout_handoff_ready': summary['rollout_handoff_ready'],
+                'recommendation_summary': summary['recommendation_summary'],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PromotionManualApplyCaseView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, case_id: int, *args, **kwargs):
+        serializer = PromotionApplyRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        promotion_case = PromotionCase.objects.get(pk=case_id)
+        try:
+            action = apply_manual_adoption_case(
+                promotion_case=promotion_case, actor=serializer.validated_data['actor'], notes=serializer.validated_data.get('notes', '')
+            )
+        except ValidationError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(ManualAdoptionActionSerializer(action).data, status=status.HTTP_200_OK)

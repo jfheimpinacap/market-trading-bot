@@ -2773,3 +2773,34 @@ Primary endpoints:
 - `GET /api/tuning/recommendations/`
 - `GET /api/tuning/summary/`
 - `GET /api/tuning/bundles/` (optional grouping panel)
+
+## Promotion manual adoption action layer (new)
+
+`apps.promotion_committee` now includes a post-approval adoption sub-layer that is manual-first and paper-only.
+
+Core entities:
+- `PromotionAdoptionRun`
+- `AdoptionActionCandidate`
+- `ManualAdoptionAction`
+- `AdoptionRollbackPlan`
+- `AdoptionActionRecommendation`
+
+Service split:
+- `services/candidate_building.py`
+- `services/target_resolution.py`
+- `services/action_planning.py`
+- `services/rollback.py`
+- `services/recommendation.py`
+- `services/run.py`
+
+Behavior:
+- consumes only `PromotionCase.APPROVED_FOR_MANUAL_ADOPTION`
+- produces bounded manual actions with explicit snapshots and blockers
+- prepares rollback plans for sensitive/risk-bearing paths
+- optionally prepares rollout handoff actions in paper/demo mode
+- records manual apply via explicit operator endpoint only
+
+Boundaries preserved:
+- no auto-apply
+- no auto-rollout
+- no live execution or real money paths

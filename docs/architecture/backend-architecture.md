@@ -1957,3 +1957,17 @@ Architectural boundary:
 - consumes `experiment_lab` validation outputs; does not duplicate quantitative comparison logic
 - preserves `champion_challenger` as baseline/champion reference
 - produces manual committee outputs only; does **not** auto-promote or auto-apply
+
+## Promotion-to-adoption bridge (new)
+
+A new adoption sub-layer exists inside `promotion_committee` to bridge approval and operator execution safely:
+
+`PromotionCase (approved)` → `AdoptionActionCandidate` → `ManualAdoptionAction` → optional `AdoptionRollbackPlan` + recommendation set.
+
+Design principles:
+- approval is not apply
+- explicit target resolution required
+- before/after snapshots persisted
+- rollback readiness for sensitive changes
+- rollout_manager bridge prepared as handoff only (paper/demo)
+- manual operator apply endpoint is the only apply path

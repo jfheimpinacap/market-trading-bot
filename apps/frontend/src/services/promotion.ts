@@ -25,7 +25,7 @@ export function getPromotionSummary() {
 }
 
 export function applyPromotionDecision(id: number, payload: Record<string, unknown> = {}) {
-  return requestJson<PromotionReviewRun>(`/api/promotion/apply/${id}/`, {
+  return requestJson<PromotionReviewRun>(`/api/promotion/legacy-apply/${id}/`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });

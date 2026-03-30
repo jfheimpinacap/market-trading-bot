@@ -1529,3 +1529,16 @@ UX boundary:
 - manual-first and recommendation-first
 - explicit empty/loading/error states
 - no auto-promote / no auto-apply controls
+
+## Promotion adoption board integration (new)
+
+The `/promotion` page now combines two layers in one view:
+1. existing promotion governance state
+2. manual adoption board state
+
+The adoption board consumes `/api/promotion/adoption-*` endpoints and exposes:
+- candidate resolution status (`RESOLVED`, `PARTIAL`, `BLOCKED`, `UNKNOWN`)
+- manual action status (`READY_TO_APPLY`, `APPLIED`, etc.)
+- rollback readiness and recommendation guidance
+
+Interaction rule is strict: operator must click manual actions (`Run adoption review`, `Apply`) and no automatic mutation is performed in the UI.

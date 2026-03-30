@@ -157,3 +157,108 @@ export type GovernedPromotionSummary = {
   high_priority: number;
   recommendation_summary: Record<string, number>;
 };
+
+export type AdoptionActionCandidate = {
+  id: number;
+  linked_promotion_case: number;
+  adoption_run: number;
+  target_component: string;
+  target_scope: string;
+  change_type: string;
+  current_value: string;
+  proposed_value: string;
+  target_resolution_status: 'RESOLVED' | 'PARTIAL' | 'BLOCKED' | 'UNKNOWN';
+  ready_for_action: boolean;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ManualAdoptionAction = {
+  id: number;
+  linked_promotion_case: number;
+  linked_candidate: number;
+  adoption_run: number;
+  action_type:
+    | 'APPLY_POLICY_TUNING_CHANGE'
+    | 'APPLY_TRUST_CALIBRATION_CHANGE'
+    | 'APPLY_STACK_BINDING_CHANGE'
+    | 'PREPARE_ROLLOUT_PLAN'
+    | 'RECORD_MANUAL_ADOPTION'
+    | 'REQUIRE_TARGET_MAPPING';
+  action_status: 'PROPOSED' | 'READY_TO_APPLY' | 'APPLIED' | 'BLOCKED' | 'DEFERRED' | 'ROLLBACK_AVAILABLE';
+  target_component: string;
+  target_scope: string;
+  current_value_snapshot: Record<string, unknown>;
+  proposed_value_snapshot: Record<string, unknown>;
+  applied_by: string;
+  applied_at: string | null;
+  rationale: string;
+  reason_codes: string[];
+  blockers: string[];
+  linked_target_artifact: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdoptionRollbackPlan = {
+  id: number;
+  linked_manual_action: number;
+  rollback_type: 'REVERT_VALUE' | 'RESTORE_BINDING' | 'CANCEL_ROLLOUT_PLAN' | 'RETURN_TO_BASELINE';
+  rollback_status: 'PREPARED' | 'AVAILABLE' | 'EXECUTED' | 'NOT_NEEDED';
+  rollback_target_snapshot: Record<string, unknown>;
+  rationale: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdoptionActionRecommendation = {
+  id: number;
+  adoption_run: number;
+  linked_promotion_case: number | null;
+  target_action: number | null;
+  recommendation_type:
+    | 'APPLY_CHANGE_MANUALLY'
+    | 'PREPARE_ROLLOUT_PLAN'
+    | 'REQUIRE_TARGET_MAPPING'
+    | 'DEFER_ADOPTION'
+    | 'PREPARE_ROLLBACK'
+    | 'REQUIRE_COMMITTEE_RECHECK'
+    | 'REORDER_ADOPTION_PRIORITY';
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PromotionAdoptionSummary = {
+  latest_run: {
+    id: number;
+    started_at: string;
+    completed_at: string | null;
+    linked_promotion_review_run: number | null;
+    candidate_count: number;
+    ready_to_apply_count: number;
+    blocked_count: number;
+    applied_count: number;
+    rollback_plan_count: number;
+    rollout_handoff_count: number;
+    recommendation_summary: Record<string, number>;
+    metadata: Record<string, unknown>;
+    created_at: string;
+    updated_at: string;
+  } | null;
+  approved_cases: number;
+  ready_to_apply: number;
+  blocked: number;
+  applied: number;
+  rollback_prepared: number;
+  rollout_handoff_ready: number;
+  recommendation_summary: Record<string, number>;
+};
