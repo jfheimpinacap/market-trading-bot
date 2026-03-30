@@ -1922,3 +1922,28 @@ API (`/api/certification`):
 - `GET /health-summary/`
 
 Governance boundaries remain strict: no auto-deactivate baseline, no auto-retune, no auto-switch champion, no silent apply. This layer is recommendation-first, manual-first, local-first, paper-only.
+
+## Baseline response board / health-to-retuning governance loop (new)
+
+After `baseline health watch`, the platform now adds a formal `baseline response` layer in `certification_board`.
+
+What it adds:
+- explicit `BaselineResponseRun` audit records
+- explicit `BaselineResponseCase` records per active baseline pressure
+- `ResponseEvidencePack` for consolidated health/evaluation/risk/opportunity context
+- `ResponseRoutingDecision` to downstream governance targets
+- `BaselineResponseRecommendation` for manual next-step guidance
+
+Manual-first guarantees:
+- no auto-retune
+- no auto-rollback
+- no auto-deactivate
+- no auto-promote/switch
+
+API:
+- `POST /api/certification/run-baseline-response-review/`
+- `GET /api/certification/response-cases/`
+- `GET /api/certification/response-evidence-packs/`
+- `GET /api/certification/response-routing-decisions/`
+- `GET /api/certification/response-recommendations/`
+- `GET /api/certification/response-summary/`

@@ -5,11 +5,19 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.certification_board.models import (
+    BaselineResponseEvidenceStatus,
+    BaselineResponseRecommendationType,
+    BaselineResponseRoutingTarget,
+    BaselineResponseType,
     BaselineHealthRecommendationType,
     BaselineHealthStatus,
     BaselineHealthStatusCode,
     CertificationLevel,
 )
+from apps.certification_board.services.baseline_response.candidate_building import determine_response_type
+from apps.certification_board.services.baseline_response.evidence_pack import build_response_evidence_pack
+from apps.certification_board.services.baseline_response.recommendation import build_response_recommendation
+from apps.certification_board.services.baseline_response.run import run_baseline_response_review
 from apps.certification_board.services.evidence import build_evidence_snapshot
 from apps.certification_board.services.baseline_health.recommendation import build_baseline_health_recommendation
 from apps.certification_board.services.baseline_health.run import run_baseline_health_review
@@ -278,3 +286,91 @@ class CertificationBoardTests(TestCase):
                 BaselineHealthRecommendationType.REQUIRE_MANUAL_BASELINE_REVIEW,
             },
         )
+
+    def test_response_candidate_building_from_health_status(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        health_result = run_baseline_health_review(actor='test')
+        status = health_result['statuses'][0]
+        response_type = determine_response_type(status)
+        self.assertIn(
+            response_type,
+            {
+                None,
+                BaselineResponseType.KEEP_UNDER_WATCH,
+                BaselineResponseType.OPEN_REEVALUATION,
+                BaselineResponseType.OPEN_TUNING_REVIEW,
+                BaselineResponseType.REQUIRE_MANUAL_BASELINE_REVIEW,
+                BaselineResponseType.PREPARE_ROLLBACK_REVIEW,
+                BaselineResponseType.REQUIRE_COMMITTEE_RECHECK,
+            },
+        )
+
+    def test_response_evidence_pack_status_levels(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        response_result = run_baseline_response_review(actor='test')
+        self.assertGreaterEqual(len(response_result['cases']), 1)
+        evidence = response_result['evidence_packs'][0]
+        self.assertIn(
+            evidence.evidence_status,
+            {
+                BaselineResponseEvidenceStatus.STRONG,
+                BaselineResponseEvidenceStatus.MIXED,
+                BaselineResponseEvidenceStatus.WEAK,
+                BaselineResponseEvidenceStatus.INSUFFICIENT,
+            },
+        )
+
+    def test_response_routing_targets(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        response_result = run_baseline_response_review(actor='test')
+        self.assertGreaterEqual(len(response_result['cases']), 1)
+        decision = response_result['routing_decisions'][0]
+        self.assertIn(
+            decision.routing_target,
+            {
+                BaselineResponseRoutingTarget.MONITORING_ONLY,
+                BaselineResponseRoutingTarget.EVALUATION_LAB,
+                BaselineResponseRoutingTarget.TUNING_BOARD,
+                BaselineResponseRoutingTarget.ROLLBACK_REVIEW,
+                BaselineResponseRoutingTarget.CERTIFICATION_BOARD,
+                BaselineResponseRoutingTarget.PROMOTION_COMMITTEE,
+            },
+        )
+
+    def test_response_recommendation_more_evidence(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        response_run_result = run_baseline_response_review(actor='test')
+        case = response_run_result['cases'][0]
+        case.metadata['sample_count'] = 1
+        case.save(update_fields=['metadata', 'updated_at'])
+        evidence = build_response_evidence_pack(response_case=case)
+        recommendation = build_response_recommendation(
+            review_run=response_run_result['run'],
+            response_case=case,
+            evidence_pack=evidence,
+        )
+        self.assertIn(
+            recommendation.recommendation_type,
+            {
+                BaselineResponseRecommendationType.OPEN_TUNING_REVIEW,
+                BaselineResponseRecommendationType.REQUIRE_MORE_EVIDENCE,
+                BaselineResponseRecommendationType.PREPARE_ROLLBACK_REVIEW,
+            },
+        )
+
+    def test_baseline_response_summary_endpoint(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        run_res = self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        self.assertEqual(run_res.status_code, 201)
+        self.assertEqual(self.client.get(reverse('certification_board:response-cases')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('certification_board:response-evidence-packs')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('certification_board:response-routing-decisions')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('certification_board:response-recommendations')).status_code, 200)
+        summary_res = self.client.get(reverse('certification_board:response-summary'))
+        self.assertEqual(summary_res.status_code, 200)
+        self.assertIn('open_response_cases', summary_res.json())

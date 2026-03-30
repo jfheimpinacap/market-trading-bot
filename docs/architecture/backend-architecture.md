@@ -2083,3 +2083,28 @@ The certification domain now includes a **paper baseline activation board** that
 - does not create tuning proposals automatically
 - does not perform rollback automatically
 - preserves paper-only and local-first governance
+
+## Baseline response architecture (new)
+
+`certification_board` now includes a post-health **baseline response** loop:
+
+`active baseline` -> `baseline health status/signals/recommendations` -> `baseline response case` -> `manual routing to governance board`
+
+Core entities:
+- `BaselineResponseRun`
+- `BaselineResponseCase`
+- `ResponseEvidencePack`
+- `ResponseRoutingDecision`
+- `BaselineResponseRecommendation`
+
+Service responsibilities:
+- `services/baseline_response/candidate_building.py`: status-to-case conversion rules
+- `services/baseline_response/evidence_pack.py`: evidence scoring and pack creation
+- `services/baseline_response/routing.py`: deterministic routing target selection
+- `services/baseline_response/recommendation.py`: recommendation type selection (`KEEP_UNDER_WATCH`, `OPEN_REEVALUATION`, `OPEN_TUNING_REVIEW`, `REQUIRE_MORE_EVIDENCE`, etc.)
+- `services/baseline_response/run.py`: end-to-end auditable run orchestration and summary
+
+Governance model:
+- response board **consumes** baseline-health outputs and does not duplicate health scoring
+- response board **routes** but never auto-executes tuning, rollback, or deactivation
+- downstream loops (`evaluation_lab`, `tuning_board`, `promotion_committee`, `certification_board`) remain independent manual workflows

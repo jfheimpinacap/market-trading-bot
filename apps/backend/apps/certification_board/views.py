@@ -4,6 +4,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.certification_board.models import (
+    BaselineResponseCase,
+    BaselineResponseRecommendation,
+    BaselineResponseRun,
+    ResponseEvidencePack,
+    ResponseRoutingDecision,
     BaselineHealthCandidate,
     BaselineHealthRecommendation,
     BaselineHealthRun,
@@ -38,6 +43,9 @@ from apps.certification_board.serializers import (
     BaselineHealthCandidateSerializer,
     BaselineHealthRecommendationSerializer,
     BaselineHealthRunSerializer,
+    BaselineResponseCaseSerializer,
+    BaselineResponseRecommendationSerializer,
+    BaselineResponseRunSerializer,
     BaselineHealthSignalSerializer,
     BaselineHealthStatusSerializer,
     BaselineBindingSnapshotSerializer,
@@ -56,9 +64,12 @@ from apps.certification_board.serializers import (
     RollbackBaselineActivationRequestSerializer,
     RunBaselineActivationReviewRequestSerializer,
     RunBaselineHealthReviewRequestSerializer,
+    RunBaselineResponseReviewRequestSerializer,
     RunBaselineConfirmationReviewRequestSerializer,
     RunPostRolloutReviewRequestSerializer,
     RunCertificationReviewRequestSerializer,
+    ResponseEvidencePackSerializer,
+    ResponseRoutingDecisionSerializer,
 )
 from apps.certification_board.services import (
     activate_paper_baseline,
@@ -69,6 +80,8 @@ from apps.certification_board.services import (
     prepare_baseline_rollback,
     rollback_baseline_activation,
     run_baseline_health_review,
+    build_baseline_response_summary,
+    run_baseline_response_review,
     run_baseline_activation_review,
     run_baseline_confirmation_review,
     run_post_rollout_certification_review,
@@ -546,6 +559,97 @@ class BaselineHealthSummaryView(APIView):
                 'review_required_count': latest_run.review_required_count if latest_run else 0,
                 'rollback_review_recommended_count': latest_run.rollback_review_count if latest_run else 0,
                 'recommendation_summary': latest_run.recommendation_summary if latest_run else {},
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class RunBaselineResponseReviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunBaselineResponseReviewRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_baseline_response_review(
+            actor=serializer.validated_data.get('actor', 'operator-ui'),
+            metadata=serializer.validated_data.get('metadata') or {},
+        )
+        return Response(
+            {
+                'run': BaselineResponseRunSerializer(result['run']).data,
+                'case_count': len(result['cases']),
+                'evidence_pack_count': len(result['evidence_packs']),
+                'routing_decision_count': len(result['routing_decisions']),
+                'recommendation_count': len(result['recommendations']),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class BaselineResponseCaseListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = BaselineResponseCaseSerializer
+
+    def get_queryset(self):
+        return BaselineResponseCase.objects.select_related(
+            'review_run',
+            'linked_active_binding',
+            'linked_baseline_health_status',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class ResponseEvidencePackListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseEvidencePackSerializer
+
+    def get_queryset(self):
+        return ResponseEvidencePack.objects.select_related(
+            'linked_response_case',
+            'linked_health_status',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class ResponseRoutingDecisionListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseRoutingDecisionSerializer
+
+    def get_queryset(self):
+        return ResponseRoutingDecision.objects.select_related('linked_response_case').order_by('-created_at', '-id')[:500]
+
+
+class BaselineResponseRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = BaselineResponseRecommendationSerializer
+
+    def get_queryset(self):
+        return BaselineResponseRecommendation.objects.select_related('review_run', 'target_case').order_by('-created_at', '-id')[:500]
+
+
+class BaselineResponseSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        summary = build_baseline_response_summary()
+        return Response(
+            {
+                'latest_run': BaselineResponseRunSerializer(summary['latest_run']).data if summary['latest_run'] else None,
+                'active_baselines_reviewed': summary['active_baselines_reviewed'],
+                'open_response_cases': summary['open_response_cases'],
+                'reevaluation_case_count': summary['reevaluation_case_count'],
+                'tuning_case_count': summary['tuning_case_count'],
+                'rollback_review_case_count': summary['rollback_review_case_count'],
+                'watch_case_count': summary['watch_case_count'],
+                'recommendation_summary': summary['recommendation_summary'],
+                'case_status_summary': summary['case_status_summary'],
+                'routing_status_summary': summary['routing_status_summary'],
+                'evidence_status_summary': summary['evidence_status_summary'],
+                'recommendation_type_summary': summary['recommendation_type_summary'],
             },
             status=status.HTTP_200_OK,
         )

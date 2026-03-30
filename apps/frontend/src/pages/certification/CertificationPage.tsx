@@ -17,6 +17,14 @@ import {
   runBaselineActivationReview,
 } from '../../services/baselineActivation';
 import {
+  getBaselineResponseCases,
+  getBaselineResponseEvidencePacks,
+  getBaselineResponseRecommendations,
+  getBaselineResponseRoutingDecisions,
+  getBaselineResponseSummary,
+  runBaselineResponseReview,
+} from '../../services/baselineResponse';
+import {
   getBaselineHealthCandidates,
   getBaselineHealthRecommendations,
   getBaselineHealthSignals,
@@ -52,6 +60,9 @@ import type {
   BaselineHealthSignal,
   BaselineHealthStatus,
   BaselineHealthSummary,
+  BaselineResponseCase,
+  BaselineResponseRecommendationItem,
+  BaselineResponseSummary,
   BaselineBindingSnapshot,
   BaselineConfirmationCandidate,
   BaselineConfirmationRecommendationItem,
@@ -63,13 +74,15 @@ import type {
   PostRolloutCertificationSummary,
   PaperBaselineActivation,
   PaperBaselineConfirmation,
+  ResponseEvidencePack,
+  ResponseRoutingDecision,
 } from '../../types/certification';
 
 const toneFromState = (value: string): 'ready' | 'pending' | 'offline' | 'neutral' => {
   const normalized = value.toUpperCase();
   if (['READY', 'CERTIFIED_FOR_PAPER_BASELINE', 'STRONG'].includes(normalized)) return 'ready';
-  if (['NEEDS_OBSERVATION', 'KEEP_UNDER_OBSERVATION', 'MIXED', 'WEAK'].includes(normalized)) return 'pending';
-  if (['ROLLBACK_RECOMMENDED', 'RECOMMEND_ROLLBACK', 'REJECT_CERTIFICATION', 'INSUFFICIENT', 'BLOCKED'].includes(normalized)) return 'offline';
+  if (['NEEDS_OBSERVATION', 'KEEP_UNDER_OBSERVATION', 'MIXED', 'WEAK', 'UNDER_REVIEW', 'ROUTED', 'MEDIUM'].includes(normalized)) return 'pending';
+  if (['ROLLBACK_RECOMMENDED', 'RECOMMEND_ROLLBACK', 'REJECT_CERTIFICATION', 'INSUFFICIENT', 'BLOCKED', 'CRITICAL', 'HIGH', 'ESCALATED', 'PREPARE_ROLLBACK_REVIEW'].includes(normalized)) return 'offline';
   return 'neutral';
 };
 
@@ -100,18 +113,24 @@ export function CertificationPage() {
   const [healthStatuses, setHealthStatuses] = useState<BaselineHealthStatus[]>([]);
   const [healthSignals, setHealthSignals] = useState<BaselineHealthSignal[]>([]);
   const [healthRecommendations, setHealthRecommendations] = useState<BaselineHealthRecommendationItem[]>([]);
+  const [responseSummary, setResponseSummary] = useState<BaselineResponseSummary | null>(null);
+  const [responseCases, setResponseCases] = useState<BaselineResponseCase[]>([]);
+  const [responseEvidencePacks, setResponseEvidencePacks] = useState<ResponseEvidencePack[]>([]);
+  const [responseRoutingDecisions, setResponseRoutingDecisions] = useState<ResponseRoutingDecision[]>([]);
+  const [responseRecommendations, setResponseRecommendations] = useState<BaselineResponseRecommendationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runningBaseline, setRunningBaseline] = useState(false);
   const [runningActivation, setRunningActivation] = useState(false);
   const [runningHealth, setRunningHealth] = useState(false);
+  const [runningResponse, setRunningResponse] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [summaryRes, candidatesRes, evidenceRes, decisionsRes, recommendationsRes, baselineSummaryRes, baselineCandidatesRes, baselineConfirmationsRes, bindingSnapshotsRes, baselineRecommendationsRes, activationSummaryRes, activationCandidatesRes, baselineActivationsRes, activeBindingsRes, activationRecommendationsRes, healthSummaryRes, healthCandidatesRes, healthStatusesRes, healthSignalsRes, healthRecommendationsRes] = await Promise.all([
+      const [summaryRes, candidatesRes, evidenceRes, decisionsRes, recommendationsRes, baselineSummaryRes, baselineCandidatesRes, baselineConfirmationsRes, bindingSnapshotsRes, baselineRecommendationsRes, activationSummaryRes, activationCandidatesRes, baselineActivationsRes, activeBindingsRes, activationRecommendationsRes, healthSummaryRes, healthCandidatesRes, healthStatusesRes, healthSignalsRes, healthRecommendationsRes, responseSummaryRes, responseCasesRes, responseEvidencePacksRes, responseRoutingRes, responseRecommendationsRes] = await Promise.all([
         getCertificationSummary(),
         getCertificationCandidates(),
         getCertificationEvidencePacks(),
@@ -132,6 +151,11 @@ export function CertificationPage() {
         getBaselineHealthStatuses(),
         getBaselineHealthSignals(),
         getBaselineHealthRecommendations(),
+        getBaselineResponseSummary(),
+        getBaselineResponseCases(),
+        getBaselineResponseEvidencePacks(),
+        getBaselineResponseRoutingDecisions(),
+        getBaselineResponseRecommendations(),
       ]);
       setSummary(summaryRes);
       setCandidates(candidatesRes);
@@ -153,6 +177,11 @@ export function CertificationPage() {
       setHealthStatuses(healthStatusesRes);
       setHealthSignals(healthSignalsRes);
       setHealthRecommendations(healthRecommendationsRes);
+      setResponseSummary(responseSummaryRes);
+      setResponseCases(responseCasesRes);
+      setResponseEvidencePacks(responseEvidencePacksRes);
+      setResponseRoutingDecisions(responseRoutingRes);
+      setResponseRecommendations(responseRecommendationsRes);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load certification stabilization state.');
     } finally {
@@ -236,6 +265,19 @@ export function CertificationPage() {
     }
   }, [load]);
 
+  const runResponseReview = useCallback(async () => {
+    setRunningResponse(true);
+    setError(null);
+    try {
+      await runBaselineResponseReview({ actor: 'certification_ui', metadata: { initiated_from: 'certification_ui' } });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not run baseline response review.');
+    } finally {
+      setRunningResponse(false);
+    }
+  }, [load]);
+
   const activateBaseline = useCallback(async (confirmationId: number) => {
     try {
       await activatePaperBaseline(confirmationId, { actor: 'certification_ui' });
@@ -271,6 +313,7 @@ export function CertificationPage() {
           <button type="button" className="secondary-button" onClick={() => void runBaselineReview()} disabled={runningBaseline} style={{ marginLeft: 8 }}>{runningBaseline ? 'Running…' : 'Run baseline confirmation'}</button>
           <button type="button" className="secondary-button" onClick={() => void runActivationReview()} disabled={runningActivation} style={{ marginLeft: 8 }}>{runningActivation ? 'Running…' : 'Run baseline activation'}</button>
           <button type="button" className="secondary-button" onClick={() => void runHealthReview()} disabled={runningHealth} style={{ marginLeft: 8 }}>{runningHealth ? 'Running…' : 'Run baseline health review'}</button>
+          <button type="button" className="secondary-button" onClick={() => void runResponseReview()} disabled={runningResponse} style={{ marginLeft: 8 }}>{runningResponse ? 'Running…' : 'Run baseline response review'}</button>
         </SectionCard>
 
         <SectionCard eyebrow="Summary" title="Stabilization outcomes" description="Latest review counters for certification, observation, manual review, rollback recommendation, and rejection.">
@@ -306,6 +349,17 @@ export function CertificationPage() {
           </div>
         </SectionCard>
 
+        <SectionCard eyebrow="Baseline response board" title="Health-to-retuning governance loop" description="Manual-first response case registry that converts baseline health pressure into auditable response cases, evidence packs, routing decisions and recommendations.">
+          <div className="cockpit-metric-grid">
+            <div><strong>Active baselines reviewed:</strong> {responseSummary?.active_baselines_reviewed ?? 0}</div>
+            <div><strong>Open response cases:</strong> {responseSummary?.open_response_cases ?? 0}</div>
+            <div><strong>Re-evaluation cases:</strong> {responseSummary?.reevaluation_case_count ?? 0}</div>
+            <div><strong>Tuning cases:</strong> {responseSummary?.tuning_case_count ?? 0}</div>
+            <div><strong>Rollback review cases:</strong> {responseSummary?.rollback_review_case_count ?? 0}</div>
+            <div><strong>Cases under watch:</strong> {responseSummary?.watch_case_count ?? 0}</div>
+          </div>
+        </SectionCard>
+
         <SectionCard eyebrow="Baseline confirmation board" title="Manual paper baseline adoption" description="Certification decides readiness; this board confirms baseline manually with before/after snapshots, binding review, and rollback preparation. No auto-switch champion, no silent baseline apply.">
           <div className="cockpit-metric-grid">
             <div><strong>Certified decisions:</strong> {baselineSummary?.candidate_count ?? 0}</div>
@@ -329,6 +383,13 @@ export function CertificationPage() {
             eyebrow="No active baselines yet"
             title="No active paper baselines are available yet."
             description="Run baseline health review to monitor stability and degradation signals."
+          />
+        ) : null}
+        {responseCases.length === 0 ? (
+          <EmptyState
+            eyebrow="No baseline response cases"
+            title="No baseline response cases are available yet."
+            description="Run baseline response review to formalize degradation handling and re-evaluation paths."
           />
         ) : null}
 
@@ -579,6 +640,65 @@ export function CertificationPage() {
                 {healthRecommendations.slice(0, 100).map((row) => (
                   <tr key={row.id}>
                     <td>{row.target_status ? `#${row.target_status}` : '—'}</td>
+                    <td><StatusBadge tone={toneFromState(row.recommendation_type)}>{row.recommendation_type}</StatusBadge></td>
+                    <td>{row.rationale}</td>
+                    <td>{row.reason_codes.join(', ') || '—'}</td>
+                    <td>{row.confidence}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Response cases" title="Formal baseline response case registry" description="Each case maps active baseline health pressure to manual-first response type, priority, status and explicit lineage.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Component</th><th>Scope</th><th>Response type</th><th>Priority</th><th>Status</th><th>Blockers</th><th>Links</th></tr></thead><tbody>
+                {responseCases.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.id}</td>
+                    <td>{row.target_component}</td>
+                    <td>{row.target_scope}</td>
+                    <td><StatusBadge tone={toneFromState(row.response_type)}>{row.response_type}</StatusBadge></td>
+                    <td><StatusBadge tone={toneFromState(row.priority_level)}>{row.priority_level}</StatusBadge></td>
+                    <td><StatusBadge tone={toneFromState(row.case_status)}>{row.case_status}</StatusBadge></td>
+                    <td>{row.blockers.join(', ') || '—'}</td>
+                    <td><button type="button" className="link-button" onClick={() => navigate('/evaluation')}>evaluation</button> · <button type="button" className="link-button" onClick={() => navigate('/tuning')}>tuning</button> · <button type="button" className="link-button" onClick={() => navigate('/trace')}>trace</button></td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Response evidence packs" title="Evidence quality for baseline response cases" description="Aggregated health/evaluation/risk/opportunity context with conservative confidence, severity and urgency scoring.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Summary</th><th>Confidence</th><th>Severity</th><th>Urgency</th><th>Evidence status</th></tr></thead><tbody>
+                {responseEvidencePacks.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_response_case}</td>
+                    <td>{row.summary}</td>
+                    <td>{row.confidence_score}</td>
+                    <td>{row.severity_score}</td>
+                    <td>{row.urgency_score}</td>
+                    <td><StatusBadge tone={toneFromState(row.evidence_status)}>{row.evidence_status}</StatusBadge></td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Routing decisions" title="Downstream routing for response governance" description="Routing remains manual-first: no auto-retune, no auto-rollback, no auto-deactivate.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Target</th><th>Status</th><th>Rationale</th></tr></thead><tbody>
+                {responseRoutingDecisions.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_response_case}</td>
+                    <td>{row.routing_target}</td>
+                    <td><StatusBadge tone={toneFromState(row.routing_status)}>{row.routing_status}</StatusBadge></td>
+                    <td>{row.routing_rationale}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Response recommendations" title="Manual-first next-step recommendations" description="Recommendations can keep monitoring, request more evidence, route re-evaluation/tuning/rollback review, or request committee-level recheck.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Recommendation</th><th>Rationale</th><th>Reason codes</th><th>Confidence</th></tr></thead><tbody>
+                {responseRecommendations.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.target_case ? `#${row.target_case}` : '—'}</td>
                     <td><StatusBadge tone={toneFromState(row.recommendation_type)}>{row.recommendation_type}</StatusBadge></td>
                     <td>{row.rationale}</td>
                     <td>{row.reason_codes.join(', ') || '—'}</td>

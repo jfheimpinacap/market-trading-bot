@@ -1621,3 +1621,25 @@ This keeps the UI conservative and auditable:
 - clear empty/loading/error states
 - under-watch and insufficient-data are first-class valid states
 - no auto-retune, no auto-switch, no auto-deactivate controls
+
+## `/certification` baseline response board (new)
+
+The existing `/certification` page now renders a baseline response layer (no new route) to keep certification governance consolidated.
+
+Sections added:
+- baseline response summary cards
+- response cases
+- response evidence packs
+- routing decisions
+- response recommendations
+- manual action button for `Run baseline response review`
+
+Client integration:
+- new service module: `src/services/baselineResponse.ts`
+- new API reads from `/api/certification/response-*`
+- empty state explicitly instructs operators to run baseline response review
+
+UX constraints retained:
+- desktop-first, technical tables, status badges
+- local-first and paper-only language
+- explicit manual-first wording (no auto-retune/rollback/deactivate)

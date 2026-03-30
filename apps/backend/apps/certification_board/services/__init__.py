@@ -4,6 +4,7 @@ from apps.certification_board.services.confirmation import confirm_paper_baselin
 from apps.certification_board.services.rollback import prepare_baseline_rollback, rollback_baseline_activation
 from apps.certification_board.services.review import build_certification_summary, get_current_certification, run_certification_review
 from apps.certification_board.services.baseline_health import run_baseline_health_review
+from apps.certification_board.services.baseline_response import build_baseline_response_summary, run_baseline_response_review
 from apps.certification_board.services.run import (
     run_baseline_activation_review,
     run_baseline_confirmation_review,
@@ -21,6 +22,8 @@ __all__ = [
     'prepare_baseline_rollback',
     'run_baseline_activation_review',
     'run_baseline_health_review',
+    'run_baseline_response_review',
+    'build_baseline_response_summary',
     'activate_paper_baseline',
     'rollback_baseline_activation',
 ]
