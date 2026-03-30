@@ -4,191 +4,205 @@ import { PageHeader } from '../../components/PageHeader';
 import { SectionCard } from '../../components/SectionCard';
 import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
-import { navigate } from '../../lib/router';
-import { getEvaluationComparison, getEvaluationSummary } from '../../services/evaluation';
-import type { EvaluationComparison, EvaluationRun, EvaluationSummary } from '../../types/evaluation';
+import {
+  getCalibrationBuckets,
+  getEffectivenessMetrics,
+  getEvaluationRecommendations,
+  getEvaluationRuntimeSummary,
+  getOutcomeAlignmentRecords,
+  runRuntimeEvaluation,
+  type CalibrationBucket,
+  type EffectivenessMetric,
+  type EvaluationRecommendation,
+  type EvaluationRuntimeSummary,
+  type OutcomeAlignmentRecord,
+} from '../../services/evaluationRuntime';
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-function formatDate(value: string | null) {
-  if (!value) return 'Pending';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+function toPercent(value: string | number | null | undefined) {
+  const numeric = value == null ? 0 : typeof value === 'number' ? value : Number(value);
+  return `${(numeric * 100).toFixed(2)}%`;
 }
 
-function formatPercent(value: string | number | undefined) {
-  if (value === undefined) return '0.00%';
-  const numericValue = typeof value === 'number' ? value : Number(value);
-  return `${(numericValue * 100).toFixed(2)}%`;
-}
+const alignmentTone: Record<string, 'ready' | 'pending' | 'offline' | 'neutral'> = {
+  WELL_CALIBRATED: 'ready',
+  OVERCONFIDENT: 'offline',
+  UNDERCONFIDENT: 'pending',
+  GOOD_SKIP: 'ready',
+  BAD_SKIP: 'offline',
+  NO_EDGE_REALIZED: 'pending',
+  NEEDS_REVIEW: 'neutral',
+};
 
-function formatMoney(value: string | number | undefined) {
-  const numericValue = value === undefined ? 0 : typeof value === 'number' ? value : Number(value);
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(numericValue);
-}
-
-function statusTone(value: string) {
-  if (value === 'READY') return 'ready';
-  if (value === 'IN_PROGRESS') return 'pending';
-  if (value === 'FAILED') return 'offline';
-  return 'neutral';
-}
+const metricTone: Record<string, 'ready' | 'pending' | 'offline' | 'neutral'> = {
+  OK: 'ready',
+  CAUTION: 'pending',
+  POOR: 'offline',
+  NEEDS_MORE_DATA: 'neutral',
+};
 
 export function EvaluationPage() {
-  const [summary, setSummary] = useState<EvaluationSummary | null>(null);
-  const [comparison, setComparison] = useState<EvaluationComparison | null>(null);
+  const [summary, setSummary] = useState<EvaluationRuntimeSummary | null>(null);
+  const [alignment, setAlignment] = useState<OutcomeAlignmentRecord[]>([]);
+  const [buckets, setBuckets] = useState<CalibrationBucket[]>([]);
+  const [metrics, setMetrics] = useState<EffectivenessMetric[]>([]);
+  const [recommendations, setRecommendations] = useState<EvaluationRecommendation[]>([]);
+  const [providerFilter, setProviderFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [modelModeFilter, setModelModeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const summaryResponse = await getEvaluationSummary();
-      setSummary(summaryResponse);
+      const params: Record<string, string> = {};
+      if (providerFilter) params.provider = providerFilter;
+      if (categoryFilter) params.category = categoryFilter;
+      if (modelModeFilter) params.model_mode = modelModeFilter;
+      if (statusFilter) params.status = statusFilter;
 
-      if (summaryResponse.recent_runs.length >= 2) {
-        const left = summaryResponse.recent_runs[1];
-        const right = summaryResponse.recent_runs[0];
-        const comparisonResponse = await getEvaluationComparison(left.id, right.id);
-        setComparison(comparisonResponse);
-      } else {
-        setComparison(null);
-      }
+      const [summaryResponse, alignmentResponse, bucketsResponse, metricsResponse, recResponse] = await Promise.all([
+        getEvaluationRuntimeSummary(),
+        getOutcomeAlignmentRecords(params),
+        getCalibrationBuckets(),
+        getEffectivenessMetrics(),
+        getEvaluationRecommendations(),
+      ]);
+      setSummary(summaryResponse);
+      setAlignment(alignmentResponse);
+      setBuckets(bucketsResponse);
+      setMetrics(metricsResponse);
+      setRecommendations(recResponse);
     } catch (loadError) {
-      setError(getErrorMessage(loadError, 'Could not load evaluation data.'));
+      setError(getErrorMessage(loadError, 'Could not load quantitative evaluation data.'));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [providerFilter, categoryFilter, modelModeFilter, statusFilter]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
 
-  const latestRun = summary?.latest_run ?? null;
-  const latestMetrics = latestRun?.metric_set;
-  const executionAdjusted = latestRun?.metadata?.execution_adjusted_snapshot;
+  const onRunRuntimeEvaluation = useCallback(async () => {
+    setIsRunning(true);
+    try {
+      await runRuntimeEvaluation();
+      await loadData();
+    } catch (runError) {
+      setError(getErrorMessage(runError, 'Runtime evaluation failed.'));
+    } finally {
+      setIsRunning(false);
+    }
+  }, [loadData]);
 
-  const guidance = useMemo(() => {
-    if (!latestRun?.guidance?.length) return ['Run continuous demo or semi-auto sessions first to build evaluation data.'];
-    return latestRun.guidance;
-  }, [latestRun]);
+  const poorMetrics = useMemo(() => metrics.filter((item) => item.status === 'POOR').length, [metrics]);
 
-  const recentRuns = summary?.recent_runs ?? [];
+  const providerOptions = useMemo(() => Array.from(new Set(alignment.map((item) => item.market_provider))).sort(), [alignment]);
+  const categoryOptions = useMemo(() => Array.from(new Set(alignment.map((item) => item.market_category))).sort(), [alignment]);
+  const modelModeOptions = useMemo(() => Array.from(new Set(alignment.map((item) => String(item.metadata.model_mode ?? 'unknown')))).sort(), [alignment]);
 
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Benchmark / evaluation harness"
+        eyebrow="Quantitative evaluation runtime"
         title="Evaluation"
-        description="Technical benchmark layer for autonomous paper/demo performance. This view is local-first and paper/demo only. No real-money execution."
-        actions={<div style={{ display: 'flex', gap: '0.75rem' }}><button type="button" className="secondary-button" onClick={() => navigate('/replay')}>Open Replay</button><button type="button" className="secondary-button" onClick={() => navigate('/experiments')}>Open Experiments</button><button type="button" className="secondary-button" onClick={() => navigate('/readiness')}>Open Readiness</button><button type="button" className="secondary-button" onClick={() => navigate('/continuous-demo')}>Open Continuous Demo</button><button type="button" className="secondary-button" onClick={() => navigate('/learning')}>Open Learning</button></div>}
+        description="Auditable ex-post board for calibration and effectiveness. Local-first, manual-first, paper/sandbox only. No opaque auto-tuning."
+        actions={<button type="button" className="secondary-button" onClick={() => void onRunRuntimeEvaluation()} disabled={isRunning}>{isRunning ? 'Running...' : 'Run runtime evaluation'}</button>}
       />
 
       <DataStateWrapper isLoading={isLoading} isError={Boolean(error)} errorMessage={error ?? undefined}>
-        {!latestRun || !latestMetrics ? (
+        {!summary?.latest_run ? (
           <EmptyState
-            eyebrow="No evaluation data"
-            title="No completed sessions available yet"
-            description="Run continuous demo or semi-auto sessions first to build evaluation data."
+            eyebrow="No runtime records"
+            title="No resolved evaluation records are available yet"
+            description="No resolved evaluation records are available yet. Run runtime evaluation to measure calibration and effectiveness."
           />
         ) : (
           <>
-            <SectionCard eyebrow="Current performance" title="Snapshot" description="Quick technical snapshot from the latest evaluation run.">
+            <SectionCard eyebrow="Summary" title="Runtime summary" description="Top-level quantitative health and manual review signal.">
               <div className="system-metadata-grid">
-                <div><strong>Status:</strong> <StatusBadge tone={statusTone(latestRun.status)}>{latestRun.status}</StatusBadge></div>
-                <div><strong>Auto execution rate:</strong> {formatPercent(latestMetrics.auto_execution_rate)}</div>
-                <div><strong>Approval required rate:</strong> {formatPercent(latestMetrics.approval_rate)}</div>
-                <div><strong>Block rate:</strong> {formatPercent(latestMetrics.block_rate)}</div>
-                <div><strong>Favorable review rate:</strong> {formatPercent(latestMetrics.favorable_review_rate)}</div>
-                <div><strong>Ending equity:</strong> {formatMoney(latestMetrics.ending_equity)}</div>
-                <div><strong>Equity delta:</strong> {formatMoney(latestMetrics.equity_delta)}</div>
-                <div><strong>Total PnL:</strong> {formatMoney(latestMetrics.total_pnl)}</div>
-                <div><strong>Safety events:</strong> {latestMetrics.safety_events_count}</div>
+                <div><strong>Resolved markets:</strong> {summary.latest_run.resolved_market_count}</div>
+                <div><strong>Linked predictions:</strong> {summary.latest_run.linked_prediction_count}</div>
+                <div><strong>Calibration buckets:</strong> {summary.latest_run.calibration_bucket_count}</div>
+                <div><strong>Poor metrics:</strong> {poorMetrics}</div>
+                <div><strong>Drift flags:</strong> {summary.latest_run.drift_flag_count}</div>
+                <div><strong>Manual review required:</strong> <StatusBadge tone={summary.manual_review_required ? 'pending' : 'ready'}>{summary.manual_review_required ? 'YES' : 'NO'}</StatusBadge></div>
               </div>
             </SectionCard>
-            <SectionCard eyebrow="Execution realism" title="Execution-aware impact" description="How execution realism changes naive assumptions.">
-              {executionAdjusted ? (
-                <div className="system-metadata-grid">
-                  <div><strong>Fill rate:</strong> {formatPercent(executionAdjusted.fill_rate)}</div>
-                  <div><strong>Partial-fill rate:</strong> {formatPercent(executionAdjusted.partial_fill_rate)}</div>
-                  <div><strong>No-fill rate:</strong> {formatPercent(executionAdjusted.no_fill_rate)}</div>
-                  <div><strong>Avg slippage:</strong> {executionAdjusted.avg_slippage_bps} bps</div>
-                  <div><strong>Execution-adjusted PnL:</strong> {formatMoney(executionAdjusted.execution_adjusted_pnl)}</div>
-                  <div><strong>Execution drag:</strong> {formatMoney(executionAdjusted.execution_drag)}</div>
-                  <div><strong>Realism score:</strong> {formatPercent(executionAdjusted.execution_realism_score)}</div>
-                  <div><strong>Quality bucket:</strong> {executionAdjusted.execution_quality_bucket}</div>
-                </div>
+
+            <SectionCard eyebrow="Actions" title="Filters" description="Filter records by provider/category/model mode/alignment status.">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(160px, 1fr))', gap: '0.75rem' }}>
+                <select value={providerFilter} onChange={(event) => setProviderFilter(event.target.value)}><option value="">All providers</option>{providerOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+                <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">All categories</option>{categoryOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+                <select value={modelModeFilter} onChange={(event) => setModelModeFilter(event.target.value)}><option value="">All model modes</option>{modelModeOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  <option value="">All alignment status</option>
+                  <option value="WELL_CALIBRATED">WELL_CALIBRATED</option>
+                  <option value="OVERCONFIDENT">OVERCONFIDENT</option>
+                  <option value="UNDERCONFIDENT">UNDERCONFIDENT</option>
+                  <option value="GOOD_SKIP">GOOD_SKIP</option>
+                  <option value="BAD_SKIP">BAD_SKIP</option>
+                  <option value="NO_EDGE_REALIZED">NO_EDGE_REALIZED</option>
+                  <option value="NEEDS_REVIEW">NEEDS_REVIEW</option>
+                </select>
+              </div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Outcome alignment" title="Prediction/risk/proposal vs realized outcome" description="Ex-post alignment records with traceable links.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Market</th><th>Provider</th><th>Calibrated prob</th><th>Market prob</th><th>Realized outcome</th><th>Adjusted edge</th><th>Alignment</th><th>Links</th></tr></thead><tbody>
+                {alignment.map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.market_title}</td>
+                    <td>{item.market_provider}</td>
+                    <td>{toPercent(item.calibrated_probability_at_decision)}</td>
+                    <td>{toPercent(item.market_probability_at_decision)}</td>
+                    <td>{item.resolved_outcome}</td>
+                    <td>{item.adjusted_edge_at_decision ?? 'n/a'}</td>
+                    <td><StatusBadge tone={alignmentTone[item.alignment_status] ?? 'neutral'}>{item.alignment_status}</StatusBadge></td>
+                    <td>P:{item.linked_prediction_assessment ?? '-'} / R:{item.linked_risk_approval ?? '-'} / O:{item.linked_opportunity_assessment ?? '-'} / PP:{item.linked_paper_proposal ?? '-'}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Calibration" title="Calibration buckets" description="Probability bucket quality by segment.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Bucket</th><th>Sample</th><th>Mean predicted</th><th>Hit rate</th><th>Gap</th><th>Scope</th><th>Value</th></tr></thead><tbody>
+                {buckets.map((item) => (
+                  <tr key={item.id}><td>{item.bucket_label}</td><td>{item.sample_count}</td><td>{toPercent(item.mean_predicted_probability)}</td><td>{toPercent(item.empirical_hit_rate)}</td><td>{toPercent(item.calibration_gap)}</td><td>{item.segment_scope}</td><td>{item.segment_value}</td></tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Effectiveness" title="Funnel and gate quality metrics" description="Global and segmented effectiveness indicators.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Metric type</th><th>Scope</th><th>Value</th><th>Sample</th><th>Status</th><th>Interpretation</th></tr></thead><tbody>
+                {metrics.map((item) => (
+                  <tr key={item.id}><td>{item.metric_type}</td><td>{item.metric_scope}</td><td>{item.metric_value}</td><td>{item.sample_count}</td><td><StatusBadge tone={metricTone[item.status] ?? 'neutral'}>{item.status}</StatusBadge></td><td>{item.interpretation}</td></tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Recommendations" title="Human review recommendations" description="Explicit review actions; no automatic policy or model changes.">
+              {recommendations.length ? (
+                <ul>
+                  {recommendations.map((item) => (
+                    <li key={item.id}><strong>{item.recommendation_type}</strong> — {item.rationale} (confidence {toPercent(item.confidence)})</li>
+                  ))}
+                </ul>
               ) : (
                 <EmptyState
-                  eyebrow="Execution-aware data missing"
-                  title="No execution-aware metrics for this evaluation snapshot."
-                  description="Run replay with execution-aware mode to measure fill realism."
+                  eyebrow="No recommendations"
+                  title="No explicit recommendations generated"
+                  description="Current evaluation run did not raise recommendation thresholds."
                 />
               )}
-            </SectionCard>
-
-            <SectionCard eyebrow="Runs" title="Recent evaluation runs" description="Comparable run snapshots for session-level review.">
-              <div className="table-wrapper">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Status</th>
-                      <th>Scope</th>
-                      <th>Market scope</th>
-                      <th>Started</th>
-                      <th>Finished</th>
-                      <th>Proposals</th>
-                      <th>Auto</th>
-                      <th>Blocked</th>
-                      <th>Favorable / Unfavorable</th>
-                      <th>Total PnL</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentRuns.map((run: EvaluationRun) => (
-                      <tr key={run.id}>
-                        <td>{run.id}</td>
-                        <td><StatusBadge tone={statusTone(run.status)}>{run.status}</StatusBadge></td>
-                        <td>{run.evaluation_scope}</td>
-                        <td>{run.market_scope}</td>
-                        <td>{formatDate(run.started_at)}</td>
-                        <td>{formatDate(run.finished_at)}</td>
-                        <td>{run.metric_set?.proposals_generated ?? 0}</td>
-                        <td>{run.metric_set?.auto_executed_count ?? 0}</td>
-                        <td>{run.metric_set?.blocked_count ?? 0}</td>
-                        <td>{run.metric_set?.favorable_reviews_count ?? 0} / {run.metric_set?.unfavorable_reviews_count ?? 0}</td>
-                        <td>{formatMoney(run.metric_set?.total_pnl)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </SectionCard>
-
-            {comparison ? (
-              <SectionCard eyebrow="Comparison" title="Latest run delta" description="Simple A/B comparison between the two most recent runs.">
-                <ul>
-                  <li><strong>PnL delta:</strong> {formatMoney(comparison.delta.total_pnl)}</li>
-                  <li><strong>Equity delta:</strong> {formatMoney(comparison.delta.equity_delta)}</li>
-                  <li><strong>Auto-execution delta:</strong> {formatPercent(comparison.delta.auto_execution_rate)}</li>
-                  <li><strong>Block-rate delta:</strong> {formatPercent(comparison.delta.block_rate)}</li>
-                  <li><strong>Favorable review delta:</strong> {formatPercent(comparison.delta.favorable_review_rate)}</li>
-                  <li><strong>Safety events delta:</strong> {comparison.delta.safety_events_count}</li>
-                </ul>
-              </SectionCard>
-            ) : null}
-
-            <SectionCard eyebrow="Guidance" title="Operational interpretation" description="Rule-based hints to detect conservative/aggressive drift.">
-              <ul>
-                {guidance.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
             </SectionCard>
           </>
         )}

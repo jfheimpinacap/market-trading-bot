@@ -1466,3 +1466,13 @@ It reuses existing frontend architecture principles:
 - direct links to scan/research/prediction/risk/cockpit/trace for traceability
 
 The page is intentionally conservative: no auto-execution controls and no hidden decisioning.
+
+
+## Quantitative evaluation runtime hardening (2026-03-30)
+
+- Added an auditable ex-post runtime evaluation layer under `evaluation_lab` that links resolved outcomes with prediction, risk, opportunity-fusion, and paper proposal artifacts.
+- Added calibration buckets, effectiveness metrics, drift flags, and explicit human recommendations (manual-first, no auto-tuning/no auto-retraining).
+- Added API endpoints under `/api/evaluation/*` for runtime evaluation execution and board data retrieval.
+- Strengthened `/evaluation` frontend with outcome-alignment, calibration, effectiveness, recommendations, and manual trigger UX.
+- Scope remains local-first, single-user, paper/sandbox only; no real-money execution or silent policy/model mutation.
+
