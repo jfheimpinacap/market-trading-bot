@@ -4,7 +4,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.research_agent.models import (
+    MarketUniverseRun,
     MarketUniverseScanRun,
+    MarketResearchCandidate,
+    MarketTriageDecisionV2,
+    MarketResearchRecommendation,
     NarrativeCluster,
     NarrativeItem,
     NarrativeSignal,
@@ -17,7 +21,12 @@ from apps.research_agent.models import (
     SourceScanRun,
 )
 from apps.research_agent.serializers import (
+    MarketUniverseRunSerializer,
     MarketUniverseScanRunSerializer,
+    MarketResearchCandidateSerializer,
+    MarketTriageDecisionV2Serializer,
+    MarketResearchRecommendationSerializer,
+    ResearchUniverseRunRequestSerializer,
     NarrativeClusterSerializer,
     NarrativeItemSerializer,
     NarrativeSignalSerializer,
@@ -33,7 +42,7 @@ from apps.research_agent.serializers import (
     TriageToPredictionRequestSerializer,
     UniverseScanRunRequestSerializer,
 )
-from apps.research_agent.services.run import run_scan_agent
+from apps.research_agent.services.run import get_latest_universe_summary, run_market_universe_triage, run_scan_agent
 from apps.research_agent.services.analyze import run_narrative_analysis
 from apps.research_agent.services.pursuit_board import get_latest_board_summary, get_pursuit_candidates_queryset
 from apps.research_agent.services.scan import run_full_research_scan, run_research_scan
@@ -313,3 +322,67 @@ class ScanAgentSummaryView(APIView):
             ).data,
         }
         return Response(payload, status=status.HTTP_200_OK)
+
+
+class ResearchAgentUniverseScanRunView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = ResearchUniverseRunRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_market_universe_triage(
+            provider_scope=serializer.validated_data.get('provider_scope'),
+            source_scope=serializer.validated_data.get('source_scope'),
+            triggered_by='manual_api',
+        )
+        return Response(MarketUniverseRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class ResearchAgentCandidateListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = MarketResearchCandidateSerializer
+
+    def get_queryset(self):
+        queryset = MarketResearchCandidate.objects.select_related('linked_market', 'universe_run').order_by('-created_at', '-id')
+        status_filter = self.request.query_params.get('status')
+        provider_filter = self.request.query_params.get('provider')
+        category_filter = self.request.query_params.get('category')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if provider_filter:
+            queryset = queryset.filter(market_provider=provider_filter)
+        if category_filter:
+            queryset = queryset.filter(category=category_filter)
+        return queryset[:300]
+
+
+class ResearchAgentTriageDecisionListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = MarketTriageDecisionV2Serializer
+
+    def get_queryset(self):
+        return MarketTriageDecisionV2.objects.select_related('linked_candidate').order_by('-created_at', '-id')[:300]
+
+
+class ResearchAgentRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = MarketResearchRecommendationSerializer
+
+    def get_queryset(self):
+        recommendation_filter = self.request.query_params.get('recommendation_type')
+        queryset = MarketResearchRecommendation.objects.select_related('target_candidate', 'target_market').order_by('-created_at', '-id')
+        if recommendation_filter:
+            queryset = queryset.filter(recommendation_type=recommendation_filter)
+        return queryset[:300]
+
+
+class ResearchAgentUniverseSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(get_latest_universe_summary(), status=status.HTTP_200_OK)

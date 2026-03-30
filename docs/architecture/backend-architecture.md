@@ -1754,3 +1754,15 @@ Pipeline:
 7. `run` persists run + cluster + signal + recommendation artifacts
 
 Non-goals unchanged: no real-time social firehose, no real-money execution, no auto-apply black-box planner.
+
+
+### Research agent universe triage hardening
+
+A new auditable triage layer was added under `research_agent` (without replacing existing scan/triage flow):
+- read-only universe fetch of active markets
+- structural filtering (open status, liquidity, volume, horizon, freshness, quality)
+- narrative linking from `NarrativeSignal` produced by scan-agent
+- transparent pursue-worthiness scoring (heuristic, non-opaque)
+- explicit candidate status + triage decisions + recommendations
+
+Out of scope: auto-trading, broker execution, market making, opaque planner/autopilot.

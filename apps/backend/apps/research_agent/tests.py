@@ -12,6 +12,10 @@ from apps.memory_retrieval.models import MemoryDocument
 from apps.research_agent.models import NarrativeAnalysis, NarrativeItem, NarrativeSource, ResearchCandidate
 from apps.research_agent.services.clustering import cluster_narratives
 from apps.research_agent.services.dedup import deduplicate_narratives
+from apps.research_agent.services.filtering import evaluate_structural_filters
+from apps.research_agent.services.narrative_linking import link_narrative_signals
+from apps.research_agent.services.recommendation import decision_for_candidate
+from apps.research_agent.services.scoring import compute_pursue_worthiness
 from apps.research_agent.services.run import run_scan_agent
 from apps.research_agent.services.scoring import score_cluster
 from apps.research_agent.services.source_fetch import ScanRawItem
@@ -297,3 +301,60 @@ class ResearchAgentTests(TestCase):
         self.assertEqual(clusters_response.status_code, 200)
         self.assertEqual(recommendations_response.status_code, 200)
         self.assertIn('latest_run', summary_response.json())
+
+
+class ResearchUniverseHardeningTests(TestCase):
+    def setUp(self):
+        seed_demo_markets()
+        self.client = APIClient()
+
+    def test_filtering_scoring_linking_recommendation_and_summary_endpoint(self):
+        market = Market.objects.filter(status=MarketStatus.OPEN).first()
+        market.liquidity = 25000
+        market.volume_24h = 8200
+        market.resolution_time = timezone.now() + timedelta(days=18)
+        market.current_market_probability = '0.62'
+        market.current_yes_price = '0.61'
+        market.save(update_fields=['liquidity', 'volume_24h', 'resolution_time', 'current_market_probability', 'current_yes_price'])
+
+        run = run_scan_agent()
+        signal = run.signals.first()
+        if signal:
+            signal.linked_market = market
+            signal.save(update_fields=['linked_market'])
+
+        structural = evaluate_structural_filters(market=market, now=timezone.now())
+        self.assertTrue(structural.open_ok)
+        self.assertGreaterEqual(structural.liquidity_score, 0)
+
+        narrative = link_narrative_signals(market=market)
+        score = compute_pursue_worthiness(structural=structural, narrative_context=narrative, precedent_context={'caution_weight': '0'})
+        self.assertGreaterEqual(score, 0)
+
+        run_response = self.client.post('/api/research-agent/run-universe-scan/', {}, format='json')
+        self.assertEqual(run_response.status_code, 200)
+
+        candidates = self.client.get('/api/research-agent/candidates/')
+        decisions = self.client.get('/api/research-agent/triage-decisions/')
+        recommendations = self.client.get('/api/research-agent/recommendations/')
+        summary = self.client.get('/api/research-agent/universe-summary/')
+
+        self.assertEqual(candidates.status_code, 200)
+        self.assertEqual(decisions.status_code, 200)
+        self.assertEqual(recommendations.status_code, 200)
+        self.assertEqual(summary.status_code, 200)
+        self.assertIn('totals', summary.json())
+
+        candidate_payload = candidates.json()
+        self.assertTrue(len(candidate_payload) > 0)
+        decision_payload = decisions.json()[0]
+        self.assertIn(decision_payload['decision_type'], {'send_to_prediction', 'keep_on_watchlist', 'ignore_market', 'require_manual_review', 'research_followup'})
+
+        # recommendation helper maps status cleanly
+        class _Candidate:
+            status = 'watchlist'
+            reason_codes = []
+            pursue_worthiness_score = '0.55'
+
+        mapped = decision_for_candidate(candidate=_Candidate())
+        self.assertEqual(mapped['decision_type'], 'keep_on_watchlist')

@@ -2543,3 +2543,21 @@ Service split (thin views, auditable services):
 - `services/run.py`
 
 Scope remains local-first/manual-first/paper-only/read-only; no broker/exchange execution is introduced.
+
+
+## Research Agent: market universe triage hardening
+
+The backend now exposes `/api/research-agent/` endpoints for hardened universe triage:
+- `POST run-universe-scan/`
+- `GET candidates/`
+- `GET triage-decisions/`
+- `GET recommendations/`
+- `GET universe-summary/`
+
+Service split (lightweight + auditable):
+- `services/universe_fetch.py`
+- `services/filtering.py`
+- `services/scoring.py`
+- `services/narrative_linking.py`
+- `services/recommendation.py`
+- `services/run.py`

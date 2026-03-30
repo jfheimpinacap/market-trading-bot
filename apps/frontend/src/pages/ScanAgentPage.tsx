@@ -71,7 +71,7 @@ export function ScanAgentPage() {
         eyebrow="Parallel source intelligence"
         title="/scan-agent"
         description="Local-first, manual-first narrative scan filter hardening. Consolidates RSS/Reddit/X, deduplicates and clusters narratives, scores market divergence, and emits recommendation-first handoffs without social auto-trading."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/research')}>Open research</button><button type="button" className="secondary-button" onClick={() => navigate('/prediction')}>Open prediction</button><button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Open cockpit</button><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Open trace</button><button type="button" className="primary-button" disabled={runLoading} onClick={() => void runScan()}>{runLoading ? 'Running scan...' : 'Run scan'}</button></div>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/research-agent')}>Open research</button><button type="button" className="secondary-button" onClick={() => navigate('/prediction')}>Open prediction</button><button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Open cockpit</button><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Open trace</button><button type="button" className="primary-button" disabled={runLoading} onClick={() => void runScan()}>{runLoading ? 'Running scan...' : 'Run scan'}</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>

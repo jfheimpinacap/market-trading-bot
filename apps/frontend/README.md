@@ -1533,3 +1533,16 @@ The frontend now includes `/scan-agent` with:
 - quick links to `/research`, `/prediction`, `/markets`, `/cockpit`, and `/trace`
 
 This page is recommendation-first and explicitly not social auto-trading.
+
+
+## Research Agent board
+
+New route: `/research-agent`
+
+This page provides:
+- universe triage summary cards
+- candidate table (shortlist/watchlist/ignore/needs_review)
+- explicit triage decisions
+- recommendation board for prediction handoff
+
+The UX is manual-first and does not enable auto-trading or execution.

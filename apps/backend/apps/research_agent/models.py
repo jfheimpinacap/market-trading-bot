@@ -266,6 +266,41 @@ class PursuitCandidate(TimeStampedModel):
         constraints = [models.UniqueConstraint(fields=['run', 'market'], name='research_unique_run_market_pursuit_candidate')]
 
 
+
+
+class MarketResearchCandidateStatus(models.TextChoices):
+    SHORTLIST = 'shortlist', 'Shortlist'
+    WATCHLIST = 'watchlist', 'Watchlist'
+    IGNORE = 'ignore', 'Ignore'
+    NEEDS_REVIEW = 'needs_review', 'Needs review'
+
+
+class MarketTriageDecisionType(models.TextChoices):
+    SEND_TO_PREDICTION = 'send_to_prediction', 'Send to prediction'
+    KEEP_ON_WATCHLIST = 'keep_on_watchlist', 'Keep on watchlist'
+    IGNORE_MARKET = 'ignore_market', 'Ignore market'
+    REQUIRE_MANUAL_REVIEW = 'require_manual_review', 'Require manual review'
+    RESEARCH_FOLLOWUP = 'research_followup', 'Research follow-up'
+
+
+class MarketTriageDecisionStatus(models.TextChoices):
+    PROPOSED = 'proposed', 'Proposed'
+    REVIEWED = 'reviewed', 'Reviewed'
+    CONFIRMED = 'confirmed', 'Confirmed'
+    SKIPPED = 'skipped', 'Skipped'
+
+
+class MarketResearchRecommendationType(models.TextChoices):
+    SEND_TO_PREDICTION = 'send_to_prediction', 'Send to prediction'
+    RESEARCH_FOLLOWUP = 'research_followup', 'Research follow-up'
+    KEEP_ON_WATCHLIST = 'keep_on_watchlist', 'Keep on watchlist'
+    IGNORE_LOW_QUALITY = 'ignore_low_quality', 'Ignore low quality'
+    IGNORE_LOW_LIQUIDITY = 'ignore_low_liquidity', 'Ignore low liquidity'
+    IGNORE_BAD_TIME_HORIZON = 'ignore_bad_time_horizon', 'Ignore bad time horizon'
+    REQUIRE_MANUAL_REVIEW = 'require_manual_review', 'Require manual review'
+    REORDER_RESEARCH_PRIORITY = 'reorder_research_priority', 'Reorder research priority'
+
+
 class SourceScanRun(TimeStampedModel):
     started_at = models.DateTimeField()
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -337,3 +372,73 @@ class ScanRecommendation(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at_scan', '-id']
+
+
+class MarketUniverseRun(TimeStampedModel):
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    total_markets_seen = models.PositiveIntegerField(default=0)
+    open_markets_seen = models.PositiveIntegerField(default=0)
+    filtered_out_count = models.PositiveIntegerField(default=0)
+    shortlisted_count = models.PositiveIntegerField(default=0)
+    watchlist_count = models.PositiveIntegerField(default=0)
+    ignored_count = models.PositiveIntegerField(default=0)
+    source_provider_counts = models.JSONField(default=dict, blank=True)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class MarketResearchCandidate(TimeStampedModel):
+    universe_run = models.ForeignKey(MarketUniverseRun, on_delete=models.CASCADE, related_name='candidates')
+    linked_market = models.ForeignKey('markets.Market', on_delete=models.CASCADE, related_name='market_research_candidates')
+    market_title = models.CharField(max_length=255)
+    market_provider = models.CharField(max_length=64)
+    category = models.CharField(max_length=100, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    time_to_resolution_hours = models.IntegerField(null=True, blank=True)
+    liquidity_score = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal('0.0000'))
+    volume_score = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal('0.0000'))
+    freshness_score = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal('0.0000'))
+    market_quality_score = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal('0.0000'))
+    narrative_support_score = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal('0.0000'))
+    divergence_score = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal('0.0000'))
+    pursue_worthiness_score = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal('0.0000'))
+    status = models.CharField(max_length=24, choices=MarketResearchCandidateStatus.choices, default=MarketResearchCandidateStatus.NEEDS_REVIEW)
+    rationale = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    linked_narrative_signals = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-pursue_worthiness_score', '-created_at', '-id']
+
+
+class MarketTriageDecisionV2(TimeStampedModel):
+    linked_candidate = models.ForeignKey(MarketResearchCandidate, on_delete=models.CASCADE, related_name='triage_decisions')
+    decision_type = models.CharField(max_length=32, choices=MarketTriageDecisionType.choices)
+    decision_status = models.CharField(max_length=24, choices=MarketTriageDecisionStatus.choices, default=MarketTriageDecisionStatus.PROPOSED)
+    rationale = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class MarketResearchRecommendation(TimeStampedModel):
+    universe_run = models.ForeignKey(MarketUniverseRun, on_delete=models.CASCADE, related_name='recommendations')
+    recommendation_type = models.CharField(max_length=48, choices=MarketResearchRecommendationType.choices)
+    target_market = models.ForeignKey('markets.Market', null=True, blank=True, on_delete=models.SET_NULL, related_name='research_recommendations')
+    target_candidate = models.ForeignKey(MarketResearchCandidate, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    rationale = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal('0.0000'))
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']

@@ -12,6 +12,7 @@ import { ExperimentsPage } from '../pages/ExperimentsPage';
 import { ReadinessPage } from '../pages/ReadinessPage';
 import { RuntimePage } from '../pages/RuntimePage';
 import { ResearchPage } from '../pages/ResearchPage';
+import { ResearchAgentPage } from '../pages/ResearchAgentPage';
 import { ScanAgentPage } from '../pages/ScanAgentPage';
 import { PredictionPage } from '../pages/PredictionPage';
 import { RiskAgentPage } from '../pages/RiskAgentPage';
@@ -605,6 +606,12 @@ export const appRoutes: AppRoute[] = [
     component: RuntimePage,
   },
 
+  {
+    label: 'Research Agent',
+    path: '/research-agent',
+    description: 'Hardened market-universe triage board with structural filters, narrative-context integration, pursue-worthiness scoring, and recommendation-first handoff to prediction/risk in manual-first paper mode.',
+    component: ResearchAgentPage,
+  },
   {
     label: 'Research',
     path: '/research',

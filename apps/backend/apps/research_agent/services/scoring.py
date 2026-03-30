@@ -62,3 +62,20 @@ def score_cluster(cluster: ClusterBundle) -> SignalScore:
         total_signal_score=total,
         reason_codes=reason_codes,
     )
+
+
+def compute_pursue_worthiness(*, structural, narrative_context, precedent_context: dict | None = None):
+    precedent = precedent_context or {}
+    caution = Decimal(str(precedent.get('caution_weight', '0')))
+
+    score = (
+        structural.liquidity_score * Decimal('0.20')
+        + structural.volume_score * Decimal('0.18')
+        + structural.freshness_score * Decimal('0.14')
+        + structural.market_quality_score * Decimal('0.18')
+        + narrative_context['narrative_support_score'] * Decimal('0.15')
+        + narrative_context['divergence_score'] * Decimal('0.15')
+    )
+    score -= min(Decimal('0.15'), caution)
+
+    return max(Decimal('0.0000'), min(Decimal('1.0000'), score)).quantize(Decimal('0.0001'))
