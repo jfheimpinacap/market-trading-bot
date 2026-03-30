@@ -12,8 +12,9 @@ from apps.memory_retrieval.models import MemoryDocument
 from apps.paper_trading.services.execution import execute_paper_trade
 from apps.paper_trading.services.portfolio import ensure_demo_account
 from apps.prediction_agent.services.scoring import score_market_prediction
-from apps.risk_agent.models import PositionWatchEvent, RiskLevel
-from apps.risk_agent.services import run_position_watch, run_risk_assessment, run_risk_sizing
+from apps.prediction_agent.services.run import run_prediction_runtime_review
+from apps.risk_agent.models import PositionWatchEvent, RiskApprovalDecision, RiskLevel, RiskRuntimeRun, RiskSizingPlan
+from apps.risk_agent.services import run_position_watch, run_risk_assessment, run_risk_runtime_review, run_risk_sizing
 
 
 class RiskAgentServiceTests(TestCase):
@@ -83,3 +84,39 @@ class RiskAgentApiTests(TestCase):
     def test_agents_pipeline_integration(self):
         run = run_agent_pipeline(pipeline_type='real_market_agent_cycle', payload={'market_limit': 1, 'quantity': '2.0000'})
         self.assertIn(run.status, ['SUCCESS', 'PARTIAL'])
+
+
+class RiskRuntimeHardeningTests(TestCase):
+    def setUp(self):
+        seed_demo_markets()
+        ensure_demo_account()
+        self.client = APIClient()
+        self.market = Market.objects.filter(is_active=True).order_by('id').first()
+        score_market_prediction(market=self.market, triggered_by='risk_runtime_tests')
+        run_prediction_runtime_review(triggered_by='risk_runtime_tests')
+
+    def test_runtime_run_creates_candidate_approval_sizing_watch(self):
+        run = run_risk_runtime_review(triggered_by='test')
+        self.assertGreaterEqual(run.candidate_count, 1)
+        self.assertGreaterEqual(RiskApprovalDecision.objects.filter(linked_candidate__runtime_run=run).count(), 1)
+        self.assertGreaterEqual(RiskSizingPlan.objects.filter(linked_candidate__runtime_run=run).count(), 1)
+
+    def test_block_for_low_confidence_or_poor_liquidity(self):
+        self.market.liquidity = Decimal('500.00')
+        self.market.save(update_fields=['liquidity', 'updated_at'])
+        run = run_risk_runtime_review(triggered_by='test-poor-liquidity')
+        blocked = RiskApprovalDecision.objects.filter(linked_candidate__runtime_run=run, approval_status='BLOCKED').count()
+        self.assertGreaterEqual(blocked, 1)
+
+    def test_runtime_api_endpoints_and_summary(self):
+        response = self.client.post(reverse('risk_agent:run-runtime-review'), {'triggered_by': 'api-test'}, format='json')
+        self.assertEqual(response.status_code, 201)
+        run_id = response.json()['id']
+        self.assertEqual(self.client.get(reverse('risk_agent:runtime-candidates'), {'run_id': run_id}).status_code, 200)
+        self.assertEqual(self.client.get(reverse('risk_agent:approval-decisions'), {'run_id': run_id}).status_code, 200)
+        self.assertEqual(self.client.get(reverse('risk_agent:sizing-plans'), {'run_id': run_id}).status_code, 200)
+        self.assertEqual(self.client.get(reverse('risk_agent:watch-plans'), {'run_id': run_id}).status_code, 200)
+        self.assertEqual(self.client.get(reverse('risk_agent:runtime-recommendations'), {'run_id': run_id}).status_code, 200)
+        summary = self.client.get(reverse('risk_agent:runtime-summary'))
+        self.assertEqual(summary.status_code, 200)
+        self.assertIsNotNone(summary.json().get('latest_run'))

@@ -1633,3 +1633,30 @@ This layer strengthens `research_agent` scan/filter quality but does **not** rep
 - New auditable entities: `MarketUniverseRun`, `MarketResearchCandidate`, `MarketTriageDecisionV2`, `MarketResearchRecommendation`.
 - The scan-agent remains upstream for narrative dedup/clustering/signals; research-agent consumes those signals as context (not as sole authority).
 - Scope remains local-first, manual-first, paper/sandbox-only, and read-only toward providers.
+
+### Risk agent runtime hardening / sizing governance / paper watch board (new)
+
+`risk_agent` now includes a stronger runtime layer between `prediction_agent` assessments and downstream paper execution simulation.
+
+What is now formalized:
+- run-level audit record (`RiskRuntimeRun`)
+- candidate intake from prediction runtime (`RiskRuntimeCandidate`)
+- explicit approval gate (`RiskApprovalDecision`: APPROVED / APPROVED_REDUCED / BLOCKED / NEEDS_REVIEW)
+- conservative sizing plan (`RiskSizingPlan`: bounded/capped fractions, paper risk budget)
+- explicit post-entry watch board (`PositionWatchPlan`)
+- recommendation-first handoff objects (`RiskRuntimeRecommendation`)
+
+API surface:
+- `POST /api/risk-agent/run-runtime-review/`
+- `GET /api/risk-agent/runtime-candidates/`
+- `GET /api/risk-agent/approval-decisions/`
+- `GET /api/risk-agent/sizing-plans/`
+- `GET /api/risk-agent/watch-plans/`
+- `GET /api/risk-agent/runtime-recommendations/`
+- `GET /api/risk-agent/runtime-summary/`
+
+Scope unchanged:
+- local-first, single-user, manual-first
+- paper/sandbox only
+- no real-money execution
+- no live broker/exchange execution

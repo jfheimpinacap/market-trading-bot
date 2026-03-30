@@ -2591,3 +2591,37 @@ Service split (lightweight + auditable):
 - `services/narrative_linking.py`
 - `services/recommendation.py`
 - `services/run.py`
+
+## Risk runtime hardening layer (new)
+
+`apps.risk_agent` now includes an explicit runtime-governance boundary that consumes prediction runtime assessments and emits auditable paper-only decisions.
+
+New entities:
+- `RiskRuntimeRun`
+- `RiskRuntimeCandidate`
+- `RiskApprovalDecision`
+- `RiskSizingPlan`
+- `PositionWatchPlan`
+- `RiskRuntimeRecommendation`
+
+New endpoints:
+- `POST /api/risk-agent/run-runtime-review/`
+- `GET /api/risk-agent/runtime-candidates/`
+- `GET /api/risk-agent/approval-decisions/`
+- `GET /api/risk-agent/sizing-plans/`
+- `GET /api/risk-agent/watch-plans/`
+- `GET /api/risk-agent/runtime-recommendations/`
+- `GET /api/risk-agent/runtime-summary/`
+
+Service split:
+- `services/candidate_building.py`
+- `services/approval.py`
+- `services/sizing_runtime.py`
+- `services/watch_plan.py`
+- `services/recommendation.py`
+- `services/run.py`
+
+Boundaries:
+- conservative bounded/capped sizing (paper-only)
+- recommendation-first handoff to execution simulator, portfolio governor context, and position-manager watch context
+- manual-first apply, no live broker execution, no real money

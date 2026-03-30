@@ -2,10 +2,17 @@ from django.urls import path
 
 from apps.risk_agent.views import (
     RiskAssessView,
+    RiskApprovalDecisionListView,
     RiskAssessmentListView,
+    RiskRuntimeCandidateListView,
+    RiskRuntimeRecommendationListView,
+    RiskRuntimeSummaryView,
+    RiskRunRuntimeReviewView,
     RiskSizeView,
+    RiskSizingPlanListView,
     RiskSummaryView,
     RiskPrecedentAssistView,
+    RiskWatchPlanListView,
     RiskWatchEventListView,
     RiskWatchRunView,
 )
@@ -20,4 +27,11 @@ urlpatterns = [
     path('watch-events/', RiskWatchEventListView.as_view(), name='watch-events'),
     path('summary/', RiskSummaryView.as_view(), name='summary'),
     path('precedent-assist/', RiskPrecedentAssistView.as_view(), name='precedent-assist'),
+    path('run-runtime-review/', RiskRunRuntimeReviewView.as_view(), name='run-runtime-review'),
+    path('runtime-candidates/', RiskRuntimeCandidateListView.as_view(), name='runtime-candidates'),
+    path('approval-decisions/', RiskApprovalDecisionListView.as_view(), name='approval-decisions'),
+    path('sizing-plans/', RiskSizingPlanListView.as_view(), name='sizing-plans'),
+    path('watch-plans/', RiskWatchPlanListView.as_view(), name='watch-plans'),
+    path('runtime-recommendations/', RiskRuntimeRecommendationListView.as_view(), name='runtime-recommendations'),
+    path('runtime-summary/', RiskRuntimeSummaryView.as_view(), name='runtime-summary'),
 ]

@@ -1796,3 +1796,35 @@ A new auditable triage layer was added under `research_agent` (without replacing
 - explicit candidate status + triage decisions + recommendations
 
 Out of scope: auto-trading, broker execution, market making, opaque planner/autopilot.
+
+## Risk runtime hardening architecture (new)
+
+`apps.risk_agent` now contains a dedicated runtime-governance lane that consumes `prediction_agent.PredictionRuntimeAssessment` outputs and emits explicit paper-risk decisions.
+
+Core runtime entities:
+- `RiskRuntimeRun`: auditable review run counters + recommendation summary
+- `RiskRuntimeCandidate`: normalized candidate input linked to prediction assessment + market context
+- `RiskApprovalDecision`: explicit gate (`APPROVED`, `APPROVED_REDUCED`, `BLOCKED`, `NEEDS_REVIEW`)
+- `RiskSizingPlan`: conservative bounded/capped sizing under risk budget/exposure caps
+- `PositionWatchPlan`: post-entry watch intent, triggers, interval, escalation
+- `RiskRuntimeRecommendation`: recommendation-first handoff artifacts
+
+Service boundary split (no heavy view logic):
+- candidate intake: `risk_agent.services.candidate_building`
+- approval rules: `risk_agent.services.approval`
+- sizing governance: `risk_agent.services.sizing_runtime`
+- watch-board plan: `risk_agent.services.watch_plan`
+- recommendation emission: `risk_agent.services.recommendation`
+- run orchestration: `risk_agent.services.run`
+
+Integration boundaries:
+- prediction remains probability/edge/confidence authority
+- risk runtime governs approve/block/reduce + conservative paper sizing
+- execution simulator receives recommendations only (no direct auto-live execution)
+- portfolio governor and position manager receive context via metadata/watch-plan intent
+- trace explorer can inspect full object trail via persisted runtime entities
+
+Non-goals remain explicit:
+- no live broker execution
+- no real money
+- no opaque planner authority
