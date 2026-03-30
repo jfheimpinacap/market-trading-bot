@@ -174,6 +174,7 @@ export function ResearchPage() {
         actions={(
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             <button type="button" className="secondary-button" onClick={() => navigate('/markets')}>Open Markets</button>
+            <button type="button" className="secondary-button" onClick={() => navigate('/scan-agent')}>Open Scan Agent</button>
             <button type="button" className="secondary-button" onClick={() => navigate('/prediction')}>Open Prediction</button>
             <button type="button" className="secondary-button" onClick={() => navigate('/agents')}>Open Agents</button>
             <button type="button" className="secondary-button" disabled={actionLoading === 'analysis'} onClick={() => void runAnalysisOnly()}>

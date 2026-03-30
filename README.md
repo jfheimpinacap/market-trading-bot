@@ -1596,3 +1596,16 @@ The stack now includes a dedicated `autonomy_seed_review` layer (`/api/autonomy-
 - keeps seed adoption manual-first (no opaque auto-apply into roadmap/scenario/program/manager)
 
 Out of scope remains explicit: no real-money execution, no broker/exchange live routing, and no black-box planner authority.
+
+### Scan agent filter hardening (new)
+
+A new **scan agent filter layer** now hardens narrative intake before research triage and prediction context:
+
+- endpoint family under `/api/scan-agent/*`
+- parallel source consolidation for RSS + Reddit + optional X/Twitter adapters (read-only)
+- explicit deduplication + narrative clustering
+- transparent signal scoring (`novelty`, `intensity`, `source_confidence`, `market_divergence`, `total_signal_score`)
+- recommendation-first handoff (`SEND_TO_RESEARCH_TRIAGE`, `SEND_TO_PREDICTION_CONTEXT`, `KEEP_ON_WATCHLIST`, `IGNORE_NOISE`, `REQUIRE_MANUAL_REVIEW`)
+- fully auditable run artifacts (`SourceScanRun`, `NarrativeSignal`, `NarrativeCluster`, `ScanRecommendation`)
+
+This layer strengthens `research_agent` scan/filter quality but does **not** replace research triage/pursuit authority and does **not** introduce real-money or auto-execution behavior.

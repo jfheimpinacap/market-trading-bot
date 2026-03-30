@@ -3,13 +3,17 @@ from rest_framework import serializers
 from apps.research_agent.models import (
     MarketTriageDecision,
     MarketUniverseScanRun,
+    NarrativeCluster,
     NarrativeAnalysis,
     NarrativeItem,
+    NarrativeSignal,
     NarrativeSource,
     PursuitCandidate,
     ResearchCandidate,
     ResearchFilterProfile,
     ResearchScanRun,
+    ScanRecommendation,
+    SourceScanRun,
 )
 
 
@@ -144,6 +148,10 @@ class ResearchRunRequestSerializer(serializers.Serializer):
     run_analysis = serializers.BooleanField(required=False, default=True)
 
 
+class ScanRunRequestSerializer(serializers.Serializer):
+    source_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False, allow_empty=False)
+
+
 class ResearchScanRunSerializer(serializers.ModelSerializer):
     class Meta:
         model = ResearchScanRun
@@ -166,6 +174,107 @@ class ResearchScanRunSerializer(serializers.ModelSerializer):
             'errors',
             'source_errors',
             'metadata',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+
+class SourceScanRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SourceScanRun
+        fields = (
+            'id',
+            'started_at',
+            'completed_at',
+            'source_counts',
+            'raw_item_count',
+            'deduped_item_count',
+            'clustered_count',
+            'signal_count',
+            'ignored_count',
+            'recommendation_summary',
+            'metadata',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+
+class NarrativeClusterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NarrativeCluster
+        fields = (
+            'id',
+            'scan_run',
+            'canonical_topic',
+            'representative_headline',
+            'source_types',
+            'item_count',
+            'first_seen_at',
+            'last_seen_at',
+            'combined_direction',
+            'combined_sentiment',
+            'cluster_status',
+            'metadata',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+
+class NarrativeSignalSerializer(serializers.ModelSerializer):
+    linked_market_slug = serializers.CharField(source='linked_market.slug', read_only=True)
+    linked_market_title = serializers.CharField(source='linked_market.title', read_only=True)
+
+    class Meta:
+        model = NarrativeSignal
+        fields = (
+            'id',
+            'scan_run',
+            'canonical_label',
+            'topic',
+            'target_market',
+            'source_mix',
+            'direction',
+            'sentiment_score',
+            'novelty_score',
+            'intensity_score',
+            'source_confidence_score',
+            'market_divergence_score',
+            'total_signal_score',
+            'status',
+            'rationale',
+            'reason_codes',
+            'raw_source_refs',
+            'linked_cluster',
+            'linked_market',
+            'linked_market_slug',
+            'linked_market_title',
+            'created_at_scan',
+            'metadata',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+
+class ScanRecommendationSerializer(serializers.ModelSerializer):
+    target_signal_label = serializers.CharField(source='target_signal.canonical_label', read_only=True)
+
+    class Meta:
+        model = ScanRecommendation
+        fields = (
+            'id',
+            'scan_run',
+            'recommendation_type',
+            'target_signal',
+            'target_signal_label',
+            'rationale',
+            'reason_codes',
+            'confidence',
+            'blockers',
+            'created_at_scan',
             'created_at',
             'updated_at',
         )

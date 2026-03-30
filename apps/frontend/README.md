@@ -1521,3 +1521,15 @@ Nueva vista manual-first para cerrar el loop de seeds del próximo ciclo:
 - empty state claro cuando no hay seeds registradas para tracking
 
 Límites explícitos: sin auto-apply opaco y sin ejecución real.
+
+## Scan agent board (new)
+
+The frontend now includes `/scan-agent` with:
+
+- source summary cards (RSS/Reddit/X, deduped items, clusters, shortlisted)
+- narrative signal table (direction, novelty, intensity, divergence, total score, status)
+- cluster panel and recommendation panel
+- manual run action (`Run scan`) and conservative filter controls
+- quick links to `/research`, `/prediction`, `/markets`, `/cockpit`, and `/trace`
+
+This page is recommendation-first and explicitly not social auto-trading.

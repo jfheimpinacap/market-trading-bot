@@ -5,25 +5,35 @@ from rest_framework.views import APIView
 
 from apps.research_agent.models import (
     MarketUniverseScanRun,
+    NarrativeCluster,
     NarrativeItem,
+    NarrativeSignal,
     NarrativeSource,
     NarrativeSourceType,
     PursuitCandidate,
     ResearchCandidate,
     ResearchScanRun,
+    ScanRecommendation,
+    SourceScanRun,
 )
 from apps.research_agent.serializers import (
     MarketUniverseScanRunSerializer,
+    NarrativeClusterSerializer,
     NarrativeItemSerializer,
+    NarrativeSignalSerializer,
     NarrativeSourceCreateSerializer,
     NarrativeSourceSerializer,
     PursuitCandidateSerializer,
     ResearchCandidateSerializer,
     ResearchRunRequestSerializer,
     ResearchScanRunSerializer,
+    ScanRecommendationSerializer,
+    ScanRunRequestSerializer,
+    SourceScanRunSerializer,
     TriageToPredictionRequestSerializer,
     UniverseScanRunRequestSerializer,
 )
+from apps.research_agent.services.run import run_scan_agent
 from apps.research_agent.services.analyze import run_narrative_analysis
 from apps.research_agent.services.pursuit_board import get_latest_board_summary, get_pursuit_candidates_queryset
 from apps.research_agent.services.scan import run_full_research_scan, run_research_scan
@@ -231,3 +241,75 @@ class ResearchPrecedentAssistView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ScanAgentRunView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = ScanRunRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_scan_agent(source_ids=serializer.validated_data.get('source_ids'), triggered_by='manual_api')
+        return Response(SourceScanRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class ScanAgentSignalListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = NarrativeSignalSerializer
+
+    def get_queryset(self):
+        status_filter = self.request.query_params.get('status')
+        queryset = NarrativeSignal.objects.select_related('linked_market', 'linked_cluster', 'scan_run').order_by('-created_at_scan', '-id')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        return queryset[:200]
+
+
+class ScanAgentClusterListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = NarrativeClusterSerializer
+
+    def get_queryset(self):
+        status_filter = self.request.query_params.get('cluster_status')
+        queryset = NarrativeCluster.objects.select_related('scan_run').order_by('-item_count', '-last_seen_at', '-id')
+        if status_filter:
+            queryset = queryset.filter(cluster_status=status_filter)
+        return queryset[:200]
+
+
+class ScanAgentRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ScanRecommendationSerializer
+
+    def get_queryset(self):
+        recommendation_type = self.request.query_params.get('recommendation_type')
+        queryset = ScanRecommendation.objects.select_related('target_signal', 'scan_run').order_by('-created_at_scan', '-id')
+        if recommendation_type:
+            queryset = queryset.filter(recommendation_type=recommendation_type)
+        return queryset[:200]
+
+
+class ScanAgentSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        latest_run = SourceScanRun.objects.order_by('-started_at', '-id').first()
+        payload = {
+            'run_count': SourceScanRun.objects.count(),
+            'signal_count': NarrativeSignal.objects.count(),
+            'shortlisted_signal_count': NarrativeSignal.objects.filter(status='shortlisted').count(),
+            'watch_signal_count': NarrativeSignal.objects.filter(status='watch').count(),
+            'ignored_signal_count': NarrativeSignal.objects.filter(status='ignore').count(),
+            'cluster_count': NarrativeCluster.objects.count(),
+            'latest_run': SourceScanRunSerializer(latest_run).data if latest_run else None,
+            'latest_recommendations': ScanRecommendationSerializer(
+                ScanRecommendation.objects.select_related('target_signal').order_by('-created_at_scan', '-id')[:8],
+                many=True,
+            ).data,
+        }
+        return Response(payload, status=status.HTTP_200_OK)

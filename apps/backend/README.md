@@ -2522,3 +2522,24 @@ Endpoints:
 - `POST /api/autonomy-seed-review/accept/<seed_id>/`
 - `POST /api/autonomy-seed-review/defer/<seed_id>/`
 - `POST /api/autonomy-seed-review/reject/<seed_id>/`
+
+## Scan agent filter hardening layer (new)
+
+`research_agent` now includes a dedicated scan hardening pipeline exposed at `/api/scan-agent/*`:
+
+- `POST /api/scan-agent/run-scan/`
+- `GET /api/scan-agent/signals/`
+- `GET /api/scan-agent/clusters/`
+- `GET /api/scan-agent/recommendations/`
+- `GET /api/scan-agent/summary/`
+
+Service split (thin views, auditable services):
+- `services/source_fetch.py`
+- `services/dedup.py`
+- `services/clustering.py`
+- `services/scoring.py`
+- `services/market_context.py`
+- `services/recommendation.py`
+- `services/run.py`
+
+Scope remains local-first/manual-first/paper-only/read-only; no broker/exchange execution is introduced.

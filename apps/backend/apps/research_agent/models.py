@@ -60,6 +60,36 @@ class ResearchFilterProfile(models.TextChoices):
     BROAD = 'broad_scan', 'Broad scan'
 
 
+class NarrativeSignalDirection(models.TextChoices):
+    BULLISH_YES = 'bullish_yes', 'Bullish/Yes'
+    BEARISH_YES = 'bearish_yes', 'Bearish/Yes'
+    UNCLEAR = 'unclear', 'Unclear'
+    MIXED = 'mixed', 'Mixed'
+
+
+class NarrativeSignalStatus(models.TextChoices):
+    CANDIDATE = 'candidate', 'Candidate'
+    SHORTLISTED = 'shortlisted', 'Shortlisted'
+    WATCH = 'watch', 'Watch'
+    IGNORE = 'ignore', 'Ignore'
+
+
+class NarrativeClusterStatus(models.TextChoices):
+    EMERGING = 'emerging', 'Emerging'
+    CONFIRMED_MULTI_SOURCE = 'confirmed_multi_source', 'Confirmed multi-source'
+    NOISY = 'noisy', 'Noisy'
+    STALE = 'stale', 'Stale'
+
+
+class ScanRecommendationType(models.TextChoices):
+    SEND_TO_RESEARCH_TRIAGE = 'send_to_research_triage', 'Send to research triage'
+    SEND_TO_PREDICTION_CONTEXT = 'send_to_prediction_context', 'Send to prediction context'
+    KEEP_ON_WATCHLIST = 'keep_on_watchlist', 'Keep on watchlist'
+    IGNORE_NOISE = 'ignore_noise', 'Ignore noise'
+    REQUIRE_MANUAL_REVIEW = 'require_manual_review', 'Require manual review'
+    REORDER_SCAN_PRIORITY = 'reorder_scan_priority', 'Reorder scan priority'
+
+
 class NarrativeSource(TimeStampedModel):
     name = models.CharField(max_length=120)
     slug = models.SlugField(max_length=120, unique=True)
@@ -234,3 +264,76 @@ class PursuitCandidate(TimeStampedModel):
     class Meta:
         ordering = ['-triage_score', '-created_at', '-id']
         constraints = [models.UniqueConstraint(fields=['run', 'market'], name='research_unique_run_market_pursuit_candidate')]
+
+
+class SourceScanRun(TimeStampedModel):
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    source_counts = models.JSONField(default=dict, blank=True)
+    raw_item_count = models.PositiveIntegerField(default=0)
+    deduped_item_count = models.PositiveIntegerField(default=0)
+    clustered_count = models.PositiveIntegerField(default=0)
+    signal_count = models.PositiveIntegerField(default=0)
+    ignored_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class NarrativeCluster(TimeStampedModel):
+    scan_run = models.ForeignKey(SourceScanRun, on_delete=models.CASCADE, related_name='clusters')
+    canonical_topic = models.CharField(max_length=255)
+    representative_headline = models.CharField(max_length=512)
+    source_types = models.JSONField(default=list, blank=True)
+    item_count = models.PositiveIntegerField(default=0)
+    first_seen_at = models.DateTimeField(null=True, blank=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    combined_direction = models.CharField(max_length=24, choices=NarrativeSignalDirection.choices, default=NarrativeSignalDirection.UNCLEAR)
+    combined_sentiment = models.CharField(max_length=16, choices=NarrativeSentiment.choices, default=NarrativeSentiment.UNCERTAIN)
+    cluster_status = models.CharField(max_length=32, choices=NarrativeClusterStatus.choices, default=NarrativeClusterStatus.EMERGING)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-item_count', '-last_seen_at', '-id']
+
+
+class NarrativeSignal(TimeStampedModel):
+    scan_run = models.ForeignKey(SourceScanRun, on_delete=models.CASCADE, related_name='signals')
+    canonical_label = models.CharField(max_length=255)
+    topic = models.CharField(max_length=255)
+    target_market = models.ForeignKey('markets.Market', null=True, blank=True, on_delete=models.SET_NULL, related_name='narrative_signals')
+    source_mix = models.JSONField(default=dict, blank=True)
+    direction = models.CharField(max_length=24, choices=NarrativeSignalDirection.choices, default=NarrativeSignalDirection.UNCLEAR)
+    sentiment_score = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    novelty_score = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    intensity_score = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    source_confidence_score = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    market_divergence_score = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    total_signal_score = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal('0.0000'))
+    status = models.CharField(max_length=16, choices=NarrativeSignalStatus.choices, default=NarrativeSignalStatus.CANDIDATE)
+    rationale = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    raw_source_refs = models.JSONField(default=list, blank=True)
+    linked_cluster = models.ForeignKey(NarrativeCluster, null=True, blank=True, on_delete=models.SET_NULL, related_name='signals')
+    linked_market = models.ForeignKey('markets.Market', null=True, blank=True, on_delete=models.SET_NULL, related_name='linked_narrative_signals')
+    created_at_scan = models.DateTimeField(auto_now_add=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-total_signal_score', '-created_at_scan', '-id']
+
+
+class ScanRecommendation(TimeStampedModel):
+    scan_run = models.ForeignKey(SourceScanRun, on_delete=models.CASCADE, related_name='recommendations')
+    recommendation_type = models.CharField(max_length=48, choices=ScanRecommendationType.choices)
+    target_signal = models.ForeignKey(NarrativeSignal, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    rationale = models.TextField()
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    blockers = models.JSONField(default=list, blank=True)
+    created_at_scan = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at_scan', '-id']

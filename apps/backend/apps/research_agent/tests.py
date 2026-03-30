@@ -10,6 +10,11 @@ from apps.markets.demo_data import seed_demo_markets
 from apps.markets.models import Market, MarketStatus
 from apps.memory_retrieval.models import MemoryDocument
 from apps.research_agent.models import NarrativeAnalysis, NarrativeItem, NarrativeSource, ResearchCandidate
+from apps.research_agent.services.clustering import cluster_narratives
+from apps.research_agent.services.dedup import deduplicate_narratives
+from apps.research_agent.services.run import run_scan_agent
+from apps.research_agent.services.scoring import score_cluster
+from apps.research_agent.services.source_fetch import ScanRawItem
 from apps.research_agent.services.scan import run_research_scan
 from apps.research_agent.services.universe_scan import run_universe_scan
 
@@ -223,3 +228,72 @@ class ResearchAgentTests(TestCase):
         pursuit_payload = pursuit_response.json()
         self.assertTrue(any(item['triage_status'] in {'shortlisted', 'watch'} for item in pursuit_payload))
         self.assertTrue(any(item['triage_score'] for item in pursuit_payload))
+
+    def test_scan_agent_dedup_clustering_scoring_and_summary_endpoint(self):
+        repeated = ScanRawItem(
+            source_type='rss',
+            source_slug='demo-rss',
+            source_name='Demo RSS',
+            title='Fed pivot narrative strengthens',
+            url='https://example.com/fed-pivot',
+            raw_text='Fed pivot narrative strengthens as traders increase yes bets.',
+            snippet='Fed pivot narrative strengthens',
+            author='news',
+            published_at=timezone.now(),
+            metadata={},
+        )
+        items = [
+            repeated,
+            repeated,
+            ScanRawItem(
+                source_type='reddit',
+                source_slug='demo-reddit',
+                source_name='r/demo',
+                title='Fed pivot narrative strengthens this week',
+                url='https://reddit.com/r/demo/fed',
+                raw_text='Community sees upside and risk-on positioning.',
+                snippet='risk-on positioning',
+                author='demo',
+                published_at=timezone.now(),
+                metadata={},
+            ),
+            ScanRawItem(
+                source_type='x',
+                source_slug='demo-twitter',
+                source_name='Demo X',
+                title='Fed pivot odds rising quickly',
+                url='https://x.com/demo/status/1',
+                raw_text='Odds rising quickly and market still flat.',
+                snippet='Odds rising quickly',
+                author='macro',
+                published_at=timezone.now(),
+                metadata={},
+            ),
+        ]
+        dedup = deduplicate_narratives(items)
+        self.assertEqual(len(dedup.deduped_items), 3)
+        self.assertEqual(len(dedup.ignored_items), 1)
+
+        clusters = cluster_narratives(dedup.deduped_items)
+        self.assertGreaterEqual(len(clusters), 1)
+        top_cluster = clusters[0]
+        score = score_cluster(top_cluster)
+        self.assertGreaterEqual(score.novelty_score, 0)
+        self.assertGreaterEqual(score.intensity_score, 0)
+
+        with patch('apps.research_agent.services.source_fetch.fetch_parallel_source_items', return_value=(items, {'rss_count': 1, 'reddit_count': 1, 'x_count': 1}, [])):
+            run = run_scan_agent()
+
+        self.assertGreaterEqual(run.signal_count, 1)
+        self.assertGreaterEqual(run.clustered_count, 1)
+        self.assertIsNotNone(run.recommendation_summary)
+
+        summary_response = self.client.get(reverse('scan_agent:summary'))
+        signals_response = self.client.get(reverse('scan_agent:signals'))
+        clusters_response = self.client.get(reverse('scan_agent:clusters'))
+        recommendations_response = self.client.get(reverse('scan_agent:recommendations'))
+        self.assertEqual(summary_response.status_code, 200)
+        self.assertEqual(signals_response.status_code, 200)
+        self.assertEqual(clusters_response.status_code, 200)
+        self.assertEqual(recommendations_response.status_code, 200)
+        self.assertIn('latest_run', summary_response.json())
