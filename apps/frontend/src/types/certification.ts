@@ -245,3 +245,93 @@ export type BaselineConfirmationSummary = {
   binding_review_required_count: number;
   recommendation_summary: Record<string, number>;
 };
+
+
+export type BaselineActivationRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  linked_baseline_confirmation_run: number | null;
+  candidate_count: number;
+  ready_to_activate_count: number;
+  blocked_count: number;
+  activated_count: number;
+  rollback_ready_count: number;
+  recommendation_summary: Record<string, number>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineActivationCandidate = {
+  id: number;
+  review_run: number;
+  linked_paper_baseline_confirmation: number;
+  linked_certification_decision: number | null;
+  target_component: string;
+  target_scope: string;
+  previous_active_reference: string;
+  proposed_active_reference: string;
+  activation_resolution_status: 'RESOLVED' | 'PARTIAL' | 'BLOCKED' | 'UNKNOWN';
+  ready_for_activation: boolean;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type PaperBaselineActivation = {
+  id: number;
+  linked_candidate: number | null;
+  linked_confirmation: number;
+  activation_status: string;
+  target_component: string;
+  target_scope: string;
+  previous_active_snapshot: Record<string, unknown>;
+  activated_snapshot: Record<string, unknown>;
+  activated_by: string;
+  activated_at: string | null;
+  rationale: string;
+  reason_codes: string[];
+  blockers: string[];
+  linked_binding_artifact: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ActivePaperBindingRecord = {
+  id: number;
+  target_component: string;
+  target_scope: string;
+  active_binding_type: string;
+  active_snapshot: Record<string, unknown>;
+  source_activation: number | null;
+  status: 'ACTIVE' | 'SUPERSEDED' | 'REVERTED';
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BaselineActivationRecommendationItem = {
+  id: number;
+  review_run: number;
+  target_activation: number | null;
+  recommendation_type: string;
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineActivationSummary = {
+  latest_run: BaselineActivationRun | null;
+  confirmed_baselines: number;
+  candidate_count: number;
+  ready_to_activate_count: number;
+  blocked_count: number;
+  activated_count: number;
+  rollback_available_count: number;
+  binding_recheck_required_count: number;
+  recommendation_summary: Record<string, number>;
+};

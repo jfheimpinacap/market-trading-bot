@@ -1,6 +1,10 @@
 from rest_framework import serializers
 
 from apps.certification_board.models import (
+    ActivePaperBindingRecord,
+    BaselineActivationCandidate,
+    BaselineActivationRecommendation,
+    BaselineActivationRun,
     BaselineBindingSnapshot,
     BaselineConfirmationCandidate,
     BaselineConfirmationRecommendation,
@@ -14,6 +18,7 @@ from apps.certification_board.models import (
     CertificationRun,
     RolloutCertificationRun,
     OperatingEnvelope,
+    PaperBaselineActivation,
     PaperBaselineConfirmation,
 )
 
@@ -130,4 +135,48 @@ class BaselineBindingSnapshotSerializer(serializers.ModelSerializer):
 class BaselineConfirmationRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = BaselineConfirmationRecommendation
+        fields = '__all__'
+
+
+class RunBaselineActivationReviewRequestSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui')
+    metadata = serializers.DictField(required=False)
+
+
+class ActivatePaperBaselineRequestSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui')
+    rationale = serializers.CharField(required=False, allow_blank=True, default='')
+
+
+class RollbackBaselineActivationRequestSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui')
+
+
+class BaselineActivationRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineActivationRun
+        fields = '__all__'
+
+
+class BaselineActivationCandidateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineActivationCandidate
+        fields = '__all__'
+
+
+class PaperBaselineActivationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaperBaselineActivation
+        fields = '__all__'
+
+
+class ActivePaperBindingRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ActivePaperBindingRecord
+        fields = '__all__'
+
+
+class BaselineActivationRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineActivationRecommendation
         fields = '__all__'

@@ -3,48 +3,64 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.certification_board.models import CertificationRun
-from apps.certification_board.serializers import (
-    BaselineBindingSnapshotSerializer,
-    BaselineConfirmationCandidateSerializer,
-    BaselineConfirmationRecommendationSerializer,
-    BaselineConfirmationRunSerializer,
-    ConfirmPaperBaselineRequestSerializer,
-    PaperBaselineConfirmationSerializer,
-    ApplyCertificationDecisionRequestSerializer,
-    CertificationCandidateSerializer,
-    CertificationDecisionSerializer,
-    CertificationEvidencePackSerializer,
-    CertificationRecommendationSerializer,
-    CertificationRunSerializer,
-    RolloutCertificationRunSerializer,
-    RunBaselineConfirmationReviewRequestSerializer,
-    RunPostRolloutReviewRequestSerializer,
-    RunCertificationReviewRequestSerializer,
-)
-from apps.certification_board.services import (
-    apply_certification_decision,
-    build_certification_summary,
-    confirm_paper_baseline,
-    get_current_certification,
-    prepare_baseline_rollback,
-    run_baseline_confirmation_review,
-    run_post_rollout_certification_review,
-    run_certification_review,
-)
 from apps.certification_board.models import (
+    ActivePaperBindingRecord,
+    BaselineActivationCandidate,
+    BaselineActivationRecommendation,
+    BaselineActivationRun,
     BaselineBindingSnapshot,
     BaselineConfirmationCandidate,
     BaselineConfirmationRecommendation,
     BaselineConfirmationRun,
     CertificationCandidate,
     CertificationDecision,
+    CertificationDecisionStatus,
     CertificationEvidencePack,
     CertificationRecommendation,
-    CertificationDecisionStatus,
+    CertificationRun,
+    PaperBaselineActivation,
     PaperBaselineConfirmation,
     PaperBaselineConfirmationStatus,
     RolloutCertificationRun,
+)
+from apps.certification_board.serializers import (
+    ActivatePaperBaselineRequestSerializer,
+    ActivePaperBindingRecordSerializer,
+    ApplyCertificationDecisionRequestSerializer,
+    BaselineActivationCandidateSerializer,
+    BaselineActivationRecommendationSerializer,
+    BaselineActivationRunSerializer,
+    BaselineBindingSnapshotSerializer,
+    BaselineConfirmationCandidateSerializer,
+    BaselineConfirmationRecommendationSerializer,
+    BaselineConfirmationRunSerializer,
+    ConfirmPaperBaselineRequestSerializer,
+    PaperBaselineActivationSerializer,
+    PaperBaselineConfirmationSerializer,
+    CertificationCandidateSerializer,
+    CertificationDecisionSerializer,
+    CertificationEvidencePackSerializer,
+    CertificationRecommendationSerializer,
+    CertificationRunSerializer,
+    RolloutCertificationRunSerializer,
+    RollbackBaselineActivationRequestSerializer,
+    RunBaselineActivationReviewRequestSerializer,
+    RunBaselineConfirmationReviewRequestSerializer,
+    RunPostRolloutReviewRequestSerializer,
+    RunCertificationReviewRequestSerializer,
+)
+from apps.certification_board.services import (
+    activate_paper_baseline,
+    apply_certification_decision,
+    build_certification_summary,
+    confirm_paper_baseline,
+    get_current_certification,
+    prepare_baseline_rollback,
+    rollback_baseline_activation,
+    run_baseline_activation_review,
+    run_baseline_confirmation_review,
+    run_post_rollout_certification_review,
+    run_certification_review,
 )
 
 
@@ -340,3 +356,118 @@ class RollbackPaperBaselineView(APIView):
         actor = (request.data or {}).get('actor', 'operator-ui')
         confirmation = prepare_baseline_rollback(confirmation=confirmation, actor=actor)
         return Response(PaperBaselineConfirmationSerializer(confirmation).data, status=status.HTTP_200_OK)
+
+
+class RunBaselineActivationReviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunBaselineActivationReviewRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_baseline_activation_review(
+            actor=serializer.validated_data.get('actor', 'operator-ui'),
+            metadata=serializer.validated_data.get('metadata') or {},
+        )
+        return Response(
+            {
+                'run': BaselineActivationRunSerializer(result['run']).data,
+                'candidate_count': len(result['candidates']),
+                'activation_count': len(result['activations']),
+                'recommendation_count': len(result['recommendations']),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class BaselineActivationCandidateListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = BaselineActivationCandidateSerializer
+
+    def get_queryset(self):
+        return BaselineActivationCandidate.objects.select_related(
+            'review_run', 'linked_paper_baseline_confirmation', 'linked_certification_decision'
+        ).order_by('-created_at', '-id')[:500]
+
+
+class PaperBaselineActivationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PaperBaselineActivationSerializer
+
+    def get_queryset(self):
+        return PaperBaselineActivation.objects.select_related('linked_candidate', 'linked_confirmation').order_by('-created_at', '-id')[:500]
+
+
+class ActivePaperBindingRecordListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ActivePaperBindingRecordSerializer
+
+    def get_queryset(self):
+        return ActivePaperBindingRecord.objects.select_related('source_activation').order_by('-created_at', '-id')[:500]
+
+
+class BaselineActivationRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = BaselineActivationRecommendationSerializer
+
+    def get_queryset(self):
+        return BaselineActivationRecommendation.objects.select_related('review_run', 'target_activation').order_by('-created_at', '-id')[:500]
+
+
+class BaselineActivationSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        latest_run = BaselineActivationRun.objects.order_by('-started_at', '-id').first()
+        return Response(
+            {
+                'latest_run': BaselineActivationRunSerializer(latest_run).data if latest_run else None,
+                'confirmed_baselines': PaperBaselineConfirmation.objects.filter(
+                    confirmation_status=PaperBaselineConfirmationStatus.CONFIRMED
+                ).count(),
+                'candidate_count': latest_run.candidate_count if latest_run else 0,
+                'ready_to_activate_count': latest_run.ready_to_activate_count if latest_run else 0,
+                'blocked_count': latest_run.blocked_count if latest_run else 0,
+                'activated_count': latest_run.activated_count if latest_run else 0,
+                'rollback_available_count': latest_run.rollback_ready_count if latest_run else 0,
+                'binding_recheck_required_count': BaselineActivationRecommendation.objects.filter(
+                    recommendation_type='REQUIRE_BINDING_RECHECK'
+                ).count(),
+                'recommendation_summary': latest_run.recommendation_summary if latest_run else {},
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ActivatePaperBaselineView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, confirmation_id: int, *args, **kwargs):
+        serializer = ActivatePaperBaselineRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        activation = activate_paper_baseline(
+            confirmation_id=confirmation_id,
+            actor=serializer.validated_data.get('actor', 'operator-ui'),
+            rationale=serializer.validated_data.get('rationale', ''),
+        )
+        return Response(PaperBaselineActivationSerializer(activation).data, status=status.HTTP_200_OK)
+
+
+class RollbackBaselineActivationView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, activation_id: int, *args, **kwargs):
+        serializer = RollbackBaselineActivationRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        activation = rollback_baseline_activation(
+            activation_id=activation_id,
+            actor=serializer.validated_data.get('actor', 'operator-ui'),
+        )
+        return Response(PaperBaselineActivationSerializer(activation).data, status=status.HTTP_200_OK)

@@ -2905,3 +2905,8 @@ Scope/constraints:
 - no auto champion switch
 - explicit manual confirmation and rollback preparation only
 - paper/sandbox governance only
+
+
+## Paper baseline activation board
+
+The certification domain now includes a **paper baseline activation board** that sits after `PaperBaselineConfirmation=CONFIRMED`. It creates manual activation candidates, resolves active-binding replacement targets, records before/after snapshots, updates an explicit active paper binding registry, and keeps rollback reversible and auditable. This layer is manual-first, paper-only, local-first, and does not auto-switch champion, auto-promote, or execute live trading.

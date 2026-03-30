@@ -163,3 +163,46 @@ def summarize_readiness(candidates: Iterable[CertificationCandidate]) -> dict[st
         ),
         'blocked': sum(1 for item in rows if item.stabilization_readiness == StabilizationReadiness.BLOCKED),
     }
+
+
+def build_baseline_activation_candidates(*, review_run):
+    from apps.certification_board.models import (
+        BaselineActivationCandidate,
+        BaselineBindingResolutionStatus,
+        PaperBaselineConfirmation,
+        PaperBaselineConfirmationStatus,
+    )
+    from apps.certification_board.services.binding_resolution import resolve_activation_bindings
+
+    confirmations = PaperBaselineConfirmation.objects.select_related('linked_candidate', 'linked_certification_decision').filter(
+        confirmation_status=PaperBaselineConfirmationStatus.CONFIRMED
+    ).order_by('-confirmed_at', '-id')
+
+    created: list[BaselineActivationCandidate] = []
+    for confirmation in confirmations:
+        if BaselineActivationCandidate.objects.filter(review_run=review_run, linked_paper_baseline_confirmation=confirmation).exists():
+            continue
+
+        resolved = resolve_activation_bindings(confirmation=confirmation)
+        ready = resolved.activation_resolution_status == BaselineBindingResolutionStatus.RESOLVED
+
+        candidate = BaselineActivationCandidate.objects.create(
+            review_run=review_run,
+            linked_paper_baseline_confirmation=confirmation,
+            linked_certification_decision=confirmation.linked_certification_decision,
+            target_component=confirmation.target_component,
+            target_scope=confirmation.target_scope,
+            previous_active_reference=resolved.previous_active_reference,
+            proposed_active_reference=resolved.proposed_active_reference,
+            activation_resolution_status=resolved.activation_resolution_status,
+            ready_for_activation=ready,
+            blockers=resolved.blockers,
+            metadata={
+                'binding_snapshot': resolved.snapshot,
+                'paper_baseline_confirmation_id': confirmation.id,
+                'baseline_confirmation_candidate_id': confirmation.linked_candidate_id,
+            },
+        )
+        created.append(candidate)
+
+    return created
