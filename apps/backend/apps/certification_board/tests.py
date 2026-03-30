@@ -135,3 +135,10 @@ class CertificationBoardTests(TestCase):
         self.assertEqual(detail_res.status_code, 200)
         summary_res = self.client.get(reverse('certification_board:summary'))
         self.assertEqual(summary_res.status_code, 200)
+
+    def test_post_rollout_review_and_summary_endpoints(self):
+        response = self.client.post(reverse('certification_board:run-post-rollout-review'), {'actor': 'test'}, format='json')
+        self.assertEqual(response.status_code, 201)
+        summary = self.client.get(reverse('certification_board:post-rollout-summary'))
+        self.assertEqual(summary.status_code, 200)
+        self.assertIn('candidate_count', summary.json())

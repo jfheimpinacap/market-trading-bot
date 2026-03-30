@@ -1571,3 +1571,18 @@ Implementation notes:
 - operator actions are explicit (`run review`, `execute`, `record checkpoint`, `close`)
 
 No autonomous execution behavior was introduced.
+
+## `/certification` post-rollout stabilization board
+
+The certification page now acts as a post-rollout governance gate (manual-first, paper-only):
+
+- action trigger: run post-rollout certification review
+- clear summary cards for stabilization outcomes
+- explicit candidate/evidence/decision/recommendation panels
+- badges for readiness, evidence status, and decision status
+- valid empty state when no post-rollout candidates exist
+
+Integration points:
+- quick links to promotion/evaluation/trace/cockpit
+- no duplicate rollout execution UI logic
+- keeps `/promotion` as rollout execution source and `/certification` as stabilization decision source

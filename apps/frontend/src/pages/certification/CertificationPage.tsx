@@ -6,27 +6,42 @@ import { PageHeader } from '../../components/PageHeader';
 import { SectionCard } from '../../components/SectionCard';
 import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { navigate } from '../../lib/router';
-import { getCertificationRuns, getCertificationSummary, getCurrentCertification, runCertificationReview } from '../../services/certification';
-import type { CertificationRun, CertificationSummary } from '../../types/certification';
+import {
+  getCertificationCandidates,
+  getCertificationDecisions,
+  getCertificationEvidencePacks,
+  getCertificationRecommendations,
+  getCertificationSummary,
+  runPostRolloutCertificationReview,
+} from '../../services/certificationReview';
+import type {
+  CertificationCandidate,
+  CertificationDecision,
+  CertificationEvidencePack,
+  CertificationRecommendationItem,
+  PostRolloutCertificationSummary,
+} from '../../types/certification';
 
-const levelTone = (level: string) => {
-  if (level === 'PAPER_CERTIFIED_HIGH_AUTONOMY' || level === 'PAPER_CERTIFIED_BALANCED') return 'ready';
-  if (level === 'PAPER_CERTIFIED_DEFENSIVE' || level === 'RECERTIFICATION_REQUIRED') return 'pending';
-  if (level === 'NOT_CERTIFIED' || level === 'REMEDIATION_REQUIRED') return 'offline';
+const toneFromState = (value: string): 'ready' | 'pending' | 'offline' | 'neutral' => {
+  const normalized = value.toUpperCase();
+  if (['READY', 'CERTIFIED_FOR_PAPER_BASELINE', 'STRONG'].includes(normalized)) return 'ready';
+  if (['NEEDS_OBSERVATION', 'KEEP_UNDER_OBSERVATION', 'MIXED', 'WEAK'].includes(normalized)) return 'pending';
+  if (['ROLLBACK_RECOMMENDED', 'RECOMMEND_ROLLBACK', 'REJECT_CERTIFICATION', 'INSUFFICIENT', 'BLOCKED'].includes(normalized)) return 'offline';
   return 'neutral';
 };
 
-const formatDate = (value: string) => {
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
+const formatDate = (value: string | null) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 };
 
-const asText = (v: unknown) => (v === null || v === undefined ? '—' : String(v));
-
 export function CertificationPage() {
-  const [summary, setSummary] = useState<CertificationSummary | null>(null);
-  const [current, setCurrent] = useState<CertificationRun | null>(null);
-  const [runs, setRuns] = useState<CertificationRun[]>([]);
+  const [summary, setSummary] = useState<PostRolloutCertificationSummary | null>(null);
+  const [candidates, setCandidates] = useState<CertificationCandidate[]>([]);
+  const [evidencePacks, setEvidencePacks] = useState<CertificationEvidencePack[]>([]);
+  const [decisions, setDecisions] = useState<CertificationDecision[]>([]);
+  const [recommendations, setRecommendations] = useState<CertificationRecommendationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,16 +50,20 @@ export function CertificationPage() {
     setLoading(true);
     setError(null);
     try {
-      const [summaryRes, runsRes, currentRes] = await Promise.all([
+      const [summaryRes, candidatesRes, evidenceRes, decisionsRes, recommendationsRes] = await Promise.all([
         getCertificationSummary(),
-        getCertificationRuns(),
-        getCurrentCertification(),
+        getCertificationCandidates(),
+        getCertificationEvidencePacks(),
+        getCertificationDecisions(),
+        getCertificationRecommendations(),
       ]);
       setSummary(summaryRes);
-      setRuns(runsRes);
-      setCurrent(currentRes.current_certification);
+      setCandidates(candidatesRes);
+      setEvidencePacks(evidenceRes);
+      setDecisions(decisionsRes);
+      setRecommendations(recommendationsRes);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load certification board state.');
+      setError(e instanceof Error ? e.message : 'Could not load certification stabilization state.');
     } finally {
       setLoading(false);
     }
@@ -54,103 +73,116 @@ export function CertificationPage() {
     void load();
   }, [load]);
 
-  const onRun = useCallback(async () => {
+  const runReview = useCallback(async () => {
     setRunning(true);
     setError(null);
     try {
-      await runCertificationReview({ metadata: { initiated_from: 'certification_ui' } });
+      await runPostRolloutCertificationReview({ actor: 'certification_ui', metadata: { initiated_from: 'certification_ui' } });
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not run certification review.');
+      setError(e instanceof Error ? e.message : 'Could not run post-rollout certification review.');
     } finally {
       setRunning(false);
     }
   }, [load]);
 
-  const evidence = current?.evidence_snapshot;
-  const envelope = current?.operating_envelope;
-  const hasRuns = useMemo(() => (summary?.total_runs ?? 0) > 0, [summary?.total_runs]);
+  const hasCandidates = useMemo(() => candidates.length > 0, [candidates.length]);
 
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Operational certification board"
+        eyebrow="Rollout certification board"
         title="/certification"
-        description="Manual-first operational certification and go-live gate for paper autonomy. Consolidates readiness, resilience, incidents, rollout and execution realism into an explicit operating envelope. Paper/demo only."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/readiness')}>Open Readiness</button><button type="button" className="secondary-button" onClick={() => navigate('/chaos')}>Open Chaos</button><button type="button" className="secondary-button" onClick={() => navigate('/promotion')}>Open Promotion</button><button type="button" className="secondary-button" onClick={() => navigate('/mission-control')}>Open Mission Control</button><button type="button" className="secondary-button" onClick={() => navigate('/runtime')}>Open Runtime</button><button type="button" className="secondary-button" onClick={() => navigate('/broker-bridge')}>Open Broker Bridge</button><button type="button" className="secondary-button" onClick={() => navigate('/go-live')}>Open Go Live Gate</button></div>}
+        description="Post-rollout stabilization gate for manual-first, local-first, paper-only governance. Execute ≠ certify: this board consolidates rollout evidence and recommends certify/observe/review/rollback without auto-apply."
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/promotion')}>Open Promotion</button><button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>Open Evaluation</button><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Open Trace</button><button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Open Cockpit</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
-        <SectionCard eyebrow="Review controls" title="Run operational certification" description="Run a conservative certification review to assess current paper stack limits and constraints.">
-          <button type="button" className="primary-button" disabled={running} onClick={() => void onRun()}>{running ? 'Running review…' : 'Run certification review'}</button>
+        <SectionCard eyebrow="Actions" title="Run post-rollout certification review" description="Manual operator trigger. No auto-certification, no auto-promotion, no automatic baseline switch.">
+          <button type="button" className="primary-button" onClick={() => void runReview()} disabled={running}>{running ? 'Running…' : 'Run post-rollout review'}</button>
         </SectionCard>
 
-        {!hasRuns || !current ? (
-          <EmptyState eyebrow="No certification reviews" title="Run an operational certification review to assess the current paper stack." description="Inconclusive evidence is shown as manual-review/recertification required, not as an API error." />
+        <SectionCard eyebrow="Summary" title="Stabilization outcomes" description="Latest review counters for certification, observation, manual review, rollback recommendation, and rejection.">
+          <div className="cockpit-metric-grid">
+            <div><strong>Candidates reviewed:</strong> {summary?.candidate_count ?? 0}</div>
+            <div><strong>Certified:</strong> {summary?.certified_count ?? 0}</div>
+            <div><strong>Under observation:</strong> {summary?.observation_count ?? 0}</div>
+            <div><strong>Review required:</strong> {summary?.review_required_count ?? 0}</div>
+            <div><strong>Rollback recommended:</strong> {summary?.rollback_recommended_count ?? 0}</div>
+            <div><strong>Rejected:</strong> {summary?.rejected_count ?? 0}</div>
+          </div>
+        </SectionCard>
+
+        {!hasCandidates ? (
+          <EmptyState
+            eyebrow="No post-rollout candidates"
+            title="No post-rollout certification candidates are available yet."
+            description="Run certification review to evaluate stabilization and baseline readiness. KEEP_UNDER_OBSERVATION and REJECT_CERTIFICATION are valid governance outcomes, not errors."
+          />
         ) : (
           <>
-            <SectionCard eyebrow="Current certification" title="Certification state and recommendation" description="Latest certification level, recommendation, confidence and envelope summary.">
-              <div className="system-metadata-grid">
-                <div><strong>Certification level:</strong> <StatusBadge tone={levelTone(current.certification_level)}>{current.certification_level}</StatusBadge></div>
-                <div><strong>Recommendation:</strong> {current.recommendation_code}</div>
-                <div><strong>Confidence:</strong> {current.confidence}</div>
-                <div><strong>Rationale:</strong> {current.rationale}</div>
-                <div><strong>Reason codes:</strong> {current.reason_codes.join(', ') || 'None'}</div>
-                <div><strong>Blocking constraints:</strong> {current.blocking_constraints.join(', ') || 'None'}</div>
-                <div><strong>Created:</strong> {formatDate(current.created_at)}</div>
-              </div>
+            <SectionCard eyebrow="Candidates" title="Certification candidates" description="Rollout executions mapped into explicit stabilization readiness states.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>ID</th><th>Target</th><th>Scope</th><th>Rollout status</th><th>Readiness</th><th>Blockers</th><th>Trace chain</th></tr></thead><tbody>
+                {candidates.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.id}</td>
+                    <td>{row.target_component}</td>
+                    <td>{row.target_scope}</td>
+                    <td>{row.rollout_status}</td>
+                    <td><StatusBadge tone={toneFromState(row.stabilization_readiness)}>{row.stabilization_readiness}</StatusBadge></td>
+                    <td>{row.blockers.join(', ') || '—'}</td>
+                    <td>promotion_case:{String((row.metadata.trace_chain as Record<string, unknown> | undefined)?.promotion_case_id ?? '—')} / experiment:{String((row.metadata.trace_chain as Record<string, unknown> | undefined)?.experiment_candidate_id ?? '—')}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
             </SectionCard>
 
-            <SectionCard eyebrow="Evidence snapshot" title="Consolidated operational evidence" description="Readiness + chaos + evaluation + incidents + rollout + promotion, all in one formal snapshot.">
-              <div className="table-wrapper">
-                <table className="data-table"><thead><tr><th>Evidence source</th><th>Summary</th></tr></thead><tbody>
-                  <tr><td>Readiness</td><td>Status: {asText(evidence?.readiness_summary.status)} | Score: {asText(evidence?.readiness_summary.score)}</td></tr>
-                  <tr><td>Chaos resilience</td><td>Resilience: {asText(evidence?.chaos_benchmark_summary.latest_resilience_score)} | Recovery: {asText(evidence?.chaos_benchmark_summary.latest_recovery_success_rate)}</td></tr>
-                  <tr><td>Execution-aware evaluation</td><td>Favorable rate: {asText(evidence?.execution_evaluation_summary.favorable_review_rate)} | Hard stops: {asText(evidence?.execution_evaluation_summary.hard_stop_count)}</td></tr>
-                  <tr><td>Incidents</td><td>Open critical: {asText(evidence?.incident_summary.open_critical)} | Open high: {asText(evidence?.incident_summary.open_high)}</td></tr>
-                  <tr><td>Rollout + Promotion</td><td>Rollout status: {asText(evidence?.rollout_summary.status)} | Promotion recommendation: {asText(evidence?.promotion_summary.recommendation_code)}</td></tr>
-                </tbody></table>
-              </div>
+            <SectionCard eyebrow="Evidence" title="Evidence packs" description="Checkpoint outcomes, post-rollout signals and evaluation context merged into auditable packs.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Candidate</th><th>Summary</th><th>Samples</th><th>Confidence</th><th>Stability</th><th>Regression risk</th><th>Status</th></tr></thead><tbody>
+                {evidencePacks.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_candidate}</td>
+                    <td>{row.summary}</td>
+                    <td>{row.sample_count}</td>
+                    <td>{row.confidence_score}</td>
+                    <td>{row.stability_score}</td>
+                    <td>{row.regression_risk_score}</td>
+                    <td><StatusBadge tone={toneFromState(row.evidence_status)}>{row.evidence_status}</StatusBadge></td>
+                  </tr>
+                ))}
+              </tbody></table></div>
             </SectionCard>
 
-            <SectionCard eyebrow="Operating envelope" title="Certified paper limits" description="Explicit operational bounds derived from certification output.">
-              <div className="system-metadata-grid">
-                <div><strong>Max autonomy mode:</strong> {envelope?.max_autonomy_mode_allowed}</div>
-                <div><strong>Auto execution allowed:</strong> {envelope?.auto_execution_allowed ? 'Yes' : 'No'}</div>
-                <div><strong>Canary rollout allowed:</strong> {envelope?.canary_rollout_allowed ? 'Yes' : 'No'}</div>
-                <div><strong>Max new entries/cycle:</strong> {envelope?.max_new_entries_per_cycle}</div>
-                <div><strong>Max size multiplier:</strong> {envelope?.max_size_multiplier_allowed}</div>
-                <div><strong>Allowed profiles:</strong> {envelope?.allowed_profiles?.join(', ') || '—'}</div>
-                <div><strong>Constrained modules:</strong> {envelope?.constrained_modules?.join(', ') || 'None'}</div>
-                <div><strong>Defensive only:</strong> {envelope?.defensive_profiles_only ? 'Yes' : 'No'}</div>
-              </div>
+            <SectionCard eyebrow="Decisions" title="Certification decisions" description="Final stabilization decisions (manual-first) with rationale and reason codes.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Candidate</th><th>Decision</th><th>Rationale</th><th>Reason codes</th><th>Decided by</th><th>Decided at</th></tr></thead><tbody>
+                {decisions.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_candidate}</td>
+                    <td><StatusBadge tone={toneFromState(row.decision_status)}>{row.decision_status}</StatusBadge></td>
+                    <td>{row.rationale}</td>
+                    <td>{row.reason_codes.join(', ') || '—'}</td>
+                    <td>{row.decided_by || 'manual_pending'}</td>
+                    <td>{formatDate(row.decided_at)}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Recommendations" title="Certification recommendations" description="Conservative recommendations for certify/observe/review/rollback/reject, never auto-applied.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Candidate</th><th>Recommendation</th><th>Rationale</th><th>Reason codes</th><th>Confidence</th></tr></thead><tbody>
+                {recommendations.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.target_candidate ? `#${row.target_candidate}` : '—'}</td>
+                    <td><StatusBadge tone={toneFromState(row.recommendation_type)}>{row.recommendation_type}</StatusBadge></td>
+                    <td>{row.rationale}</td>
+                    <td>{row.reason_codes.join(', ') || '—'}</td>
+                    <td>{row.confidence}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
             </SectionCard>
           </>
         )}
-
-        <SectionCard eyebrow="Recent certification runs" title="Audit trail" description="Recent certification decisions with level, recommendation and summary.">
-          {!runs.length ? (
-            <EmptyState eyebrow="No runs" title="No certification runs yet" description="Run an operational certification review to assess the current paper stack." />
-          ) : (
-            <div className="table-wrapper">
-              <table className="data-table">
-                <thead><tr><th>ID</th><th>Status</th><th>Recommendation</th><th>Certification level</th><th>Created</th><th>Summary</th></tr></thead>
-                <tbody>
-                  {runs.slice(0, 15).map((run) => (
-                    <tr key={run.id}>
-                      <td>#{run.id}</td>
-                      <td>{run.status}</td>
-                      <td>{run.recommendation_code}</td>
-                      <td><StatusBadge tone={levelTone(run.certification_level)}>{run.certification_level}</StatusBadge></td>
-                      <td>{formatDate(run.created_at)}</td>
-                      <td>{run.summary || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </SectionCard>
       </DataStateWrapper>
     </div>
   );

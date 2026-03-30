@@ -236,7 +236,7 @@ export function PromotionPage() {
         eyebrow="Promotion rollout execution prep board"
         title="/promotion"
         description="Local-first, manual-first and paper-only governance. Approved adoption actions can be transformed into explicit rollout plans, checkpoints, monitoring intent, and dedicated auditable manual rollback controls. No auto-rollout."
-        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/experiments')}>Experiments</button><button className="secondary-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button><button className="secondary-button" type="button" onClick={() => navigate('/tuning')}>Tuning</button><button className="secondary-button" type="button" onClick={() => navigate('/evaluation')}>Evaluation</button><button className="secondary-button" type="button" onClick={() => navigate('/trace')}>Trace</button></div>}
+        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/experiments')}>Experiments</button><button className="secondary-button" type="button" onClick={() => navigate('/cockpit')}>Cockpit</button><button className="secondary-button" type="button" onClick={() => navigate('/certification')}>Certification</button><button className="secondary-button" type="button" onClick={() => navigate('/tuning')}>Tuning</button><button className="secondary-button" type="button" onClick={() => navigate('/evaluation')}>Evaluation</button><button className="secondary-button" type="button" onClick={() => navigate('/trace')}>Trace</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>

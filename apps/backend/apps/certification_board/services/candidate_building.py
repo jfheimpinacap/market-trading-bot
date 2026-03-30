@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+from typing import Iterable
+
+from apps.certification_board.models import CertificationCandidate, RolloutCertificationRun, StabilizationReadiness
+from apps.promotion_committee.models import (
+    PostRolloutStatus,
+    PostRolloutStatusType,
+    RolloutExecutionRecord,
+    RolloutExecutionStatus,
+)
+
+_TERMINAL_EXECUTION_STATUSES: tuple[str, ...] = (
+    RolloutExecutionStatus.EXECUTED,
+    RolloutExecutionStatus.FAILED,
+    RolloutExecutionStatus.ROLLBACK_RECOMMENDED,
+    RolloutExecutionStatus.REVERTED,
+)
+
+
+def _derive_readiness(*, execution: RolloutExecutionRecord, post_status: PostRolloutStatus | None, blockers: list[str]) -> str:
+    if execution.execution_status in {RolloutExecutionStatus.FAILED, RolloutExecutionStatus.REVERTED}:
+        return StabilizationReadiness.ROLLBACK_RECOMMENDED
+
+    if post_status and post_status.status in {PostRolloutStatusType.ROLLBACK_RECOMMENDED, PostRolloutStatusType.REVERTED}:
+        return StabilizationReadiness.ROLLBACK_RECOMMENDED
+
+    if blockers:
+        return StabilizationReadiness.BLOCKED
+
+    if post_status is None or post_status.status == PostRolloutStatusType.INCOMPLETE:
+        return StabilizationReadiness.NEEDS_OBSERVATION
+
+    if post_status.status == PostRolloutStatusType.REVIEW_REQUIRED:
+        return StabilizationReadiness.REVIEW_REQUIRED
+
+    if post_status.status == PostRolloutStatusType.CAUTION:
+        return StabilizationReadiness.NEEDS_OBSERVATION
+
+    if post_status.status == PostRolloutStatusType.HEALTHY and execution.execution_status == RolloutExecutionStatus.EXECUTED:
+        return StabilizationReadiness.READY
+
+    return StabilizationReadiness.NEEDS_OBSERVATION
+
+
+def build_rollout_certification_candidates(
+    *,
+    review_run: RolloutCertificationRun,
+    rollout_execution_run_id: int | None = None,
+) -> list[CertificationCandidate]:
+    executions = (
+        RolloutExecutionRecord.objects.select_related(
+            'linked_rollout_plan',
+            'linked_rollout_plan__linked_candidate',
+            'linked_rollout_plan__linked_candidate__linked_promotion_case',
+            'execution_run',
+        )
+        .prefetch_related('post_rollout_statuses')
+        .filter(execution_status__in=_TERMINAL_EXECUTION_STATUSES)
+        .order_by('-created_at', '-id')
+    )
+
+    if rollout_execution_run_id:
+        executions = executions.filter(execution_run_id=rollout_execution_run_id)
+
+    candidates: list[CertificationCandidate] = []
+    for execution in executions:
+        post_status = execution.post_rollout_statuses.order_by('-created_at', '-id').first()
+        blockers = list(execution.blockers or [])
+        if not post_status:
+            blockers.append('missing_post_rollout_status')
+
+        readiness = _derive_readiness(execution=execution, post_status=post_status, blockers=blockers)
+        promotion_case = getattr(getattr(execution.linked_rollout_plan, 'linked_candidate', None), 'linked_promotion_case', None)
+        candidate = CertificationCandidate.objects.create(
+            review_run=review_run,
+            linked_rollout_execution=execution,
+            linked_post_rollout_status=post_status,
+            linked_rollout_plan=execution.linked_rollout_plan,
+            linked_promotion_case=promotion_case,
+            target_component=execution.linked_rollout_plan.target_component,
+            target_scope=execution.linked_rollout_plan.target_scope,
+            rollout_status=execution.execution_status,
+            stabilization_readiness=readiness,
+            blockers=blockers,
+            metadata={
+                'execution_run_id': execution.execution_run_id,
+                'promotion_case_id': promotion_case.id if promotion_case else None,
+                'post_rollout_status_id': post_status.id if post_status else None,
+                'trace_chain': {
+                    'tuning_proposal_id': promotion_case.linked_tuning_proposal_id if promotion_case else None,
+                    'experiment_candidate_id': promotion_case.linked_experiment_candidate_id if promotion_case else None,
+                    'promotion_case_id': promotion_case.id if promotion_case else None,
+                    'manual_rollout_plan_id': execution.linked_rollout_plan_id,
+                    'rollout_execution_id': execution.id,
+                },
+            },
+        )
+        candidates.append(candidate)
+
+    return candidates
+
+
+def summarize_readiness(candidates: Iterable[CertificationCandidate]) -> dict[str, int]:
+    rows = list(candidates)
+    return {
+        'ready': sum(1 for item in rows if item.stabilization_readiness == StabilizationReadiness.READY),
+        'needs_observation': sum(
+            1 for item in rows if item.stabilization_readiness == StabilizationReadiness.NEEDS_OBSERVATION
+        ),
+        'review_required': sum(1 for item in rows if item.stabilization_readiness == StabilizationReadiness.REVIEW_REQUIRED),
+        'rollback_recommended': sum(
+            1 for item in rows if item.stabilization_readiness == StabilizationReadiness.ROLLBACK_RECOMMENDED
+        ),
+        'blocked': sum(1 for item in rows if item.stabilization_readiness == StabilizationReadiness.BLOCKED),
+    }

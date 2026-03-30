@@ -2005,3 +2005,36 @@ This keeps authority explicit:
 - plans are never auto-executed
 - rollback is never silently auto-triggered
 - policy/evaluation/risk/trust inputs are contextual signals only
+
+## Post-rollout certification architecture
+
+A new stabilization gate was added to `apps.certification_board`.
+
+### Intent
+- `promotion_committee` executes rollout plans and records outcomes.
+- `certification_board` consumes those outcomes and emits explicit stabilization/certification decisions.
+- execute != certify.
+
+### Domain entities
+- `RolloutCertificationRun`: auditable run envelope
+- `CertificationCandidate`: rollout execution candidate with readiness classification
+- `CertificationEvidencePack`: checkpoint/post-rollout/evaluation evidence
+- `CertificationDecision`: explicit governance status
+- `CertificationRecommendation`: operator-facing recommendation
+
+### Rule style
+- deterministic conservative rules (no ML authority)
+- global-scope changes require stronger evidence
+- rollback signals block certification and map to manual rollback recommendations
+
+### Integrations
+- upstream evidence: `promotion_committee`
+- quantitative context: `evaluation_lab`
+- contextual flags can be included from risk/trust/policy metadata
+- downstream visibility: `cockpit`, `/certification`, `trace_explorer`
+
+### Non-goals
+- no auto-certification
+- no auto-promote/champion switch
+- no auto-rollback execution
+- no live trading / real money
