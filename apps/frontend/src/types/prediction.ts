@@ -167,3 +167,87 @@ export type ModelGovernanceSummary = {
   latest_comparison: Record<string, unknown> | null;
   recent_recommendations: Array<Record<string, unknown>>;
 };
+
+export type PredictionRuntimeRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  candidate_count: number;
+  scored_count: number;
+  blocked_count: number;
+  high_edge_count: number;
+  low_confidence_count: number;
+  sent_to_risk_count: number;
+  sent_to_signal_fusion_count: number;
+  recommendation_summary: Record<string, number>;
+  active_model_context: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PredictionRuntimeCandidate = {
+  id: number;
+  runtime_run: number;
+  linked_market: number;
+  market_slug: string;
+  market_title: string;
+  linked_research_candidate: number | null;
+  linked_scan_signals: Array<Record<string, unknown>>;
+  market_provider: string;
+  category: string;
+  market_probability: string | null;
+  narrative_support_score: string | null;
+  divergence_score: string | null;
+  research_status: string;
+  candidate_quality_score: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PredictionRuntimeAssessment = {
+  id: number;
+  linked_candidate: number;
+  candidate: PredictionRuntimeCandidate;
+  active_model_name: string;
+  model_mode: string;
+  system_probability: string;
+  calibrated_probability: string;
+  market_probability: string;
+  raw_edge: string;
+  adjusted_edge: string;
+  confidence_score: string;
+  uncertainty_score: string;
+  evidence_quality_score: string;
+  precedent_caution_score: string;
+  narrative_influence_score: string;
+  prediction_status: string;
+  rationale: string;
+  reason_codes: string[];
+  feature_summary: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PredictionRuntimeRecommendation = {
+  id: number;
+  runtime_run: number;
+  target_assessment: number | null;
+  assessment: PredictionRuntimeAssessment | null;
+  recommendation_type: string;
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type PredictionRuntimeSummary = {
+  latest_run: PredictionRuntimeRun | null;
+  status_counts: Record<string, number>;
+  recommendation_counts: Record<string, number>;
+  model_mode_counts: Record<string, number>;
+};

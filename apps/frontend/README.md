@@ -53,6 +53,24 @@ La pantalla `/prediction` ahora incluye una capa de gobernanza de modelo (sin au
 
 Todo sigue local-first y paper/demo only.
 
+## Prediction runtime review board en `/prediction` (new)
+
+La misma pantalla `/prediction` ahora incluye una sección de runtime hardening:
+
+- botón manual `Run prediction runtime review`
+- summary cards de runtime (`candidates`, `scored`, `strong edge`, `low confidence`, `sent to risk`, `sent to signal fusion`)
+- tabla de runtime assessments con:
+  - market vs calibrated probability
+  - adjusted edge
+  - confidence / uncertainty / evidence quality / precedent caution
+  - prediction status (`STRONG_EDGE`, `WEAK_EDGE`, `LOW_CONFIDENCE`, `NO_EDGE`, `CONFLICTED`, `NEEDS_REVIEW`)
+- panel de runtime recommendations con recommendation type + rationale + reason codes + confidence
+- filtros por status de assessment
+- empty state explícito:
+  - `No prediction runtime assessments are available yet. Run a runtime review to score shortlisted markets.`
+
+Se mantiene el límite: manual-first, local-first, paper/demo only, sin auto-trading ni autoridad opaca del modelo.
+
 ## Exploración de mercados reales (read-only) en frontend
 
 La vista de mercados ahora soporta dos orígenes de datos sin ambigüedad visual:

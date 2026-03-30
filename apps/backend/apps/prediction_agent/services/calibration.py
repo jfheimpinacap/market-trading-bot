@@ -31,3 +31,26 @@ def confidence_level(confidence: Decimal) -> str:
     if confidence >= Decimal('0.4500'):
         return 'medium'
     return 'low'
+
+
+def runtime_calibrated_probability(*, system_probability: Decimal, evidence_quality_score: Decimal, uncertainty_score: Decimal) -> Decimal:
+    conservative_pull = Decimal('0.08') + (uncertainty_score * Decimal('0.20'))
+    evidence_bonus = (evidence_quality_score - Decimal('0.5000')) * Decimal('0.10')
+    pull = max(Decimal('0.0000'), conservative_pull - evidence_bonus)
+    centered = Decimal('0.5000') + ((system_probability - Decimal('0.5000')) * (Decimal('1.0000') - pull))
+    return clamp_probability(q4(centered))
+
+
+def runtime_confidence_uncertainty(*, edge: Decimal, evidence_quality_score: Decimal, precedent_caution_score: Decimal, signal_conflict_score: Decimal) -> tuple[Decimal, Decimal]:
+    uncertainty = Decimal('0.3000')
+    uncertainty += (Decimal('1.0000') - evidence_quality_score) * Decimal('0.3500')
+    uncertainty += precedent_caution_score * Decimal('0.2500')
+    uncertainty += signal_conflict_score * Decimal('0.2500')
+    uncertainty = clamp_probability(q4(uncertainty))
+
+    confidence = Decimal('0.3000') + min(abs(edge) * Decimal('2.0000'), Decimal('0.3000'))
+    confidence += evidence_quality_score * Decimal('0.2500')
+    confidence -= precedent_caution_score * Decimal('0.1800')
+    confidence -= signal_conflict_score * Decimal('0.1800')
+    confidence = clamp_probability(q4(confidence))
+    return confidence, uncertainty

@@ -80,6 +80,7 @@ Instead, each page coordinates a small set of explicit service calls.
 - `services/experiments.ts` for strategy profiles, experiment runs, and run comparisons
 - `services/research.ts` for mixed narrative source management (`RSS` + `REDDIT` + optional `TWITTER`), ingest/analysis/full-scan controls, and shortlist/candidate data.
 - `services/policyRollout.ts` for rollout-monitor start/list/detail/evaluate/rollback/summary APIs tied to post-change policy tuning governance.
+- `services/predictionRuntime.ts` for runtime review run/candidates/assessments/recommendations/summary in `/prediction`.
 
 This keeps data dependencies understandable and prevents the current demo phase from turning into a client-state rewrite.
 
@@ -169,6 +170,24 @@ The `/markets/:marketId` route is now the operational hub of the demo:
   - explicit reminder that trading in the app still remains paper/demo only
   - explicit `execution_mode`, `paper_tradable`, and `paper_tradable_reason` context in overview and trade panel
   - blocked CTA behavior when a market is not paper-tradable
+
+### Prediction runtime board (new)
+
+The `/prediction` route now contains two explicit layers:
+
+1. existing MVP score-market + model governance controls
+2. runtime-hardening board for candidate-level review
+
+Runtime board UX blocks:
+- manual action: `Run prediction runtime review`
+- summary cards for latest run counters
+- assessments table (calibrated probability, adjusted edge, confidence, uncertainty, evidence, precedent caution, status)
+- recommendations table (type, rationale, reason codes, confidence)
+- explicit empty/loading/error states with `LOW_CONFIDENCE`/`NO_EDGE` treated as valid outcomes
+
+Design boundary remains unchanged:
+- recommendation-first only
+- no auto-trading, no real execution, no opaque model authority
 
 ### Portfolio
 

@@ -25,6 +25,36 @@ The backend is a local-first Django service inside the monorepo. Its current res
   - `postmortem_agents.services.precedent_enrichment`
 - Architectural rule: precedent memory augments context/rationale and may apply bounded caution, but cannot replace numeric risk/policy/safety guardrails.
 
+## Prediction runtime hardening architecture (new)
+
+`apps.prediction_agent` now exposes a dedicated runtime review flow (in addition to single-market scoring):
+
+- `services/candidate_building.py`: consumes research-triage shortlist/watchlist candidates
+- `services/model_runtime.py`: resolves active model vs explicit heuristic fallback (and low-evidence blend)
+- `services/calibration.py`: runtime conservative calibration + confidence/uncertainty computation
+- `services/context_adjustment.py`: bounded narrative + precedent caution adjustment
+- `services/recommendation.py`: status classification + recommendation typing
+- `services/run.py`: auditable orchestration and run summary counters
+
+Persistence entities:
+- `PredictionRuntimeRun`
+- `PredictionRuntimeCandidate`
+- `PredictionRuntimeAssessment`
+- `PredictionRuntimeRecommendation`
+
+API boundary:
+- `POST /api/prediction/run-runtime-review/`
+- `GET /api/prediction/runtime-candidates/`
+- `GET /api/prediction/runtime-assessments/`
+- `GET /api/prediction/runtime-recommendations/`
+- `GET /api/prediction/runtime-summary/`
+
+Boundary guarantees:
+- no real-money execution
+- no automatic model switching
+- no opaque planner authority
+- prediction remains recommendation-first for downstream risk/signal fusion
+
 ## Current backend app roles
 - `apps.common`: abstract timestamped models and shared technical helpers.
 - `apps.health`: lightweight environment-oriented health endpoint.

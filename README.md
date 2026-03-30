@@ -105,6 +105,22 @@ Prediction training now includes a formal governance layer for predictor compari
   - `CAUTION_REVIEW_MANUALLY`
 - explicit non-goal: no automatic model switching at runtime
 
+### Prediction runtime hardening / calibrated probability review (new)
+
+`prediction_agent` now includes a stronger runtime review layer for paper/demo operations:
+
+- consumes filtered research triage candidates (shortlist/watchlist), not raw market universe
+- builds auditable `PredictionRuntimeRun` + `PredictionRuntimeCandidate` + `PredictionRuntimeAssessment` + `PredictionRuntimeRecommendation`
+- combines active model (if available), explicit heuristic fallback, runtime calibration, bounded narrative influence, and precedent caution
+- emits recommendation-first outcomes for downstream handoff:
+  - `SEND_TO_RISK_ASSESSMENT`
+  - `SEND_TO_SIGNAL_FUSION`
+  - `KEEP_FOR_MONITORING`
+  - `IGNORE_NO_EDGE`
+  - `IGNORE_LOW_CONFIDENCE`
+  - `REQUIRE_MANUAL_PREDICTION_REVIEW`
+- keeps scope unchanged: local-first, single-user, manual-first, paper/demo only, no real-money execution
+
 
 The platform now also includes a controlled **autonomous continuous demo loop** (`/continuous-demo` + `/api/continuous-demo/*`):
 

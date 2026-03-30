@@ -26,6 +26,36 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 - Existing assist endpoints for research/prediction/risk/postmortem now return influence metadata + summary (not only run IDs).
 - Mission control can optionally refresh memory index on cadence (`run_memory_index_refresh_every_n_cycles`) and cycle details now mark precedent-aware mode.
 
+## Prediction runtime review layer (new)
+
+`apps.prediction_agent` now contains a runtime-hardening layer that sits between research triage and downstream risk/signals:
+
+- auditable run entity: `PredictionRuntimeRun`
+- runtime input entity: `PredictionRuntimeCandidate`
+- calibrated assessment entity: `PredictionRuntimeAssessment`
+- recommendation entity: `PredictionRuntimeRecommendation`
+
+New endpoints:
+- `POST /api/prediction/run-runtime-review/`
+- `GET /api/prediction/runtime-candidates/`
+- `GET /api/prediction/runtime-assessments/`
+- `GET /api/prediction/runtime-assessments/<id>/`
+- `GET /api/prediction/runtime-recommendations/`
+- `GET /api/prediction/runtime-summary/`
+
+Service split:
+- `services/candidate_building.py`
+- `services/model_runtime.py`
+- `services/calibration.py` (runtime calibration helpers)
+- `services/context_adjustment.py`
+- `services/recommendation.py`
+- `services/run.py`
+
+Design boundaries:
+- no auto model switching, no auto retraining, no LLM final authority
+- recommendation-first handoff only
+- risk/policy/safety remain the downstream authority
+
 ## Internal structure
 
 ```text
