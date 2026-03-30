@@ -1955,3 +1955,5 @@ The `certification_board` flow now extends baseline response with an explicit ma
 `response case -> routing action -> downstream tracking -> case closure`
 
 This layer consumes existing baseline response outputs and records auditable manual routing/tracking artifacts without automatically creating or executing downstream reviews.
+
+Key APIs include run/list/summary plus explicit manual actions: `route-response-case`, `update-response-tracking`, and `close-response-case` (manual closure without downstream action).

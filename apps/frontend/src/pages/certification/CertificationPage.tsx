@@ -33,6 +33,7 @@ import {
   routeBaselineResponseCase,
   runBaselineResponseActions,
   updateBaselineResponseTracking,
+  closeBaselineResponseCase,
 } from '../../services/baselineResponseActions';
 import {
   getBaselineHealthCandidates,
@@ -437,6 +438,13 @@ export function CertificationPage() {
             description="Run baseline response review to formalize degradation handling and re-evaluation paths."
           />
         ) : null}
+        {responseActionCandidates.length === 0 ? (
+          <EmptyState
+            eyebrow="No response action candidates"
+            title="No baseline response action candidates are available yet."
+            description="Run response actions review to route and track baseline response cases. BLOCKED and KEEP_IN_MONITORING are valid outcomes, not errors."
+          />
+        ) : null}
 
         {!hasCandidates ? (
           <EmptyState
@@ -764,7 +772,7 @@ export function CertificationPage() {
               </div>
             </SectionCard>
 
-            <SectionCard eyebrow="Response action candidates" title="Cases ready for manual handoff" description="No baseline response action candidates are available yet. Run response actions review to route and track baseline response cases.">
+            <SectionCard eyebrow="Response action candidates" title="Cases ready for manual handoff" description="Cases selected for manual handoff with explicit routing resolution, blockers, and downstream context links.">
               <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Component</th><th>Scope</th><th>Target</th><th>Resolution</th><th>Ready</th><th>Blockers</th><th>Links</th></tr></thead><tbody>
                 {responseActionCandidates.slice(0, 100).map((row) => (
                   <tr key={row.id}>
@@ -782,15 +790,16 @@ export function CertificationPage() {
             </SectionCard>
 
             <SectionCard eyebrow="Response routing actions" title="Explicit manual routing handoffs" description="Manual routing action records and lifecycle from PROPOSED/READY_TO_ROUTE to ROUTED/BLOCKED/DEFERRED/CLOSED.">
-              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Action type</th><th>Status</th><th>Target</th><th>Rationale</th><th>Route</th></tr></thead><tbody>
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Action type</th><th>Status</th><th>Target</th><th>Routed by / at</th><th>Rationale</th><th>Actions</th></tr></thead><tbody>
                 {responseRoutingActions.slice(0, 100).map((row) => (
                   <tr key={row.id}>
                     <td>#{row.linked_response_case}</td>
                     <td><StatusBadge tone={toneFromState(row.action_type)}>{row.action_type}</StatusBadge></td>
                     <td><StatusBadge tone={toneFromState(row.action_status)}>{row.action_status}</StatusBadge></td>
                     <td>{row.routing_target || '—'}</td>
+                    <td>{row.routed_by || '—'} · {formatDate(row.routed_at)}</td>
                     <td>{row.rationale}</td>
-                    <td><button type="button" className="secondary-button" onClick={() => void routeBaselineResponseCase(row.linked_response_case, { routed_by: 'certification_ui' }).then(load)}>Route response case</button></td>
+                    <td><button type="button" className="secondary-button" onClick={() => void routeBaselineResponseCase(row.linked_response_case, { routed_by: 'certification_ui' }).then(load)}>Route response case</button><button type="button" className="secondary-button" style={{ marginLeft: 8 }} onClick={() => void closeBaselineResponseCase(row.linked_response_case, { tracked_by: 'certification_ui' }).then(load)}>Close no action</button></td>
                   </tr>
                 ))}
               </tbody></table></div>

@@ -656,6 +656,8 @@ Flow:
 4. compute shortlist candidates (`ResearchCandidate`)
 5. persist run audit (`ResearchScanRun`)
 
+API surface includes run/list/summary, manual route/update endpoints, plus optional detail/close endpoints (`response-routing-actions/<id>`, `response-tracking-records/<id>`, `close-response-case/<case_id>`).
+
 Design constraints:
 - local-first and paper/demo only
 - LLM provides narrative enrichment only
@@ -1214,6 +1216,8 @@ Flow:
 4. fold in incident-after-auto signals (`incident_commander`)
 5. persist auditable run + feedback snapshots + recommendations
 
+API surface includes run/list/summary, manual route/update endpoints, plus optional detail/close endpoints (`response-routing-actions/<id>`, `response-tracking-records/<id>`, `close-response-case/<case_id>`).
+
 Design constraints:
 - explicit rules and formulas (no black-box learning)
 - recommendation-only by default
@@ -1629,6 +1633,8 @@ This layer never emits new advisory artifacts and never auto-applies roadmap/sce
 ## `autonomy_intake` backend layer (new)
 
 `apps.autonomy_intake` consumes formal `GovernanceBacklogItem` records from `autonomy_backlog` and creates governed `PlanningProposal` artifacts for roadmap/scenario/program/manager/operator review destinations.
+
+API surface includes run/list/summary, manual route/update endpoints, plus optional detail/close endpoints (`response-routing-actions/<id>`, `response-tracking-records/<id>`, `close-response-case/<case_id>`).
 
 Design constraints:
 - recommendation-first and manual-first actions (`run-review`, explicit `emit`, optional `acknowledge`)
@@ -2124,6 +2130,8 @@ Service split:
 - `services/baseline_response_actions/tracking.py`
 - `services/baseline_response_actions/recommendation.py`
 - `services/baseline_response_actions/run.py`
+
+API surface includes run/list/summary, manual route/update endpoints, plus optional detail/close endpoints (`response-routing-actions/<id>`, `response-tracking-records/<id>`, `close-response-case/<case_id>`).
 
 Design constraints:
 - consumes baseline response case/routing decision; does not duplicate baseline response evidence/routing generation

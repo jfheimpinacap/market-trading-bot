@@ -36,7 +36,7 @@ def run_baseline_response_actions(*, actor: str = 'operator-ui', metadata: dict 
     action_run.completed_at = timezone.now()
     action_run.candidate_count = len(candidates)
     action_run.ready_to_route_count = sum(1 for action in actions if action.action_status == ResponseRoutingActionStatus.READY_TO_ROUTE)
-    action_run.routed_count = ResponseRoutingAction.objects.filter(action_status=ResponseRoutingActionStatus.ROUTED).count()
+    action_run.routed_count = sum(1 for action in actions if action.action_status == ResponseRoutingActionStatus.ROUTED)
     action_run.blocked_count = sum(1 for action in actions if action.action_status == ResponseRoutingActionStatus.BLOCKED)
     action_run.under_review_count = BaselineResponseCase.objects.filter(case_status='UNDER_REVIEW').count()
     action_run.closed_count = BaselineResponseCase.objects.filter(case_status='CLOSED_NO_ACTION').count()

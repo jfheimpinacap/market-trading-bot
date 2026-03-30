@@ -561,3 +561,40 @@ class CertificationBoardTests(TestCase):
         summary_res = self.client.get(reverse('certification_board:response-action-summary'))
         self.assertEqual(summary_res.status_code, 200)
         self.assertIn('ready_to_route', summary_res.json())
+
+    def test_response_action_detail_endpoints(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-response-actions'), {'actor': 'test'}, format='json')
+
+        action_id = self.client.get(reverse('certification_board:response-routing-actions')).json()[0]['id']
+        action_res = self.client.get(reverse('certification_board:response-routing-action-detail', kwargs={'pk': action_id}))
+        self.assertEqual(action_res.status_code, 200)
+
+        case_id = self.client.get(reverse('certification_board:response-cases')).json()[0]['id']
+        self.client.post(
+            reverse('certification_board:update-response-tracking', kwargs={'case_id': case_id}),
+            {'downstream_status': ResponseCaseDownstreamStatus.SENT, 'tracked_by': 'test'},
+            format='json',
+        )
+        tracking_id = self.client.get(reverse('certification_board:response-tracking-records')).json()[0]['id']
+        tracking_res = self.client.get(reverse('certification_board:response-tracking-record-detail', kwargs={'pk': tracking_id}))
+        self.assertEqual(tracking_res.status_code, 200)
+
+    def test_close_response_case_endpoint(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-response-actions'), {'actor': 'test'}, format='json')
+
+        case_id = self.client.get(reverse('certification_board:response-cases')).json()[0]['id']
+        close_res = self.client.post(
+            reverse('certification_board:close-response-case', kwargs={'case_id': case_id}),
+            {'tracked_by': 'test', 'tracking_notes': 'manual closure'},
+            format='json',
+        )
+        self.assertEqual(close_res.status_code, 200)
+
+        case = BaselineResponseCase.objects.get(pk=case_id)
+        self.assertEqual(case.case_status, 'CLOSED_NO_ACTION')

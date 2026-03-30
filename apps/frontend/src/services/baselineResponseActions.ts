@@ -47,3 +47,11 @@ export function updateBaselineResponseTracking(caseId: number, input: Record<str
     body: JSON.stringify(input),
   });
 }
+
+
+export function closeBaselineResponseCase(caseId: number, input: Record<string, unknown> = {}) {
+  return requestJson(`/api/certification/close-response-case/${caseId}/`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
