@@ -7,6 +7,16 @@ import { SectionCard } from '../../components/SectionCard';
 import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { navigate } from '../../lib/router';
 import {
+  activatePaperBaseline,
+  getActivePaperBindings,
+  getBaselineActivationCandidates,
+  getBaselineActivationRecommendations,
+  getBaselineActivationSummary,
+  getBaselineActivations,
+  rollbackActivation,
+  runBaselineActivationReview,
+} from '../../services/baselineActivation';
+import {
   confirmPaperBaseline,
   getBaselineBindingSnapshots,
   getBaselineConfirmationCandidates,
@@ -25,6 +35,10 @@ import {
   runPostRolloutCertificationReview,
 } from '../../services/certificationReview';
 import type {
+  ActivePaperBindingRecord,
+  BaselineActivationCandidate,
+  BaselineActivationRecommendationItem,
+  BaselineActivationSummary,
   BaselineBindingSnapshot,
   BaselineConfirmationCandidate,
   BaselineConfirmationRecommendationItem,
@@ -34,6 +48,7 @@ import type {
   CertificationEvidencePack,
   CertificationRecommendationItem,
   PostRolloutCertificationSummary,
+  PaperBaselineActivation,
   PaperBaselineConfirmation,
 } from '../../types/certification';
 
@@ -62,16 +77,22 @@ export function CertificationPage() {
   const [baselineConfirmations, setBaselineConfirmations] = useState<PaperBaselineConfirmation[]>([]);
   const [bindingSnapshots, setBindingSnapshots] = useState<BaselineBindingSnapshot[]>([]);
   const [baselineRecommendations, setBaselineRecommendations] = useState<BaselineConfirmationRecommendationItem[]>([]);
+  const [activationSummary, setActivationSummary] = useState<BaselineActivationSummary | null>(null);
+  const [activationCandidates, setActivationCandidates] = useState<BaselineActivationCandidate[]>([]);
+  const [baselineActivations, setBaselineActivations] = useState<PaperBaselineActivation[]>([]);
+  const [activeBindings, setActiveBindings] = useState<ActivePaperBindingRecord[]>([]);
+  const [activationRecommendations, setActivationRecommendations] = useState<BaselineActivationRecommendationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runningBaseline, setRunningBaseline] = useState(false);
+  const [runningActivation, setRunningActivation] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [summaryRes, candidatesRes, evidenceRes, decisionsRes, recommendationsRes, baselineSummaryRes, baselineCandidatesRes, baselineConfirmationsRes, bindingSnapshotsRes, baselineRecommendationsRes] = await Promise.all([
+      const [summaryRes, candidatesRes, evidenceRes, decisionsRes, recommendationsRes, baselineSummaryRes, baselineCandidatesRes, baselineConfirmationsRes, bindingSnapshotsRes, baselineRecommendationsRes, activationSummaryRes, activationCandidatesRes, baselineActivationsRes, activeBindingsRes, activationRecommendationsRes] = await Promise.all([
         getCertificationSummary(),
         getCertificationCandidates(),
         getCertificationEvidencePacks(),
@@ -82,6 +103,11 @@ export function CertificationPage() {
         getBaselineConfirmations(),
         getBaselineBindingSnapshots(),
         getBaselineRecommendations(),
+        getBaselineActivationSummary(),
+        getBaselineActivationCandidates(),
+        getBaselineActivations(),
+        getActivePaperBindings(),
+        getBaselineActivationRecommendations(),
       ]);
       setSummary(summaryRes);
       setCandidates(candidatesRes);
@@ -93,6 +119,11 @@ export function CertificationPage() {
       setBaselineConfirmations(baselineConfirmationsRes);
       setBindingSnapshots(bindingSnapshotsRes);
       setBaselineRecommendations(baselineRecommendationsRes);
+      setActivationSummary(activationSummaryRes);
+      setActivationCandidates(activationCandidatesRes);
+      setBaselineActivations(baselineActivationsRes);
+      setActiveBindings(activeBindingsRes);
+      setActivationRecommendations(activationRecommendationsRes);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load certification stabilization state.');
     } finally {
@@ -148,6 +179,39 @@ export function CertificationPage() {
     }
   }, [load]);
 
+
+
+  const runActivationReview = useCallback(async () => {
+    setRunningActivation(true);
+    setError(null);
+    try {
+      await runBaselineActivationReview({ actor: 'certification_ui', metadata: { initiated_from: 'certification_ui' } });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not run baseline activation review.');
+    } finally {
+      setRunningActivation(false);
+    }
+  }, [load]);
+
+  const activateBaseline = useCallback(async (confirmationId: number) => {
+    try {
+      await activatePaperBaseline(confirmationId, { actor: 'certification_ui' });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not activate paper baseline.');
+    }
+  }, [load]);
+
+  const rollbackActivatedBaseline = useCallback(async (activationId: number) => {
+    try {
+      await rollbackActivation(activationId, { actor: 'certification_ui' });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not rollback activation.');
+    }
+  }, [load]);
+
   const hasCandidates = useMemo(() => candidates.length > 0, [candidates.length]);
 
   return (
@@ -163,6 +227,7 @@ export function CertificationPage() {
         <SectionCard eyebrow="Actions" title="Run post-rollout certification review" description="Manual operator trigger. No auto-certification, no auto-promotion, no automatic baseline switch.">
           <button type="button" className="primary-button" onClick={() => void runReview()} disabled={running}>{running ? 'Running…' : 'Run post-rollout review'}</button>
           <button type="button" className="secondary-button" onClick={() => void runBaselineReview()} disabled={runningBaseline} style={{ marginLeft: 8 }}>{runningBaseline ? 'Running…' : 'Run baseline confirmation'}</button>
+          <button type="button" className="secondary-button" onClick={() => void runActivationReview()} disabled={runningActivation} style={{ marginLeft: 8 }}>{runningActivation ? 'Running…' : 'Run baseline activation'}</button>
         </SectionCard>
 
         <SectionCard eyebrow="Summary" title="Stabilization outcomes" description="Latest review counters for certification, observation, manual review, rollback recommendation, and rejection.">
@@ -173,6 +238,17 @@ export function CertificationPage() {
             <div><strong>Review required:</strong> {summary?.review_required_count ?? 0}</div>
             <div><strong>Rollback recommended:</strong> {summary?.rollback_recommended_count ?? 0}</div>
             <div><strong>Rejected:</strong> {summary?.rejected_count ?? 0}</div>
+          </div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Baseline activation board" title="Manual active paper baseline registry" description="Confirmed baselines are reviewed for manual activation into active paper bindings with explicit rollback and no auto-switch.">
+          <div className="cockpit-metric-grid">
+            <div><strong>Confirmed baselines:</strong> {activationSummary?.confirmed_baselines ?? 0}</div>
+            <div><strong>Ready to activate:</strong> {activationSummary?.ready_to_activate_count ?? 0}</div>
+            <div><strong>Blocked:</strong> {activationSummary?.blocked_count ?? 0}</div>
+            <div><strong>Activated:</strong> {activationSummary?.activated_count ?? 0}</div>
+            <div><strong>Rollback available:</strong> {activationSummary?.rollback_available_count ?? 0}</div>
+            <div><strong>Binding recheck required:</strong> {activationSummary?.binding_recheck_required_count ?? 0}</div>
           </div>
         </SectionCard>
 
@@ -324,6 +400,71 @@ export function CertificationPage() {
                 ))}
               </tbody></table></div>
             </SectionCard>
+
+            <SectionCard eyebrow="Activation candidates" title="Confirmed baselines ready for manual activation" description="Activation candidates resolve previous active binding vs proposed active binding and keep blockers explicit.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>ID</th><th>Component</th><th>Scope</th><th>Previous active</th><th>Proposed active</th><th>Resolution</th><th>Blockers</th><th>Actions</th></tr></thead><tbody>
+                {activationCandidates.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.id}</td>
+                    <td>{row.target_component}</td>
+                    <td>{row.target_scope}</td>
+                    <td>{row.previous_active_reference || '—'}</td>
+                    <td>{row.proposed_active_reference || '—'}</td>
+                    <td><StatusBadge tone={toneFromState(row.activation_resolution_status)}>{row.activation_resolution_status}</StatusBadge></td>
+                    <td>{row.blockers.join(', ') || '—'}</td>
+                    <td><button type="button" className="secondary-button" disabled={!row.ready_for_activation} onClick={() => void activateBaseline(row.linked_paper_baseline_confirmation)}>Activate baseline</button></td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Baseline activations" title="Manual activation records" description="Before/after snapshots of active paper bindings with explicit actor and rollback pathway.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>ID</th><th>Status</th><th>Previous</th><th>Activated</th><th>By</th><th>At</th><th>Rationale</th><th>Rollback</th></tr></thead><tbody>
+                {baselineActivations.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.id}</td>
+                    <td><StatusBadge tone={toneFromState(row.activation_status)}>{row.activation_status}</StatusBadge></td>
+                    <td>{String((row.previous_active_snapshot as Record<string, unknown>).reference ?? '—')}</td>
+                    <td>{String((row.activated_snapshot as Record<string, unknown>).reference ?? '—')}</td>
+                    <td>{row.activated_by || 'manual_pending'}</td>
+                    <td>{formatDate(row.activated_at)}</td>
+                    <td>{row.rationale}</td>
+                    <td><button type="button" className="secondary-button" onClick={() => void rollbackActivatedBaseline(row.id)}>Rollback activation</button></td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Active paper bindings" title="Current active paper baseline/config by component" description="Explicit registry of current active binding references and status transitions (ACTIVE, SUPERSEDED, REVERTED).">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>ID</th><th>Component</th><th>Scope</th><th>Binding type</th><th>Status</th><th>Source activation</th><th>Snapshot</th></tr></thead><tbody>
+                {activeBindings.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.id}</td>
+                    <td>{row.target_component}</td>
+                    <td>{row.target_scope}</td>
+                    <td>{row.active_binding_type}</td>
+                    <td><StatusBadge tone={toneFromState(row.status)}>{row.status}</StatusBadge></td>
+                    <td>{row.source_activation ? `#${row.source_activation}` : '—'}</td>
+                    <td>{JSON.stringify(row.active_snapshot).slice(0, 120)}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Activation recommendations" title="Manual-first activation recommendations" description="Activate/defer/recheck/rollback recommendations for paper baseline activation; never auto-applied.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Activation</th><th>Recommendation</th><th>Rationale</th><th>Reason codes</th><th>Confidence</th></tr></thead><tbody>
+                {activationRecommendations.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.target_activation ? `#${row.target_activation}` : '—'}</td>
+                    <td><StatusBadge tone={toneFromState(row.recommendation_type)}>{row.recommendation_type}</StatusBadge></td>
+                    <td>{row.rationale}</td>
+                    <td>{row.reason_codes.join(', ') || '—'}</td>
+                    <td>{row.confidence}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
           </>
         )}
       </DataStateWrapper>

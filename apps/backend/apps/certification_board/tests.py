@@ -159,3 +159,40 @@ class CertificationBoardTests(TestCase):
         self.assertEqual(snapshots_response.status_code, 200)
         recommendations_response = self.client.get(reverse('certification_board:baseline-recommendations'))
         self.assertEqual(recommendations_response.status_code, 200)
+
+
+    def test_baseline_activation_endpoints(self):
+        self.client.post(reverse('certification_board:run-post-rollout-review'), {'actor': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-confirmation'), {'actor': 'test'}, format='json')
+        candidate_res = self.client.get(reverse('certification_board:baseline-candidates'))
+        self.assertEqual(candidate_res.status_code, 200)
+        candidates = candidate_res.json()
+        if not candidates:
+            self.skipTest('No baseline candidates available in current seed.')
+
+        first_decision_id = candidates[0]['linked_certification_decision']
+        self.client.post(reverse('certification_board:confirm-baseline', kwargs={'decision_id': first_decision_id}), {'actor': 'test'}, format='json')
+
+        run_res = self.client.post(reverse('certification_board:run-baseline-activation'), {'actor': 'test'}, format='json')
+        self.assertEqual(run_res.status_code, 201)
+
+        activation_candidates_res = self.client.get(reverse('certification_board:activation-candidates'))
+        self.assertEqual(activation_candidates_res.status_code, 200)
+        baseline_activations_res = self.client.get(reverse('certification_board:baseline-activations'))
+        self.assertEqual(baseline_activations_res.status_code, 200)
+        active_bindings_res = self.client.get(reverse('certification_board:active-bindings'))
+        self.assertEqual(active_bindings_res.status_code, 200)
+        recs_res = self.client.get(reverse('certification_board:activation-recommendations'))
+        self.assertEqual(recs_res.status_code, 200)
+        summary_res = self.client.get(reverse('certification_board:activation-summary'))
+        self.assertEqual(summary_res.status_code, 200)
+        self.assertIn('ready_to_activate_count', summary_res.json())
+
+        confirmations = self.client.get(reverse('certification_board:baseline-confirmations')).json()
+        self.assertGreaterEqual(len(confirmations), 1)
+        activation_res = self.client.post(
+            reverse('certification_board:activate-baseline', kwargs={'confirmation_id': confirmations[0]['id']}),
+            {'actor': 'test'},
+            format='json',
+        )
+        self.assertEqual(activation_res.status_code, 200)

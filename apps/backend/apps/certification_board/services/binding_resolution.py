@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from apps.certification_board.models import BaselineBindingResolutionStatus, CertificationDecision
+from apps.certification_board.models import (
+    ActivePaperBindingRecord,
+    BaselineBindingResolutionStatus,
+    CertificationDecision,
+    PaperBaselineConfirmation,
+)
 from apps.champion_challenger.models import StackProfileBinding
 from apps.policy_tuning.models import PolicyTuningCandidate
 from apps.trust_calibration.models import TrustCalibrationRecommendation
@@ -13,6 +18,15 @@ class BindingResolutionResult:
     previous_baseline_reference: str
     proposed_baseline_reference: str
     binding_resolution_status: str
+    blockers: list[str]
+    snapshot: dict
+
+
+@dataclass
+class ActivationBindingResolutionResult:
+    previous_active_reference: str
+    proposed_active_reference: str
+    activation_resolution_status: str
     blockers: list[str]
     snapshot: dict
 
@@ -80,4 +94,53 @@ def resolve_baseline_bindings(*, decision: CertificationDecision) -> BindingReso
         binding_resolution_status=status,
         blockers=blockers,
         snapshot=snapshot,
+    )
+
+
+def resolve_activation_bindings(*, confirmation: PaperBaselineConfirmation) -> ActivationBindingResolutionResult:
+    blockers: list[str] = []
+    previous_active = ActivePaperBindingRecord.objects.filter(
+        target_component=confirmation.target_component,
+        target_scope=confirmation.target_scope,
+        status='ACTIVE',
+    ).order_by('-updated_at', '-id').first()
+    previous_reference = str((previous_active.active_snapshot or {}).get('reference') or '') if previous_active else ''
+
+    proposed_reference = str((confirmation.confirmed_baseline_snapshot or {}).get('reference') or '')
+    if not proposed_reference:
+        blockers.append('missing_confirmed_baseline_reference')
+
+    if previous_reference and proposed_reference and previous_reference == proposed_reference:
+        blockers.append('equivalent_active_binding_already_set')
+
+    binding_snapshot = confirmation.linked_candidate.metadata.get('binding_snapshot', {}) if confirmation.linked_candidate else {}
+
+    status = BaselineBindingResolutionStatus.RESOLVED
+    if blockers:
+        status = BaselineBindingResolutionStatus.BLOCKED
+    elif not binding_snapshot.get('policy_tuning_binding') or not binding_snapshot.get('trust_calibration_binding'):
+        status = BaselineBindingResolutionStatus.PARTIAL
+
+    return ActivationBindingResolutionResult(
+        previous_active_reference=previous_reference,
+        proposed_active_reference=proposed_reference,
+        activation_resolution_status=status,
+        blockers=blockers,
+        snapshot={
+            'current_active_binding': {
+                'record_id': previous_active.id if previous_active else None,
+                'binding_type': previous_active.active_binding_type if previous_active else '',
+                'snapshot': previous_active.active_snapshot if previous_active else {},
+            },
+            'proposed_binding': confirmation.confirmed_baseline_snapshot,
+            'baseline_confirmation': {
+                'confirmation_id': confirmation.id,
+                'candidate_id': confirmation.linked_candidate_id,
+                'reason_codes': confirmation.reason_codes,
+            },
+            'policy_tuning_binding': binding_snapshot.get('policy_tuning_binding', {}),
+            'trust_calibration_binding': binding_snapshot.get('trust_calibration_binding', {}),
+            'champion_binding': binding_snapshot.get('champion_binding', {}),
+            'rollout_reference': binding_snapshot.get('rollout_reference', {}),
+        },
     )

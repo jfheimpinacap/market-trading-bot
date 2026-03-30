@@ -8,6 +8,11 @@ from apps.certification_board.models import (
     BaselineConfirmationRecommendation,
     BaselineConfirmationRecommendationType,
     BaselineConfirmationRun,
+    BaselineActivationCandidate,
+    BaselineActivationRecommendation,
+    BaselineActivationRecommendationType,
+    BaselineActivationRun,
+    PaperBaselineActivation,
     CertificationDecision,
     CertificationDecisionStatus,
     CertificationEvidenceSnapshot,
@@ -244,4 +249,59 @@ def build_baseline_confirmation_recommendation(
         confidence=Decimal('0.62'),
         blockers=candidate.blockers,
         metadata={'candidate_id': candidate.id},
+    )
+
+
+
+def build_baseline_activation_recommendation(
+    *, review_run: BaselineActivationRun, candidate: BaselineActivationCandidate, activation: PaperBaselineActivation
+) -> BaselineActivationRecommendation:
+    if activation.activation_status == 'ACTIVATED':
+        return BaselineActivationRecommendation.objects.create(
+            review_run=review_run,
+            target_activation=activation,
+            recommendation_type=BaselineActivationRecommendationType.PREPARE_ACTIVATION_ROLLBACK,
+            rationale='Activation is manually applied; preserve explicit rollback readiness to previous active baseline.',
+            reason_codes=['ACTIVATED_WITH_ROLLBACK_PATH'],
+            confidence=Decimal('0.85'),
+            blockers=[],
+            metadata={'candidate_id': candidate.id, 'confirmation_id': candidate.linked_paper_baseline_confirmation_id},
+        )
+
+    if candidate.ready_for_activation and candidate.activation_resolution_status == BaselineBindingResolutionStatus.RESOLVED:
+        return BaselineActivationRecommendation.objects.create(
+            review_run=review_run,
+            target_activation=activation,
+            recommendation_type=BaselineActivationRecommendationType.ACTIVATE_PAPER_BASELINE,
+            rationale='Confirmed baseline has resolved previous/proposed active references and is ready for manual activation.',
+            reason_codes=['CONFIRMED_AND_READY_FOR_ACTIVATION'],
+            confidence=Decimal('0.88'),
+            blockers=[],
+            metadata={'candidate_id': candidate.id, 'confirmation_id': candidate.linked_paper_baseline_confirmation_id},
+        )
+
+    if candidate.activation_resolution_status in {
+        BaselineBindingResolutionStatus.BLOCKED,
+        BaselineBindingResolutionStatus.PARTIAL,
+    }:
+        return BaselineActivationRecommendation.objects.create(
+            review_run=review_run,
+            target_activation=activation,
+            recommendation_type=BaselineActivationRecommendationType.REQUIRE_BINDING_RECHECK,
+            rationale='Activation mapping is incomplete; recheck champion/policy/trust/rollout bindings before manual apply.',
+            reason_codes=['ACTIVATION_BINDING_MAPPING_INCOMPLETE'],
+            confidence=Decimal('0.76'),
+            blockers=candidate.blockers,
+            metadata={'candidate_id': candidate.id, 'confirmation_id': candidate.linked_paper_baseline_confirmation_id},
+        )
+
+    return BaselineActivationRecommendation.objects.create(
+        review_run=review_run,
+        target_activation=activation,
+        recommendation_type=BaselineActivationRecommendationType.DEFER_ACTIVATION,
+        rationale='Defer activation until the committee re-checks priority and baseline context.',
+        reason_codes=['DEFER_FOR_CONSERVATIVE_ACTIVATION_GOVERNANCE'],
+        confidence=Decimal('0.62'),
+        blockers=candidate.blockers,
+        metadata={'candidate_id': candidate.id, 'confirmation_id': candidate.linked_paper_baseline_confirmation_id},
     )

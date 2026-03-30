@@ -1896,3 +1896,8 @@ Governance boundaries preserved:
 - no auto-promote / no auto champion switch / no silent apply
 - rollback path to previous baseline is explicitly captured
 - local-first, single-user, paper/sandbox only
+
+
+## Paper baseline activation board
+
+The certification domain now includes a **paper baseline activation board** that sits after `PaperBaselineConfirmation=CONFIRMED`. It creates manual activation candidates, resolves active-binding replacement targets, records before/after snapshots, updates an explicit active paper binding registry, and keeps rollback reversible and auditable. This layer is manual-first, paper-only, local-first, and does not auto-switch champion, auto-promote, or execute live trading.

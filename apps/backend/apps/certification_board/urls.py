@@ -1,6 +1,11 @@
 from django.urls import path
 
 from apps.certification_board.views import (
+    ActivePaperBindingRecordListView,
+    ActivatePaperBaselineView,
+    BaselineActivationCandidateListView,
+    BaselineActivationRecommendationListView,
+    BaselineActivationSummaryView,
     BaselineBindingSnapshotListView,
     BaselineConfirmationCandidateListView,
     BaselineConfirmationRecommendationListView,
@@ -16,9 +21,12 @@ from apps.certification_board.views import (
     CertificationRunReviewView,
     CertificationSummaryView,
     CurrentCertificationView,
+    PaperBaselineActivationListView,
     PostRolloutCertificationSummaryView,
     PaperBaselineConfirmationListView,
+    RollbackBaselineActivationView,
     RollbackPaperBaselineView,
+    RunBaselineActivationReviewView,
     RunBaselineConfirmationReviewView,
     RunPostRolloutCertificationReviewView,
 )
@@ -44,4 +52,12 @@ urlpatterns = [
     path('baseline-summary/', BaselineConfirmationSummaryView.as_view(), name='baseline-summary'),
     path('confirm-baseline/<int:decision_id>/', ConfirmPaperBaselineView.as_view(), name='confirm-baseline'),
     path('rollback-baseline/<int:confirmation_id>/', RollbackPaperBaselineView.as_view(), name='rollback-baseline'),
+    path('run-baseline-activation/', RunBaselineActivationReviewView.as_view(), name='run-baseline-activation'),
+    path('activation-candidates/', BaselineActivationCandidateListView.as_view(), name='activation-candidates'),
+    path('baseline-activations/', PaperBaselineActivationListView.as_view(), name='baseline-activations'),
+    path('active-bindings/', ActivePaperBindingRecordListView.as_view(), name='active-bindings'),
+    path('activation-recommendations/', BaselineActivationRecommendationListView.as_view(), name='activation-recommendations'),
+    path('activation-summary/', BaselineActivationSummaryView.as_view(), name='activation-summary'),
+    path('activate-baseline/<int:confirmation_id>/', ActivatePaperBaselineView.as_view(), name='activate-baseline'),
+    path('rollback-activation/<int:activation_id>/', RollbackBaselineActivationView.as_view(), name='rollback-activation'),
 ]

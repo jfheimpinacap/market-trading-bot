@@ -397,3 +397,149 @@ class BaselineConfirmationRecommendation(TimeStampedModel):
     class Meta:
         ordering = ['-created_at', '-id']
         indexes = [models.Index(fields=['recommendation_type', '-created_at'])]
+
+
+class PaperBaselineActivationStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    READY_TO_ACTIVATE = 'READY_TO_ACTIVATE', 'Ready to activate'
+    ACTIVATED = 'ACTIVATED', 'Activated'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    DEFERRED = 'DEFERRED', 'Deferred'
+    ROLLBACK_AVAILABLE = 'ROLLBACK_AVAILABLE', 'Rollback available'
+
+
+class ActivePaperBindingStatus(models.TextChoices):
+    ACTIVE = 'ACTIVE', 'Active'
+    SUPERSEDED = 'SUPERSEDED', 'Superseded'
+    REVERTED = 'REVERTED', 'Reverted'
+
+
+class BaselineActivationRecommendationType(models.TextChoices):
+    ACTIVATE_PAPER_BASELINE = 'ACTIVATE_PAPER_BASELINE', 'Activate paper baseline'
+    REQUIRE_BINDING_RECHECK = 'REQUIRE_BINDING_RECHECK', 'Require binding recheck'
+    DEFER_ACTIVATION = 'DEFER_ACTIVATION', 'Defer activation'
+    PREPARE_ACTIVATION_ROLLBACK = 'PREPARE_ACTIVATION_ROLLBACK', 'Prepare activation rollback'
+    REQUIRE_COMMITTEE_RECHECK = 'REQUIRE_COMMITTEE_RECHECK', 'Require committee recheck'
+    REORDER_ACTIVATION_PRIORITY = 'REORDER_ACTIVATION_PRIORITY', 'Reorder activation priority'
+
+
+class BaselineActivationRun(TimeStampedModel):
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    linked_baseline_confirmation_run = models.ForeignKey(
+        BaselineConfirmationRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='baseline_activation_runs',
+    )
+    candidate_count = models.PositiveIntegerField(default=0)
+    ready_to_activate_count = models.PositiveIntegerField(default=0)
+    blocked_count = models.PositiveIntegerField(default=0)
+    activated_count = models.PositiveIntegerField(default=0)
+    rollback_ready_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class BaselineActivationCandidate(TimeStampedModel):
+    review_run = models.ForeignKey(BaselineActivationRun, on_delete=models.CASCADE, related_name='candidates')
+    linked_paper_baseline_confirmation = models.ForeignKey(
+        PaperBaselineConfirmation, on_delete=models.CASCADE, related_name='activation_candidates'
+    )
+    linked_certification_decision = models.ForeignKey(
+        CertificationDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='baseline_activation_candidates',
+    )
+    target_component = models.CharField(max_length=32)
+    target_scope = models.CharField(max_length=24)
+    previous_active_reference = models.CharField(max_length=255, blank=True)
+    proposed_active_reference = models.CharField(max_length=255, blank=True)
+    activation_resolution_status = models.CharField(
+        max_length=16, choices=BaselineBindingResolutionStatus.choices, default=BaselineBindingResolutionStatus.UNKNOWN
+    )
+    ready_for_activation = models.BooleanField(default=False)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['activation_resolution_status', '-created_at'])]
+
+
+class PaperBaselineActivation(TimeStampedModel):
+    linked_candidate = models.ForeignKey(
+        BaselineActivationCandidate,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='activations',
+    )
+    linked_confirmation = models.ForeignKey(
+        PaperBaselineConfirmation, on_delete=models.CASCADE, related_name='activations'
+    )
+    activation_status = models.CharField(
+        max_length=24, choices=PaperBaselineActivationStatus.choices, default=PaperBaselineActivationStatus.PROPOSED
+    )
+    target_component = models.CharField(max_length=32)
+    target_scope = models.CharField(max_length=24)
+    previous_active_snapshot = models.JSONField(default=dict, blank=True)
+    activated_snapshot = models.JSONField(default=dict, blank=True)
+    activated_by = models.CharField(max_length=120, blank=True)
+    activated_at = models.DateTimeField(null=True, blank=True)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    blockers = models.JSONField(default=list, blank=True)
+    linked_binding_artifact = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['activation_status', '-created_at'])]
+
+
+class ActivePaperBindingRecord(TimeStampedModel):
+    target_component = models.CharField(max_length=32)
+    target_scope = models.CharField(max_length=24)
+    active_binding_type = models.CharField(max_length=40, choices=BaselineBindingType.choices)
+    active_snapshot = models.JSONField(default=dict, blank=True)
+    source_activation = models.ForeignKey(
+        PaperBaselineActivation,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='active_binding_records',
+    )
+    status = models.CharField(max_length=16, choices=ActivePaperBindingStatus.choices, default=ActivePaperBindingStatus.ACTIVE)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['target_component', 'target_scope', 'status', '-created_at'])]
+
+
+class BaselineActivationRecommendation(TimeStampedModel):
+    review_run = models.ForeignKey(BaselineActivationRun, on_delete=models.CASCADE, related_name='recommendations')
+    target_activation = models.ForeignKey(
+        PaperBaselineActivation,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    recommendation_type = models.CharField(max_length=48, choices=BaselineActivationRecommendationType.choices)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=6, decimal_places=4, default=0)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['recommendation_type', '-created_at'])]

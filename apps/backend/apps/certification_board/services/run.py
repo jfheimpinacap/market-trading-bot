@@ -6,24 +6,33 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.certification_board.models import (
+    BaselineActivationCandidate,
+    BaselineActivationRun,
     BaselineConfirmationCandidate,
     BaselineConfirmationRun,
     CertificationDecision,
     CertificationDecisionStatus,
     CertificationEvidencePack,
     CertificationRecommendation,
+    PaperBaselineActivation,
     PaperBaselineConfirmation,
     PaperBaselineConfirmationStatus,
     RolloutCertificationRun,
 )
+from apps.certification_board.services.activation import get_or_create_paper_baseline_activation
 from apps.certification_board.services.candidate_building import (
+    build_baseline_activation_candidates,
     build_baseline_confirmation_candidates,
     build_rollout_certification_candidates,
 )
 from apps.certification_board.services.confirmation import get_or_create_confirmation
 from apps.certification_board.services.decision import build_certification_decision
 from apps.certification_board.services.evidence_pack import build_certification_evidence_pack
-from apps.certification_board.services.recommendation import build_baseline_confirmation_recommendation, build_certification_recommendation
+from apps.certification_board.services.recommendation import (
+    build_baseline_activation_recommendation,
+    build_baseline_confirmation_recommendation,
+    build_certification_recommendation,
+)
 
 
 @transaction.atomic
@@ -133,5 +142,54 @@ def run_baseline_confirmation_review(*, actor: str = 'operator-ui', metadata: di
         'run': run,
         'candidates': candidates,
         'confirmations': confirmations,
+        'recommendations': recommendations,
+    }
+
+
+@transaction.atomic
+def run_baseline_activation_review(*, actor: str = 'operator-ui', metadata: dict | None = None) -> dict:
+    started_at = timezone.now()
+    linked_confirmation_run = BaselineConfirmationRun.objects.order_by('-started_at', '-id').first()
+    run = BaselineActivationRun.objects.create(
+        started_at=started_at,
+        linked_baseline_confirmation_run=linked_confirmation_run,
+        metadata={'actor': actor, **(metadata or {})},
+    )
+
+    candidates = build_baseline_activation_candidates(review_run=run)
+    activations: list[PaperBaselineActivation] = [get_or_create_paper_baseline_activation(candidate=item) for item in candidates]
+    recommendations = [
+        build_baseline_activation_recommendation(review_run=run, candidate=item, activation=activation)
+        for item, activation in zip(candidates, activations)
+    ]
+
+    run.completed_at = timezone.now()
+    run.candidate_count = BaselineActivationCandidate.objects.filter(review_run=run).count()
+    run.ready_to_activate_count = BaselineActivationCandidate.objects.filter(review_run=run, ready_for_activation=True).count()
+    run.blocked_count = BaselineActivationCandidate.objects.filter(review_run=run, ready_for_activation=False).count()
+    run.activated_count = PaperBaselineActivation.objects.filter(
+        linked_candidate__review_run=run, activation_status='ACTIVATED'
+    ).count()
+    run.rollback_ready_count = PaperBaselineActivation.objects.filter(
+        linked_candidate__review_run=run, metadata__rollback_ready=True
+    ).count()
+    run.recommendation_summary = dict(Counter(item.recommendation_type for item in recommendations))
+    run.save(
+        update_fields=[
+            'completed_at',
+            'candidate_count',
+            'ready_to_activate_count',
+            'blocked_count',
+            'activated_count',
+            'rollback_ready_count',
+            'recommendation_summary',
+            'updated_at',
+        ]
+    )
+
+    return {
+        'run': run,
+        'candidates': candidates,
+        'activations': activations,
         'recommendations': recommendations,
     }

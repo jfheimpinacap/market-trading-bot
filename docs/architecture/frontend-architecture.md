@@ -1601,3 +1601,8 @@ The second view is manual-first and includes:
 - recommendation panel for confirm/defer/binding-review/rollback readiness
 
 All interactions are explicit button-driven API calls; there is no automatic baseline switch in the client.
+
+
+## Paper baseline activation board
+
+The certification domain now includes a **paper baseline activation board** that sits after `PaperBaselineConfirmation=CONFIRMED`. It creates manual activation candidates, resolves active-binding replacement targets, records before/after snapshots, updates an explicit active paper binding registry, and keeps rollback reversible and auditable. This layer is manual-first, paper-only, local-first, and does not auto-switch champion, auto-promote, or execute live trading.
