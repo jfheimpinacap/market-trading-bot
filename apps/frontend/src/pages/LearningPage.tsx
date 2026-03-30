@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
 import { SectionCard } from '../components/SectionCard';
@@ -6,58 +6,65 @@ import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
 import {
+  getFailurePatterns,
   getLearningAdjustments,
-  getLearningIntegrationStatus,
-  getLearningMemory,
-  getLearningRebuildRuns,
-  getLearningSummary,
-  rebuildLearningMemory,
-} from '../services/learning';
-import type { LearningAdjustment, LearningIntegrationStatus, LearningMemoryEntry, LearningRebuildRun, LearningSummary } from '../types/learning';
+  getLearningApplicationRecords,
+  getLearningRecommendations,
+  getPostmortemLearningSummary,
+  runPostmortemLearningLoop,
+} from '../services/learningLoop';
+import type {
+  FailurePattern,
+  LearningAdjustment,
+  LearningApplicationRecord,
+  LearningLoopSummary,
+  LearningRecommendation,
+} from '../types/learning';
 
-function formatDate(value: string) {
+function formatDate(value: string | null) {
+  if (!value) return '—';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-function outcomeTone(outcome: string) {
-  if (outcome === 'positive') return 'ready';
-  if (outcome === 'negative') return 'pending';
+function toneForStatus(status: string) {
+  if (['ACTIVE', 'SUCCESS'].includes(status)) return 'ready';
+  if (['WATCH', 'PROPOSED', 'NEEDS_REVIEW'].includes(status)) return 'pending';
   return 'neutral';
 }
 
-function activeTone(active: boolean) {
-  return active ? 'ready' : 'neutral';
-}
-
 export function LearningPage() {
-  const [summary, setSummary] = useState<LearningSummary | null>(null);
-  const [memoryEntries, setMemoryEntries] = useState<LearningMemoryEntry[]>([]);
+  const [summary, setSummary] = useState<LearningLoopSummary | null>(null);
+  const [patterns, setPatterns] = useState<FailurePattern[]>([]);
   const [adjustments, setAdjustments] = useState<LearningAdjustment[]>([]);
-  const [rebuildRuns, setRebuildRuns] = useState<LearningRebuildRun[]>([]);
-  const [integrationStatus, setIntegrationStatus] = useState<LearningIntegrationStatus | null>(null);
+  const [applications, setApplications] = useState<LearningApplicationRecord[]>([]);
+  const [recommendations, setRecommendations] = useState<LearningRecommendation[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [scopeFilter, setScopeFilter] = useState<string>('ALL');
+  const [patternTypeFilter, setPatternTypeFilter] = useState<string>('ALL');
+  const [adjustmentTypeFilter, setAdjustmentTypeFilter] = useState<string>('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isRebuilding, setIsRebuilding] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [summaryRes, memoryRes, adjustmentsRes, rebuildRunsRes, integrationStatusRes] = await Promise.all([
-        getLearningSummary(),
-        getLearningMemory(),
+      const [summaryRes, patternsRes, adjustmentsRes, applicationsRes, recommendationsRes] = await Promise.all([
+        getPostmortemLearningSummary(),
+        getFailurePatterns(),
         getLearningAdjustments(),
-        getLearningRebuildRuns(),
-        getLearningIntegrationStatus(),
+        getLearningApplicationRecords(),
+        getLearningRecommendations(),
       ]);
       setSummary(summaryRes);
-      setMemoryEntries(memoryRes);
+      setPatterns(patternsRes);
       setAdjustments(adjustmentsRes);
-      setRebuildRuns(rebuildRunsRes);
-      setIntegrationStatus(integrationStatusRes);
+      setApplications(applicationsRes);
+      setRecommendations(recommendationsRes);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load learning memory data.');
+      setError(loadError instanceof Error ? loadError.message : 'Could not load postmortem learning loop data.');
     } finally {
       setIsLoading(false);
     }
@@ -67,28 +74,40 @@ export function LearningPage() {
     void loadData();
   }, [loadData]);
 
-  const handleRebuild = async () => {
-    setIsRebuilding(true);
+  const handleRunLoop = async () => {
+    setIsRunning(true);
     try {
-      await rebuildLearningMemory();
+      await runPostmortemLearningLoop();
       await loadData();
     } finally {
-      setIsRebuilding(false);
+      setIsRunning(false);
     }
   };
+
+  const filteredPatterns = useMemo(() => patterns.filter((item) => (
+    (statusFilter === 'ALL' || item.status === statusFilter)
+    && (scopeFilter === 'ALL' || item.scope === scopeFilter)
+    && (patternTypeFilter === 'ALL' || item.pattern_type === patternTypeFilter)
+  )), [patterns, statusFilter, scopeFilter, patternTypeFilter]);
+
+  const filteredAdjustments = useMemo(() => adjustments.filter((item) => (
+    (statusFilter === 'ALL' || item.status === statusFilter)
+    && (scopeFilter === 'ALL' || item.scope === scopeFilter)
+    && (adjustmentTypeFilter === 'ALL' || item.adjustment_type === adjustmentTypeFilter)
+  )), [adjustments, statusFilter, scopeFilter, adjustmentTypeFilter]);
 
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Heuristic demo learning"
-        title="Learning Memory"
-        description="Operational memory from reviews/evaluation/safety to apply conservative, auditable heuristic adjustments. This is not ML and not autonomous optimization."
+        eyebrow="Postmortem learning loop"
+        title="Learning"
+        description="Structured loss analysis to failure patterns, conservative adjustments, and next-decision feedback. Local-first, paper-only, recommendation-first, and manual-first (no opaque auto-learning)."
         actions={(
           <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>Open Evaluation</button>
             <button type="button" className="secondary-button" onClick={() => navigate('/postmortem-board')}>Open Postmortem Board</button>
-            <button type="button" className="secondary-button" disabled={isRebuilding} onClick={() => void handleRebuild()}>
-              {isRebuilding ? 'Rebuilding learning memory...' : 'Rebuild learning memory'}
+            <button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Open Cockpit</button>
+            <button type="button" className="secondary-button" disabled={isRunning} onClick={() => void handleRunLoop()}>
+              {isRunning ? 'Running postmortem learning loop...' : 'Run postmortem learning loop'}
             </button>
           </div>
         )}
@@ -96,151 +115,80 @@ export function LearningPage() {
 
       <DataStateWrapper isLoading={isLoading} isError={Boolean(error)} errorMessage={error ?? undefined}>
         {!summary ? (
-          <EmptyState
-            eyebrow="No learning memory"
-            title="Learning memory is empty"
-            description="Run reviews and evaluation first to build learning memory."
-          />
+          <EmptyState eyebrow="No learning loop" title="No postmortem learning loop data yet" description="Run postmortem learning loop to derive reusable conservative adjustments." />
         ) : (
           <>
-            <SectionCard eyebrow="Summary" title="Learning summary" description="Conservative learning indicators derived from auditable entries and active adjustments.">
+            <SectionCard eyebrow="Summary" title="Postmortem loop summary" description="Operational and auditable state of active/expired learning and downstream impact.">
               <div className="system-metadata-grid">
-                <div><strong>Total memory entries:</strong> {summary.total_memory_entries}</div>
+                <div><strong>Postmortem runs processed:</strong> {summary.runs_processed}</div>
+                <div><strong>Active patterns:</strong> {summary.active_patterns}</div>
                 <div><strong>Active adjustments:</strong> {summary.active_adjustments}</div>
-                <div><strong>Negative patterns detected:</strong> {summary.negative_patterns_detected}</div>
-                <div><strong>Conservative bias score:</strong> {summary.conservative_bias_score}</div>
+                <div><strong>Expired adjustments:</strong> {summary.expired_adjustments}</div>
+                <div><strong>Applications recorded:</strong> {summary.applications_recorded}</div>
+                <div><strong>Manual review required:</strong> {summary.manual_review_required ? 'Yes' : 'No'}</div>
               </div>
             </SectionCard>
 
-
-            <SectionCard eyebrow="Controlled loop" title="Learning integration status" description="How rebuild is integrated into automation/continuous demo under conservative guardrails.">
-              <div className="system-metadata-grid">
-                <div><strong>Mode:</strong> {integrationStatus?.learning_rebuild_enabled ? 'Automatic (conservative)' : 'Manual by default'}</div>
-                <div><strong>Cadence:</strong> every {integrationStatus?.learning_rebuild_every_n_cycles ?? '—'} cycles</div>
-                <div><strong>After reviews:</strong> {integrationStatus?.learning_rebuild_after_reviews ? 'enabled' : 'disabled'}</div>
-                <div><strong>Guidance:</strong> {integrationStatus?.message ?? 'Learning rebuild is currently manual.'}</div>
+            <SectionCard eyebrow="Filters" title="Filter learning artifacts" description="Filter by status/scope/pattern type/adjustment type.">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '0.75rem' }}>
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  <option value="ALL">All status</option>
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="WATCH">WATCH</option>
+                  <option value="EXPIRED">EXPIRED</option>
+                  <option value="PROPOSED">PROPOSED</option>
+                  <option value="REJECTED">REJECTED</option>
+                </select>
+                <select value={scopeFilter} onChange={(event) => setScopeFilter(event.target.value)}>
+                  <option value="ALL">All scope</option>
+                  <option value="global">global</option>
+                  <option value="provider">provider</option>
+                  <option value="category">category</option>
+                  <option value="source_type">source_type</option>
+                  <option value="signal_type">signal_type</option>
+                  <option value="market">market</option>
+                </select>
+                <input value={patternTypeFilter} onChange={(event) => setPatternTypeFilter(event.target.value || 'ALL')} placeholder="pattern_type or ALL" />
+                <input value={adjustmentTypeFilter} onChange={(event) => setAdjustmentTypeFilter(event.target.value || 'ALL')} placeholder="adjustment_type or ALL" />
               </div>
             </SectionCard>
 
-            <SectionCard eyebrow="Rebuild audit" title="Recent rebuild runs" description="Every rebuild leaves explicit traceability: trigger, counts, summary, and warnings.">
-              {rebuildRuns.length === 0 ? (
+            <SectionCard eyebrow="Failure patterns" title="Loss pattern registry" description="Explicit failure patterns extracted from postmortem board conclusions.">
+              {filteredPatterns.length === 0 ? (
                 <EmptyState
-                  eyebrow="No rebuild runs"
-                  title="No learning rebuild runs yet"
-                  description="Run reviews and evaluation first to get better learning results."
+                  eyebrow="No patterns"
+                  title="No postmortem learning patterns are available yet"
+                  description="Run the learning loop to derive reusable adjustments. WATCH and EXPIRED are valid states."
                 />
               ) : (
-                <div className="table-wrapper">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Status</th>
-                        <th>Triggered from</th>
-                        <th>Entries</th>
-                        <th>Created</th>
-                        <th>Updated</th>
-                        <th>Deactivated</th>
-                        <th>Started</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rebuildRuns.slice(0, 10).map((run) => (
-                        <tr key={run.id}>
-                          <td>{run.id}</td>
-                          <td><StatusBadge tone={run.status === 'SUCCESS' ? 'ready' : run.status === 'PARTIAL' ? 'pending' : 'offline'}>{run.status}</StatusBadge></td>
-                          <td>{run.triggered_from}</td>
-                          <td>{run.memory_entries_processed}</td>
-                          <td>{run.adjustments_created}</td>
-                          <td>{run.adjustments_updated}</td>
-                          <td>{run.adjustments_deactivated}</td>
-                          <td>{formatDate(run.started_at)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <div className="table-wrapper"><table className="data-table"><thead><tr><th>Label</th><th>Pattern type</th><th>Scope</th><th>Severity</th><th>Recurrence</th><th>Status</th><th>Rationale</th></tr></thead><tbody>
+                  {filteredPatterns.map((item) => (<tr key={item.id}><td>{item.canonical_label}</td><td>{item.pattern_type}</td><td>{item.scope}:{item.scope_key}</td><td>{item.severity_score}</td><td>{item.recurrence_count}</td><td><StatusBadge tone={toneForStatus(item.status)}>{item.status}</StatusBadge></td><td>{item.rationale}</td></tr>))}
+                </tbody></table></div>
               )}
             </SectionCard>
 
-            <SectionCard eyebrow="Entries" title="Memory entries" description="Recent memory entries used to derive conservative biases for proposals and risk.">
-              {memoryEntries.length === 0 ? (
-                <EmptyState eyebrow="No entries" title="No memory entries yet" description="Run reviews and evaluation first to build learning memory." />
-              ) : (
-                <div className="table-wrapper">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Type</th>
-                        <th>Scope</th>
-                        <th>Outcome</th>
-                        <th>Summary</th>
-                        <th>Δ Score</th>
-                        <th>Δ Confidence</th>
-                        <th>Δ Quantity</th>
-                        <th>Created</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {memoryEntries.map((entry) => (
-                        <tr key={entry.id}>
-                          <td>{entry.id}</td>
-                          <td>{entry.memory_type}</td>
-                          <td>{entry.provider_slug ?? entry.market_slug ?? entry.source_type}</td>
-                          <td><StatusBadge tone={outcomeTone(entry.outcome)}>{entry.outcome}</StatusBadge></td>
-                          <td>{entry.summary}</td>
-                          <td>{entry.score_delta}</td>
-                          <td>{entry.confidence_delta}</td>
-                          <td>{entry.quantity_bias_delta}</td>
-                          <td>{formatDate(entry.created_at)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+            <SectionCard eyebrow="Adjustments" title="Conservative learning adjustments" description="Bounded and traceable adjustments derived from failure patterns.">
+              {filteredAdjustments.length === 0 ? <EmptyState eyebrow="No adjustments" title="No learning adjustments yet" description="Run the postmortem learning loop to derive adjustments." /> : (
+                <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Scope</th><th>Strength</th><th>Status</th><th>Expiration</th><th>Rationale</th><th>Postmortem</th></tr></thead><tbody>
+                  {filteredAdjustments.map((item) => (<tr key={item.id}><td>{item.adjustment_type}</td><td>{item.scope}:{item.scope_key}</td><td>{item.adjustment_strength}</td><td><StatusBadge tone={toneForStatus(item.status)}>{item.status}</StatusBadge></td><td>{formatDate(item.expiration_hint)}</td><td>{item.rationale}</td><td>{item.linked_postmortem ?? '—'}</td></tr>))}
+                </tbody></table></div>
               )}
             </SectionCard>
 
-            <SectionCard eyebrow="Active heuristics" title="Adjustments" description="Active conservative adjustments and their scope/magnitude, always auditable and explicit.">
-              {adjustments.length === 0 ? (
-                <EmptyState eyebrow="No adjustments" title="No active adjustments" description="Rebuild learning memory to calculate current heuristic adjustments." />
-              ) : (
-                <div className="table-wrapper">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Type</th>
-                        <th>Scope</th>
-                        <th>Magnitude</th>
-                        <th>Reason</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {adjustments.map((adjustment) => (
-                        <tr key={adjustment.id}>
-                          <td>{adjustment.id}</td>
-                          <td>{adjustment.adjustment_type}</td>
-                          <td>{adjustment.scope_type}:{adjustment.scope_key}</td>
-                          <td>{adjustment.magnitude}</td>
-                          <td>{adjustment.reason}</td>
-                          <td><StatusBadge tone={activeTone(adjustment.is_active)}>{adjustment.is_active ? 'active' : 'inactive'}</StatusBadge></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+            <SectionCard eyebrow="Application records" title="Downstream influence records" description="Where learning adjustments affected prediction/risk/proposal/signal_fusion.">
+              {applications.length === 0 ? <EmptyState eyebrow="No applications" title="No application records yet" description="Application records appear after the learning loop and downstream components apply caution." /> : (
+                <div className="table-wrapper"><table className="data-table"><thead><tr><th>Target</th><th>Type</th><th>Before</th><th>After</th><th>Adjustment</th><th>Rationale</th></tr></thead><tbody>
+                  {applications.slice(0, 100).map((item) => (<tr key={item.id}><td>{item.target_component}</td><td>{item.application_type}</td><td>{item.before_value || '—'}</td><td>{item.after_value || '—'}</td><td>{item.linked_adjustment}</td><td>{item.rationale}</td></tr>))}
+                </tbody></table></div>
               )}
             </SectionCard>
 
-            <SectionCard eyebrow="Influence" title="How it impacts the flow" description="Learning memory only nudges proposal confidence/size and adds risk caution. It does not bypass policy or create autonomous control.">
-              <ul>
-                <li>Proposal engine: confidence and suggested quantity receive bounded, conservative deltas.</li>
-                <li>Risk demo: additional caution warning can be injected for sensitive scopes.</li>
-                <li>Policy engine: remains authoritative; learning context is secondary and auditable.</li>
-              </ul>
+            <SectionCard eyebrow="Recommendations" title="Learning recommendations" description="Recommendation-first outputs for manual activation/watch/expiry/review actions.">
+              {recommendations.length === 0 ? <EmptyState eyebrow="No recommendations" title="No recommendations yet" description="Run the learning loop to derive explicit recommendations." /> : (
+                <div className="table-wrapper"><table className="data-table"><thead><tr><th>Recommendation</th><th>Rationale</th><th>Reason codes</th><th>Confidence</th><th>Blockers</th></tr></thead><tbody>
+                  {recommendations.slice(0, 80).map((item) => (<tr key={item.id}><td><StatusBadge tone={toneForStatus(item.recommendation_type.includes('REQUIRE') ? 'NEEDS_REVIEW' : 'ACTIVE')}>{item.recommendation_type}</StatusBadge></td><td>{item.rationale}</td><td>{item.reason_codes.join(', ') || '—'}</td><td>{item.confidence}</td><td>{item.blockers.join(', ') || '—'}</td></tr>))}
+                </tbody></table></div>
+              )}
             </SectionCard>
           </>
         )}

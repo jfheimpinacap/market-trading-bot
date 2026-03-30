@@ -23,14 +23,86 @@ export type LearningMemoryEntry = {
   updated_at: string;
 };
 
+export type LearningLoopSummary = {
+  runs_processed: number;
+  active_patterns: number;
+  active_adjustments: number;
+  expired_adjustments: number;
+  applications_recorded: number;
+  manual_review_required: boolean;
+  latest_run: PostmortemLearningRun | null;
+};
+
+export type FailurePattern = {
+  id: number;
+  canonical_label: string;
+  pattern_type: string;
+  scope: string;
+  scope_key: string;
+  severity_score: string;
+  recurrence_count: number;
+  status: 'ACTIVE' | 'WATCH' | 'EXPIRED' | 'NEEDS_REVIEW';
+  rationale: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
 export type LearningAdjustment = {
   id: number;
+  linked_failure_pattern: number | null;
+  linked_postmortem: number | null;
   adjustment_type: string;
-  scope_type: string;
+  scope: string;
   scope_key: string;
-  is_active: boolean;
-  magnitude: string;
-  reason: string;
+  adjustment_strength: string;
+  status: 'PROPOSED' | 'ACTIVE' | 'PAUSED' | 'EXPIRED' | 'REJECTED';
+  expiration_hint: string | null;
+  rationale: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LearningApplicationRecord = {
+  id: number;
+  linked_adjustment: number;
+  target_component: 'research' | 'prediction' | 'risk' | 'proposal' | 'signal_fusion';
+  target_entity_id: string;
+  application_type: string;
+  before_value: string;
+  after_value: string;
+  rationale: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LearningRecommendation = {
+  id: number;
+  recommendation_type: string;
+  target_pattern: number | null;
+  target_adjustment: number | null;
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  created_at: string;
+};
+
+export type PostmortemLearningRun = {
+  id: number;
+  linked_postmortem_run: number | null;
+  started_at: string;
+  completed_at: string | null;
+  reviewed_position_count: number;
+  failure_pattern_count: number;
+  adjustment_count: number;
+  active_adjustment_count: number;
+  expired_adjustment_count: number;
+  recommendation_summary: string;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;

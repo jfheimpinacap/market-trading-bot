@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 
 from apps.learning_memory.services import build_learning_influence
+from apps.learning_memory.services.application import record_application_for_component
 from apps.paper_trading.models import PaperPositionSide, PaperTradeType
 from apps.paper_trading.services.valuation import PaperTradingValidationError, get_market_price
 from apps.policy_engine.models import ApprovalDecision, ApprovalDecisionType, PolicyRequestedBy, PolicyTriggeredFrom
@@ -168,6 +169,7 @@ def evaluate_proposal_heuristics(*, context: ProposalContext, triggered_from: st
         confidence,
     ) = _build_trade_idea(context)
 
+    record_application_for_component(target_component='proposal', target_entity_id=str(context.market.id))
     learning_influence = build_learning_influence(
         market=context.market,
         signal_type=context.latest_signals[0].signal_type if context.latest_signals else None,

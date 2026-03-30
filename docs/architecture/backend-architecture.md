@@ -1828,3 +1828,22 @@ Non-goals remain explicit:
 - no live broker execution
 - no real money
 - no opaque planner authority
+
+## Postmortem learning loop hardening architecture (new)
+
+`learning_memory` now includes a stronger auditable bridge from `postmortem_board` conclusions to reusable conservative learning controls.
+
+### Runtime path
+1. `postmortem_agents` persists multi-perspective conclusions.
+2. `learning_memory.services.patterns` derives explicit `FailurePattern` artifacts.
+3. `learning_memory.services.adjustments_loop` derives bounded `PostmortemLearningAdjustment` artifacts.
+4. `learning_memory.services.application` records downstream `LearningApplicationRecord` impact traces.
+5. `learning_memory.services.recommendation` emits recommendation-first `LearningRecommendation` actions.
+6. `learning_memory.services.run` consolidates one `PostmortemLearningRun` audit snapshot.
+
+### Governance and boundaries
+- recommendation-first outputs, manual-first activation/expiration
+- bounded conservative strengths
+- ACTIVE/WATCH/EXPIRED/NEEDS_REVIEW pattern lifecycle visibility
+- no silent policy/risk/runtime mutation authority
+- no model retraining, no AutoML, no real-money execution

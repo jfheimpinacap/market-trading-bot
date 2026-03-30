@@ -1660,3 +1660,28 @@ Scope unchanged:
 - paper/sandbox only
 - no real-money execution
 - no live broker/exchange execution
+
+### Postmortem learning loop hardening (new)
+
+The `learning_memory` layer now includes a stronger **postmortem → learning** loop focused on auditable, conservative, manual-first learning reuse.
+
+New capabilities:
+- `PostmortemLearningRun` audit trail per loop execution.
+- formal `FailurePattern` registry (ACTIVE/WATCH/EXPIRED/NEEDS_REVIEW).
+- bounded `PostmortemLearningAdjustment` records (PROPOSED/ACTIVE/PAUSED/EXPIRED/REJECTED).
+- explicit `LearningApplicationRecord` entries for downstream influence visibility.
+- recommendation-first `LearningRecommendation` outputs (`ACTIVATE_ADJUSTMENT`, `KEEP_ADJUSTMENT_ON_WATCH`, `EXPIRE_ADJUSTMENT`, `REQUIRE_MANUAL_LEARNING_REVIEW`, etc.).
+
+API:
+- `POST /api/learning/run-postmortem-loop/`
+- `GET /api/learning/failure-patterns/`
+- `GET /api/learning/adjustments/`
+- `GET /api/learning/application-records/`
+- `GET /api/learning/recommendations/`
+- `GET /api/learning/postmortem-loop-summary/`
+
+Scope remains unchanged:
+- local-first, single-user, paper/sandbox only
+- no real money / no broker live execution
+- no opaque autonomous learning authority
+- no automatic model retraining

@@ -1587,3 +1587,24 @@ Sigue el límite operativo:
 - manual-first
 - paper/demo only
 - sin ejecución real y sin autoridad opaca de auto-trading
+
+## `/learning` postmortem loop board hardening (new)
+
+The `/learning` page now acts as a technical board for postmortem learning loop visibility:
+
+- summary cards (runs, active patterns, active/expired adjustments, applications, manual-review flag)
+- failure patterns registry table
+- learning adjustments table
+- application records table
+- recommendations table
+- manual action: **Run postmortem learning loop**
+- filters by status/scope/pattern type/adjustment type
+
+New frontend API layer:
+- `src/services/learningLoop.ts`
+
+Design principles preserved:
+- local-first
+- manual-first
+- recommendation-first
+- no opaque auto-learning or auto-tuning behavior

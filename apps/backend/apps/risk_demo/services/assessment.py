@@ -9,6 +9,7 @@ from apps.paper_trading.services.portfolio import get_active_account
 from apps.paper_trading.services.market_pricing import get_paper_tradability
 from apps.paper_trading.services.valuation import PaperTradingValidationError, get_market_price
 from apps.learning_memory.services import build_learning_influence
+from apps.learning_memory.services.application import record_application_for_component
 from apps.risk_demo.models import TradeRiskAssessment, TradeRiskDecision
 from apps.signals.models import MarketSignal, MarketSignalStatus, SignalDirection
 
@@ -258,6 +259,7 @@ def assess_trade(*, market: Market, trade_type: str, side: str, quantity, reques
 
     signal_context = _signal_warnings(market=market, trade_type=trade_type, side=side, warnings=warnings)
 
+    record_application_for_component(target_component='risk', target_entity_id=str(market.id))
     learning_influence = build_learning_influence(market=market, source_type=market.source_type)
     if learning_influence.caution_delta > Decimal('0.0000'):
         _add_warning(
