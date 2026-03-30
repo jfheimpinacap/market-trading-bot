@@ -25,6 +25,16 @@ import {
   runBaselineResponseReview,
 } from '../../services/baselineResponse';
 import {
+  getBaselineResponseActionCandidates,
+  getBaselineResponseActionRecommendations,
+  getBaselineResponseActionSummary,
+  getBaselineResponseRoutingActions,
+  getBaselineResponseTrackingRecords,
+  routeBaselineResponseCase,
+  runBaselineResponseActions,
+  updateBaselineResponseTracking,
+} from '../../services/baselineResponseActions';
+import {
   getBaselineHealthCandidates,
   getBaselineHealthRecommendations,
   getBaselineHealthSignals,
@@ -61,6 +71,11 @@ import type {
   BaselineHealthStatus,
   BaselineHealthSummary,
   BaselineResponseCase,
+  BaselineResponseActionSummary,
+  ResponseActionCandidate,
+  ResponseRoutingAction,
+  ResponseCaseTrackingRecord,
+  ResponseActionRecommendationItem,
   BaselineResponseRecommendationItem,
   BaselineResponseSummary,
   BaselineBindingSnapshot,
@@ -118,19 +133,25 @@ export function CertificationPage() {
   const [responseEvidencePacks, setResponseEvidencePacks] = useState<ResponseEvidencePack[]>([]);
   const [responseRoutingDecisions, setResponseRoutingDecisions] = useState<ResponseRoutingDecision[]>([]);
   const [responseRecommendations, setResponseRecommendations] = useState<BaselineResponseRecommendationItem[]>([]);
+  const [responseActionSummary, setResponseActionSummary] = useState<BaselineResponseActionSummary | null>(null);
+  const [responseActionCandidates, setResponseActionCandidates] = useState<ResponseActionCandidate[]>([]);
+  const [responseRoutingActions, setResponseRoutingActions] = useState<ResponseRoutingAction[]>([]);
+  const [responseTrackingRecords, setResponseTrackingRecords] = useState<ResponseCaseTrackingRecord[]>([]);
+  const [responseActionRecommendations, setResponseActionRecommendations] = useState<ResponseActionRecommendationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runningBaseline, setRunningBaseline] = useState(false);
   const [runningActivation, setRunningActivation] = useState(false);
   const [runningHealth, setRunningHealth] = useState(false);
   const [runningResponse, setRunningResponse] = useState(false);
+  const [runningResponseActions, setRunningResponseActions] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [summaryRes, candidatesRes, evidenceRes, decisionsRes, recommendationsRes, baselineSummaryRes, baselineCandidatesRes, baselineConfirmationsRes, bindingSnapshotsRes, baselineRecommendationsRes, activationSummaryRes, activationCandidatesRes, baselineActivationsRes, activeBindingsRes, activationRecommendationsRes, healthSummaryRes, healthCandidatesRes, healthStatusesRes, healthSignalsRes, healthRecommendationsRes, responseSummaryRes, responseCasesRes, responseEvidencePacksRes, responseRoutingRes, responseRecommendationsRes] = await Promise.all([
+      const [summaryRes, candidatesRes, evidenceRes, decisionsRes, recommendationsRes, baselineSummaryRes, baselineCandidatesRes, baselineConfirmationsRes, bindingSnapshotsRes, baselineRecommendationsRes, activationSummaryRes, activationCandidatesRes, baselineActivationsRes, activeBindingsRes, activationRecommendationsRes, healthSummaryRes, healthCandidatesRes, healthStatusesRes, healthSignalsRes, healthRecommendationsRes, responseSummaryRes, responseCasesRes, responseEvidencePacksRes, responseRoutingRes, responseRecommendationsRes, responseActionSummaryRes, responseActionCandidatesRes, responseRoutingActionsRes, responseTrackingRecordsRes, responseActionRecommendationsRes] = await Promise.all([
         getCertificationSummary(),
         getCertificationCandidates(),
         getCertificationEvidencePacks(),
@@ -156,6 +177,11 @@ export function CertificationPage() {
         getBaselineResponseEvidencePacks(),
         getBaselineResponseRoutingDecisions(),
         getBaselineResponseRecommendations(),
+        getBaselineResponseActionSummary(),
+        getBaselineResponseActionCandidates(),
+        getBaselineResponseRoutingActions(),
+        getBaselineResponseTrackingRecords(),
+        getBaselineResponseActionRecommendations(),
       ]);
       setSummary(summaryRes);
       setCandidates(candidatesRes);
@@ -182,6 +208,11 @@ export function CertificationPage() {
       setResponseEvidencePacks(responseEvidencePacksRes);
       setResponseRoutingDecisions(responseRoutingRes);
       setResponseRecommendations(responseRecommendationsRes);
+      setResponseActionSummary(responseActionSummaryRes);
+      setResponseActionCandidates(responseActionCandidatesRes);
+      setResponseRoutingActions(responseRoutingActionsRes);
+      setResponseTrackingRecords(responseTrackingRecordsRes);
+      setResponseActionRecommendations(responseActionRecommendationsRes);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load certification stabilization state.');
     } finally {
@@ -278,6 +309,19 @@ export function CertificationPage() {
     }
   }, [load]);
 
+  const runResponseActionsReview = useCallback(async () => {
+    setRunningResponseActions(true);
+    setError(null);
+    try {
+      await runBaselineResponseActions({ actor: 'certification_ui', metadata: { initiated_from: 'certification_ui' } });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not run baseline response actions review.');
+    } finally {
+      setRunningResponseActions(false);
+    }
+  }, [load]);
+
   const activateBaseline = useCallback(async (confirmationId: number) => {
     try {
       await activatePaperBaseline(confirmationId, { actor: 'certification_ui' });
@@ -314,6 +358,7 @@ export function CertificationPage() {
           <button type="button" className="secondary-button" onClick={() => void runActivationReview()} disabled={runningActivation} style={{ marginLeft: 8 }}>{runningActivation ? 'Running…' : 'Run baseline activation'}</button>
           <button type="button" className="secondary-button" onClick={() => void runHealthReview()} disabled={runningHealth} style={{ marginLeft: 8 }}>{runningHealth ? 'Running…' : 'Run baseline health review'}</button>
           <button type="button" className="secondary-button" onClick={() => void runResponseReview()} disabled={runningResponse} style={{ marginLeft: 8 }}>{runningResponse ? 'Running…' : 'Run baseline response review'}</button>
+          <button type="button" className="secondary-button" onClick={() => void runResponseActionsReview()} disabled={runningResponseActions} style={{ marginLeft: 8 }}>{runningResponseActions ? 'Running…' : 'Run baseline response actions'}</button>
         </SectionCard>
 
         <SectionCard eyebrow="Summary" title="Stabilization outcomes" description="Latest review counters for certification, observation, manual review, rollback recommendation, and rejection.">
@@ -699,6 +744,78 @@ export function CertificationPage() {
                 {responseRecommendations.slice(0, 100).map((row) => (
                   <tr key={row.id}>
                     <td>{row.target_case ? `#${row.target_case}` : '—'}</td>
+                    <td><StatusBadge tone={toneFromState(row.recommendation_type)}>{row.recommendation_type}</StatusBadge></td>
+                    <td>{row.rationale}</td>
+                    <td>{row.reason_codes.join(', ') || '—'}</td>
+                    <td>{row.confidence}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Response action summary" title="Manual routing and downstream tracking status" description="Manual-first, paper-only handoff execution over baseline response output. Recommendation ≠ routing executed.">
+              <div className="cockpit-metric-grid">
+                <div className="metric-tile"><span>Response cases reviewed</span><strong>{responseActionSummary?.response_cases_reviewed ?? 0}</strong></div>
+                <div className="metric-tile"><span>Ready to route</span><strong>{responseActionSummary?.ready_to_route ?? 0}</strong></div>
+                <div className="metric-tile"><span>Routed</span><strong>{responseActionSummary?.routed ?? 0}</strong></div>
+                <div className="metric-tile"><span>Blocked</span><strong>{responseActionSummary?.blocked ?? 0}</strong></div>
+                <div className="metric-tile"><span>Under review</span><strong>{responseActionSummary?.under_review ?? 0}</strong></div>
+                <div className="metric-tile"><span>Closed</span><strong>{responseActionSummary?.closed ?? 0}</strong></div>
+              </div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Response action candidates" title="Cases ready for manual handoff" description="No baseline response action candidates are available yet. Run response actions review to route and track baseline response cases.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Component</th><th>Scope</th><th>Target</th><th>Resolution</th><th>Ready</th><th>Blockers</th><th>Links</th></tr></thead><tbody>
+                {responseActionCandidates.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_response_case}</td>
+                    <td>{row.target_component}</td>
+                    <td>{row.target_scope}</td>
+                    <td>{row.intended_routing_target || '—'}</td>
+                    <td><StatusBadge tone={toneFromState(row.routing_resolution_status)}>{row.routing_resolution_status}</StatusBadge></td>
+                    <td>{row.ready_for_action ? 'Yes' : 'No'}</td>
+                    <td>{row.blockers.join(', ') || '—'}</td>
+                    <td><button type="button" className="link-button" onClick={() => navigate('/evaluation')}>evaluation</button> · <button type="button" className="link-button" onClick={() => navigate('/tuning')}>tuning</button> · <button type="button" className="link-button" onClick={() => navigate('/trace')}>trace</button></td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Response routing actions" title="Explicit manual routing handoffs" description="Manual routing action records and lifecycle from PROPOSED/READY_TO_ROUTE to ROUTED/BLOCKED/DEFERRED/CLOSED.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Action type</th><th>Status</th><th>Target</th><th>Rationale</th><th>Route</th></tr></thead><tbody>
+                {responseRoutingActions.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_response_case}</td>
+                    <td><StatusBadge tone={toneFromState(row.action_type)}>{row.action_type}</StatusBadge></td>
+                    <td><StatusBadge tone={toneFromState(row.action_status)}>{row.action_status}</StatusBadge></td>
+                    <td>{row.routing_target || '—'}</td>
+                    <td>{row.rationale}</td>
+                    <td><button type="button" className="secondary-button" onClick={() => void routeBaselineResponseCase(row.linked_response_case, { routed_by: 'certification_ui' }).then(load)}>Route response case</button></td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Response tracking records" title="Operational downstream case tracking" description="Track SENT/UNDER_REVIEW/COMPLETED/CLOSED_NO_ACTION and link downstream references for auditability.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Status</th><th>Notes</th><th>Downstream ref</th><th>Tracked by</th><th>Update</th></tr></thead><tbody>
+                {responseTrackingRecords.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_response_case}</td>
+                    <td><StatusBadge tone={toneFromState(row.downstream_status)}>{row.downstream_status}</StatusBadge></td>
+                    <td>{row.tracking_notes || '—'}</td>
+                    <td>{row.linked_downstream_reference || '—'}</td>
+                    <td>{row.tracked_by || '—'} · {formatDate(row.tracked_at)}</td>
+                    <td><button type="button" className="secondary-button" onClick={() => void updateBaselineResponseTracking(row.linked_response_case, { downstream_status: 'UNDER_REVIEW', tracked_by: 'certification_ui' }).then(load)}>Update response tracking</button></td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Response action recommendations" title="Manual-first response action recommendations" description="ROUTE_CASE_NOW / REQUIRE_ROUTING_RECHECK / KEEP_CASE_IN_MONITORING / ESCALATE_CASE_PRIORITY / CLOSE_CASE_NO_ACTION / REQUIRE_DOWNSTREAM_STATUS_UPDATE.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Action</th><th>Recommendation</th><th>Rationale</th><th>Reason codes</th><th>Confidence</th></tr></thead><tbody>
+                {responseActionRecommendations.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.target_action ? `#${row.target_action}` : '—'}</td>
                     <td><StatusBadge tone={toneFromState(row.recommendation_type)}>{row.recommendation_type}</StatusBadge></td>
                     <td>{row.rationale}</td>
                     <td>{row.reason_codes.join(', ') || '—'}</td>

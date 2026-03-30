@@ -5,6 +5,8 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.certification_board.models import (
+    ResponseRoutingActionType,
+    ResponseCaseDownstreamStatus,
     BaselineResponseEvidenceStatus,
     BaselineResponseRecommendationType,
     BaselineResponseRoutingTarget,
@@ -374,3 +376,76 @@ class CertificationBoardTests(TestCase):
         summary_res = self.client.get(reverse('certification_board:response-summary'))
         self.assertEqual(summary_res.status_code, 200)
         self.assertIn('open_response_cases', summary_res.json())
+
+    def test_response_action_candidates_build_from_response_cases(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        run_res = self.client.post(reverse('certification_board:run-baseline-response-actions'), {'actor': 'test'}, format='json')
+        self.assertEqual(run_res.status_code, 201)
+        candidates_res = self.client.get(reverse('certification_board:response-action-candidates'))
+        self.assertEqual(candidates_res.status_code, 200)
+        self.assertGreaterEqual(len(candidates_res.json()), 1)
+
+    def test_require_routing_recheck_when_routing_is_blocked(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        cases = self.client.get(reverse('certification_board:response-cases')).json()
+        case_id = cases[0]['id']
+        routing = self.client.get(reverse('certification_board:response-routing-decisions')).json()
+        for item in routing:
+            if item['linked_response_case'] == case_id:
+                item['routing_status'] = 'BLOCKED'
+        # force blocked routing for deterministic recommendation
+        from apps.certification_board.models import ResponseRoutingDecision
+        decision = ResponseRoutingDecision.objects.get(linked_response_case_id=case_id)
+        decision.routing_status = 'BLOCKED'
+        decision.save(update_fields=['routing_status', 'updated_at'])
+        self.client.post(reverse('certification_board:run-baseline-response-actions'), {'actor': 'test'}, format='json')
+        actions = self.client.get(reverse('certification_board:response-routing-actions')).json()
+        self.assertIn(ResponseRoutingActionType.REQUIRE_ROUTING_RECHECK, {item['action_type'] for item in actions})
+
+    def test_response_routing_actions_cover_core_targets(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-response-actions'), {'actor': 'test'}, format='json')
+        actions = self.client.get(reverse('certification_board:response-routing-actions')).json()
+        self.assertGreaterEqual(len(actions), 1)
+        allowed = {
+            'SEND_TO_EVALUATION_REVIEW',
+            'SEND_TO_TUNING_REVIEW',
+            'SEND_TO_ROLLBACK_REVIEW',
+            'KEEP_IN_MONITORING',
+            'REQUIRE_ROUTING_RECHECK',
+        }
+        self.assertTrue(any(item['action_type'] in allowed for item in actions))
+
+    def test_update_response_tracking_statuses(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-response-actions'), {'actor': 'test'}, format='json')
+        case_id = self.client.get(reverse('certification_board:response-cases')).json()[0]['id']
+        for downstream_status in [
+            ResponseCaseDownstreamStatus.SENT,
+            ResponseCaseDownstreamStatus.UNDER_REVIEW,
+            ResponseCaseDownstreamStatus.COMPLETED,
+            ResponseCaseDownstreamStatus.CLOSED_NO_ACTION,
+        ]:
+            response = self.client.post(
+                reverse('certification_board:update-response-tracking', kwargs={'case_id': case_id}),
+                {'downstream_status': downstream_status, 'tracked_by': 'test'},
+                format='json',
+            )
+            self.assertEqual(response.status_code, 200)
+
+    def test_baseline_response_action_summary_endpoint(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-response-actions'), {'actor': 'test'}, format='json')
+        summary_res = self.client.get(reverse('certification_board:response-action-summary'))
+        self.assertEqual(summary_res.status_code, 200)
+        self.assertIn('ready_to_route', summary_res.json())

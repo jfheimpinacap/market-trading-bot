@@ -1,6 +1,11 @@
 from rest_framework import serializers
 
 from apps.certification_board.models import (
+    BaselineResponseActionRun,
+    ResponseActionCandidate,
+    ResponseActionRecommendation,
+    ResponseCaseTrackingRecord,
+    ResponseRoutingAction,
     BaselineResponseCase,
     BaselineResponseRecommendation,
     BaselineResponseRun,
@@ -260,3 +265,56 @@ class BaselineResponseRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = BaselineResponseRecommendation
         fields = '__all__'
+
+
+class RunBaselineResponseActionsRequestSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui')
+    metadata = serializers.DictField(required=False)
+
+
+class BaselineResponseActionRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineResponseActionRun
+        fields = '__all__'
+
+
+class ResponseActionCandidateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResponseActionCandidate
+        fields = '__all__'
+
+
+class ResponseRoutingActionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResponseRoutingAction
+        fields = '__all__'
+
+
+class ResponseCaseTrackingRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResponseCaseTrackingRecord
+        fields = '__all__'
+
+
+class ResponseActionRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResponseActionRecommendation
+        fields = '__all__'
+
+
+class RouteResponseCaseRequestSerializer(serializers.Serializer):
+    action_type = serializers.CharField(required=False, allow_blank=True)
+    routing_target = serializers.CharField(required=False, allow_blank=True)
+    rationale = serializers.CharField(required=False, allow_blank=True, default='')
+    reason_codes = serializers.ListField(child=serializers.CharField(), required=False)
+    routed_by = serializers.CharField(required=False, default='operator-ui')
+    linked_target_artifact = serializers.CharField(required=False, allow_blank=True, default='')
+    metadata = serializers.DictField(required=False)
+
+
+class UpdateResponseTrackingRequestSerializer(serializers.Serializer):
+    downstream_status = serializers.CharField()
+    tracking_notes = serializers.CharField(required=False, allow_blank=True, default='')
+    tracked_by = serializers.CharField(required=False, default='operator-ui')
+    linked_downstream_reference = serializers.CharField(required=False, allow_blank=True, default='')
+    metadata = serializers.DictField(required=False)

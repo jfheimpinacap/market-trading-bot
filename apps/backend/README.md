@@ -2956,3 +2956,23 @@ API:
 - `GET /api/certification/response-summary/`
 
 Out of scope (unchanged): no auto-retune, no auto-rollback, no auto-deactivate baseline, no live/real-money execution.
+
+## Baseline response actions & tracking (manual-first)
+
+`certification_board` now includes a baseline response actions sublayer that executes **manual routing handoff records** and **downstream tracking** on top of existing baseline response outputs.
+
+New API endpoints:
+- `POST /api/certification/run-baseline-response-actions/`
+- `GET /api/certification/response-action-candidates/`
+- `GET /api/certification/response-routing-actions/`
+- `GET /api/certification/response-tracking-records/`
+- `GET /api/certification/response-action-recommendations/`
+- `GET /api/certification/response-action-summary/`
+- `POST /api/certification/route-response-case/<case_id>/`
+- `POST /api/certification/update-response-tracking/<case_id>/`
+
+Scope:
+- consumes `BaselineResponseCase + ResponseRoutingDecision`
+- creates auditable `ResponseRoutingAction` and `ResponseCaseTrackingRecord`
+- keeps routing/apply explicitly manual (no auto-open of downstream boards)
+- paper-only, local-first, single-user conservative flow

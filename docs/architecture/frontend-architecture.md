@@ -1643,3 +1643,17 @@ UX constraints retained:
 - desktop-first, technical tables, status badges
 - local-first and paper-only language
 - explicit manual-first wording (no auto-retune/rollback/deactivate)
+
+## `/certification` baseline response actions/tracking extension
+
+`/certification` now includes a dedicated baseline response actions slice:
+- summary cards (`reviewed`, `ready`, `routed`, `blocked`, `under review`, `closed`)
+- response action candidates panel
+- response routing actions panel
+- response tracking records panel
+- response action recommendations panel
+- manual operator controls for running actions review, routing case handoff, and updating tracking
+
+Frontend service module: `src/services/baselineResponseActions.ts`.
+
+This keeps governance manual-first and paper-only while improving lineage from response case to downstream operational status.

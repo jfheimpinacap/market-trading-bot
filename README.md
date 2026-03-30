@@ -1947,3 +1947,11 @@ API:
 - `GET /api/certification/response-routing-decisions/`
 - `GET /api/certification/response-recommendations/`
 - `GET /api/certification/response-summary/`
+
+## Baseline response actions/tracking loop
+
+The `certification_board` flow now extends baseline response with an explicit manual handoff layer:
+
+`response case -> routing action -> downstream tracking -> case closure`
+
+This layer consumes existing baseline response outputs and records auditable manual routing/tracking artifacts without automatically creating or executing downstream reviews.

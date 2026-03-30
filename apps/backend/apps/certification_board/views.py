@@ -4,6 +4,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.certification_board.models import (
+    BaselineResponseActionRun,
+    ResponseActionCandidate,
+    ResponseActionRecommendation,
+    ResponseCaseTrackingRecord,
+    ResponseCaseDownstreamStatus,
+    ResponseRoutingAction,
+    ResponseRoutingActionStatus,
     BaselineResponseCase,
     BaselineResponseRecommendation,
     BaselineResponseRun,
@@ -65,11 +72,19 @@ from apps.certification_board.serializers import (
     RunBaselineActivationReviewRequestSerializer,
     RunBaselineHealthReviewRequestSerializer,
     RunBaselineResponseReviewRequestSerializer,
+    RunBaselineResponseActionsRequestSerializer,
+    RouteResponseCaseRequestSerializer,
+    UpdateResponseTrackingRequestSerializer,
     RunBaselineConfirmationReviewRequestSerializer,
     RunPostRolloutReviewRequestSerializer,
     RunCertificationReviewRequestSerializer,
     ResponseEvidencePackSerializer,
     ResponseRoutingDecisionSerializer,
+    BaselineResponseActionRunSerializer,
+    ResponseActionCandidateSerializer,
+    ResponseRoutingActionSerializer,
+    ResponseCaseTrackingRecordSerializer,
+    ResponseActionRecommendationSerializer,
 )
 from apps.certification_board.services import (
     activate_paper_baseline,
@@ -80,13 +95,17 @@ from apps.certification_board.services import (
     prepare_baseline_rollback,
     rollback_baseline_activation,
     run_baseline_health_review,
+    run_baseline_response_actions,
     build_baseline_response_summary,
+    build_baseline_response_action_summary,
+    create_tracking_record,
     run_baseline_response_review,
     run_baseline_activation_review,
     run_baseline_confirmation_review,
     run_post_rollout_certification_review,
     run_certification_review,
 )
+from django.utils import timezone
 
 
 class CertificationRunReviewView(APIView):
@@ -653,6 +672,169 @@ class BaselineResponseSummaryView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class RunBaselineResponseActionsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunBaselineResponseActionsRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_baseline_response_actions(
+            actor=serializer.validated_data.get('actor', 'operator-ui'),
+            metadata=serializer.validated_data.get('metadata') or {},
+        )
+        return Response(
+            {
+                'run': BaselineResponseActionRunSerializer(result['run']).data,
+                'candidate_count': len(result['candidates']),
+                'routing_action_count': len(result['actions']),
+                'recommendation_count': len(result['recommendations']),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ResponseActionCandidateListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseActionCandidateSerializer
+
+    def get_queryset(self):
+        return ResponseActionCandidate.objects.select_related(
+            'action_run',
+            'linked_response_case',
+            'linked_routing_decision',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class ResponseRoutingActionListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseRoutingActionSerializer
+
+    def get_queryset(self):
+        return ResponseRoutingAction.objects.select_related(
+            'linked_candidate',
+            'linked_response_case',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class ResponseCaseTrackingRecordListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseCaseTrackingRecordSerializer
+
+    def get_queryset(self):
+        return ResponseCaseTrackingRecord.objects.select_related(
+            'linked_response_case',
+            'linked_routing_action',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class ResponseActionRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseActionRecommendationSerializer
+
+    def get_queryset(self):
+        return ResponseActionRecommendation.objects.select_related('action_run', 'target_action').order_by('-created_at', '-id')[:500]
+
+
+class BaselineResponseActionSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        summary = build_baseline_response_action_summary()
+        return Response(
+            {
+                'latest_run': BaselineResponseActionRunSerializer(summary['latest_run']).data if summary['latest_run'] else None,
+                'response_cases_reviewed': summary['response_cases_reviewed'],
+                'ready_to_route': summary['ready_to_route'],
+                'routed': summary['routed'],
+                'blocked': summary['blocked'],
+                'under_review': summary['under_review'],
+                'closed': summary['closed'],
+                'recommendation_summary': summary['recommendation_summary'],
+                'action_status_summary': summary['action_status_summary'],
+                'recommendation_type_summary': summary['recommendation_type_summary'],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class RouteResponseCaseView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, case_id: int, *args, **kwargs):
+        response_case = BaselineResponseCase.objects.get(pk=case_id)
+        serializer = RouteResponseCaseRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        action = ResponseRoutingAction.objects.filter(
+            linked_response_case=response_case,
+            action_status__in=[ResponseRoutingActionStatus.READY_TO_ROUTE, ResponseRoutingActionStatus.PROPOSED],
+        ).order_by('-created_at', '-id').first()
+        if action is None:
+            return Response({'detail': 'No route-ready action exists for this case.'}, status=status.HTTP_400_BAD_REQUEST)
+        action.action_type = payload.get('action_type') or action.action_type
+        action.routing_target = payload.get('routing_target') or action.routing_target
+        action.rationale = payload.get('rationale') or action.rationale
+        action.reason_codes = payload.get('reason_codes') or action.reason_codes
+        action.routed_by = payload.get('routed_by', 'operator-ui')
+        action.routed_at = timezone.now()
+        action.linked_target_artifact = payload.get('linked_target_artifact') or action.linked_target_artifact
+        action.action_status = ResponseRoutingActionStatus.ROUTED
+        action.metadata = {**(action.metadata or {}), **(payload.get('metadata') or {}), 'manual_routed': True}
+        action.save()
+
+        tracking = create_tracking_record(
+            response_case=response_case,
+            routing_action=action,
+            downstream_status=ResponseCaseDownstreamStatus.SENT,
+            tracking_notes='Manual handoff executed.',
+            tracked_by=action.routed_by,
+            linked_downstream_reference=action.linked_target_artifact,
+            metadata={'source': 'route-response-case'},
+        )
+        return Response(
+            {
+                'routing_action': ResponseRoutingActionSerializer(action).data,
+                'tracking_record': ResponseCaseTrackingRecordSerializer(tracking).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class UpdateResponseTrackingView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, case_id: int, *args, **kwargs):
+        response_case = BaselineResponseCase.objects.get(pk=case_id)
+        serializer = UpdateResponseTrackingRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        action = ResponseRoutingAction.objects.filter(linked_response_case=response_case).order_by('-created_at', '-id').first()
+        tracking = create_tracking_record(
+            response_case=response_case,
+            routing_action=action,
+            downstream_status=payload['downstream_status'],
+            tracking_notes=payload.get('tracking_notes', ''),
+            tracked_by=payload.get('tracked_by', 'operator-ui'),
+            linked_downstream_reference=payload.get('linked_downstream_reference', ''),
+            metadata=payload.get('metadata') or {},
+        )
+        if payload['downstream_status'] in {
+            ResponseCaseDownstreamStatus.COMPLETED,
+            ResponseCaseDownstreamStatus.CLOSED_NO_ACTION,
+        } and action:
+            action.action_status = ResponseRoutingActionStatus.CLOSED
+            action.save(update_fields=['action_status', 'updated_at'])
+        return Response(ResponseCaseTrackingRecordSerializer(tracking).data, status=status.HTTP_200_OK)
 
 
 class ActivatePaperBaselineView(APIView):
