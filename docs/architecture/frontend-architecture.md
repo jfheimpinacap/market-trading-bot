@@ -1542,3 +1542,21 @@ The adoption board consumes `/api/promotion/adoption-*` endpoints and exposes:
 - rollback readiness and recommendation guidance
 
 Interaction rule is strict: operator must click manual actions (`Run adoption review`, `Apply`) and no automatic mutation is performed in the UI.
+
+## Promotion rollout-prep UI slice (new)
+
+`/promotion` now includes a rollout-preparation board that sits after manual adoption approval.
+
+Page sections:
+- summary cards (candidate/ready/blocked/checkpoints/rollback-ready/rollback-executed)
+- rollout candidates table
+- rollout plans table
+- checkpoint plans table
+- rollback executions table
+- rollout recommendations table
+
+Implementation notes:
+- API access remains service-based (`services/promotionRollout.ts`)
+- existing promotion/adoption data flow is preserved (no frontend rewrite)
+- explicit operator actions only (`Run rollout prep`, `Prepare rollout`, `Rollback`)
+- conservative UI language to reinforce manual-first and paper-only constraints

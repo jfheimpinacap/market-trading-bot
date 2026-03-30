@@ -1795,3 +1795,34 @@ New API endpoints:
 - `POST /api/promotion/apply/<case_id>/`
 
 This closes the governance gap: **approved case → explicit manual action → optional rollout handoff / rollback-ready record**.
+
+## Rollout execution prep board / safe manual rollback control (2026-03-30)
+
+A new rollout-preparation layer is now available under `promotion_committee` to bridge:
+
+`approved case -> manual adoption action -> rollout prep -> manual rollout / manual rollback`.
+
+What it adds:
+- auditable `RolloutPreparationRun`
+- `RolloutActionCandidate` built from existing `ManualAdoptionAction`
+- `ManualRolloutPlan` with staged steps + monitoring intent
+- `RolloutCheckpointPlan` for pre/post/risk/calibration/drift/rollback checks
+- `ManualRollbackExecution` for explicit rollback execution logging
+- `RolloutPreparationRecommendation` for conservative operator guidance
+
+API endpoints:
+- `POST /api/promotion/run-rollout-prep/`
+- `GET /api/promotion/rollout-candidates/`
+- `GET /api/promotion/rollout-plans/`
+- `GET /api/promotion/checkpoint-plans/`
+- `GET /api/promotion/rollback-executions/`
+- `GET /api/promotion/rollout-recommendations/`
+- `GET /api/promotion/rollout-summary/`
+- `POST /api/promotion/prepare-rollout/<case_id>/`
+- `POST /api/promotion/rollback/<action_id>/`
+
+Boundary remains strict:
+- no auto-rollout
+- no auto-apply
+- no live trading / real money
+- manual-first, local-first, paper/sandbox-only.

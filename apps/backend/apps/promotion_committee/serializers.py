@@ -5,12 +5,18 @@ from apps.promotion_committee.models import (
     AdoptionActionCandidate,
     AdoptionActionRecommendation,
     AdoptionRollbackPlan,
+    ManualRollbackExecution,
+    ManualRolloutPlan,
     ManualAdoptionAction,
     PromotionCase,
     PromotionAdoptionRun,
     PromotionDecisionLog,
     PromotionDecisionRecommendation,
     PromotionEvidencePack,
+    RolloutActionCandidate,
+    RolloutCheckpointPlan,
+    RolloutPreparationRecommendation,
+    RolloutPreparationRun,
     PromotionReviewCycleRun,
     PromotionReviewRun,
     StackEvidenceSnapshot,
@@ -58,6 +64,11 @@ class GovernedPromotionRunRequestSerializer(serializers.Serializer):
     actor = serializers.CharField(required=False, default='promotion_ui')
     linked_experiment_run_id = serializers.IntegerField(required=False, min_value=1)
     metadata = serializers.DictField(required=False)
+
+
+class PromotionRollbackRequestSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator')
+    notes = serializers.CharField(required=False, allow_blank=True, default='')
 
 
 class PromotionReviewCycleRunSerializer(serializers.ModelSerializer):
@@ -111,4 +122,40 @@ class AdoptionRollbackPlanSerializer(serializers.ModelSerializer):
 class AdoptionActionRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = AdoptionActionRecommendation
+        fields = '__all__'
+
+
+class RolloutPreparationRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RolloutPreparationRun
+        fields = '__all__'
+
+
+class RolloutActionCandidateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RolloutActionCandidate
+        fields = '__all__'
+
+
+class ManualRolloutPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ManualRolloutPlan
+        fields = '__all__'
+
+
+class RolloutCheckpointPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RolloutCheckpointPlan
+        fields = '__all__'
+
+
+class ManualRollbackExecutionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ManualRollbackExecution
+        fields = '__all__'
+
+
+class RolloutPreparationRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RolloutPreparationRecommendation
         fields = '__all__'

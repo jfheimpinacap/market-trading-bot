@@ -15,12 +15,16 @@ from apps.experiment_lab.models import (
 )
 from apps.promotion_committee.models import (
     AdoptionRollbackPlan,
+    ManualRollbackExecution,
+    ManualRolloutPlan,
     ManualAdoptionAction,
     ManualAdoptionActionStatus,
     PromotionCase,
     PromotionCaseStatus,
     PromotionDecisionRecommendation,
     PromotionDecisionRecommendationType,
+    RolloutActionCandidate,
+    RolloutCheckpointPlan,
 )
 from apps.tuning_board.models import (
     TuningComponent,
@@ -198,3 +202,43 @@ class PromotionCommitteeTests(TestCase):
         summary_response = self.client.get(reverse('promotion_committee:adoption-summary'))
         self.assertEqual(summary_response.status_code, 200)
         self.assertIn('ready_to_apply', summary_response.json())
+
+    def test_run_rollout_prep_creates_candidates_plans_and_checkpoints(self):
+        exp_run, *_ = self._create_candidate_bundle(sample_count=170, comparison_status='IMPROVED', confidence=Decimal('0.91'))
+        self.client.post(reverse('promotion_committee:governed-run-review'), {'linked_experiment_run_id': exp_run.id}, format='json')
+        self.client.post(reverse('promotion_committee:run-adoption-review'), {}, format='json')
+
+        response = self.client.post(reverse('promotion_committee:run-rollout-prep'), {}, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertGreaterEqual(RolloutActionCandidate.objects.count(), 1)
+        self.assertGreaterEqual(ManualRolloutPlan.objects.count(), 1)
+        self.assertGreaterEqual(RolloutCheckpointPlan.objects.count(), 1)
+
+    def test_rollout_prep_blocks_when_target_mapping_incomplete(self):
+        exp_run, *_ = self._create_candidate_bundle(sample_count=160, comparison_status='IMPROVED', confidence=Decimal('0.92'))
+        self.client.post(reverse('promotion_committee:governed-run-review'), {'linked_experiment_run_id': exp_run.id}, format='json')
+        self.client.post(reverse('promotion_committee:run-adoption-review'), {}, format='json')
+        action = ManualAdoptionAction.objects.latest('id')
+        action.current_value_snapshot = {}
+        action.proposed_value_snapshot = {}
+        action.save(update_fields=['current_value_snapshot', 'proposed_value_snapshot', 'updated_at'])
+
+        self.client.post(reverse('promotion_committee:run-rollout-prep'), {}, format='json')
+        candidate = RolloutActionCandidate.objects.get(linked_manual_adoption_action=action)
+        self.assertFalse(candidate.ready_for_rollout)
+        self.assertIn('missing_snapshots', candidate.blockers)
+
+    def test_rollout_summary_and_manual_rollback_endpoint(self):
+        exp_run, *_ = self._create_candidate_bundle(sample_count=170, comparison_status='IMPROVED', confidence=Decimal('0.91'))
+        self.client.post(reverse('promotion_committee:governed-run-review'), {'linked_experiment_run_id': exp_run.id}, format='json')
+        self.client.post(reverse('promotion_committee:run-adoption-review'), {}, format='json')
+        self.client.post(reverse('promotion_committee:run-rollout-prep'), {}, format='json')
+        action = ManualAdoptionAction.objects.latest('id')
+
+        rollback_response = self.client.post(reverse('promotion_committee:rollback-action', kwargs={'action_id': action.id}), {}, format='json')
+        self.assertEqual(rollback_response.status_code, 200)
+        self.assertTrue(ManualRollbackExecution.objects.filter(linked_manual_action=action).exists())
+
+        summary_response = self.client.get(reverse('promotion_committee:rollout-summary'))
+        self.assertEqual(summary_response.status_code, 200)
+        self.assertIn('checkpoint_plans', summary_response.json())
