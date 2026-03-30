@@ -143,3 +143,64 @@ class LearningInfluenceIntegrationTests(TestCase):
         )
         self.assertTrue(global_bias.is_active)
         self.assertLess(global_bias.magnitude, Decimal('0.0000'))
+
+
+class PostmortemLearningLoopTests(TestCase):
+    def setUp(self):
+        seed_demo_markets()
+        self.client = APIClient()
+        self.account, _ = ensure_demo_account()
+        self.market = Market.objects.get(slug='will-candidate-a-win-the-2028-election')
+
+    def _create_postmortem_run(self):
+        trade = execute_paper_trade(market=self.market, trade_type='BUY', side='YES', quantity=Decimal('3.0000'), account=self.account).trade
+        self.market.current_yes_price = Decimal('44.0000')
+        self.market.current_market_probability = Decimal('0.4400')
+        self.market.save(update_fields=['current_yes_price', 'current_market_probability', 'updated_at'])
+        review = generate_trade_review(trade, refresh_existing=True).review
+        from apps.postmortem_agents.services.board import run_postmortem_board
+
+        result = run_postmortem_board(related_trade_review_id=review.id, force_learning_rebuild=False)
+        return result.board_run
+
+    def test_pattern_derivation_and_summary_endpoint(self):
+        self._create_postmortem_run()
+        response = self.client.post(reverse('learning_memory:run-postmortem-loop'), {}, format='json')
+        self.assertEqual(response.status_code, 200)
+
+        patterns = self.client.get(reverse('learning_memory:failure-patterns'))
+        self.assertEqual(patterns.status_code, 200)
+        self.assertGreaterEqual(len(patterns.json()), 1)
+
+        summary = self.client.get(reverse('learning_memory:postmortem-loop-summary'))
+        self.assertEqual(summary.status_code, 200)
+        self.assertIn('runs_processed', summary.json())
+
+    def test_adjustment_status_activation_and_expire(self):
+        self._create_postmortem_run()
+        self.client.post(reverse('learning_memory:run-postmortem-loop'), {}, format='json')
+        adjustments = self.client.get(reverse('learning_memory:adjustments')).json()
+        self.assertGreaterEqual(len(adjustments), 1)
+        adjustment_id = adjustments[0]['id']
+
+        activate = self.client.post(reverse('learning_memory:activate-adjustment', kwargs={'pk': adjustment_id}), {}, format='json')
+        self.assertEqual(activate.status_code, 200)
+        self.assertEqual(activate.json()['status'], 'ACTIVE')
+
+        expire = self.client.post(reverse('learning_memory:expire-adjustment', kwargs={'pk': adjustment_id}), {}, format='json')
+        self.assertEqual(expire.status_code, 200)
+        self.assertEqual(expire.json()['status'], 'EXPIRED')
+
+    def test_application_records_and_manual_review_recommendation(self):
+        for _ in range(6):
+            self._create_postmortem_run()
+        self.client.post(reverse('learning_memory:run-postmortem-loop'), {}, format='json')
+
+        applications = self.client.get(reverse('learning_memory:application-records'))
+        self.assertEqual(applications.status_code, 200)
+        self.assertGreaterEqual(len(applications.json()), 1)
+
+        recommendations = self.client.get(reverse('learning_memory:recommendations'))
+        self.assertEqual(recommendations.status_code, 200)
+        types = {item['recommendation_type'] for item in recommendations.json()}
+        self.assertIn('REQUIRE_MANUAL_LEARNING_REVIEW', types)

@@ -1435,3 +1435,22 @@ UX boundaries remain explicit:
 - recommendation-first (no opaque execution authority)
 - paper/demo only
 - clear empty/loading/error states for runtime datasets
+
+## Learning board architecture hardening (new)
+
+`/learning` now renders a dedicated postmortem-learning loop view powered by `services/learningLoop.ts`.
+
+Frontend composition:
+- summary metrics card strip
+- failure pattern registry table
+- learning adjustment table
+- application records table
+- recommendation table
+- manual run-loop action + status/scope/type filters
+
+Integration notes:
+- links to `/postmortem-board` and `/cockpit`
+- empty/loading/error states are explicit
+- WATCH/EXPIRED states are first-class, not treated as errors
+
+UX boundary remains conservative: manual-first actions and recommendation-first guidance only.

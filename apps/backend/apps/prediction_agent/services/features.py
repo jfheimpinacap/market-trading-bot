@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.utils import timezone
 
 from apps.learning_memory.services import build_learning_influence
+from apps.learning_memory.services.application import record_application_for_component
 from apps.markets.models import Market, MarketSnapshot
 from apps.research_agent.models import NarrativeSentiment, ResearchCandidate
 
@@ -64,6 +65,7 @@ def build_prediction_features(*, market: Market) -> FeatureBuildResult:
         if analysis_values:
             market_relevance_score = sum((Decimal(str(value)) for value in analysis_values), Decimal('0.0000')) / Decimal(len(analysis_values))
 
+    record_application_for_component(target_component='prediction', target_entity_id=str(market.id))
     learning_influence = build_learning_influence(market=market, source_type=market.source_type)
 
     stale_market_data = True

@@ -2625,3 +2625,36 @@ Boundaries:
 - conservative bounded/capped sizing (paper-only)
 - recommendation-first handoff to execution simulator, portfolio governor context, and position-manager watch context
 - manual-first apply, no live broker execution, no real money
+
+## Postmortem learning loop hardening (new)
+
+`apps.learning_memory` now includes a dedicated postmortem-learning loop runtime that extends (not replaces) postmortem board + learning memory:
+
+New entities:
+- `PostmortemLearningRun`
+- `FailurePattern`
+- `PostmortemLearningAdjustment`
+- `LearningApplicationRecord`
+- `LearningRecommendation`
+
+Service split (thin views):
+- `services/patterns.py`
+- `services/adjustments_loop.py`
+- `services/application.py`
+- `services/recommendation.py`
+- `services/run.py`
+
+Primary endpoints:
+- `POST /api/learning/run-postmortem-loop/`
+- `GET /api/learning/failure-patterns/`
+- `GET /api/learning/adjustments/`
+- `GET /api/learning/application-records/`
+- `GET /api/learning/recommendations/`
+- `GET /api/learning/postmortem-loop-summary/`
+
+Optional manual controls:
+- `POST /api/learning/adjustments/<id>/activate/`
+- `POST /api/learning/adjustments/<id>/expire/`
+- `GET /api/learning/adjustments/<id>/`
+
+Boundaries remain strict: recommendation-first + manual-first apply, conservative bounded adjustments, no opaque auto policy/risk changes, no model retraining.

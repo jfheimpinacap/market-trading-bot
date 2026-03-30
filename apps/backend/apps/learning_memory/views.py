@@ -6,17 +6,36 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.continuous_demo.services.control import DEFAULT_LOOP_SETTINGS
-from apps.learning_memory.models import LearningAdjustment, LearningMemoryEntry, LearningOutcome, LearningRebuildRun
+from apps.learning_memory.models import (
+    FailurePattern,
+    FailurePatternStatus,
+    LearningAdjustment,
+    LearningApplicationRecord,
+    LearningMemoryEntry,
+    LearningOutcome,
+    LearningRecommendation,
+    LearningRecommendationType,
+    LearningRebuildRun,
+    LoopAdjustmentStatus,
+    PostmortemLearningAdjustment,
+    PostmortemLearningRun,
+)
 from apps.learning_memory.serializers import (
+    FailurePatternSerializer,
     LearningAdjustmentSerializer,
+    LearningApplicationRecordSerializer,
     LearningMemoryEntrySerializer,
+    LearningRecommendationSerializer,
     LearningRebuildRequestSerializer,
     LearningRebuildRunSerializer,
     LearningSummarySerializer,
+    PostmortemLearningAdjustmentSerializer,
+    PostmortemLearningLoopSummarySerializer,
+    PostmortemLearningRunSerializer,
+    RunPostmortemLearningLoopRequestSerializer,
 )
-from apps.learning_memory.services import (
-    run_learning_rebuild,
-)
+from apps.learning_memory.services import run_learning_rebuild
+from apps.learning_memory.services.run import run_postmortem_learning_loop
 
 
 class LearningMemoryListView(generics.ListAPIView):
@@ -139,3 +158,113 @@ class LearningIntegrationStatusView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class RunPostmortemLearningLoopView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunPostmortemLearningLoopRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_postmortem_learning_loop(linked_postmortem_run_id=serializer.validated_data.get('linked_postmortem_run_id'))
+        return Response(PostmortemLearningRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class FailurePatternListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = FailurePatternSerializer
+
+    def get_queryset(self):
+        queryset = FailurePattern.objects.order_by('-updated_at', '-id')
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        pattern_type = self.request.query_params.get('pattern_type')
+        if pattern_type:
+            queryset = queryset.filter(pattern_type=pattern_type)
+        scope = self.request.query_params.get('scope')
+        if scope:
+            queryset = queryset.filter(scope=scope)
+        return queryset[:200]
+
+
+class PostmortemLearningAdjustmentListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PostmortemLearningAdjustmentSerializer
+
+    def get_queryset(self):
+        queryset = PostmortemLearningAdjustment.objects.select_related('linked_failure_pattern').order_by('-updated_at', '-id')
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        adjustment_type = self.request.query_params.get('adjustment_type')
+        if adjustment_type:
+            queryset = queryset.filter(adjustment_type=adjustment_type)
+        return queryset[:200]
+
+
+class PostmortemLearningAdjustmentDetailView(generics.RetrieveAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PostmortemLearningAdjustmentSerializer
+    queryset = PostmortemLearningAdjustment.objects.select_related('linked_failure_pattern').order_by('-updated_at', '-id')
+
+
+class LearningApplicationRecordListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = LearningApplicationRecordSerializer
+
+    def get_queryset(self):
+        return LearningApplicationRecord.objects.select_related('linked_adjustment').order_by('-created_at', '-id')[:300]
+
+
+class LearningRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = LearningRecommendationSerializer
+
+    def get_queryset(self):
+        return LearningRecommendation.objects.select_related('target_pattern', 'target_adjustment').order_by('-created_at', '-id')[:300]
+
+
+class PostmortemLearningLoopSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        payload = {
+            'runs_processed': PostmortemLearningRun.objects.count(),
+            'active_patterns': FailurePattern.objects.filter(status=FailurePatternStatus.ACTIVE).count(),
+            'active_adjustments': PostmortemLearningAdjustment.objects.filter(status=LoopAdjustmentStatus.ACTIVE).count(),
+            'expired_adjustments': PostmortemLearningAdjustment.objects.filter(status=LoopAdjustmentStatus.EXPIRED).count(),
+            'applications_recorded': LearningApplicationRecord.objects.count(),
+            'manual_review_required': LearningRecommendation.objects.filter(recommendation_type=LearningRecommendationType.REQUIRE_MANUAL_LEARNING_REVIEW).exists(),
+            'latest_run': PostmortemLearningRun.objects.order_by('-started_at', '-id').first(),
+        }
+        return Response(PostmortemLearningLoopSummarySerializer(payload).data, status=status.HTTP_200_OK)
+
+
+class ActivatePostmortemLearningAdjustmentView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk, *args, **kwargs):
+        adjustment = PostmortemLearningAdjustment.objects.get(pk=pk)
+        adjustment.status = LoopAdjustmentStatus.ACTIVE
+        adjustment.save(update_fields=['status', 'updated_at'])
+        return Response(PostmortemLearningAdjustmentSerializer(adjustment).data, status=status.HTTP_200_OK)
+
+
+class ExpirePostmortemLearningAdjustmentView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk, *args, **kwargs):
+        adjustment = PostmortemLearningAdjustment.objects.get(pk=pk)
+        adjustment.status = LoopAdjustmentStatus.EXPIRED
+        adjustment.save(update_fields=['status', 'updated_at'])
+        return Response(PostmortemLearningAdjustmentSerializer(adjustment).data, status=status.HTTP_200_OK)
