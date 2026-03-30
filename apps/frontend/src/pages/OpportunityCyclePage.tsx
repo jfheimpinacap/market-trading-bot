@@ -86,7 +86,7 @@ export function OpportunityCyclePage() {
         eyebrow="Opportunity cycle"
         title="/opportunity-cycle"
         description="Local-first, manual-first signal fusion runtime hardening. Consolidates research/prediction/risk/learning and emits auditable paper proposal recommendations."
-        actions={<div className="button-row"><button type="button" className="primary-button" disabled={busy} onClick={() => void runReview()}>{busy ? 'Running...' : 'Run opportunity cycle review'}</button><button type="button" className="secondary-button" onClick={() => navigate('/risk-agent')}>Risk agent</button><button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Cockpit</button><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Trace</button></div>}
+        actions={<div className="button-row"><button type="button" className="primary-button" disabled={busy} onClick={() => void runReview()}>{busy ? 'Running...' : 'Run opportunity cycle review'}</button><button type="button" className="secondary-button" onClick={() => navigate('/risk-agent')}>Risk agent</button><button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Cockpit</button><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Trace</button><button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>Evaluation</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined} loadingTitle="Loading opportunity cycle" errorTitle="Could not load opportunity cycle" loadingDescription="Collecting candidates, assessments, proposals and recommendations.">
