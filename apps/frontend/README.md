@@ -219,6 +219,30 @@ Qué centraliza en una sola vista:
 
 Diseño y alcance:
 
+## Promotion governance board en `/promotion` (new)
+
+La vista `/promotion` ahora opera como **manual adoption committee board** y no como simple recomendación de stack:
+
+- header explícito: local-first, manual-first, paper-only, sin auto-promotion
+- summary cards: reviewed / ready / needs-more-data / deferred / rejected / high-priority
+- panel de `PromotionCase` con scope, change-type, prioridad, status, blockers y links a contexto (`/experiments`, `/tuning`, `/evaluation`, `/trace`)
+- panel de `PromotionEvidencePack` con sample_count, confidence, adoption risk, expected benefit y `evidence_status`
+- panel de `PromotionDecisionRecommendation` con recommendation type, rationale, reason codes y confidence
+- botón manual `Run promotion review` y filtros por component/scope/status/priority
+
+Servicios frontend nuevos:
+- `src/services/promotionReview.ts`
+  - `runPromotionReview()`
+  - `getPromotionCases()`
+  - `getPromotionEvidencePacks()`
+  - `getPromotionRecommendations()`
+  - `getPromotionSummary()`
+
+Límites operativos intactos:
+- no auto-promote
+- no auto-apply
+- no live trading / no real-money execution
+
 - desktop-first, sobrio, auditable
 - no reemplaza pantallas especializadas; las enlaza como source of truth
 - fallback parcial por panel cuando algún endpoint falla

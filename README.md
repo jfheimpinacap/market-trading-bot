@@ -102,6 +102,28 @@ Hard boundaries remain unchanged:
 - no auto-promotion to champion
 - no real-money or broker/exchange execution
 
+### Promotion governance board / manual adoption committee (new)
+
+The `promotion_committee` layer now includes a formal **manual adoption governance flow** on top of `experiment_lab` outputs:
+
+- consumes `ExperimentCandidate`, `TuningChampionChallengerComparison`, and `ExperimentPromotionRecommendation`
+- builds auditable `PromotionReviewCycleRun` + `PromotionCase` + `PromotionEvidencePack` + `PromotionDecisionRecommendation`
+- classifies readiness (`READY_FOR_REVIEW`, `NEEDS_MORE_DATA`, `DEFERRED`, `REJECTED`, `APPROVED_FOR_MANUAL_ADOPTION`)
+- emits committee-facing recommendation types (`APPROVE_FOR_MANUAL_ADOPTION`, `DEFER_FOR_MORE_EVIDENCE`, `REJECT_CHANGE`, `REQUIRE_COMMITTEE_REVIEW`, `SPLIT_SCOPE_AND_RETEST`, `GROUP_WITH_RELATED_CHANGES`, `REORDER_PROMOTION_PRIORITY`)
+- keeps a strict boundary: **validation ≠ automatic adoption**
+
+API:
+- `POST /api/promotion/run-review/`
+- `GET /api/promotion/cases/`
+- `GET /api/promotion/evidence-packs/`
+- `GET /api/promotion/recommendations/`
+- `GET /api/promotion/summary/`
+
+Deliberate non-goals remain in force:
+- no auto-promote / auto-apply
+- no real-money execution
+- no black-box planner authority
+
 ### Execution-aware replay / evaluation realism / readiness impact (new)
 
 The platform now supports a practical execution realism bridge across replay, evaluation, experiments, and readiness:

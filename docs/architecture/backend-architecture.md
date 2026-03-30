@@ -1929,3 +1929,31 @@ Primary endpoints:
 - `GET /api/tuning/recommendations/`
 - `GET /api/tuning/summary/`
 - `GET /api/tuning/bundles/` (optional grouping panel)
+
+## Promotion governance board / manual adoption committee (new)
+
+`promotion_committee` now hosts a second, experiment-fed governance sublayer focused on manual adoption readiness (paper/sandbox only):
+
+- `PromotionReviewCycleRun`: auditable review cycle envelope (`started_at/completed_at`, counts, recommendation summary)
+- `PromotionCase`: formal case object linked to experiment candidate/comparison/proposal/bundle
+- `PromotionEvidencePack`: normalized evidence payload (metrics, sample count, confidence, adoption risk, expected benefit)
+- `PromotionDecisionRecommendation`: committee-facing recommendation artifact
+
+Service decomposition:
+- `services/case_building.py`: experiment -> case translation
+- `services/evidence_pack.py`: evidence pack synthesis
+- `services/readiness.py`: case status classification (`READY_FOR_REVIEW`, `NEEDS_MORE_DATA`, `DEFERRED`, `REJECTED`, `APPROVED_FOR_MANUAL_ADOPTION`)
+- `services/recommendation.py`: recommendation type emission
+- `services/run.py`: run orchestration and summaries
+
+API surface (`/api/promotion/*`):
+- `POST /run-review/`
+- `GET /cases/`
+- `GET /evidence-packs/`
+- `GET /recommendations/`
+- `GET /summary/`
+
+Architectural boundary:
+- consumes `experiment_lab` validation outputs; does not duplicate quantitative comparison logic
+- preserves `champion_challenger` as baseline/champion reference
+- produces manual committee outputs only; does **not** auto-promote or auto-apply

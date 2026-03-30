@@ -1,8 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 
 from apps.promotion_committee.models import PromotionRecommendationCode, StackEvidenceSnapshot
+from apps.promotion_committee.models import (
+    PromotionCase,
+    PromotionCaseStatus,
+    PromotionDecisionRecommendation,
+    PromotionDecisionRecommendationType,
+    PromotionEvidencePack,
+    PromotionReviewCycleRun,
+)
 
 
 @dataclass
@@ -102,4 +111,87 @@ def generate_recommendation(snapshot: StackEvidenceSnapshot) -> RecommendationRe
         blocking_constraints=[],
         confidence=0.55,
         evidence_summary=snapshot.execution_aware_metrics,
+    )
+
+
+def _base_recommendation(case: PromotionCase, evidence: PromotionEvidencePack) -> tuple[str, str, list[str], float]:
+    if case.case_status == PromotionCaseStatus.NEEDS_MORE_DATA:
+        return (
+            PromotionDecisionRecommendationType.DEFER_FOR_MORE_EVIDENCE,
+            'Validation is inconclusive or sample size is insufficient for committee-ready manual adoption.',
+            ['needs_more_data'],
+            0.76,
+        )
+    if case.case_status == PromotionCaseStatus.REJECTED:
+        return (
+            PromotionDecisionRecommendationType.REJECT_CHANGE,
+            'Challenger degrades key metrics versus baseline in current validation evidence.',
+            ['degraded_metrics'],
+            0.86,
+        )
+    if case.case_status == PromotionCaseStatus.DEFERRED:
+        return (
+            PromotionDecisionRecommendationType.SPLIT_SCOPE_AND_RETEST,
+            'Evidence is mixed or overly broad for current scope; split scope and retest before adoption.',
+            ['mixed_signals_or_scope_too_broad'],
+            0.68,
+        )
+
+    if float(evidence.risk_of_adoption_score) > 0.45:
+        return (
+            PromotionDecisionRecommendationType.REQUIRE_COMMITTEE_REVIEW,
+            'Expected uplift is promising but adoption risk remains elevated; require explicit committee review.',
+            ['elevated_adoption_risk'],
+            0.72,
+        )
+
+    return (
+        PromotionDecisionRecommendationType.APPROVE_FOR_MANUAL_ADOPTION,
+        'Evidence is strong with clear expected benefit and acceptable adoption risk for manual-first approval.',
+        ['strong_evidence'],
+        0.82,
+    )
+
+
+def create_case_recommendation(*, review_run: PromotionReviewCycleRun, case: PromotionCase, evidence_pack: PromotionEvidencePack):
+    recommendation_type, rationale, reason_codes, confidence = _base_recommendation(case, evidence_pack)
+    return PromotionDecisionRecommendation.objects.create(
+        review_run=review_run,
+        target_case=case,
+        recommendation_type=recommendation_type,
+        rationale=rationale,
+        reason_codes=[*reason_codes, *case.reason_codes],
+        confidence=Decimal(str(confidence)),
+        blockers=case.blockers,
+        metadata={'evidence_status': evidence_pack.evidence_status},
+    )
+
+
+def create_grouping_recommendation(*, review_run: PromotionReviewCycleRun, grouped_case_ids: list[int]):
+    if len(grouped_case_ids) < 2:
+        return None
+    return PromotionDecisionRecommendation.objects.create(
+        review_run=review_run,
+        target_case=None,
+        recommendation_type=PromotionDecisionRecommendationType.GROUP_WITH_RELATED_CHANGES,
+        rationale='Multiple cases target the same component/scope; review as a bounded grouped package.',
+        reason_codes=['related_changes_detected'],
+        confidence=Decimal('0.64'),
+        blockers=[],
+        metadata={'grouped_case_ids': grouped_case_ids},
+    )
+
+
+def create_reorder_recommendation(*, review_run: PromotionReviewCycleRun, high_priority_case_ids: list[int]):
+    if len(high_priority_case_ids) < 2:
+        return None
+    return PromotionDecisionRecommendation.objects.create(
+        review_run=review_run,
+        target_case=None,
+        recommendation_type=PromotionDecisionRecommendationType.REORDER_PROMOTION_PRIORITY,
+        rationale='Several high-priority cases are ready; enforce explicit ordering before manual adoption meetings.',
+        reason_codes=['multiple_high_priority_cases'],
+        confidence=Decimal('0.67'),
+        blockers=[],
+        metadata={'prioritized_case_ids': high_priority_case_ids},
     )
