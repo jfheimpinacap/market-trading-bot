@@ -7,8 +7,11 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.evaluation_lab.models import EvaluationMetricSet, EvaluationRun
+from apps.evaluation_lab.models import EffectivenessMetric, EffectivenessMetricType, EffectivenessMetricStatus, EvaluationRuntimeRun
+from apps.experiment_lab.models import ExperimentCandidate, ExperimentPromotionRecommendation, TuningChampionChallengerComparison
 from apps.experiment_lab.models import StrategyProfile
 from apps.experiment_lab.services import seed_strategy_profiles
+from apps.tuning_board.models import TuningComponent, TuningPriorityLevel, TuningProposal, TuningProposalStatus, TuningProposalType, TuningReviewRun, TuningScope
 from apps.markets.models import Market, MarketSnapshot, MarketSourceType, MarketStatus, Provider
 
 
@@ -136,3 +139,72 @@ class ExperimentLabTests(TestCase):
         self.assertEqual(comparison.status_code, 200)
         payload = comparison.json()
         self.assertIn('execution_comparison', payload)
+
+    def _create_tuning_proposal(self, *, sample_count: int, metric_type: str, metric_value: Decimal, baseline_value: Decimal, status: str = TuningProposalStatus.READY_FOR_REVIEW):
+        eval_runtime = EvaluationRuntimeRun.objects.create(metric_count=1, recommendation_summary={}, metadata={})
+        metric = EffectivenessMetric.objects.create(
+            run=eval_runtime,
+            metric_type=metric_type,
+            metric_scope='global',
+            metric_value=metric_value,
+            sample_count=sample_count,
+            status=EffectivenessMetricStatus.POOR,
+            metadata={'baseline_value': str(baseline_value)},
+        )
+        tuning_run = TuningReviewRun.objects.create(metadata={'source': 'test'})
+        return TuningProposal.objects.create(
+            run=tuning_run,
+            source_metric=metric,
+            proposal_type=TuningProposalType.CALIBRATION_BIAS_OFFSET,
+            target_scope=TuningScope.GLOBAL,
+            target_component=TuningComponent.CALIBRATION,
+            proposal_status=status,
+            evidence_strength_score=Decimal('0.8'),
+            priority_level=TuningPriorityLevel.HIGH,
+            rationale='Calibrate probability bias in paper runtime.',
+        )
+
+    def test_run_tuning_validation_builds_candidates_and_summary(self):
+        self._create_tuning_proposal(
+            sample_count=80,
+            metric_type=EffectivenessMetricType.CALIBRATION_ERROR,
+            metric_value=Decimal('0.08'),
+            baseline_value=Decimal('0.10'),
+        )
+        run_response = self.client.post(reverse('experiment_lab:run-tuning-validation'), {'metadata': {'triggered_from': 'tests'}}, format='json')
+        self.assertEqual(run_response.status_code, 201)
+        self.assertEqual(ExperimentCandidate.objects.count(), 1)
+        self.assertEqual(TuningChampionChallengerComparison.objects.count(), 1)
+        self.assertEqual(ExperimentPromotionRecommendation.objects.count(), 1)
+
+        summary = self.client.get(reverse('experiment_lab:tuning-validation-summary'))
+        self.assertEqual(summary.status_code, 200)
+        payload = summary.json()
+        self.assertEqual(payload['candidates_reviewed'], 1)
+        self.assertEqual(payload['comparisons_run'], 1)
+
+    def test_run_tuning_validation_marks_needs_more_data_when_sample_is_low(self):
+        self._create_tuning_proposal(
+            sample_count=10,
+            metric_type=EffectivenessMetricType.BRIER_SCORE,
+            metric_value=Decimal('0.25'),
+            baseline_value=Decimal('0.20'),
+        )
+        self.client.post(reverse('experiment_lab:run-tuning-validation'), {'metadata': {}}, format='json')
+        comparison = TuningChampionChallengerComparison.objects.latest('id')
+        recommendation = ExperimentPromotionRecommendation.objects.latest('id')
+        self.assertEqual(comparison.comparison_status, 'NEEDS_MORE_DATA')
+        self.assertEqual(recommendation.recommendation_type, 'REQUIRE_MORE_DATA')
+
+    def test_tuning_validation_lists_support_filters(self):
+        self._create_tuning_proposal(
+            sample_count=90,
+            metric_type=EffectivenessMetricType.RISK_APPROVAL_PRECISION,
+            metric_value=Decimal('0.62'),
+            baseline_value=Decimal('0.55'),
+            status=TuningProposalStatus.WATCH,
+        )
+        self.client.post(reverse('experiment_lab:run-tuning-validation'), {'metadata': {}}, format='json')
+        candidates = self.client.get(reverse('experiment_lab:tuning-candidates'), {'readiness_status': 'NEEDS_MORE_DATA'})
+        self.assertEqual(candidates.status_code, 200)
+        self.assertGreaterEqual(len(candidates.json()), 1)

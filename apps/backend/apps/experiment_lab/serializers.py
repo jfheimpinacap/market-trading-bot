@@ -1,7 +1,15 @@
 from rest_framework import serializers
 
 from apps.execution_simulator.models import ExecutionPolicyProfile
-from apps.experiment_lab.models import ExperimentRun, ExperimentRunType, StrategyProfile
+from apps.experiment_lab.models import (
+    ExperimentCandidate,
+    ExperimentPromotionRecommendation,
+    ExperimentRun,
+    ExperimentRunType,
+    StrategyProfile,
+    TuningChampionChallengerComparison,
+    TuningExperimentRun,
+)
 from apps.replay_lab.services.execution_replay import REPLAY_EXECUTION_MODE_AWARE, REPLAY_EXECUTION_MODE_NAIVE
 
 
@@ -46,3 +54,32 @@ class ExperimentRunRequestSerializer(serializers.Serializer):
         if start and end and start >= end:
             raise serializers.ValidationError('start_timestamp must be earlier than end_timestamp.')
         return attrs
+
+
+class TuningExperimentRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TuningExperimentRun
+        fields = '__all__'
+
+
+class ExperimentCandidateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExperimentCandidate
+        fields = '__all__'
+
+
+class TuningChampionChallengerComparisonSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TuningChampionChallengerComparison
+        fields = '__all__'
+
+
+class ExperimentPromotionRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExperimentPromotionRecommendation
+        fields = '__all__'
+
+
+class TuningValidationRunRequestSerializer(serializers.Serializer):
+    linked_tuning_review_run_id = serializers.IntegerField(required=False, min_value=1)
+    metadata = serializers.DictField(required=False, default=dict)

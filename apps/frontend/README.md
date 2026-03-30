@@ -615,10 +615,18 @@ Nueva ruta técnica para comparación de perfiles de estrategia en paper/demo mo
 - tabla de runs recientes con estado y resumen
 - comparador A/B entre dos runs con métricas clave y deltas
 - mensajes empty/loading/error orientados a ejecutar replay/evaluation antes de comparar
+- bloque de **governed tuning validation** con:
+  - summary cards (`candidates`, `comparisons`, `improved`, `degraded`, `inconclusive`, `ready_for_manual_review`)
+  - tabla de tuning candidates (scope, baseline/challenger, readiness, blockers)
+  - tabla de champion-challenger comparisons (status, sample_count, confidence, rationale)
+  - tabla de promotion recommendations (`PROMOTE_TO_MANUAL_REVIEW`, `KEEP_BASELINE`, `REQUIRE_MORE_DATA`, `REJECT_CHALLENGER`, `BUNDLE_WITH_OTHER_CHANGES`)
+  - acción manual explícita `Run tuning validation` (sin auto-apply ni auto-promotion)
 
 Servicios frontend añadidos:
 - `src/services/experiments.ts`
 - `src/types/experiments.ts`
+- `src/services/tuningValidation.ts`
+- `src/types/tuningValidation.ts`
 
 ## Readiness route (`/readiness`)
 
@@ -1651,4 +1659,3 @@ Primary endpoints:
 - `GET /api/tuning/recommendations/`
 - `GET /api/tuning/summary/`
 - `GET /api/tuning/bundles/` (optional grouping panel)
-

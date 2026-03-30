@@ -1887,6 +1887,41 @@ The platform now includes a dedicated `tuning_board` layer (`/api/tuning/*` + `/
 - integrates conceptually with `trust_calibration`, `policy_tuning`, `experiments`, `champion_challenger`, and `promotion_committee` without deep auto-integration in this step
 - keeps strict manual-first governance: **no auto-tuning, no silent threshold mutation, no auto-retraining, no live-money execution**
 
+## Governed tuning validation / champion-challenger paper loop (new)
+
+`apps.experiment_lab` now extends the existing experiment/champion-challenger infrastructure with a validation layer between `tuning_board` proposals and any serious promotion review.
+
+New entities:
+- `TuningExperimentRun`
+- `ExperimentCandidate`
+- `TuningChampionChallengerComparison`
+- `ExperimentPromotionRecommendation`
+
+Service decomposition:
+- `services/candidate_building.py`: converts `TuningProposal` (+ optional bundles) into controlled experiment candidates.
+- `services/baseline_challenger.py`: binds baseline/champion and challenger labels without mutating active runtime config.
+- `services/tuning_comparison.py`: computes explicit paper/replay/evaluation deltas and assigns `IMPROVED`/`DEGRADED`/`MIXED`/`INCONCLUSIVE`/`NEEDS_MORE_DATA`.
+- `services/recommendation.py`: emits recommendation-first outcomes (`PROMOTE_TO_MANUAL_REVIEW`, `KEEP_BASELINE`, etc.).
+- `services/run.py`: orchestrates auditable run creation and summary rollups.
+
+API additions under `/api/experiments/`:
+- `POST run-tuning-validation/`
+- `GET tuning-candidates/`
+- `GET champion-challenger-comparisons/`
+- `GET promotion-recommendations/`
+- `GET tuning-validation-summary/`
+
+Integration intent:
+- consumes `tuning_board` outputs directly (no duplicated proposal derivation)
+- reuses champion reference from `champion_challenger` bindings
+- keeps `promotion_committee` as downstream/manual governance consumer
+- remains paper-only and recommendation-first
+
+Explicit non-goals (unchanged):
+- no auto-apply of challengers
+- no automatic champion promotion
+- no real broker/exchange execution or real money paths
+
 Primary endpoints:
 - `POST /api/tuning/run-review/`
 - `GET /api/tuning/proposals/`
@@ -1894,4 +1929,3 @@ Primary endpoints:
 - `GET /api/tuning/recommendations/`
 - `GET /api/tuning/summary/`
 - `GET /api/tuning/bundles/` (optional grouping panel)
-
