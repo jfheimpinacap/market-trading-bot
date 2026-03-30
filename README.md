@@ -1868,3 +1868,31 @@ Primary API:
 - `GET /api/certification/decisions/`
 - `GET /api/certification/recommendations/`
 - `GET /api/certification/post-rollout-summary/`
+
+## Paper baseline confirmation board / certified-change adoption registry (2026-03-30)
+
+A formal baseline-confirmation layer now sits on top of `certification_board` so certified changes do **not** silently become active paper baselines.
+
+New auditable entities:
+- `BaselineConfirmationRun`
+- `BaselineConfirmationCandidate`
+- `PaperBaselineConfirmation`
+- `BaselineBindingSnapshot`
+- `BaselineConfirmationRecommendation`
+
+New API surface (`/api/certification/*`):
+- `POST /run-baseline-confirmation/`
+- `GET /baseline-candidates/`
+- `GET /baseline-confirmations/`
+- `GET /binding-snapshots/`
+- `GET /baseline-recommendations/`
+- `GET /baseline-summary/`
+- `POST /confirm-baseline/<decision_id>/`
+- `POST /rollback-baseline/<confirmation_id>/` (manual rollback preparation)
+
+Governance boundaries preserved:
+- certification still decides certification status
+- baseline confirmation is a separate **manual** operator step
+- no auto-promote / no auto champion switch / no silent apply
+- rollback path to previous baseline is explicitly captured
+- local-first, single-user, paper/sandbox only

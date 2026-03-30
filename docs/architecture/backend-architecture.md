@@ -2038,3 +2038,26 @@ A new stabilization gate was added to `apps.certification_board`.
 - no auto-promote/champion switch
 - no auto-rollback execution
 - no live trading / real money
+
+## Certification vs paper baseline confirmation (new)
+
+A dedicated baseline-adoption sublayer has been added inside `certification_board`.
+
+### Separation of concerns
+- `RolloutCertificationRun` and `CertificationDecision` still represent stabilization certification outcomes.
+- `BaselineConfirmationRun` and `PaperBaselineConfirmation` represent **manual adoption** of certified changes as paper baseline.
+
+### Why this matters
+This enforces: `CERTIFIED_FOR_PAPER_BASELINE` does not auto-switch active baseline. A separate, auditable operator action is required.
+
+### Integration points
+- `champion_challenger`: previous baseline/champion references are captured as baseline snapshots.
+- `promotion_committee` / rollout lineage: certification candidate and rollout execution references are preserved for traceability.
+- `policy_tuning` and `trust_calibration`: latest mapping context is included in binding snapshots; missing mapping yields binding-review recommendations.
+- rollback: `previous_baseline_snapshot` is retained and surfaced as `ROLLBACK_AVAILABLE` when prepared.
+
+### Explicit non-goals
+- no auto-promote
+- no auto champion switch
+- no silent apply
+- no live trading / no real money

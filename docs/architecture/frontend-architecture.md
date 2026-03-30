@@ -1586,3 +1586,18 @@ Integration points:
 - quick links to promotion/evaluation/trace/cockpit
 - no duplicate rollout execution UI logic
 - keeps `/promotion` as rollout execution source and `/certification` as stabilization decision source
+
+## Certification page baseline-confirmation UI layer
+
+`/certification` now contains two stacked governance views:
+1. post-rollout certification stabilization
+2. paper baseline confirmation/adoption registry
+
+The second view is manual-first and includes:
+- baseline summary cards
+- baseline candidates table with previous/proposed references and binding status
+- baseline confirmations table with explicit manual confirmation metadata
+- binding snapshots table for before/after/reverted references
+- recommendation panel for confirm/defer/binding-review/rollback readiness
+
+All interactions are explicit button-driven API calls; there is no automatic baseline switch in the client.

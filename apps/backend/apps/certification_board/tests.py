@@ -142,3 +142,20 @@ class CertificationBoardTests(TestCase):
         summary = self.client.get(reverse('certification_board:post-rollout-summary'))
         self.assertEqual(summary.status_code, 200)
         self.assertIn('candidate_count', summary.json())
+
+    def test_baseline_confirmation_endpoints(self):
+        run_response = self.client.post(reverse('certification_board:run-baseline-confirmation'), {'actor': 'test'}, format='json')
+        self.assertEqual(run_response.status_code, 201)
+
+        summary_response = self.client.get(reverse('certification_board:baseline-summary'))
+        self.assertEqual(summary_response.status_code, 200)
+        self.assertIn('ready_to_confirm_count', summary_response.json())
+
+        candidates_response = self.client.get(reverse('certification_board:baseline-candidates'))
+        self.assertEqual(candidates_response.status_code, 200)
+        confirmations_response = self.client.get(reverse('certification_board:baseline-confirmations'))
+        self.assertEqual(confirmations_response.status_code, 200)
+        snapshots_response = self.client.get(reverse('certification_board:binding-snapshots'))
+        self.assertEqual(snapshots_response.status_code, 200)
+        recommendations_response = self.client.get(reverse('certification_board:baseline-recommendations'))
+        self.assertEqual(recommendations_response.status_code, 200)
