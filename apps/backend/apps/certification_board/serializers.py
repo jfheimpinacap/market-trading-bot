@@ -1,7 +1,18 @@
 from rest_framework import serializers
 
 from apps.certification_board.models import (
+    BaselineResponseLifecycleRun,
     BaselineResponseActionRun,
+    DownstreamAcknowledgement,
+    DownstreamAcknowledgementStatus,
+    DownstreamLifecycleOutcome,
+    DownstreamLifecycleOutcomeStatus,
+    DownstreamLifecycleOutcomeType,
+    ResponseLifecycleRecommendation,
+    ResponseLifecycleRecommendationType,
+    ResponseReviewStageRecord,
+    ResponseReviewStageStatus,
+    ResponseReviewStageType,
     ResponseActionCandidate,
     ResponseActionRecommendation,
     ResponseCaseTrackingRecord,
@@ -274,6 +285,11 @@ class RunBaselineResponseActionsRequestSerializer(serializers.Serializer):
     metadata = serializers.DictField(required=False)
 
 
+class RunBaselineResponseLifecycleRequestSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui')
+    metadata = serializers.DictField(required=False)
+
+
 class BaselineResponseActionRunSerializer(serializers.ModelSerializer):
     class Meta:
         model = BaselineResponseActionRun
@@ -302,6 +318,64 @@ class ResponseActionRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ResponseActionRecommendation
         fields = '__all__'
+
+
+class BaselineResponseLifecycleRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineResponseLifecycleRun
+        fields = '__all__'
+
+
+class DownstreamAcknowledgementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DownstreamAcknowledgement
+        fields = '__all__'
+
+
+class ResponseReviewStageRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResponseReviewStageRecord
+        fields = '__all__'
+
+
+class DownstreamLifecycleOutcomeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DownstreamLifecycleOutcome
+        fields = '__all__'
+
+
+class ResponseLifecycleRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResponseLifecycleRecommendation
+        fields = '__all__'
+
+
+class AcknowledgeResponseCaseRequestSerializer(serializers.Serializer):
+    acknowledgement_status = serializers.ChoiceField(
+        choices=DownstreamAcknowledgementStatus.choices,
+        required=False,
+        default=DownstreamAcknowledgementStatus.ACKNOWLEDGED,
+    )
+    acknowledged_by = serializers.CharField(required=False, default='operator-ui')
+    acknowledgement_notes = serializers.CharField(required=False, allow_blank=True, default='')
+    linked_target_reference = serializers.CharField(required=False, allow_blank=True, default='')
+    metadata = serializers.DictField(required=False)
+
+
+class UpdateResponseStageRequestSerializer(serializers.Serializer):
+    stage_type = serializers.ChoiceField(choices=ResponseReviewStageType.choices)
+    stage_status = serializers.ChoiceField(choices=ResponseReviewStageStatus.choices)
+    stage_notes = serializers.CharField(required=False, allow_blank=True, default='')
+    stage_actor = serializers.CharField(required=False, default='operator-ui')
+    metadata = serializers.DictField(required=False)
+
+
+class RecordDownstreamOutcomeRequestSerializer(serializers.Serializer):
+    outcome_type = serializers.ChoiceField(choices=DownstreamLifecycleOutcomeType.choices)
+    outcome_status = serializers.ChoiceField(choices=DownstreamLifecycleOutcomeStatus.choices)
+    outcome_rationale = serializers.CharField(required=False, allow_blank=True, default='')
+    linked_target_reference = serializers.CharField(required=False, allow_blank=True, default='')
+    metadata = serializers.DictField(required=False)
 
 
 class RouteResponseCaseRequestSerializer(serializers.Serializer):

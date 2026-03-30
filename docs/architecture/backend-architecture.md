@@ -2138,3 +2138,19 @@ Design constraints:
 - manual-first routing handoff; no automatic downstream board creation
 - paper/sandbox-only, auditable lineage
 - no auto-retune, auto-rollback, auto-promote, or live execution
+
+## Certification downstream response lifecycle architecture (new)
+
+`apps.certification_board` now has a dedicated sublayer in `services/baseline_response_lifecycle/`:
+
+- `acknowledgement.py`: create/update explicit downstream acknowledgement records and sync tracking updates.
+- `stages.py`: register/query granular downstream review stages.
+- `outcomes.py`: derive conservative downstream outcomes and persist them.
+- `recommendation.py`: emit manual-first lifecycle recommendations.
+- `run.py`: orchestrate lifecycle runs and summary counters.
+
+This sublayer sits on top of existing baseline response actions/tracking and preserves explicit lineage:
+
+`ResponseRoutingAction -> DownstreamAcknowledgement -> ResponseReviewStageRecord -> DownstreamLifecycleOutcome`.
+
+Boundary guarantees remain strict: no auto-resolution, no auto-retune/rollback/promotion, and no real-money execution.

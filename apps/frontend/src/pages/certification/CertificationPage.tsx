@@ -36,6 +36,17 @@ import {
   closeBaselineResponseCase,
 } from '../../services/baselineResponseActions';
 import {
+  acknowledgeBaselineResponseCase,
+  getDownstreamAcknowledgements,
+  getDownstreamLifecycleOutcomes,
+  getResponseLifecycleRecommendations,
+  getResponseLifecycleSummary,
+  getReviewStageRecords,
+  recordDownstreamOutcome,
+  runBaselineResponseLifecycle,
+  updateBaselineResponseStage,
+} from '../../services/baselineResponseLifecycle';
+import {
   getBaselineHealthCandidates,
   getBaselineHealthRecommendations,
   getBaselineHealthSignals,
@@ -76,6 +87,11 @@ import type {
   ResponseActionCandidate,
   ResponseRoutingAction,
   ResponseCaseTrackingRecord,
+  DownstreamAcknowledgement,
+  DownstreamLifecycleOutcome,
+  ResponseLifecycleRecommendationItem,
+  ResponseLifecycleSummary,
+  ResponseReviewStageRecord,
   ResponseActionRecommendationItem,
   BaselineResponseRecommendationItem,
   BaselineResponseSummary,
@@ -139,6 +155,11 @@ export function CertificationPage() {
   const [responseRoutingActions, setResponseRoutingActions] = useState<ResponseRoutingAction[]>([]);
   const [responseTrackingRecords, setResponseTrackingRecords] = useState<ResponseCaseTrackingRecord[]>([]);
   const [responseActionRecommendations, setResponseActionRecommendations] = useState<ResponseActionRecommendationItem[]>([]);
+  const [lifecycleSummary, setLifecycleSummary] = useState<ResponseLifecycleSummary | null>(null);
+  const [downstreamAcknowledgements, setDownstreamAcknowledgements] = useState<DownstreamAcknowledgement[]>([]);
+  const [reviewStageRecords, setReviewStageRecords] = useState<ResponseReviewStageRecord[]>([]);
+  const [downstreamOutcomes, setDownstreamOutcomes] = useState<DownstreamLifecycleOutcome[]>([]);
+  const [lifecycleRecommendations, setLifecycleRecommendations] = useState<ResponseLifecycleRecommendationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runningBaseline, setRunningBaseline] = useState(false);
@@ -146,13 +167,14 @@ export function CertificationPage() {
   const [runningHealth, setRunningHealth] = useState(false);
   const [runningResponse, setRunningResponse] = useState(false);
   const [runningResponseActions, setRunningResponseActions] = useState(false);
+  const [runningLifecycle, setRunningLifecycle] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [summaryRes, candidatesRes, evidenceRes, decisionsRes, recommendationsRes, baselineSummaryRes, baselineCandidatesRes, baselineConfirmationsRes, bindingSnapshotsRes, baselineRecommendationsRes, activationSummaryRes, activationCandidatesRes, baselineActivationsRes, activeBindingsRes, activationRecommendationsRes, healthSummaryRes, healthCandidatesRes, healthStatusesRes, healthSignalsRes, healthRecommendationsRes, responseSummaryRes, responseCasesRes, responseEvidencePacksRes, responseRoutingRes, responseRecommendationsRes, responseActionSummaryRes, responseActionCandidatesRes, responseRoutingActionsRes, responseTrackingRecordsRes, responseActionRecommendationsRes] = await Promise.all([
+      const [summaryRes, candidatesRes, evidenceRes, decisionsRes, recommendationsRes, baselineSummaryRes, baselineCandidatesRes, baselineConfirmationsRes, bindingSnapshotsRes, baselineRecommendationsRes, activationSummaryRes, activationCandidatesRes, baselineActivationsRes, activeBindingsRes, activationRecommendationsRes, healthSummaryRes, healthCandidatesRes, healthStatusesRes, healthSignalsRes, healthRecommendationsRes, responseSummaryRes, responseCasesRes, responseEvidencePacksRes, responseRoutingRes, responseRecommendationsRes, responseActionSummaryRes, responseActionCandidatesRes, responseRoutingActionsRes, responseTrackingRecordsRes, responseActionRecommendationsRes, lifecycleSummaryRes, downstreamAcknowledgementsRes, reviewStageRecordsRes, downstreamOutcomesRes, lifecycleRecommendationsRes] = await Promise.all([
         getCertificationSummary(),
         getCertificationCandidates(),
         getCertificationEvidencePacks(),
@@ -183,6 +205,11 @@ export function CertificationPage() {
         getBaselineResponseRoutingActions(),
         getBaselineResponseTrackingRecords(),
         getBaselineResponseActionRecommendations(),
+        getResponseLifecycleSummary(),
+        getDownstreamAcknowledgements(),
+        getReviewStageRecords(),
+        getDownstreamLifecycleOutcomes(),
+        getResponseLifecycleRecommendations(),
       ]);
       setSummary(summaryRes);
       setCandidates(candidatesRes);
@@ -214,6 +241,11 @@ export function CertificationPage() {
       setResponseRoutingActions(responseRoutingActionsRes);
       setResponseTrackingRecords(responseTrackingRecordsRes);
       setResponseActionRecommendations(responseActionRecommendationsRes);
+      setLifecycleSummary(lifecycleSummaryRes);
+      setDownstreamAcknowledgements(downstreamAcknowledgementsRes);
+      setReviewStageRecords(reviewStageRecordsRes);
+      setDownstreamOutcomes(downstreamOutcomesRes);
+      setLifecycleRecommendations(lifecycleRecommendationsRes);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load certification stabilization state.');
     } finally {
@@ -323,6 +355,55 @@ export function CertificationPage() {
     }
   }, [load]);
 
+  const runLifecycleReview = useCallback(async () => {
+    setRunningLifecycle(true);
+    setError(null);
+    try {
+      await runBaselineResponseLifecycle({ actor: 'certification_ui', metadata: { initiated_from: 'certification_ui' } });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not run baseline response lifecycle.');
+    } finally {
+      setRunningLifecycle(false);
+    }
+  }, [load]);
+
+  const acknowledgeCase = useCallback(async (caseId: number) => {
+    try {
+      await acknowledgeBaselineResponseCase(caseId, { acknowledgement_status: 'ACKNOWLEDGED', acknowledged_by: 'certification_ui' });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not acknowledge response case.');
+    }
+  }, [load]);
+
+  const updateStage = useCallback(async (caseId: number) => {
+    try {
+      await updateBaselineResponseStage(caseId, {
+        stage_type: 'board_review',
+        stage_status: 'ACTIVE',
+        stage_actor: 'certification_ui',
+        stage_notes: 'Manual board review is active.',
+      });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update downstream stage.');
+    }
+  }, [load]);
+
+  const confirmOutcome = useCallback(async (caseId: number) => {
+    try {
+      await recordDownstreamOutcome(caseId, {
+        outcome_type: 'RESOLVED_BY_TARGET',
+        outcome_status: 'CONFIRMED',
+        outcome_rationale: 'Manual outcome recorded by certification operator.',
+      });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not record downstream outcome.');
+    }
+  }, [load]);
+
   const activateBaseline = useCallback(async (confirmationId: number) => {
     try {
       await activatePaperBaseline(confirmationId, { actor: 'certification_ui' });
@@ -360,6 +441,7 @@ export function CertificationPage() {
           <button type="button" className="secondary-button" onClick={() => void runHealthReview()} disabled={runningHealth} style={{ marginLeft: 8 }}>{runningHealth ? 'Running…' : 'Run baseline health review'}</button>
           <button type="button" className="secondary-button" onClick={() => void runResponseReview()} disabled={runningResponse} style={{ marginLeft: 8 }}>{runningResponse ? 'Running…' : 'Run baseline response review'}</button>
           <button type="button" className="secondary-button" onClick={() => void runResponseActionsReview()} disabled={runningResponseActions} style={{ marginLeft: 8 }}>{runningResponseActions ? 'Running…' : 'Run baseline response actions'}</button>
+          <button type="button" className="secondary-button" onClick={() => void runLifecycleReview()} disabled={runningLifecycle} style={{ marginLeft: 8 }}>{runningLifecycle ? 'Running…' : 'Run baseline response lifecycle'}</button>
         </SectionCard>
 
         <SectionCard eyebrow="Summary" title="Stabilization outcomes" description="Latest review counters for certification, observation, manual review, rollback recommendation, and rejection.">
@@ -443,6 +525,13 @@ export function CertificationPage() {
             eyebrow="No response action candidates"
             title="No baseline response action candidates are available yet."
             description="Run response actions review to route and track baseline response cases. BLOCKED and KEEP_IN_MONITORING are valid outcomes, not errors."
+          />
+        ) : null}
+        {downstreamAcknowledgements.length === 0 ? (
+          <EmptyState
+            eyebrow="No downstream lifecycle records"
+            title="No downstream lifecycle records are available yet."
+            description="Run baseline response lifecycle to track acknowledgements and review progress. WAITING_MORE_EVIDENCE and NO_RESPONSE are valid lifecycle outcomes, not failures."
           />
         ) : null}
 
@@ -770,6 +859,78 @@ export function CertificationPage() {
                 <div className="metric-tile"><span>Under review</span><strong>{responseActionSummary?.under_review ?? 0}</strong></div>
                 <div className="metric-tile"><span>Closed</span><strong>{responseActionSummary?.closed ?? 0}</strong></div>
               </div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Downstream response lifecycle" title="Acknowledgement board and granular progression loop" description="Manual-first, local-first, paper-only downstream lifecycle tracking. This board does not auto-resolve downstream work and does not auto-apply tuning/rollback decisions.">
+              <div className="cockpit-metric-grid">
+                <div className="metric-tile"><span>Routed cases</span><strong>{lifecycleSummary?.routed_cases ?? 0}</strong></div>
+                <div className="metric-tile"><span>Acknowledged</span><strong>{lifecycleSummary?.acknowledged ?? 0}</strong></div>
+                <div className="metric-tile"><span>Accepted for review</span><strong>{lifecycleSummary?.accepted_for_review ?? 0}</strong></div>
+                <div className="metric-tile"><span>Waiting evidence</span><strong>{lifecycleSummary?.waiting_evidence ?? 0}</strong></div>
+                <div className="metric-tile"><span>Resolved downstream</span><strong>{lifecycleSummary?.resolved_downstream ?? 0}</strong></div>
+                <div className="metric-tile"><span>Rejected downstream</span><strong>{lifecycleSummary?.rejected_downstream ?? 0}</strong></div>
+              </div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Downstream acknowledgements" title="Explicit target acknowledgement status" description="Tracks SENT/ACKNOWLEDGED/ACCEPTED_FOR_REVIEW/WAITING_MORE_EVIDENCE/REJECTED_BY_TARGET/NO_RESPONSE with auditable actor and references.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Routing target</th><th>Status</th><th>Acknowledged by / at</th><th>Notes</th><th>Target reference</th><th>Actions</th></tr></thead><tbody>
+                {downstreamAcknowledgements.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_response_case}</td>
+                    <td>{row.routing_target || '—'}</td>
+                    <td><StatusBadge tone={toneFromState(row.acknowledgement_status)}>{row.acknowledgement_status}</StatusBadge></td>
+                    <td>{row.acknowledged_by || '—'} · {formatDate(row.acknowledged_at)}</td>
+                    <td>{row.acknowledgement_notes || '—'}</td>
+                    <td>{row.linked_target_reference || '—'}</td>
+                    <td><button type="button" className="secondary-button" onClick={() => void acknowledgeCase(row.linked_response_case)}>Acknowledge response case</button></td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Review stage records" title="Granular downstream review stages" description="Tracks intake, evidence collection, board review, manual follow-up, downstream resolution, and rejection review stages.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Stage</th><th>Status</th><th>Notes</th><th>Actor / at</th><th>Actions</th></tr></thead><tbody>
+                {reviewStageRecords.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_response_case}</td>
+                    <td>{row.stage_type}</td>
+                    <td><StatusBadge tone={toneFromState(row.stage_status)}>{row.stage_status}</StatusBadge></td>
+                    <td>{row.stage_notes || '—'}</td>
+                    <td>{row.stage_actor || '—'} · {formatDate(row.stage_at)}</td>
+                    <td><button type="button" className="secondary-button" onClick={() => void updateStage(row.linked_response_case)}>Update response stage</button></td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Downstream outcomes" title="Outcome clarity for response lifecycle" description="Outcome layer tracks resolved/rejected/waiting/still-under-review outcomes without auto-closing the response case.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Outcome type</th><th>Status</th><th>Rationale</th><th>Target reference</th><th>Links</th><th>Actions</th></tr></thead><tbody>
+                {downstreamOutcomes.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_response_case}</td>
+                    <td><StatusBadge tone={toneFromState(row.outcome_type)}>{row.outcome_type}</StatusBadge></td>
+                    <td><StatusBadge tone={toneFromState(row.outcome_status)}>{row.outcome_status}</StatusBadge></td>
+                    <td>{row.outcome_rationale}</td>
+                    <td>{row.linked_target_reference || '—'}</td>
+                    <td><button type="button" className="link-button" onClick={() => navigate('/evaluation')}>evaluation</button> · <button type="button" className="link-button" onClick={() => navigate('/tuning')}>tuning</button> · <button type="button" className="link-button" onClick={() => navigate('/experiments')}>experiments</button> · <button type="button" className="link-button" onClick={() => navigate('/trace')}>trace</button></td>
+                    <td><button type="button" className="secondary-button" onClick={() => void confirmOutcome(row.linked_response_case)}>Record downstream outcome</button></td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Lifecycle recommendations" title="Manual next steps for downstream progression" description="REQUEST_ACKNOWLEDGEMENT_UPDATE / MARK_ACCEPTED_FOR_REVIEW / RECORD_WAITING_EVIDENCE / RECORD_REJECTED_BY_TARGET / ESCALATE_FOR_FOLLOWUP / PREPARE_CASE_RESOLUTION.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Recommendation</th><th>Rationale</th><th>Reason codes</th><th>Confidence</th></tr></thead><tbody>
+                {lifecycleRecommendations.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.target_case ? `#${row.target_case}` : '—'}</td>
+                    <td><StatusBadge tone={toneFromState(row.recommendation_type)}>{row.recommendation_type}</StatusBadge></td>
+                    <td>{row.rationale}</td>
+                    <td>{row.reason_codes.join(', ') || '—'}</td>
+                    <td>{row.confidence}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
             </SectionCard>
 
             <SectionCard eyebrow="Response action candidates" title="Cases ready for manual handoff" description="Cases selected for manual handoff with explicit routing resolution, blockers, and downstream context links.">

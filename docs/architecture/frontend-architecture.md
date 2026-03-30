@@ -1657,3 +1657,21 @@ UX constraints retained:
 Frontend service module: `src/services/baselineResponseActions.ts`.
 
 This keeps governance manual-first and paper-only while improving lineage from response case to downstream operational status.
+
+## Certification downstream lifecycle surfaces (new)
+
+The `/certification` page now contains a dedicated downstream lifecycle segment backed by `services/baselineResponseLifecycle.ts`.
+
+Frontend data flows:
+- lifecycle summary
+- acknowledgement records
+- review stage records
+- downstream outcomes
+- lifecycle recommendations
+
+Manual-first controls trigger backend lifecycle endpoints directly from `/certification` and keep governance context connected to evaluation/tuning/experiments/trace navigation links.
+
+UX rules:
+- no auto-apply behavior in the UI
+- explicit empty/loading/error states
+- `WAITING_MORE_EVIDENCE` and `NO_RESPONSE` shown as valid lifecycle statuses

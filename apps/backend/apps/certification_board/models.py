@@ -1070,3 +1070,185 @@ class ResponseActionRecommendation(TimeStampedModel):
     class Meta:
         ordering = ['-created_at', '-id']
         indexes = [models.Index(fields=['recommendation_type', '-created_at'])]
+
+
+class DownstreamAcknowledgementStatus(models.TextChoices):
+    SENT = 'SENT', 'Sent'
+    ACKNOWLEDGED = 'ACKNOWLEDGED', 'Acknowledged'
+    ACCEPTED_FOR_REVIEW = 'ACCEPTED_FOR_REVIEW', 'Accepted for review'
+    REJECTED_BY_TARGET = 'REJECTED_BY_TARGET', 'Rejected by target'
+    WAITING_MORE_EVIDENCE = 'WAITING_MORE_EVIDENCE', 'Waiting more evidence'
+    NO_RESPONSE = 'NO_RESPONSE', 'No response'
+
+
+class ResponseReviewStageType(models.TextChoices):
+    INTAKE_REVIEW = 'intake_review', 'Intake review'
+    EVIDENCE_COLLECTION = 'evidence_collection', 'Evidence collection'
+    BOARD_REVIEW = 'board_review', 'Board review'
+    MANUAL_FOLLOWUP = 'manual_followup', 'Manual follow-up'
+    DOWNSTREAM_RESOLUTION = 'downstream_resolution', 'Downstream resolution'
+    REJECTION_REVIEW = 'rejection_review', 'Rejection review'
+
+
+class ResponseReviewStageStatus(models.TextChoices):
+    PENDING = 'PENDING', 'Pending'
+    ACTIVE = 'ACTIVE', 'Active'
+    COMPLETED = 'COMPLETED', 'Completed'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    SKIPPED = 'SKIPPED', 'Skipped'
+
+
+class DownstreamLifecycleOutcomeType(models.TextChoices):
+    RESOLVED_BY_TARGET = 'RESOLVED_BY_TARGET', 'Resolved by target'
+    REJECTED_BY_TARGET = 'REJECTED_BY_TARGET', 'Rejected by target'
+    WAITING_EVIDENCE = 'WAITING_EVIDENCE', 'Waiting evidence'
+    NO_ACTION_TAKEN = 'NO_ACTION_TAKEN', 'No action taken'
+    ESCALATED_BACK = 'ESCALATED_BACK', 'Escalated back'
+    STILL_UNDER_REVIEW = 'STILL_UNDER_REVIEW', 'Still under review'
+
+
+class DownstreamLifecycleOutcomeStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    CONFIRMED = 'CONFIRMED', 'Confirmed'
+    DEFERRED = 'DEFERRED', 'Deferred'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class ResponseLifecycleRecommendationType(models.TextChoices):
+    REQUEST_ACKNOWLEDGEMENT_UPDATE = 'REQUEST_ACKNOWLEDGEMENT_UPDATE', 'Request acknowledgement update'
+    MARK_ACCEPTED_FOR_REVIEW = 'MARK_ACCEPTED_FOR_REVIEW', 'Mark accepted for review'
+    RECORD_WAITING_EVIDENCE = 'RECORD_WAITING_EVIDENCE', 'Record waiting evidence'
+    RECORD_REJECTED_BY_TARGET = 'RECORD_REJECTED_BY_TARGET', 'Record rejected by target'
+    ESCALATE_FOR_FOLLOWUP = 'ESCALATE_FOR_FOLLOWUP', 'Escalate for follow-up'
+    PREPARE_CASE_RESOLUTION = 'PREPARE_CASE_RESOLUTION', 'Prepare case resolution'
+    REORDER_LIFECYCLE_PRIORITY = 'REORDER_LIFECYCLE_PRIORITY', 'Reorder lifecycle priority'
+
+
+class BaselineResponseLifecycleRun(TimeStampedModel):
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    linked_baseline_response_action_run = models.ForeignKey(
+        BaselineResponseActionRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='lifecycle_runs',
+    )
+    routed_action_count = models.PositiveIntegerField(default=0)
+    acknowledged_count = models.PositiveIntegerField(default=0)
+    accepted_for_review_count = models.PositiveIntegerField(default=0)
+    waiting_evidence_count = models.PositiveIntegerField(default=0)
+    resolved_downstream_count = models.PositiveIntegerField(default=0)
+    rejected_downstream_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class DownstreamAcknowledgement(TimeStampedModel):
+    linked_response_routing_action = models.ForeignKey(
+        ResponseRoutingAction,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='downstream_acknowledgements',
+    )
+    linked_response_case = models.ForeignKey(
+        BaselineResponseCase,
+        on_delete=models.CASCADE,
+        related_name='downstream_acknowledgements',
+    )
+    routing_target = models.CharField(max_length=64, blank=True)
+    acknowledgement_status = models.CharField(max_length=32, choices=DownstreamAcknowledgementStatus.choices)
+    acknowledged_by = models.CharField(max_length=120, blank=True)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    acknowledgement_notes = models.CharField(max_length=255, blank=True)
+    linked_target_reference = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['acknowledgement_status', '-created_at'])]
+
+
+class ResponseReviewStageRecord(TimeStampedModel):
+    linked_response_case = models.ForeignKey(
+        BaselineResponseCase,
+        on_delete=models.CASCADE,
+        related_name='review_stage_records',
+    )
+    linked_acknowledgement = models.ForeignKey(
+        DownstreamAcknowledgement,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='stage_records',
+    )
+    stage_type = models.CharField(max_length=32, choices=ResponseReviewStageType.choices)
+    stage_status = models.CharField(max_length=16, choices=ResponseReviewStageStatus.choices)
+    stage_notes = models.CharField(max_length=255, blank=True)
+    stage_actor = models.CharField(max_length=120, blank=True)
+    stage_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['stage_type', 'stage_status', '-created_at'])]
+
+
+class DownstreamLifecycleOutcome(TimeStampedModel):
+    linked_response_case = models.ForeignKey(
+        BaselineResponseCase,
+        on_delete=models.CASCADE,
+        related_name='downstream_lifecycle_outcomes',
+    )
+    linked_acknowledgement = models.ForeignKey(
+        DownstreamAcknowledgement,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='downstream_lifecycle_outcomes',
+    )
+    linked_latest_stage = models.ForeignKey(
+        ResponseReviewStageRecord,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='downstream_lifecycle_outcomes',
+    )
+    outcome_type = models.CharField(max_length=32, choices=DownstreamLifecycleOutcomeType.choices)
+    outcome_status = models.CharField(max_length=16, choices=DownstreamLifecycleOutcomeStatus.choices)
+    outcome_rationale = models.CharField(max_length=255)
+    linked_target_reference = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['outcome_type', 'outcome_status', '-created_at'])]
+
+
+class ResponseLifecycleRecommendation(TimeStampedModel):
+    lifecycle_run = models.ForeignKey(
+        BaselineResponseLifecycleRun,
+        on_delete=models.CASCADE,
+        related_name='recommendations',
+    )
+    target_case = models.ForeignKey(
+        BaselineResponseCase,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='lifecycle_recommendations',
+    )
+    recommendation_type = models.CharField(max_length=48, choices=ResponseLifecycleRecommendationType.choices)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=6, decimal_places=4, default=0)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['recommendation_type', '-created_at'])]

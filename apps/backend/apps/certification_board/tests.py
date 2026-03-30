@@ -7,7 +7,11 @@ from rest_framework.test import APIClient
 from apps.certification_board.models import (
     BaselineResponseCase,
     ResponseEvidencePack,
+    DownstreamAcknowledgementStatus,
+    ResponseLifecycleRecommendationType,
     ResponseRoutingActionType,
+    ResponseReviewStageStatus,
+    ResponseReviewStageType,
     ResponseCaseDownstreamStatus,
     BaselineResponseEvidenceStatus,
     BaselineResponseRecommendationType,
@@ -598,3 +602,104 @@ class CertificationBoardTests(TestCase):
 
         case = BaselineResponseCase.objects.get(pk=case_id)
         self.assertEqual(case.case_status, 'CLOSED_NO_ACTION')
+
+    def test_lifecycle_acknowledgement_flow_sent_to_accepted(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-response-actions'), {'actor': 'test'}, format='json')
+        case_id = self.client.get(reverse('certification_board:response-cases')).json()[0]['id']
+        self.client.post(reverse('certification_board:route-response-case', kwargs={'case_id': case_id}), {'routed_by': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-response-lifecycle'), {'actor': 'test'}, format='json')
+        first_ack = self.client.get(reverse('certification_board:downstream-acknowledgements')).json()[0]
+        self.assertEqual(first_ack['acknowledgement_status'], DownstreamAcknowledgementStatus.SENT)
+
+        self.client.post(
+            reverse('certification_board:acknowledge-response-case', kwargs={'case_id': case_id}),
+            {'acknowledgement_status': DownstreamAcknowledgementStatus.ACKNOWLEDGED, 'acknowledged_by': 'board-a'},
+            format='json',
+        )
+        self.client.post(
+            reverse('certification_board:acknowledge-response-case', kwargs={'case_id': case_id}),
+            {'acknowledgement_status': DownstreamAcknowledgementStatus.ACCEPTED_FOR_REVIEW, 'acknowledged_by': 'board-a'},
+            format='json',
+        )
+        ack = self.client.get(reverse('certification_board:downstream-acknowledgements')).json()[0]
+        self.assertEqual(ack['acknowledgement_status'], DownstreamAcknowledgementStatus.ACCEPTED_FOR_REVIEW)
+
+    def test_review_stage_and_outcome_variants(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-response-actions'), {'actor': 'test'}, format='json')
+        case_id = self.client.get(reverse('certification_board:response-cases')).json()[0]['id']
+        self.client.post(reverse('certification_board:route-response-case', kwargs={'case_id': case_id}), {'routed_by': 'test'}, format='json')
+        self.client.post(
+            reverse('certification_board:acknowledge-response-case', kwargs={'case_id': case_id}),
+            {'acknowledgement_status': DownstreamAcknowledgementStatus.WAITING_MORE_EVIDENCE, 'acknowledged_by': 'board-a'},
+            format='json',
+        )
+        for stage_type in [ResponseReviewStageType.EVIDENCE_COLLECTION, ResponseReviewStageType.BOARD_REVIEW, ResponseReviewStageType.DOWNSTREAM_RESOLUTION]:
+            stage_res = self.client.post(
+                reverse('certification_board:update-response-stage', kwargs={'case_id': case_id}),
+                {'stage_type': stage_type, 'stage_status': ResponseReviewStageStatus.ACTIVE, 'stage_actor': 'board-a'},
+                format='json',
+            )
+            self.assertEqual(stage_res.status_code, 200)
+
+        outcome_res = self.client.post(
+            reverse('certification_board:record-downstream-outcome', kwargs={'case_id': case_id}),
+            {'outcome_type': 'WAITING_EVIDENCE', 'outcome_status': 'DEFERRED', 'outcome_rationale': 'Need more evidence'},
+            format='json',
+        )
+        self.assertEqual(outcome_res.status_code, 200)
+        self.assertEqual(outcome_res.json()['outcome_type'], 'WAITING_EVIDENCE')
+
+        reject_res = self.client.post(
+            reverse('certification_board:record-downstream-outcome', kwargs={'case_id': case_id}),
+            {'outcome_type': 'REJECTED_BY_TARGET', 'outcome_status': 'CONFIRMED', 'outcome_rationale': 'Rejected by board'},
+            format='json',
+        )
+        self.assertEqual(reject_res.status_code, 200)
+        self.assertEqual(reject_res.json()['outcome_type'], 'REJECTED_BY_TARGET')
+
+        resolved_res = self.client.post(
+            reverse('certification_board:record-downstream-outcome', kwargs={'case_id': case_id}),
+            {'outcome_type': 'RESOLVED_BY_TARGET', 'outcome_status': 'CONFIRMED', 'outcome_rationale': 'Resolved'},
+            format='json',
+        )
+        self.assertEqual(resolved_res.status_code, 200)
+        self.assertEqual(resolved_res.json()['outcome_type'], 'RESOLVED_BY_TARGET')
+
+    def test_lifecycle_recommendations_and_summary_endpoint(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-response-actions'), {'actor': 'test'}, format='json')
+        case_id = self.client.get(reverse('certification_board:response-cases')).json()[0]['id']
+        self.client.post(reverse('certification_board:route-response-case', kwargs={'case_id': case_id}), {'routed_by': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-response-lifecycle'), {'actor': 'test'}, format='json')
+        recommendation_types = {item['recommendation_type'] for item in self.client.get(reverse('certification_board:response-lifecycle-recommendations')).json()}
+        self.assertIn(ResponseLifecycleRecommendationType.REQUEST_ACKNOWLEDGEMENT_UPDATE, recommendation_types)
+
+        self.client.post(
+            reverse('certification_board:acknowledge-response-case', kwargs={'case_id': case_id}),
+            {'acknowledgement_status': DownstreamAcknowledgementStatus.NO_RESPONSE, 'acknowledged_by': 'board-a'},
+            format='json',
+        )
+        self.client.post(reverse('certification_board:run-baseline-response-lifecycle'), {'actor': 'test'}, format='json')
+        recommendation_types = {item['recommendation_type'] for item in self.client.get(reverse('certification_board:response-lifecycle-recommendations')).json()}
+        self.assertIn(ResponseLifecycleRecommendationType.ESCALATE_FOR_FOLLOWUP, recommendation_types)
+
+        self.client.post(
+            reverse('certification_board:record-downstream-outcome', kwargs={'case_id': case_id}),
+            {'outcome_type': 'RESOLVED_BY_TARGET', 'outcome_status': 'CONFIRMED', 'outcome_rationale': 'ready for closure'},
+            format='json',
+        )
+        self.client.post(reverse('certification_board:run-baseline-response-lifecycle'), {'actor': 'test'}, format='json')
+        recommendation_types = {item['recommendation_type'] for item in self.client.get(reverse('certification_board:response-lifecycle-recommendations')).json()}
+        self.assertIn(ResponseLifecycleRecommendationType.PREPARE_CASE_RESOLUTION, recommendation_types)
+
+        summary_res = self.client.get(reverse('certification_board:response-lifecycle-summary'))
+        self.assertEqual(summary_res.status_code, 200)
+        self.assertIn('routed_cases', summary_res.json())

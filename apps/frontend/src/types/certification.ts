@@ -588,6 +588,89 @@ export type ResponseCaseTrackingRecord = {
   created_at: string;
 };
 
+export type BaselineResponseLifecycleRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  linked_baseline_response_action_run: number | null;
+  routed_action_count: number;
+  acknowledged_count: number;
+  accepted_for_review_count: number;
+  waiting_evidence_count: number;
+  resolved_downstream_count: number;
+  rejected_downstream_count: number;
+  recommendation_summary: Record<string, number>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type DownstreamAcknowledgement = {
+  id: number;
+  linked_response_routing_action: number | null;
+  linked_response_case: number;
+  routing_target: string;
+  acknowledgement_status: 'SENT' | 'ACKNOWLEDGED' | 'ACCEPTED_FOR_REVIEW' | 'REJECTED_BY_TARGET' | 'WAITING_MORE_EVIDENCE' | 'NO_RESPONSE';
+  acknowledged_by: string;
+  acknowledged_at: string | null;
+  acknowledgement_notes: string;
+  linked_target_reference: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ResponseReviewStageRecord = {
+  id: number;
+  linked_response_case: number;
+  linked_acknowledgement: number | null;
+  stage_type: 'intake_review' | 'evidence_collection' | 'board_review' | 'manual_followup' | 'downstream_resolution' | 'rejection_review';
+  stage_status: 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'BLOCKED' | 'SKIPPED';
+  stage_notes: string;
+  stage_actor: string;
+  stage_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type DownstreamLifecycleOutcome = {
+  id: number;
+  linked_response_case: number;
+  linked_acknowledgement: number | null;
+  linked_latest_stage: number | null;
+  outcome_type: 'RESOLVED_BY_TARGET' | 'REJECTED_BY_TARGET' | 'WAITING_EVIDENCE' | 'NO_ACTION_TAKEN' | 'ESCALATED_BACK' | 'STILL_UNDER_REVIEW';
+  outcome_status: 'PROPOSED' | 'CONFIRMED' | 'DEFERRED' | 'BLOCKED';
+  outcome_rationale: string;
+  linked_target_reference: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ResponseLifecycleRecommendationItem = {
+  id: number;
+  lifecycle_run: number;
+  target_case: number | null;
+  recommendation_type: 'REQUEST_ACKNOWLEDGEMENT_UPDATE' | 'MARK_ACCEPTED_FOR_REVIEW' | 'RECORD_WAITING_EVIDENCE' | 'RECORD_REJECTED_BY_TARGET' | 'ESCALATE_FOR_FOLLOWUP' | 'PREPARE_CASE_RESOLUTION' | 'REORDER_LIFECYCLE_PRIORITY';
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ResponseLifecycleSummary = {
+  latest_run: BaselineResponseLifecycleRun | null;
+  routed_cases: number;
+  acknowledged: number;
+  accepted_for_review: number;
+  waiting_evidence: number;
+  resolved_downstream: number;
+  rejected_downstream: number;
+  recommendation_summary: Record<string, number>;
+  acknowledgement_status_summary: Record<string, number>;
+  outcome_type_summary: Record<string, number>;
+  recommendation_type_summary: Record<string, number>;
+};
+
 export type ResponseActionRecommendationItem = {
   id: number;
   action_run: number;

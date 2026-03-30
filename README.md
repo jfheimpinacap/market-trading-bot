@@ -1957,3 +1957,14 @@ The `certification_board` flow now extends baseline response with an explicit ma
 This layer consumes existing baseline response outputs and records auditable manual routing/tracking artifacts without automatically creating or executing downstream reviews.
 
 Key APIs include run/list/summary plus explicit manual actions: `route-response-case`, `update-response-tracking`, and `close-response-case` (manual closure without downstream action).
+
+### Baseline downstream acknowledgement board / response review lifecycle (new)
+
+The `certification_board` domain now extends baseline response actions with a formal downstream lifecycle layer:
+
+- explicit downstream acknowledgement tracking (`SENT`, `ACKNOWLEDGED`, `ACCEPTED_FOR_REVIEW`, `WAITING_MORE_EVIDENCE`, `REJECTED_BY_TARGET`, `NO_RESPONSE`)
+- granular review stages (`intake_review`, `evidence_collection`, `board_review`, `manual_followup`, `downstream_resolution`, `rejection_review`)
+- explicit downstream lifecycle outcomes (`RESOLVED_BY_TARGET`, `REJECTED_BY_TARGET`, `WAITING_EVIDENCE`, etc.)
+- lifecycle recommendations for manual follow-up and preparation of future formal case resolution
+
+This layer is manual-first and auditable. It does **not** auto-open downstream board workflows and does **not** auto-resolve response cases.

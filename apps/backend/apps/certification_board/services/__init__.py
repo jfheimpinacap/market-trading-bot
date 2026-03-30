@@ -11,6 +11,13 @@ from apps.certification_board.services.baseline_response_actions import (
     close_response_case_no_action,
     run_baseline_response_actions,
 )
+from apps.certification_board.services.baseline_response_lifecycle import (
+    build_response_lifecycle_summary,
+    create_or_update_acknowledgement,
+    record_or_update_outcome,
+    record_review_stage,
+    run_baseline_response_lifecycle,
+)
 from apps.certification_board.services.run import (
     run_baseline_activation_review,
     run_baseline_confirmation_review,
@@ -36,4 +43,9 @@ __all__ = [
     'build_baseline_response_action_summary',
     'create_tracking_record',
     'close_response_case_no_action',
+    'run_baseline_response_lifecycle',
+    'build_response_lifecycle_summary',
+    'create_or_update_acknowledgement',
+    'record_review_stage',
+    'record_or_update_outcome',
 ]

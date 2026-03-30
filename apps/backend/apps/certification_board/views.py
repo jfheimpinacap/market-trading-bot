@@ -4,23 +4,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.certification_board.models import (
-    BaselineResponseActionRun,
-    ResponseActionCandidate,
-    ResponseActionRecommendation,
-    ResponseCaseTrackingRecord,
-    ResponseCaseDownstreamStatus,
-    ResponseRoutingAction,
-    ResponseRoutingActionStatus,
-    BaselineResponseCase,
-    BaselineResponseRecommendation,
-    BaselineResponseRun,
-    ResponseEvidencePack,
-    ResponseRoutingDecision,
-    BaselineHealthCandidate,
-    BaselineHealthRecommendation,
-    BaselineHealthRun,
-    BaselineHealthSignal,
-    BaselineHealthStatus,
     ActivePaperBindingRecord,
     BaselineActivationCandidate,
     BaselineActivationRecommendation,
@@ -29,83 +12,119 @@ from apps.certification_board.models import (
     BaselineConfirmationCandidate,
     BaselineConfirmationRecommendation,
     BaselineConfirmationRun,
+    BaselineHealthCandidate,
+    BaselineHealthRecommendation,
+    BaselineHealthRun,
+    BaselineHealthSignal,
+    BaselineHealthStatus,
+    BaselineResponseActionRun,
+    BaselineResponseCase,
+    BaselineResponseLifecycleRun,
+    BaselineResponseRecommendation,
+    BaselineResponseRun,
     CertificationCandidate,
     CertificationDecision,
     CertificationDecisionStatus,
     CertificationEvidencePack,
     CertificationRecommendation,
     CertificationRun,
+    DownstreamAcknowledgement,
+    DownstreamLifecycleOutcome,
     PaperBaselineActivation,
     PaperBaselineConfirmation,
     PaperBaselineConfirmationStatus,
+    ResponseActionCandidate,
+    ResponseActionRecommendation,
+    ResponseCaseDownstreamStatus,
+    ResponseCaseTrackingRecord,
+    ResponseEvidencePack,
+    ResponseLifecycleRecommendation,
+    ResponseReviewStageRecord,
+    ResponseRoutingAction,
+    ResponseRoutingActionStatus,
+    ResponseRoutingDecision,
     RolloutCertificationRun,
 )
 from apps.certification_board.serializers import (
     ActivatePaperBaselineRequestSerializer,
     ActivePaperBindingRecordSerializer,
+    AcknowledgeResponseCaseRequestSerializer,
     ApplyCertificationDecisionRequestSerializer,
     BaselineActivationCandidateSerializer,
     BaselineActivationRecommendationSerializer,
     BaselineActivationRunSerializer,
-    BaselineHealthCandidateSerializer,
-    BaselineHealthRecommendationSerializer,
-    BaselineHealthRunSerializer,
-    BaselineResponseCaseSerializer,
-    BaselineResponseRecommendationSerializer,
-    BaselineResponseRunSerializer,
-    BaselineHealthSignalSerializer,
-    BaselineHealthStatusSerializer,
     BaselineBindingSnapshotSerializer,
     BaselineConfirmationCandidateSerializer,
     BaselineConfirmationRecommendationSerializer,
     BaselineConfirmationRunSerializer,
-    ConfirmPaperBaselineRequestSerializer,
-    PaperBaselineActivationSerializer,
-    PaperBaselineConfirmationSerializer,
+    BaselineHealthCandidateSerializer,
+    BaselineHealthRecommendationSerializer,
+    BaselineHealthRunSerializer,
+    BaselineHealthSignalSerializer,
+    BaselineHealthStatusSerializer,
+    BaselineResponseActionRunSerializer,
+    BaselineResponseCaseSerializer,
+    BaselineResponseLifecycleRunSerializer,
+    BaselineResponseRecommendationSerializer,
+    BaselineResponseRunSerializer,
     CertificationCandidateSerializer,
     CertificationDecisionSerializer,
     CertificationEvidencePackSerializer,
     CertificationRecommendationSerializer,
     CertificationRunSerializer,
-    RolloutCertificationRunSerializer,
-    RollbackBaselineActivationRequestSerializer,
-    RunBaselineActivationReviewRequestSerializer,
-    RunBaselineHealthReviewRequestSerializer,
-    RunBaselineResponseReviewRequestSerializer,
-    RunBaselineResponseActionsRequestSerializer,
-    RouteResponseCaseRequestSerializer,
     CloseResponseCaseRequestSerializer,
-    UpdateResponseTrackingRequestSerializer,
-    RunBaselineConfirmationReviewRequestSerializer,
-    RunPostRolloutReviewRequestSerializer,
-    RunCertificationReviewRequestSerializer,
-    ResponseEvidencePackSerializer,
-    ResponseRoutingDecisionSerializer,
-    BaselineResponseActionRunSerializer,
+    ConfirmPaperBaselineRequestSerializer,
+    DownstreamAcknowledgementSerializer,
+    DownstreamLifecycleOutcomeSerializer,
+    PaperBaselineActivationSerializer,
+    PaperBaselineConfirmationSerializer,
+    RecordDownstreamOutcomeRequestSerializer,
     ResponseActionCandidateSerializer,
-    ResponseRoutingActionSerializer,
-    ResponseCaseTrackingRecordSerializer,
     ResponseActionRecommendationSerializer,
+    ResponseCaseTrackingRecordSerializer,
+    ResponseEvidencePackSerializer,
+    ResponseLifecycleRecommendationSerializer,
+    ResponseReviewStageRecordSerializer,
+    ResponseRoutingActionSerializer,
+    ResponseRoutingDecisionSerializer,
+    RollbackBaselineActivationRequestSerializer,
+    RolloutCertificationRunSerializer,
+    RouteResponseCaseRequestSerializer,
+    RunBaselineActivationReviewRequestSerializer,
+    RunBaselineConfirmationReviewRequestSerializer,
+    RunBaselineHealthReviewRequestSerializer,
+    RunBaselineResponseActionsRequestSerializer,
+    RunBaselineResponseLifecycleRequestSerializer,
+    RunBaselineResponseReviewRequestSerializer,
+    RunCertificationReviewRequestSerializer,
+    RunPostRolloutReviewRequestSerializer,
+    UpdateResponseStageRequestSerializer,
+    UpdateResponseTrackingRequestSerializer,
 )
 from apps.certification_board.services import (
     activate_paper_baseline,
     apply_certification_decision,
+    build_baseline_response_action_summary,
+    build_baseline_response_summary,
     build_certification_summary,
+    build_response_lifecycle_summary,
+    close_response_case_no_action,
     confirm_paper_baseline,
+    create_or_update_acknowledgement,
+    create_tracking_record,
     get_current_certification,
     prepare_baseline_rollback,
+    record_or_update_outcome,
+    record_review_stage,
     rollback_baseline_activation,
-    run_baseline_health_review,
-    run_baseline_response_actions,
-    build_baseline_response_summary,
-    build_baseline_response_action_summary,
-    create_tracking_record,
-    close_response_case_no_action,
-    run_baseline_response_review,
     run_baseline_activation_review,
     run_baseline_confirmation_review,
-    run_post_rollout_certification_review,
+    run_baseline_health_review,
+    run_baseline_response_actions,
+    run_baseline_response_lifecycle,
+    run_baseline_response_review,
     run_certification_review,
+    run_post_rollout_certification_review,
 )
 from django.utils import timezone
 
@@ -872,6 +891,188 @@ class CloseResponseCaseView(APIView):
             metadata={**(payload.get('metadata') or {}), 'source': 'close-response-case'},
         )
         return Response(ResponseCaseTrackingRecordSerializer(tracking).data, status=status.HTTP_200_OK)
+
+
+class RunBaselineResponseLifecycleView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunBaselineResponseLifecycleRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_baseline_response_lifecycle(
+            actor=serializer.validated_data.get('actor', 'operator-ui'),
+            metadata=serializer.validated_data.get('metadata') or {},
+        )
+        return Response(
+            {
+                'run': BaselineResponseLifecycleRunSerializer(result['run']).data,
+                'outcome_count': len(result['outcomes']),
+                'recommendation_count': len(result['recommendations']),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DownstreamAcknowledgementListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = DownstreamAcknowledgementSerializer
+
+    def get_queryset(self):
+        return DownstreamAcknowledgement.objects.select_related(
+            'linked_response_case',
+            'linked_response_routing_action',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class DownstreamAcknowledgementDetailView(generics.RetrieveAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = DownstreamAcknowledgementSerializer
+    queryset = DownstreamAcknowledgement.objects.select_related(
+        'linked_response_case',
+        'linked_response_routing_action',
+    ).order_by('-created_at', '-id')
+
+
+class ResponseReviewStageRecordListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseReviewStageRecordSerializer
+
+    def get_queryset(self):
+        return ResponseReviewStageRecord.objects.select_related(
+            'linked_response_case',
+            'linked_acknowledgement',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class ResponseReviewStageRecordDetailView(generics.RetrieveAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseReviewStageRecordSerializer
+    queryset = ResponseReviewStageRecord.objects.select_related(
+        'linked_response_case',
+        'linked_acknowledgement',
+    ).order_by('-created_at', '-id')
+
+
+class DownstreamLifecycleOutcomeListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = DownstreamLifecycleOutcomeSerializer
+
+    def get_queryset(self):
+        return DownstreamLifecycleOutcome.objects.select_related(
+            'linked_response_case',
+            'linked_acknowledgement',
+            'linked_latest_stage',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class ResponseLifecycleRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseLifecycleRecommendationSerializer
+
+    def get_queryset(self):
+        return ResponseLifecycleRecommendation.objects.select_related(
+            'lifecycle_run',
+            'target_case',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class ResponseLifecycleSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        summary = build_response_lifecycle_summary()
+        return Response(
+            {
+                'latest_run': BaselineResponseLifecycleRunSerializer(summary['latest_run']).data if summary['latest_run'] else None,
+                'routed_cases': summary['routed_cases'],
+                'acknowledged': summary['acknowledged'],
+                'accepted_for_review': summary['accepted_for_review'],
+                'waiting_evidence': summary['waiting_evidence'],
+                'resolved_downstream': summary['resolved_downstream'],
+                'rejected_downstream': summary['rejected_downstream'],
+                'recommendation_summary': summary['recommendation_summary'],
+                'acknowledgement_status_summary': summary['acknowledgement_status_summary'],
+                'outcome_type_summary': summary['outcome_type_summary'],
+                'recommendation_type_summary': summary['recommendation_type_summary'],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class AcknowledgeResponseCaseView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, case_id: int, *args, **kwargs):
+        response_case = BaselineResponseCase.objects.get(pk=case_id)
+        serializer = AcknowledgeResponseCaseRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        action = ResponseRoutingAction.objects.filter(linked_response_case=response_case).order_by('-created_at', '-id').first()
+        acknowledgement = create_or_update_acknowledgement(
+            response_case=response_case,
+            routing_action=action,
+            acknowledgement_status=payload['acknowledgement_status'],
+            acknowledged_by=payload.get('acknowledged_by', 'operator-ui'),
+            acknowledgement_notes=payload.get('acknowledgement_notes', ''),
+            linked_target_reference=payload.get('linked_target_reference', ''),
+            metadata=payload.get('metadata') or {},
+        )
+        return Response(DownstreamAcknowledgementSerializer(acknowledgement).data, status=status.HTTP_200_OK)
+
+
+class UpdateResponseStageView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, case_id: int, *args, **kwargs):
+        response_case = BaselineResponseCase.objects.get(pk=case_id)
+        serializer = UpdateResponseStageRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        acknowledgement = DownstreamAcknowledgement.objects.filter(linked_response_case=response_case).order_by('-created_at', '-id').first()
+        stage = record_review_stage(
+            response_case=response_case,
+            linked_acknowledgement=acknowledgement,
+            stage_type=payload['stage_type'],
+            stage_status=payload['stage_status'],
+            stage_notes=payload.get('stage_notes', ''),
+            stage_actor=payload.get('stage_actor', 'operator-ui'),
+            metadata=payload.get('metadata') or {},
+        )
+        return Response(ResponseReviewStageRecordSerializer(stage).data, status=status.HTTP_200_OK)
+
+
+class RecordDownstreamOutcomeView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, case_id: int, *args, **kwargs):
+        response_case = BaselineResponseCase.objects.get(pk=case_id)
+        serializer = RecordDownstreamOutcomeRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        acknowledgement = DownstreamAcknowledgement.objects.filter(linked_response_case=response_case).order_by('-created_at', '-id').first()
+        latest_stage = ResponseReviewStageRecord.objects.filter(linked_response_case=response_case).order_by('-created_at', '-id').first()
+        outcome = record_or_update_outcome(
+            response_case=response_case,
+            acknowledgement=acknowledgement,
+            latest_stage=latest_stage,
+            outcome_type=payload['outcome_type'],
+            outcome_status=payload['outcome_status'],
+            outcome_rationale=payload.get('outcome_rationale', ''),
+            linked_target_reference=payload.get('linked_target_reference', ''),
+            metadata=payload.get('metadata') or {},
+        )
+        return Response(DownstreamLifecycleOutcomeSerializer(outcome).data, status=status.HTTP_200_OK)
 
 
 class ActivatePaperBaselineView(APIView):
