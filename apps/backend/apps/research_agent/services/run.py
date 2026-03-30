@@ -9,6 +9,11 @@ from django.utils import timezone
 from apps.memory_retrieval.models import MemoryQueryType
 from apps.memory_retrieval.services import run_assist
 from apps.research_agent.models import (
+    MarketResearchCandidate,
+    MarketResearchCandidateStatus,
+    MarketResearchRecommendation,
+    MarketTriageDecisionV2,
+    MarketUniverseRun,
     NarrativeCluster,
     NarrativeClusterStatus,
     NarrativeSentiment,
@@ -19,10 +24,13 @@ from apps.research_agent.models import (
 )
 from apps.research_agent.services.clustering import cluster_narratives
 from apps.research_agent.services.dedup import deduplicate_narratives
+from apps.research_agent.services.filtering import evaluate_structural_filters
 from apps.research_agent.services.market_context import infer_target_market, narrative_market_divergence
-from apps.research_agent.services.recommendation import recommend_for_signal
-from apps.research_agent.services.scoring import score_cluster
+from apps.research_agent.services.narrative_linking import link_narrative_signals
+from apps.research_agent.services.recommendation import decision_for_candidate, recommend_for_signal
+from apps.research_agent.services.scoring import compute_pursue_worthiness, score_cluster
 from apps.research_agent.services.source_fetch import fetch_parallel_source_items
+from apps.research_agent.services.universe_fetch import fetch_market_universe
 
 
 def _cluster_status(*, source_types: set[str], item_count: int, last_seen_at):
@@ -164,3 +172,145 @@ def run_scan_agent(*, source_ids: list[int] | None = None, triggered_by: str = '
         ]
     )
     return scan_run
+
+
+def _status_for_score(score: Decimal, reason_codes: list[str]):
+    hard_blockers = {'market_not_open', 'bad_time_horizon_near_expiry'}
+    if any(code in hard_blockers for code in reason_codes):
+        return MarketResearchCandidateStatus.IGNORE
+    if score >= Decimal('0.72'):
+        return MarketResearchCandidateStatus.SHORTLIST
+    if score >= Decimal('0.48'):
+        return MarketResearchCandidateStatus.WATCHLIST
+    if 'no_scan_signals' in reason_codes and score >= Decimal('0.40'):
+        return MarketResearchCandidateStatus.NEEDS_REVIEW
+    return MarketResearchCandidateStatus.IGNORE
+
+
+def run_market_universe_triage(*, provider_scope=None, source_scope=None, triggered_by='manual_api'):
+    started_at = timezone.now()
+    run = MarketUniverseRun.objects.create(started_at=started_at, metadata={'triggered_by': triggered_by})
+    markets, provider_counts = fetch_market_universe(provider_scope=provider_scope, source_scope=source_scope)
+
+    status_counter = Counter()
+    recommendation_counter = Counter()
+
+    for market in markets:
+        structural = evaluate_structural_filters(market=market, now=started_at)
+        narrative = link_narrative_signals(market=market)
+
+        precedent_context = {}
+        try:
+            assist = run_assist(
+                query_text=f"{market.title} {market.category}"[:220],
+                query_type=MemoryQueryType.RESEARCH,
+                context_metadata={'market_id': market.id, 'source': 'research_agent_universe_triage'},
+                limit=3,
+            )
+            precedent_context = {'caution_weight': '0.08' if assist.retrieval_run.result_count > 0 else '0'}
+        except Exception:
+            precedent_context = {'caution_weight': '0'}
+
+        reason_codes = structural.reason_codes + narrative['reason_codes']
+        pursue_score = compute_pursue_worthiness(structural=structural, narrative_context=narrative, precedent_context=precedent_context)
+        status = _status_for_score(pursue_score, reason_codes)
+
+        candidate = MarketResearchCandidate.objects.create(
+            universe_run=run,
+            linked_market=market,
+            market_title=market.title,
+            market_provider=market.provider.slug,
+            category=market.category,
+            end_time=market.resolution_time,
+            time_to_resolution_hours=structural.time_to_resolution_hours,
+            liquidity_score=structural.liquidity_score,
+            volume_score=structural.volume_score,
+            freshness_score=structural.freshness_score,
+            market_quality_score=structural.market_quality_score,
+            narrative_support_score=narrative['narrative_support_score'],
+            divergence_score=narrative['divergence_score'],
+            pursue_worthiness_score=pursue_score,
+            status=status,
+            rationale=(
+                f"open={structural.open_ok}; liquidity={structural.liquidity_score}; volume={structural.volume_score}; "
+                f"freshness={structural.freshness_score}; narrative={narrative['narrative_support_score']}; divergence={narrative['divergence_score']}"
+            ),
+            reason_codes=reason_codes,
+            linked_narrative_signals=narrative['linked_signals'],
+            metadata={'blockers': structural.blockers, 'precedent_context': precedent_context},
+        )
+        status_counter[status] += 1
+
+        decision_payload = decision_for_candidate(candidate=candidate)
+        MarketTriageDecisionV2.objects.create(
+            linked_candidate=candidate,
+            decision_type=decision_payload['decision_type'],
+            decision_status=decision_payload['decision_status'],
+            rationale=candidate.rationale,
+            reason_codes=candidate.reason_codes,
+            blockers=candidate.metadata.get('blockers', []),
+            metadata={'pursue_worthiness_score': str(candidate.pursue_worthiness_score)},
+        )
+        MarketResearchRecommendation.objects.create(
+            universe_run=run,
+            recommendation_type=decision_payload['recommendation_type'],
+            target_market=market,
+            target_candidate=candidate,
+            rationale=candidate.rationale,
+            reason_codes=candidate.reason_codes,
+            confidence=decision_payload['confidence'],
+            blockers=candidate.metadata.get('blockers', []),
+        )
+        recommendation_counter[decision_payload['recommendation_type']] += 1
+
+    run.total_markets_seen = len(markets)
+    run.open_markets_seen = sum(1 for market in markets if market.status == 'open')
+    run.shortlisted_count = status_counter[MarketResearchCandidateStatus.SHORTLIST]
+    run.watchlist_count = status_counter[MarketResearchCandidateStatus.WATCHLIST]
+    run.ignored_count = status_counter[MarketResearchCandidateStatus.IGNORE]
+    run.filtered_out_count = run.ignored_count
+    run.source_provider_counts = provider_counts
+    run.recommendation_summary = dict(recommendation_counter)
+    run.completed_at = timezone.now()
+    run.metadata = {
+        **(run.metadata or {}),
+        'provider_scope': provider_scope or [],
+        'source_scope': source_scope or [],
+    }
+    run.save()
+    return run
+
+
+def get_latest_universe_summary():
+    run = MarketUniverseRun.objects.order_by('-started_at', '-id').first()
+    if not run:
+        return {
+            'latest_run': None,
+            'totals': {
+                'total_markets_seen': 0,
+                'open_markets_seen': 0,
+                'shortlisted_count': 0,
+                'watchlist_count': 0,
+                'ignored_count': 0,
+                'sent_to_prediction_count': 0,
+            },
+            'recommendation_summary': {},
+        }
+
+    sent_count = run.recommendations.filter(recommendation_type='send_to_prediction').count()
+    return {
+        'latest_run': {
+            'id': run.id,
+            'started_at': run.started_at,
+            'completed_at': run.completed_at,
+        },
+        'totals': {
+            'total_markets_seen': run.total_markets_seen,
+            'open_markets_seen': run.open_markets_seen,
+            'shortlisted_count': run.shortlisted_count,
+            'watchlist_count': run.watchlist_count,
+            'ignored_count': run.ignored_count,
+            'sent_to_prediction_count': sent_count,
+        },
+        'recommendation_summary': run.recommendation_summary,
+    }

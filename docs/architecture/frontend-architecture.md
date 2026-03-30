@@ -1383,3 +1383,13 @@ UX contract:
 - lightweight navigation links to research/prediction/markets/cockpit/trace
 
 The page extends (not replaces) `/research` by hardening scan/filter output quality before triage and prediction context handoff.
+
+
+### /research-agent triage board
+
+Frontend now includes `/research-agent`, a technical board for market universe triage. It integrates with:
+- `/scan-agent` for upstream narrative context
+- `/prediction` for shortlist handoff
+- `/markets`, `/cockpit`, `/trace` for operator workflow continuity
+
+States include loading/error/empty and valid WATCHLIST/IGNORE outcomes.

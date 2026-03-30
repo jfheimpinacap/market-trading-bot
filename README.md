@@ -1609,3 +1609,11 @@ A new **scan agent filter layer** now hardens narrative intake before research t
 - fully auditable run artifacts (`SourceScanRun`, `NarrativeSignal`, `NarrativeCluster`, `ScanRecommendation`)
 
 This layer strengthens `research_agent` scan/filter quality but does **not** replace research triage/pursuit authority and does **not** introduce real-money or auto-execution behavior.
+
+
+## Research Agent scan hardening (market universe triage)
+
+- Added a hardened `/api/research-agent/*` layer for read-only market universe triage with explicit structural filtering, transparent pursue-worthiness scoring, and recommendation-first outputs.
+- New auditable entities: `MarketUniverseRun`, `MarketResearchCandidate`, `MarketTriageDecisionV2`, `MarketResearchRecommendation`.
+- The scan-agent remains upstream for narrative dedup/clustering/signals; research-agent consumes those signals as context (not as sole authority).
+- Scope remains local-first, manual-first, paper/sandbox-only, and read-only toward providers.

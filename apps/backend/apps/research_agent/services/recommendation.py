@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from apps.research_agent.models import NarrativeSignal, ScanRecommendationType
+from apps.research_agent.models import (
+    MarketResearchCandidateStatus,
+    MarketResearchRecommendationType,
+    MarketTriageDecisionStatus,
+    MarketTriageDecisionType,
+    NarrativeSignal,
+    ScanRecommendationType,
+)
 
 
 def recommend_for_signal(signal: NarrativeSignal) -> tuple[str, Decimal, list[str], list[str], str]:
@@ -23,3 +30,31 @@ def recommend_for_signal(signal: NarrativeSignal) -> tuple[str, Decimal, list[st
         return ScanRecommendationType.REQUIRE_MANUAL_REVIEW, Decimal('0.6200'), reason_codes + ['MANUAL_REVIEW_REQUIRED'], blockers, 'Narrative direction is not clear enough.'
 
     return ScanRecommendationType.KEEP_ON_WATCHLIST, Decimal('0.6400'), reason_codes + ['WATCH_AND_RESCAN'], blockers, 'Keep signal on watchlist for convergence confirmation.'
+
+
+def decision_for_candidate(*, candidate):
+    if candidate.status == MarketResearchCandidateStatus.SHORTLIST:
+        decision_type = MarketTriageDecisionType.SEND_TO_PREDICTION
+        recommendation_type = MarketResearchRecommendationType.SEND_TO_PREDICTION
+    elif candidate.status == MarketResearchCandidateStatus.WATCHLIST:
+        decision_type = MarketTriageDecisionType.KEEP_ON_WATCHLIST
+        recommendation_type = MarketResearchRecommendationType.KEEP_ON_WATCHLIST
+    elif candidate.status == MarketResearchCandidateStatus.NEEDS_REVIEW:
+        decision_type = MarketTriageDecisionType.REQUIRE_MANUAL_REVIEW
+        recommendation_type = MarketResearchRecommendationType.REQUIRE_MANUAL_REVIEW
+    else:
+        decision_type = MarketTriageDecisionType.IGNORE_MARKET
+        if 'low_liquidity' in candidate.reason_codes:
+            recommendation_type = MarketResearchRecommendationType.IGNORE_LOW_LIQUIDITY
+        elif any(code.startswith('bad_time_horizon') for code in candidate.reason_codes):
+            recommendation_type = MarketResearchRecommendationType.IGNORE_BAD_TIME_HORIZON
+        else:
+            recommendation_type = MarketResearchRecommendationType.IGNORE_LOW_QUALITY
+
+    confidence = Decimal(candidate.pursue_worthiness_score)
+    return {
+        'decision_type': decision_type,
+        'decision_status': MarketTriageDecisionStatus.PROPOSED,
+        'recommendation_type': recommendation_type,
+        'confidence': confidence,
+    }
