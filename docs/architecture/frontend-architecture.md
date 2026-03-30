@@ -1367,3 +1367,19 @@ Added `/autonomy-seed-review` as a dedicated governance route with:
 - drill-down links to `/trace` and quick links to `/autonomy-seed`, `/cockpit`, and governance neighbors
 
 Design intent remains conservative: recommendation-first tracking, no opaque auto-apply.
+
+## Scan-agent frontend architecture (new)
+
+The `/scan-agent` route adds a focused narrative source-intelligence board without changing shell architecture.
+
+Data layer:
+- `services/scanAgent.ts`
+- `types/scanAgent.ts`
+
+UX contract:
+- explicit loading/error/empty states
+- valid WATCH/IGNORE visualization (not treated as failures)
+- manual run trigger and recommendation-first signal interpretation
+- lightweight navigation links to research/prediction/markets/cockpit/trace
+
+The page extends (not replaces) `/research` by hardening scan/filter output quality before triage and prediction context handoff.

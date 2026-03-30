@@ -1728,3 +1728,29 @@ Boundary:
 - seed registration remains in `autonomy_seed`
 - no roadmap/scenario/program/manager auto-mutation
 - local-first, single-user, paper/sandbox-only scope
+
+## Scan-agent filter hardening architecture (new)
+
+A scan hardening layer now lives inside `apps.research_agent` and is exposed via `/api/scan-agent/*`.
+
+Design intent:
+- strengthen pre-triage scan/filter quality
+- preserve `research_agent` triage/pursuit as downstream authority
+- avoid opaque planner behavior
+
+Auditable entities:
+- `SourceScanRun`
+- `NarrativeSignal`
+- `NarrativeCluster`
+- `ScanRecommendation`
+
+Pipeline:
+1. `source_fetch` collects RSS/Reddit/X items via existing adapters
+2. `dedup` removes repeated narrative payloads
+3. `clustering` groups equivalent themes
+4. `scoring` computes explicit conservative metrics
+5. `market_context` compares narrative direction with market probabilities
+6. `recommendation` emits recommendation-first handoff actions
+7. `run` persists run + cluster + signal + recommendation artifacts
+
+Non-goals unchanged: no real-time social firehose, no real-money execution, no auto-apply black-box planner.

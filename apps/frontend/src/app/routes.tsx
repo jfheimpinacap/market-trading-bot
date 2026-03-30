@@ -12,6 +12,7 @@ import { ExperimentsPage } from '../pages/ExperimentsPage';
 import { ReadinessPage } from '../pages/ReadinessPage';
 import { RuntimePage } from '../pages/RuntimePage';
 import { ResearchPage } from '../pages/ResearchPage';
+import { ScanAgentPage } from '../pages/ScanAgentPage';
 import { PredictionPage } from '../pages/PredictionPage';
 import { RiskAgentPage } from '../pages/RiskAgentPage';
 import { ReplayPage } from '../pages/ReplayPage';
@@ -116,6 +117,12 @@ export const appRoutes: AppRoute[] = [
     description: 'Inspect one market, including rules, recent snapshots, and operational metadata.',
     component: MarketDetailPage,
     match: (pathname) => /^\/markets\/[^/]+\/?$/.test(pathname),
+  },
+  {
+    label: 'Scan Agent',
+    path: '/scan-agent',
+    description: 'Parallel source intelligence board that hardens scan/filter from RSS, Reddit, and X into deduped narrative signals, clusters, and recommendation-first market divergence handoffs.',
+    component: ScanAgentPage,
   },
   {
     label: 'Signals',

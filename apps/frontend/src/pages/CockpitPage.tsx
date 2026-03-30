@@ -8,6 +8,7 @@ import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
 import { getCockpitAttention, getCockpitQuickLinks, getCockpitSummary, runCockpitAction } from '../services/cockpit';
 import { getAutonomyScenarioSummary } from '../services/autonomyScenario';
+import { getScanSummary } from '../services/scanAgent';
 import type { CockpitAttentionItem, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
 
 const formatDate = (value: string | null | undefined) => (value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'n/a');
@@ -47,14 +48,16 @@ export function CockpitPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [runningAction, setRunningAction] = useState<CockpitQuickActionId | null>(null);
   const [autonomyScenarioSummary, setAutonomyScenarioSummary] = useState<Awaited<ReturnType<typeof getAutonomyScenarioSummary>> | null>(null);
+  const [scanSummary, setScanSummary] = useState<Awaited<ReturnType<typeof getScanSummary>> | null>(null);
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [response, scenarioSummary] = await Promise.all([getCockpitSummary(), getAutonomyScenarioSummary()]);
+      const [response, scenarioSummary, scanSummaryResponse] = await Promise.all([getCockpitSummary(), getAutonomyScenarioSummary(), getScanSummary()]);
       setSnapshot(response);
       setAutonomyScenarioSummary(scenarioSummary);
+      setScanSummary(scanSummaryResponse);
     } catch (loadError) {
       setError(getErrorMessage(loadError, 'Could not load cockpit data.'));
       setSnapshot(null);
@@ -96,7 +99,7 @@ export function CockpitPage() {
         eyebrow="Operator cockpit"
         title="/cockpit"
         description="Single-pane operational command center for manual-first paper/sandbox supervision. Centralizes posture, incidents, governance, and trace-oriented drill-down without replacing specialized pages."
-        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => void loadCockpit()}>Refresh cockpit</button><button className="ghost-button" type="button" onClick={() => navigate('/autonomy-seed')}>Autonomy seed</button><button className="ghost-button" type="button" onClick={() => navigate('/autonomy-seed-review')}>Seed review</button></div>}
+        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => void loadCockpit()}>Refresh cockpit</button><button className="ghost-button" type="button" onClick={() => navigate('/scan-agent')}>Scan agent</button><button className="ghost-button" type="button" onClick={() => navigate('/autonomy-seed')}>Autonomy seed</button><button className="ghost-button" type="button" onClick={() => navigate('/autonomy-seed-review')}>Seed review</button></div>}
       />
 
       <SectionCard eyebrow="Quick actions" title="Manual-first controls" description="Triggers existing operations; no new execution logic is introduced.">
@@ -174,6 +177,16 @@ export function CockpitPage() {
                   <li><span>High priority approvals</span><strong>{snapshot.approvalSummary?.high_priority_pending ?? 0}</strong></li>
                 </ul>
                 <div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/runbooks')}>Open runbooks</button><button className="ghost-button" type="button" onClick={() => navigate('/approvals')}>Open approvals</button><button className="ghost-button" type="button" onClick={() => navigate('/trust-calibration')}>Open trust calibration</button><button className="ghost-button" type="button" onClick={() => navigate('/policy-tuning')}>Open policy tuning</button></div>
+              </SectionCard>
+
+              <SectionCard eyebrow="Scan intelligence" title="Narrative scan summary" description="Compact scan-agent filter summary for quick handoff posture checks.">
+                <ul className="key-value-list">
+                  <li><span>Signals</span><strong>{scanSummary?.signal_count ?? 0}</strong></li>
+                  <li><span>Shortlisted</span><strong>{scanSummary?.shortlisted_signal_count ?? 0}</strong></li>
+                  <li><span>Watch</span><strong>{scanSummary?.watch_signal_count ?? 0}</strong></li>
+                  <li><span>Ignored</span><strong>{scanSummary?.ignored_signal_count ?? 0}</strong></li>
+                </ul>
+                <div className="button-row"><button className="secondary-button" type="button" onClick={() => navigate('/scan-agent')}>Open scan agent board</button></div>
               </SectionCard>
 
               <SectionCard eyebrow="Change governance" title="Promotion, rollout and champion/challenger" description="Current promotion recommendations and rollout status.">

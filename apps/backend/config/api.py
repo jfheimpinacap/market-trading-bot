@@ -34,6 +34,7 @@ urlpatterns = [
     path('notifications/', include(('apps.notification_center.urls', 'notification_center'), namespace='notification_center')),
     path('llm/', include(('apps.llm_local.urls', 'llm_local'), namespace='llm_local')),
     path('research/', include(('apps.research_agent.urls', 'research_agent'), namespace='research_agent')),
+    path('scan-agent/', include(('apps.research_agent.scan_urls', 'scan_agent'), namespace='scan_agent')),
     path('prediction/', include(('apps.prediction_agent.urls', 'prediction_agent'), namespace='prediction_agent')),
     path('prediction/', include(('apps.prediction_training.urls', 'prediction_training'), namespace='prediction_training')),
     path('opportunities/', include(('apps.opportunity_supervisor.urls', 'opportunity_supervisor'), namespace='opportunity_supervisor')),
