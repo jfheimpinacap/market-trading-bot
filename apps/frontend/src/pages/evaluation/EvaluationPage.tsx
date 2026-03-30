@@ -4,6 +4,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { SectionCard } from '../../components/SectionCard';
 import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
+import { navigate } from '../../lib/router';
 import {
   getCalibrationBuckets,
   getEffectivenessMetrics,
@@ -115,7 +116,7 @@ export function EvaluationPage() {
         eyebrow="Quantitative evaluation runtime"
         title="Evaluation"
         description="Auditable ex-post board for calibration and effectiveness. Local-first, manual-first, paper/sandbox only. No opaque auto-tuning."
-        actions={<button type="button" className="secondary-button" onClick={() => void onRunRuntimeEvaluation()} disabled={isRunning}>{isRunning ? 'Running...' : 'Run runtime evaluation'}</button>}
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => void onRunRuntimeEvaluation()} disabled={isRunning}>{isRunning ? 'Running...' : 'Run runtime evaluation'}</button><button type="button" className="ghost-button" onClick={() => navigate('/tuning')}>Open tuning board</button></div>}
       />
 
       <DataStateWrapper isLoading={isLoading} isError={Boolean(error)} errorMessage={error ?? undefined}>

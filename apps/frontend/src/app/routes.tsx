@@ -56,6 +56,7 @@ import { ApprovalsPage } from '../pages/ApprovalsPage';
 import { TrustCalibrationPage } from '../pages/TrustCalibrationPage';
 import { PolicyTuningPage } from '../pages/PolicyTuningPage';
 import { PolicyRolloutPage } from '../pages/PolicyRolloutPage';
+import { TuningPage } from '../pages/TuningPage';
 import { AutonomyPage } from '../pages/AutonomyPage';
 import { AutonomyRolloutPage } from '../pages/AutonomyRolloutPage';
 import { AutonomyRoadmapPage } from '../pages/AutonomyRoadmapPage';
@@ -399,6 +400,12 @@ export const appRoutes: AppRoute[] = [
     path: '/policy-tuning',
     description: 'Manual-first recommendation-to-approval policy tuning board with explicit candidate diff, review decisions, and audited apply flow.',
     component: PolicyTuningPage,
+  },
+  {
+    label: 'Tuning',
+    path: '/tuning',
+    description: 'Governed quantitative tuning board that translates evaluation findings into bounded, manual-review proposals without auto-apply.',
+    component: TuningPage,
   },
   {
     label: 'Policy Rollout',
