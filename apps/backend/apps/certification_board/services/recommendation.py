@@ -4,9 +4,14 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from apps.certification_board.models import (
+    CertificationDecision,
+    CertificationDecisionStatus,
     CertificationEvidenceSnapshot,
     CertificationLevel,
+    CertificationRecommendation as CertificationRecommendationModel,
     CertificationRecommendationCode,
+    CertificationRecommendationType,
+    RolloutCertificationRun,
 )
 
 
@@ -144,4 +149,37 @@ def generate_recommendation(snapshot: CertificationEvidenceSnapshot) -> Certific
         blocking_constraints=['Collect fresh readiness, chaos, and rollout evidence.'],
         remediation_items=['Run certification review again after updated evidence snapshots.'],
         evidence_summary={'readiness_status': readiness_status, 'chaos_score': chaos_score, 'favorable_review_rate': favorable_rate},
+    )
+
+
+def build_certification_recommendation(*, review_run: RolloutCertificationRun, decision: CertificationDecision) -> CertificationRecommendationModel:
+    mapping = {
+        CertificationDecisionStatus.CERTIFIED_FOR_PAPER_BASELINE: CertificationRecommendationType.CERTIFY_FOR_PAPER_BASELINE,
+        CertificationDecisionStatus.KEEP_UNDER_OBSERVATION: CertificationRecommendationType.KEEP_UNDER_OBSERVATION,
+        CertificationDecisionStatus.REQUIRE_MANUAL_REVIEW: CertificationRecommendationType.REQUIRE_MANUAL_CERTIFICATION_REVIEW,
+        CertificationDecisionStatus.RECOMMEND_ROLLBACK: CertificationRecommendationType.RECOMMEND_MANUAL_ROLLBACK,
+        CertificationDecisionStatus.REJECT_CERTIFICATION: CertificationRecommendationType.REJECT_CERTIFICATION,
+    }
+    recommendation_type = mapping[decision.decision_status]
+
+    confidence = Decimal('0.60')
+    if decision.decision_status == CertificationDecisionStatus.CERTIFIED_FOR_PAPER_BASELINE:
+        confidence = Decimal('0.82')
+    elif decision.decision_status == CertificationDecisionStatus.RECOMMEND_ROLLBACK:
+        confidence = Decimal('0.88')
+    elif decision.decision_status == CertificationDecisionStatus.REJECT_CERTIFICATION:
+        confidence = Decimal('0.80')
+
+    return CertificationRecommendationModel.objects.create(
+        review_run=review_run,
+        target_candidate=decision.linked_candidate,
+        recommendation_type=recommendation_type,
+        rationale=decision.rationale,
+        reason_codes=decision.reason_codes,
+        confidence=confidence,
+        blockers=decision.blockers,
+        metadata={
+            'decision_id': decision.id,
+            'decision_status': decision.decision_status,
+        },
     )

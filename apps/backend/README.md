@@ -2853,3 +2853,36 @@ Explicitly out of scope:
 - no auto-rollback
 - no live trading / real-money execution
 - evaluation/risk/trust/policy contribute context signals only
+
+## Post-rollout certification / stabilization gate (new)
+
+`apps.certification_board` now includes a post-rollout stabilization layer that is separate from rollout execution:
+
+- consumes `RolloutExecutionRecord`, `CheckpointOutcomeRecord`, and `PostRolloutStatus` from `promotion_committee`
+- builds auditable entities:
+  - `RolloutCertificationRun`
+  - `CertificationCandidate`
+  - `CertificationEvidencePack`
+  - `CertificationDecision`
+  - `CertificationRecommendation`
+- keeps governance manual-first and paper-only (no auto-certification, no auto-promotion, no auto-rollback)
+
+Service split:
+- `services/candidate_building.py`
+- `services/evidence_pack.py`
+- `services/decision.py`
+- `services/recommendation.py`
+- `services/run.py`
+
+API endpoints:
+- `POST /api/certification/run-post-rollout-review/`
+- `GET /api/certification/candidates/`
+- `GET /api/certification/evidence-packs/`
+- `GET /api/certification/decisions/`
+- `GET /api/certification/recommendations/`
+- `GET /api/certification/post-rollout-summary/`
+
+Boundary clarification:
+- rollout execution remains in `promotion_committee`.
+- certification consumes rollout evidence and emits recommendations only.
+- baseline confirmation stays explicit/manual; no active champion switch is applied automatically.

@@ -69,4 +69,92 @@ export type CertificationSummary = {
   total_runs: number;
   level_counts: Record<string, number>;
   recommendation_counts: Record<string, number>;
+  post_rollout_review?: RolloutCertificationRun | null;
+};
+
+export type RolloutCertificationRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  linked_rollout_execution_run: number | null;
+  candidate_count: number;
+  certified_count: number;
+  observation_count: number;
+  review_required_count: number;
+  rollback_recommended_count: number;
+  rejected_count: number;
+  recommendation_summary: Record<string, number>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type CertificationCandidate = {
+  id: number;
+  review_run: number;
+  linked_rollout_execution: number;
+  linked_post_rollout_status: number | null;
+  linked_rollout_plan: number;
+  linked_promotion_case: number | null;
+  target_component: string;
+  target_scope: string;
+  rollout_status: string;
+  stabilization_readiness: string;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type CertificationEvidencePack = {
+  id: number;
+  linked_candidate: number;
+  summary: string;
+  linked_checkpoint_outcomes: Array<Record<string, unknown>>;
+  linked_post_rollout_statuses: Array<Record<string, unknown>>;
+  linked_evaluation_metrics: Record<string, unknown>;
+  sample_count: number;
+  confidence_score: string;
+  stability_score: string;
+  regression_risk_score: string;
+  evidence_status: 'STRONG' | 'MIXED' | 'WEAK' | 'INSUFFICIENT';
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type CertificationDecision = {
+  id: number;
+  linked_candidate: number;
+  linked_evidence_pack: number;
+  decision_status: string;
+  rationale: string;
+  reason_codes: string[];
+  blockers: string[];
+  decided_by: string;
+  decided_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type CertificationRecommendationItem = {
+  id: number;
+  review_run: number;
+  target_candidate: number | null;
+  recommendation_type: string;
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type PostRolloutCertificationSummary = {
+  latest_run: RolloutCertificationRun | null;
+  candidate_count: number;
+  certified_count: number;
+  observation_count: number;
+  review_required_count: number;
+  rollback_recommended_count: number;
+  rejected_count: number;
+  recommendation_summary: Record<string, number>;
+  decision_counts: Record<string, number>;
 };

@@ -1847,3 +1847,24 @@ New API endpoints:
 - `POST /api/promotion/execute-rollout/<plan_id>/`
 - `POST /api/promotion/record-checkpoint-outcome/<checkpoint_id>/`
 - `POST /api/promotion/close-rollout/<execution_id>/`
+
+### Post-rollout certification board / stabilization gate (new)
+
+The platform now includes a formal post-rollout certification layer in `certification_board` that closes the gap between rollout execution and baseline confirmation:
+
+- rollout execution evidence is consumed (not duplicated)
+- stabilization candidates + evidence packs + decisions + recommendations are persisted and auditable
+- outputs classify changes as:
+  - certified for paper baseline
+  - kept under observation
+  - manual review required
+  - rollback recommended / reject certification
+- no automatic baseline switch, no auto-promote, no live/real-money behavior
+
+Primary API:
+- `POST /api/certification/run-post-rollout-review/`
+- `GET /api/certification/candidates/`
+- `GET /api/certification/evidence-packs/`
+- `GET /api/certification/decisions/`
+- `GET /api/certification/recommendations/`
+- `GET /api/certification/post-rollout-summary/`

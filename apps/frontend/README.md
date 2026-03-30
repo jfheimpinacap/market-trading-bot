@@ -1741,3 +1741,22 @@ UX goals:
 - explicit empty/loading/error states for no-execution yet scenarios
 
 Frontend integration uses `src/services/promotionRolloutExecution.ts` and keeps all controls manual-first and paper-only.
+
+## Certification UI: post-rollout stabilization board (new)
+
+`/certification` now includes a dedicated post-rollout certification gate:
+
+- manual trigger: **Run post-rollout review**
+- summary cards: reviewed / certified / observation / review required / rollback recommended / rejected
+- candidates table with stabilization readiness (`READY`, `NEEDS_OBSERVATION`, `REVIEW_REQUIRED`, `ROLLBACK_RECOMMENDED`, `BLOCKED`)
+- evidence packs with confidence, stability, regression risk, and evidence strength (`STRONG`, `MIXED`, `WEAK`, `INSUFFICIENT`)
+- decisions + recommendations tables for auditable manual actions
+
+Data integration:
+- new `src/services/certificationReview.ts`
+- reuses `services/api/client.ts`
+- keeps loading/error/empty states explicit
+
+Important boundary:
+- UI does not auto-certify, auto-promote, or auto-rollback.
+- paper/sandbox governance only.
