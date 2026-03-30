@@ -5,12 +5,19 @@ from decimal import Decimal
 
 from apps.promotion_committee.models import PromotionRecommendationCode, StackEvidenceSnapshot
 from apps.promotion_committee.models import (
+    AdoptionActionRecommendation,
+    AdoptionActionRecommendationType,
+    AdoptionTargetResolutionStatus,
+    ManualAdoptionAction,
+    ManualAdoptionActionStatus,
+    ManualAdoptionActionType,
     PromotionCase,
     PromotionCaseStatus,
     PromotionDecisionRecommendation,
     PromotionDecisionRecommendationType,
     PromotionEvidencePack,
     PromotionReviewCycleRun,
+    PromotionAdoptionRun,
 )
 
 
@@ -195,3 +202,51 @@ def create_reorder_recommendation(*, review_run: PromotionReviewCycleRun, high_p
         blockers=[],
         metadata={'prioritized_case_ids': high_priority_case_ids},
     )
+
+
+def create_adoption_recommendation(*, adoption_run: PromotionAdoptionRun, action: ManualAdoptionAction, needs_rollback: bool):
+    if action.action_type == ManualAdoptionActionType.REQUIRE_TARGET_MAPPING:
+        recommendation_type = AdoptionActionRecommendationType.REQUIRE_TARGET_MAPPING
+        rationale = 'Target mapping is incomplete; resolve policy/trust/stack mapping before manual apply.'
+        confidence = Decimal('0.9500')
+    elif action.action_type == ManualAdoptionActionType.PREPARE_ROLLOUT_PLAN:
+        recommendation_type = AdoptionActionRecommendationType.PREPARE_ROLLOUT_PLAN
+        rationale = 'Global or sensitive scope change should be bridged as a paper/demo rollout handoff.'
+        confidence = Decimal('0.8200')
+    elif action.action_status == ManualAdoptionActionStatus.BLOCKED:
+        recommendation_type = AdoptionActionRecommendationType.DEFER_ADOPTION
+        rationale = 'Adoption action is blocked by missing before/after data or unresolved target constraints.'
+        confidence = Decimal('0.9000')
+    else:
+        recommendation_type = AdoptionActionRecommendationType.APPLY_CHANGE_MANUALLY
+        rationale = 'Bounded scoped change is ready for explicit operator-driven manual adoption.'
+        confidence = Decimal('0.8400')
+
+    if action.linked_candidate.target_resolution_status == AdoptionTargetResolutionStatus.PARTIAL:
+        recommendation_type = AdoptionActionRecommendationType.REQUIRE_COMMITTEE_RECHECK
+        rationale = 'Resolution is partial with blockers; committee recheck is required before applying.'
+
+    recommendation = AdoptionActionRecommendation.objects.create(
+        adoption_run=adoption_run,
+        linked_promotion_case=action.linked_promotion_case,
+        target_action=action,
+        recommendation_type=recommendation_type,
+        rationale=rationale,
+        reason_codes=list(action.reason_codes or []),
+        confidence=confidence,
+        blockers=list(action.blockers or []),
+        metadata={'manual_first': True, 'paper_only': True},
+    )
+
+    if needs_rollback:
+        AdoptionActionRecommendation.objects.create(
+            adoption_run=adoption_run,
+            linked_promotion_case=action.linked_promotion_case,
+            target_action=action,
+            recommendation_type=AdoptionActionRecommendationType.PREPARE_ROLLBACK,
+            rationale='Risk-aware adoption path requires rollback preparation before operator apply.',
+            reason_codes=['rollback_required'],
+            confidence=Decimal('0.8800'),
+            blockers=[],
+            metadata={'derived_from': recommendation.id},
+        )

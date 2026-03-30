@@ -14,6 +14,9 @@ from apps.experiment_lab.models import (
     TuningExperimentRun,
 )
 from apps.promotion_committee.models import (
+    AdoptionRollbackPlan,
+    ManualAdoptionAction,
+    ManualAdoptionActionStatus,
     PromotionCase,
     PromotionCaseStatus,
     PromotionDecisionRecommendation,
@@ -158,3 +161,40 @@ class PromotionCommitteeTests(TestCase):
         payload = response.json()
         self.assertIn('cases_reviewed', payload)
         self.assertIn('recommendation_summary', payload)
+
+    def test_adoption_review_builds_candidates_actions_and_rollback(self):
+        exp_run, *_ = self._create_candidate_bundle(sample_count=160, comparison_status='IMPROVED', confidence=Decimal('0.92'))
+        self.client.post(reverse('promotion_committee:governed-run-review'), {'linked_experiment_run_id': exp_run.id}, format='json')
+        response = self.client.post(reverse('promotion_committee:run-adoption-review'), {}, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertGreaterEqual(ManualAdoptionAction.objects.count(), 1)
+        self.assertGreaterEqual(AdoptionRollbackPlan.objects.count(), 1)
+
+    def test_missing_mapping_becomes_require_target_mapping(self):
+        exp_run, candidate, comparison, recommendation = self._create_candidate_bundle(
+            sample_count=160,
+            comparison_status='IMPROVED',
+            confidence=Decimal('0.92'),
+        )
+        self.client.post(reverse('promotion_committee:governed-run-review'), {'linked_experiment_run_id': exp_run.id}, format='json')
+        case = PromotionCase.objects.latest('id')
+        case.current_value = ''
+        case.proposed_value = ''
+        case.save(update_fields=['current_value', 'proposed_value', 'updated_at'])
+        self.client.post(reverse('promotion_committee:run-adoption-review'), {}, format='json')
+        action = ManualAdoptionAction.objects.filter(linked_promotion_case=case).latest('id')
+        self.assertEqual(action.action_type, 'REQUIRE_TARGET_MAPPING')
+        self.assertEqual(action.action_status, ManualAdoptionActionStatus.BLOCKED)
+
+    def test_adoption_summary_and_manual_apply_endpoint(self):
+        exp_run, *_ = self._create_candidate_bundle(sample_count=160, comparison_status='IMPROVED', confidence=Decimal('0.92'))
+        self.client.post(reverse('promotion_committee:governed-run-review'), {'linked_experiment_run_id': exp_run.id}, format='json')
+        self.client.post(reverse('promotion_committee:run-adoption-review'), {}, format='json')
+        case = PromotionCase.objects.latest('id')
+        action = ManualAdoptionAction.objects.filter(linked_promotion_case=case).latest('id')
+        self.assertEqual(action.action_status, ManualAdoptionActionStatus.READY_TO_APPLY)
+        apply_response = self.client.post(reverse('promotion_committee:apply', kwargs={'case_id': case.id}), {'actor': 'tester'}, format='json')
+        self.assertEqual(apply_response.status_code, 200)
+        summary_response = self.client.get(reverse('promotion_committee:adoption-summary'))
+        self.assertEqual(summary_response.status_code, 200)
+        self.assertIn('ready_to_apply', summary_response.json())

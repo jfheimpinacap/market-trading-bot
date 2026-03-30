@@ -14,10 +14,23 @@ from apps.promotion_committee.models import (
 from apps.promotion_committee.services.case_building import build_promotion_cases
 from apps.promotion_committee.services.evidence_pack import build_evidence_pack
 from apps.promotion_committee.services.readiness import classify_case_readiness
+from apps.promotion_committee.services.candidate_building import build_adoption_candidates
+from apps.promotion_committee.services.action_planning import plan_manual_action
+from apps.promotion_committee.services.recommendation import create_adoption_recommendation
+from apps.promotion_committee.services.rollback import prepare_rollback_plan
 from apps.promotion_committee.services.recommendation import (
     create_case_recommendation,
     create_grouping_recommendation,
     create_reorder_recommendation,
+)
+from apps.promotion_committee.models import (
+    AdoptionActionRecommendation,
+    AdoptionActionRecommendationType,
+    AdoptionRollbackPlan,
+    ManualAdoptionAction,
+    ManualAdoptionActionStatus,
+    ManualAdoptionActionType,
+    PromotionAdoptionRun,
 )
 
 
@@ -76,3 +89,64 @@ def run_governed_promotion_review(*, actor: str = 'promotion_ui', linked_experim
     )
 
     return run
+
+
+@transaction.atomic
+def run_promotion_adoption_review(*, actor: str = 'promotion_ui', metadata: dict | None = None):
+    latest_review_run = PromotionReviewCycleRun.objects.order_by('-started_at', '-id').first()
+    adoption_run = PromotionAdoptionRun.objects.create(
+        started_at=timezone.now(),
+        linked_promotion_review_run=latest_review_run,
+        metadata={'actor': actor, 'manual_first': True, **(metadata or {})},
+    )
+    candidates = build_adoption_candidates(adoption_run=adoption_run)
+
+    recommendation_counter = Counter()
+    for candidate in candidates:
+        action, needs_rollback = plan_manual_action(adoption_run=adoption_run, candidate=candidate)
+        if needs_rollback:
+            prepare_rollback_plan(action=action)
+        create_adoption_recommendation(adoption_run=adoption_run, action=action, needs_rollback=needs_rollback)
+
+    recommendation_counter.update(
+        AdoptionActionRecommendation.objects.filter(adoption_run=adoption_run).values_list('recommendation_type', flat=True)
+    )
+    actions = ManualAdoptionAction.objects.filter(adoption_run=adoption_run)
+
+    adoption_run.candidate_count = len(candidates)
+    adoption_run.ready_to_apply_count = actions.filter(action_status=ManualAdoptionActionStatus.READY_TO_APPLY).count()
+    adoption_run.blocked_count = actions.filter(action_status=ManualAdoptionActionStatus.BLOCKED).count()
+    adoption_run.applied_count = actions.filter(action_status=ManualAdoptionActionStatus.APPLIED).count()
+    adoption_run.rollback_plan_count = AdoptionRollbackPlan.objects.filter(linked_manual_action__adoption_run=adoption_run).count()
+    adoption_run.rollout_handoff_count = actions.filter(action_type=ManualAdoptionActionType.PREPARE_ROLLOUT_PLAN).count()
+    adoption_run.recommendation_summary = dict(recommendation_counter)
+    adoption_run.completed_at = timezone.now()
+    adoption_run.save(
+        update_fields=[
+            'candidate_count',
+            'ready_to_apply_count',
+            'blocked_count',
+            'applied_count',
+            'rollback_plan_count',
+            'rollout_handoff_count',
+            'recommendation_summary',
+            'completed_at',
+            'updated_at',
+        ]
+    )
+    return adoption_run
+
+
+def build_adoption_summary():
+    latest = PromotionAdoptionRun.objects.order_by('-started_at', '-id').first()
+    approved_cases = PromotionCase.objects.filter(case_status=PromotionCaseStatus.APPROVED_FOR_MANUAL_ADOPTION).count()
+    return {
+        'latest_run': latest,
+        'approved_cases': approved_cases,
+        'ready_to_apply': latest.ready_to_apply_count if latest else 0,
+        'blocked': latest.blocked_count if latest else 0,
+        'applied': latest.applied_count if latest else 0,
+        'rollback_prepared': latest.rollback_plan_count if latest else 0,
+        'rollout_handoff_ready': latest.rollout_handoff_count if latest else 0,
+        'recommendation_summary': latest.recommendation_summary if latest else {},
+    }
