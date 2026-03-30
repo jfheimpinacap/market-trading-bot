@@ -120,6 +120,7 @@ LOCAL_APPS = [
     'apps.trust_calibration',
     'apps.policy_tuning',
     'apps.policy_rollout',
+    'apps.tuning_board',
     'apps.autonomy_manager',
     'apps.autonomy_rollout',
     'apps.autonomy_roadmap',

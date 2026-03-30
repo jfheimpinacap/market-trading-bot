@@ -61,6 +61,7 @@ urlpatterns = [
     path('trust-calibration/', include(('apps.trust_calibration.urls', 'trust_calibration'), namespace='trust_calibration')),
     path('policy-tuning/', include(('apps.policy_tuning.urls', 'policy_tuning'), namespace='policy_tuning')),
     path('policy-rollout/', include(('apps.policy_rollout.urls', 'policy_rollout'), namespace='policy_rollout')),
+    path('tuning/', include(('apps.tuning_board.urls', 'tuning_board'), namespace='tuning_board')),
     path('autonomy/', include(('apps.autonomy_manager.urls', 'autonomy_manager'), namespace='autonomy_manager')),
     path('autonomy-rollout/', include(('apps.autonomy_rollout.urls', 'autonomy_rollout'), namespace='autonomy_rollout')),
     path('autonomy-roadmap/', include(('apps.autonomy_roadmap.urls', 'autonomy_roadmap'), namespace='autonomy_roadmap')),

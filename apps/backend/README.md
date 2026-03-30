@@ -2697,3 +2697,22 @@ Boundary guarantees: recommendation-first, local-first, manual-first, paper-only
 - Strengthened `/evaluation` frontend with outcome-alignment, calibration, effectiveness, recommendations, and manual trigger UX.
 - Scope remains local-first, single-user, paper/sandbox only; no real-money execution or silent policy/model mutation.
 
+
+## Governed tuning board (manual quantitative improvement loop)
+
+The platform now includes a dedicated `tuning_board` layer (`/api/tuning/*` + `/tuning`) that converts `evaluation_lab` metrics/drift findings into explicit, bounded, reviewable tuning proposals.
+
+- consumes `EvaluationRuntimeRun`, `EffectivenessMetric`, `CalibrationBucket`, and `EvaluationRecommendation` evidence
+- emits auditable `TuningReviewRun`, `TuningProposal`, `TuningImpactHypothesis`, `TuningRecommendation`, and optional `TuningProposalBundle` records
+- preserves metric -> recommendation -> proposal traceability and scoped targeting (global/provider/category/horizon/model_mode)
+- integrates conceptually with `trust_calibration`, `policy_tuning`, `experiments`, `champion_challenger`, and `promotion_committee` without deep auto-integration in this step
+- keeps strict manual-first governance: **no auto-tuning, no silent threshold mutation, no auto-retraining, no live-money execution**
+
+Primary endpoints:
+- `POST /api/tuning/run-review/`
+- `GET /api/tuning/proposals/`
+- `GET /api/tuning/hypotheses/`
+- `GET /api/tuning/recommendations/`
+- `GET /api/tuning/summary/`
+- `GET /api/tuning/bundles/` (optional grouping panel)
+
