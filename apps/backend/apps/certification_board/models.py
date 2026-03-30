@@ -886,3 +886,187 @@ class BaselineResponseRecommendation(TimeStampedModel):
     class Meta:
         ordering = ['-created_at', '-id']
         indexes = [models.Index(fields=['recommendation_type', '-created_at'])]
+
+
+class ResponseActionResolutionStatus(models.TextChoices):
+    RESOLVED = 'RESOLVED', 'Resolved'
+    PARTIAL = 'PARTIAL', 'Partial'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    UNKNOWN = 'UNKNOWN', 'Unknown'
+
+
+class ResponseRoutingActionType(models.TextChoices):
+    SEND_TO_EVALUATION_REVIEW = 'SEND_TO_EVALUATION_REVIEW', 'Send to evaluation review'
+    SEND_TO_TUNING_REVIEW = 'SEND_TO_TUNING_REVIEW', 'Send to tuning review'
+    SEND_TO_CERTIFICATION_REVIEW = 'SEND_TO_CERTIFICATION_REVIEW', 'Send to certification review'
+    SEND_TO_PROMOTION_RECHECK = 'SEND_TO_PROMOTION_RECHECK', 'Send to promotion recheck'
+    SEND_TO_ROLLBACK_REVIEW = 'SEND_TO_ROLLBACK_REVIEW', 'Send to rollback review'
+    KEEP_IN_MONITORING = 'KEEP_IN_MONITORING', 'Keep in monitoring'
+    REQUIRE_ROUTING_RECHECK = 'REQUIRE_ROUTING_RECHECK', 'Require routing recheck'
+
+
+class ResponseRoutingActionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    READY_TO_ROUTE = 'READY_TO_ROUTE', 'Ready to route'
+    ROUTED = 'ROUTED', 'Routed'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    DEFERRED = 'DEFERRED', 'Deferred'
+    CLOSED = 'CLOSED', 'Closed'
+
+
+class ResponseCaseDownstreamStatus(models.TextChoices):
+    SENT = 'SENT', 'Sent'
+    ACKNOWLEDGED = 'ACKNOWLEDGED', 'Acknowledged'
+    UNDER_REVIEW = 'UNDER_REVIEW', 'Under review'
+    WAITING_EVIDENCE = 'WAITING_EVIDENCE', 'Waiting evidence'
+    COMPLETED = 'COMPLETED', 'Completed'
+    CLOSED_NO_ACTION = 'CLOSED_NO_ACTION', 'Closed without action'
+    ESCALATED = 'ESCALATED', 'Escalated'
+    REJECTED = 'REJECTED', 'Rejected'
+
+
+class ResponseActionRecommendationType(models.TextChoices):
+    ROUTE_CASE_NOW = 'ROUTE_CASE_NOW', 'Route case now'
+    REQUIRE_ROUTING_RECHECK = 'REQUIRE_ROUTING_RECHECK', 'Require routing recheck'
+    KEEP_CASE_IN_MONITORING = 'KEEP_CASE_IN_MONITORING', 'Keep case in monitoring'
+    ESCALATE_CASE_PRIORITY = 'ESCALATE_CASE_PRIORITY', 'Escalate case priority'
+    CLOSE_CASE_NO_ACTION = 'CLOSE_CASE_NO_ACTION', 'Close case with no action'
+    REQUIRE_DOWNSTREAM_STATUS_UPDATE = 'REQUIRE_DOWNSTREAM_STATUS_UPDATE', 'Require downstream status update'
+    REORDER_RESPONSE_ACTION_PRIORITY = 'REORDER_RESPONSE_ACTION_PRIORITY', 'Reorder response action priority'
+
+
+class BaselineResponseActionRun(TimeStampedModel):
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    linked_baseline_response_run = models.ForeignKey(
+        BaselineResponseRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='action_runs',
+    )
+    candidate_count = models.PositiveIntegerField(default=0)
+    ready_to_route_count = models.PositiveIntegerField(default=0)
+    routed_count = models.PositiveIntegerField(default=0)
+    blocked_count = models.PositiveIntegerField(default=0)
+    under_review_count = models.PositiveIntegerField(default=0)
+    closed_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class ResponseActionCandidate(TimeStampedModel):
+    action_run = models.ForeignKey(BaselineResponseActionRun, on_delete=models.CASCADE, related_name='candidates')
+    linked_response_case = models.ForeignKey(
+        BaselineResponseCase,
+        on_delete=models.CASCADE,
+        related_name='action_candidates',
+    )
+    linked_routing_decision = models.ForeignKey(
+        ResponseRoutingDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='action_candidates',
+    )
+    target_component = models.CharField(max_length=32)
+    target_scope = models.CharField(max_length=24)
+    intended_routing_target = models.CharField(max_length=32, blank=True)
+    routing_resolution_status = models.CharField(
+        max_length=16,
+        choices=ResponseActionResolutionStatus.choices,
+        default=ResponseActionResolutionStatus.UNKNOWN,
+    )
+    ready_for_action = models.BooleanField(default=False)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['routing_resolution_status', 'ready_for_action', '-created_at'])]
+
+
+class ResponseRoutingAction(TimeStampedModel):
+    linked_candidate = models.ForeignKey(
+        ResponseActionCandidate,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='routing_actions',
+    )
+    linked_response_case = models.ForeignKey(
+        BaselineResponseCase,
+        on_delete=models.CASCADE,
+        related_name='routing_actions',
+    )
+    action_type = models.CharField(max_length=40, choices=ResponseRoutingActionType.choices)
+    action_status = models.CharField(
+        max_length=20,
+        choices=ResponseRoutingActionStatus.choices,
+        default=ResponseRoutingActionStatus.PROPOSED,
+    )
+    routed_by = models.CharField(max_length=120, blank=True)
+    routed_at = models.DateTimeField(null=True, blank=True)
+    routing_target = models.CharField(max_length=32, blank=True)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    blockers = models.JSONField(default=list, blank=True)
+    linked_target_artifact = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['action_type', 'action_status', '-created_at'])]
+
+
+class ResponseCaseTrackingRecord(TimeStampedModel):
+    linked_response_case = models.ForeignKey(
+        BaselineResponseCase,
+        on_delete=models.CASCADE,
+        related_name='tracking_records',
+    )
+    linked_routing_action = models.ForeignKey(
+        ResponseRoutingAction,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='tracking_records',
+    )
+    downstream_status = models.CharField(max_length=24, choices=ResponseCaseDownstreamStatus.choices)
+    tracking_notes = models.CharField(max_length=255, blank=True)
+    tracked_by = models.CharField(max_length=120, blank=True)
+    tracked_at = models.DateTimeField(null=True, blank=True)
+    linked_downstream_reference = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['downstream_status', '-created_at'])]
+
+
+class ResponseActionRecommendation(TimeStampedModel):
+    action_run = models.ForeignKey(
+        BaselineResponseActionRun,
+        on_delete=models.CASCADE,
+        related_name='recommendations',
+    )
+    target_action = models.ForeignKey(
+        ResponseRoutingAction,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    recommendation_type = models.CharField(max_length=48, choices=ResponseActionRecommendationType.choices)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=6, decimal_places=4, default=0)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['recommendation_type', '-created_at'])]

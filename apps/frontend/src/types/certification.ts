@@ -525,3 +525,91 @@ export type BaselineResponseSummary = {
   evidence_status_summary: Record<string, number>;
   recommendation_type_summary: Record<string, number>;
 };
+
+export type BaselineResponseActionRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  linked_baseline_response_run: number | null;
+  candidate_count: number;
+  ready_to_route_count: number;
+  routed_count: number;
+  blocked_count: number;
+  under_review_count: number;
+  closed_count: number;
+  recommendation_summary: Record<string, number>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ResponseActionCandidate = {
+  id: number;
+  action_run: number;
+  linked_response_case: number;
+  linked_routing_decision: number | null;
+  target_component: string;
+  target_scope: string;
+  intended_routing_target: string;
+  routing_resolution_status: 'RESOLVED' | 'PARTIAL' | 'BLOCKED' | 'UNKNOWN';
+  ready_for_action: boolean;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ResponseRoutingAction = {
+  id: number;
+  linked_candidate: number | null;
+  linked_response_case: number;
+  action_type: string;
+  action_status: 'PROPOSED' | 'READY_TO_ROUTE' | 'ROUTED' | 'BLOCKED' | 'DEFERRED' | 'CLOSED';
+  routed_by: string;
+  routed_at: string | null;
+  routing_target: string;
+  rationale: string;
+  reason_codes: string[];
+  blockers: string[];
+  linked_target_artifact: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ResponseCaseTrackingRecord = {
+  id: number;
+  linked_response_case: number;
+  linked_routing_action: number | null;
+  downstream_status: 'SENT' | 'ACKNOWLEDGED' | 'UNDER_REVIEW' | 'WAITING_EVIDENCE' | 'COMPLETED' | 'CLOSED_NO_ACTION' | 'ESCALATED' | 'REJECTED';
+  tracking_notes: string;
+  tracked_by: string;
+  tracked_at: string | null;
+  linked_downstream_reference: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ResponseActionRecommendationItem = {
+  id: number;
+  action_run: number;
+  target_action: number | null;
+  recommendation_type: string;
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineResponseActionSummary = {
+  latest_run: BaselineResponseActionRun | null;
+  response_cases_reviewed: number;
+  ready_to_route: number;
+  routed: number;
+  blocked: number;
+  under_review: number;
+  closed: number;
+  recommendation_summary: Record<string, number>;
+  action_status_summary: Record<string, number>;
+  recommendation_type_summary: Record<string, number>;
+};

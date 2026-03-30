@@ -2108,3 +2108,25 @@ Governance model:
 - response board **consumes** baseline-health outputs and does not duplicate health scoring
 - response board **routes** but never auto-executes tuning, rollback, or deactivation
 - downstream loops (`evaluation_lab`, `tuning_board`, `promotion_committee`, `certification_board`) remain independent manual workflows
+
+## Baseline response actions/tracking sublayer (certification_board)
+
+A new sublayer under `apps.certification_board` extends baseline response with manual routing execution and operational tracking:
+- `BaselineResponseActionRun`
+- `ResponseActionCandidate`
+- `ResponseRoutingAction`
+- `ResponseCaseTrackingRecord`
+- `ResponseActionRecommendation`
+
+Service split:
+- `services/baseline_response_actions/candidate_building.py`
+- `services/baseline_response_actions/action_planning.py`
+- `services/baseline_response_actions/tracking.py`
+- `services/baseline_response_actions/recommendation.py`
+- `services/baseline_response_actions/run.py`
+
+Design constraints:
+- consumes baseline response case/routing decision; does not duplicate baseline response evidence/routing generation
+- manual-first routing handoff; no automatic downstream board creation
+- paper/sandbox-only, auditable lineage
+- no auto-retune, auto-rollback, auto-promote, or live execution
