@@ -1509,3 +1509,15 @@ Design constraints preserved:
 - manual-first actions only
 - recommendation-first governance UX
 - no opaque auto-apply behavior
+
+## Autonomy seed review board en `/autonomy-seed-review` (new)
+
+Nueva vista manual-first para cerrar el loop de seeds del próximo ciclo:
+
+- summary cards de `registered/pending/acknowledged/accepted/deferred/rejected`
+- tabla de candidates con `seed -> package -> decision` y links a `/trace`
+- panel de resoluciones persistidas y recomendaciones
+- acciones explícitas: `Run seed review`, `Acknowledge`, `Accept`, `Defer`, `Reject`
+- empty state claro cuando no hay seeds registradas para tracking
+
+Límites explícitos: sin auto-apply opaco y sin ejecución real.

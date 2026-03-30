@@ -79,6 +79,7 @@ import { AutonomyDecisionPage } from '../pages/AutonomyDecisionPage';
 import { AutonomyPackagePage } from '../pages/AutonomyPackagePage';
 import { AutonomyPackageReviewPage } from '../pages/AutonomyPackageReviewPage';
 import { AutonomySeedPage } from '../pages/AutonomySeedPage';
+import { AutonomySeedReviewPage } from '../pages/AutonomySeedReviewPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -315,6 +316,13 @@ export const appRoutes: AppRoute[] = [
     description: 'Manual-first planning proposal resolution board that tracks downstream acknowledged/accepted/deferred/rejected outcomes without opaque auto-apply.',
     component: AutonomyPlanningReviewPage,
   },
+  {
+    label: 'Autonomy Seed Review',
+    path: '/autonomy-seed-review',
+    description: 'Manual-first seed resolution tracker for registered governance seeds with explicit acknowledge/accept/defer/reject outcomes and audit-ready run summaries.',
+    component: AutonomySeedReviewPage,
+  },
+
   {
     label: 'Autonomy Seed',
     path: '/autonomy-seed',
