@@ -5,6 +5,8 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.certification_board.models import (
+    BaselineResponseCase,
+    ResponseEvidencePack,
     ResponseRoutingActionType,
     ResponseCaseDownstreamStatus,
     BaselineResponseEvidenceStatus,
@@ -19,6 +21,7 @@ from apps.certification_board.models import (
 from apps.certification_board.services.baseline_response.candidate_building import determine_response_type
 from apps.certification_board.services.baseline_response.evidence_pack import build_response_evidence_pack
 from apps.certification_board.services.baseline_response.recommendation import build_response_recommendation
+from apps.certification_board.services.baseline_response.routing import build_routing_decision
 from apps.certification_board.services.baseline_response.run import run_baseline_response_review
 from apps.certification_board.services.evidence import build_evidence_snapshot
 from apps.certification_board.services.baseline_health.recommendation import build_baseline_health_recommendation
@@ -342,6 +345,50 @@ class CertificationBoardTests(TestCase):
             },
         )
 
+    def test_candidate_building_prefers_health_recommendation_override(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        health_run = run_baseline_health_review(actor='test')
+        status = BaselineHealthStatus.objects.filter(linked_candidate__review_run=health_run).order_by('-id').first()
+        self.assertIsNotNone(status)
+        recommendation = build_baseline_health_recommendation(review_run=health_run, status=status)
+        recommendation.recommendation_type = BaselineHealthRecommendationType.OPEN_TUNING_REVIEW
+        recommendation.save(update_fields=['recommendation_type', 'updated_at'])
+
+        response_result = run_baseline_response_review(actor='test')
+        response_case = next(item for item in response_result['cases'] if item.linked_baseline_health_status_id == status.id)
+        self.assertEqual(response_case.response_type, BaselineResponseType.OPEN_TUNING_REVIEW)
+
+    def test_response_routing_target_mapping(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        response_result = run_baseline_response_review(actor='test')
+        template_case = response_result['cases'][0]
+        mapping = {
+            BaselineResponseType.KEEP_UNDER_WATCH: BaselineResponseRoutingTarget.MONITORING_ONLY,
+            BaselineResponseType.OPEN_REEVALUATION: BaselineResponseRoutingTarget.EVALUATION_LAB,
+            BaselineResponseType.OPEN_TUNING_REVIEW: BaselineResponseRoutingTarget.TUNING_BOARD,
+            BaselineResponseType.PREPARE_ROLLBACK_REVIEW: BaselineResponseRoutingTarget.ROLLBACK_REVIEW,
+        }
+        for response_type, expected_target in mapping.items():
+            case = BaselineResponseCase.objects.create(
+                review_run=template_case.review_run,
+                linked_active_binding=template_case.linked_active_binding,
+                linked_baseline_health_status=template_case.linked_baseline_health_status,
+                linked_health_signals=list(template_case.linked_health_signals or []),
+                target_component=template_case.target_component,
+                target_scope=template_case.target_scope,
+                response_type=response_type,
+                priority_level=template_case.priority_level,
+                case_status=template_case.case_status,
+                rationale=template_case.rationale,
+                reason_codes=list(template_case.reason_codes or []),
+                blockers=[],
+                metadata=dict(template_case.metadata or {}),
+            )
+            decision = build_routing_decision(response_case=case)
+            self.assertEqual(decision.routing_target, expected_target)
+
     def test_response_recommendation_more_evidence(self):
         self._seed_baseline()
         self._activate_one_baseline()
@@ -363,6 +410,71 @@ class CertificationBoardTests(TestCase):
                 BaselineResponseRecommendationType.PREPARE_ROLLBACK_REVIEW,
             },
         )
+
+    def test_response_recommendation_type_with_strong_vs_insufficient_evidence(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        response_result = run_baseline_response_review(actor='test')
+        case = response_result['cases'][0]
+
+        strong = ResponseEvidencePack.objects.create(
+            linked_response_case=BaselineResponseCase.objects.create(
+                review_run=case.review_run,
+                linked_active_binding=case.linked_active_binding,
+                linked_baseline_health_status=case.linked_baseline_health_status,
+                linked_health_signals=list(case.linked_health_signals or []),
+                target_component=case.target_component,
+                target_scope=case.target_scope,
+                response_type=BaselineResponseType.OPEN_TUNING_REVIEW,
+                priority_level=case.priority_level,
+                case_status=case.case_status,
+                rationale=case.rationale,
+                reason_codes=list(case.reason_codes or []),
+                blockers=[],
+                metadata=dict(case.metadata or {}),
+            ),
+            summary='strong evidence',
+            confidence_score=Decimal('0.9'),
+            severity_score=Decimal('0.8'),
+            urgency_score=Decimal('0.8'),
+            evidence_status=BaselineResponseEvidenceStatus.STRONG,
+        )
+        strong_recommendation = build_response_recommendation(
+            review_run=response_result['run'],
+            response_case=strong.linked_response_case,
+            evidence_pack=strong,
+        )
+        self.assertEqual(strong_recommendation.recommendation_type, BaselineResponseRecommendationType.OPEN_TUNING_REVIEW)
+
+        weak_case = BaselineResponseCase.objects.create(
+            review_run=case.review_run,
+            linked_active_binding=case.linked_active_binding,
+            linked_baseline_health_status=case.linked_baseline_health_status,
+            linked_health_signals=list(case.linked_health_signals or []),
+            target_component=case.target_component,
+            target_scope=case.target_scope,
+            response_type=BaselineResponseType.PREPARE_ROLLBACK_REVIEW,
+            priority_level=case.priority_level,
+            case_status=case.case_status,
+            rationale=case.rationale,
+            reason_codes=list(case.reason_codes or []),
+            blockers=[],
+            metadata=dict(case.metadata or {}),
+        )
+        weak_evidence = ResponseEvidencePack.objects.create(
+            linked_response_case=weak_case,
+            summary='insufficient evidence',
+            confidence_score=Decimal('0.1'),
+            severity_score=Decimal('0.1'),
+            urgency_score=Decimal('0.1'),
+            evidence_status=BaselineResponseEvidenceStatus.INSUFFICIENT,
+        )
+        weak_recommendation = build_response_recommendation(
+            review_run=response_result['run'],
+            response_case=weak_case,
+            evidence_pack=weak_evidence,
+        )
+        self.assertEqual(weak_recommendation.recommendation_type, BaselineResponseRecommendationType.REQUIRE_MORE_EVIDENCE)
 
     def test_baseline_response_summary_endpoint(self):
         self._seed_baseline()

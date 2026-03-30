@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from apps.certification_board.models import (
+    BaselineHealthRecommendationType,
     BaselineHealthStatus,
     BaselineHealthStatusCode,
     BaselineResponseCase,
@@ -62,15 +63,45 @@ def determine_response_type(status: BaselineHealthStatus) -> str | None:
     return BaselineResponseType.REQUIRE_COMMITTEE_RECHECK
 
 
+def _response_type_from_health_recommendation(status: BaselineHealthStatus) -> str | None:
+    recommendations = list(status.recommendations.all())
+    if not recommendations:
+        return None
+
+    prioritized = [
+        BaselineHealthRecommendationType.PREPARE_ROLLBACK_REVIEW,
+        BaselineHealthRecommendationType.REQUIRE_MANUAL_BASELINE_REVIEW,
+        BaselineHealthRecommendationType.OPEN_TUNING_REVIEW,
+        BaselineHealthRecommendationType.REQUIRE_REEVALUATION,
+        BaselineHealthRecommendationType.KEEP_UNDER_WATCH,
+    ]
+    by_type = {recommendation.recommendation_type: recommendation for recommendation in recommendations}
+    for item in prioritized:
+        if item in by_type:
+            mapping = {
+                BaselineHealthRecommendationType.PREPARE_ROLLBACK_REVIEW: BaselineResponseType.PREPARE_ROLLBACK_REVIEW,
+                BaselineHealthRecommendationType.REQUIRE_MANUAL_BASELINE_REVIEW: BaselineResponseType.REQUIRE_MANUAL_BASELINE_REVIEW,
+                BaselineHealthRecommendationType.OPEN_TUNING_REVIEW: BaselineResponseType.OPEN_TUNING_REVIEW,
+                BaselineHealthRecommendationType.REQUIRE_REEVALUATION: BaselineResponseType.OPEN_REEVALUATION,
+                BaselineHealthRecommendationType.KEEP_UNDER_WATCH: BaselineResponseType.KEEP_UNDER_WATCH,
+            }
+            return mapping[item]
+    return None
+
+
 def build_response_cases(*, review_run: BaselineResponseRun) -> list[BaselineResponseCase]:
-    statuses = BaselineHealthStatus.objects.select_related(
+    health_run = review_run.linked_baseline_health_run
+    status_queryset = BaselineHealthStatus.objects.select_related(
         'linked_candidate',
         'linked_candidate__linked_active_binding',
-    ).prefetch_related('signals').order_by('-created_at', '-id')[:500]
+    ).prefetch_related('signals', 'recommendations').order_by('-created_at', '-id')
+    if health_run:
+        status_queryset = status_queryset.filter(linked_candidate__review_run=health_run)
+    statuses = status_queryset[:500]
 
     cases: list[BaselineResponseCase] = []
     for status in statuses:
-        response_type = determine_response_type(status)
+        response_type = _response_type_from_health_recommendation(status) or determine_response_type(status)
         if not response_type:
             continue
 
@@ -86,6 +117,14 @@ def build_response_cases(*, review_run: BaselineResponseRun) -> list[BaselineRes
             for signal in status.signals.all()
         ]
         reason_codes = list(status.reason_codes or [])
+        recommendation_reason_codes = []
+        recommendation_ids = []
+        for recommendation in status.recommendations.all():
+            recommendation_reason_codes.extend(recommendation.reason_codes or [])
+            recommendation_ids.append(recommendation.id)
+        for recommendation_code in recommendation_reason_codes:
+            if recommendation_code not in reason_codes:
+                reason_codes.append(recommendation_code)
         if response_type == BaselineResponseType.KEEP_UNDER_WATCH and 'monitoring_only' not in reason_codes:
             reason_codes.append('monitoring_only')
 
@@ -114,6 +153,7 @@ def build_response_cases(*, review_run: BaselineResponseRun) -> list[BaselineRes
                     'health_status': status.health_status,
                     'response_confidence': float(confidence),
                     'source_health_run_id': status.linked_candidate.review_run_id,
+                    'source_health_recommendation_ids': recommendation_ids,
                 },
             )
         )
