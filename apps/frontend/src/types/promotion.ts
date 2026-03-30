@@ -262,3 +262,107 @@ export type PromotionAdoptionSummary = {
   rollout_handoff_ready: number;
   recommendation_summary: Record<string, number>;
 };
+
+export type RolloutActionCandidate = {
+  id: number;
+  preparation_run: number;
+  linked_manual_adoption_action: number;
+  linked_promotion_case: number;
+  target_component: string;
+  target_scope: string;
+  action_type: string;
+  current_value_snapshot: Record<string, unknown>;
+  proposed_value_snapshot: Record<string, unknown>;
+  rollout_need_level: 'DIRECT_APPLY_OK' | 'ROLLOUT_RECOMMENDED' | 'ROLLOUT_REQUIRED';
+  target_resolution_status: 'RESOLVED' | 'PARTIAL' | 'BLOCKED' | 'UNKNOWN';
+  ready_for_rollout: boolean;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ManualRolloutPlan = {
+  id: number;
+  linked_candidate: number;
+  linked_manual_adoption_action: number;
+  rollout_plan_type:
+    | 'DIRECT_CONFIG_APPLY'
+    | 'STAGED_BINDING_ROLLOUT'
+    | 'SHADOW_CONFIG_ROLLOUT'
+    | 'TRUST_CALIBRATION_ROLLOUT'
+    | 'POLICY_TUNING_ROLLOUT';
+  rollout_status: 'PROPOSED' | 'READY' | 'EXECUTED' | 'BLOCKED' | 'DEFERRED' | 'ROLLBACK_AVAILABLE';
+  target_component: string;
+  target_scope: string;
+  rollout_rationale: string;
+  staged_steps: Array<Record<string, unknown>>;
+  monitoring_intent: Record<string, unknown>;
+  linked_rollout_artifact: string;
+  executed_by: string;
+  executed_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RolloutCheckpointPlan = {
+  id: number;
+  linked_rollout_plan: number;
+  checkpoint_type: string;
+  checkpoint_status: 'PLANNED' | 'PASSED' | 'FAILED' | 'SKIPPED';
+  checkpoint_rationale: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ManualRollbackExecution = {
+  id: number;
+  linked_rollout_plan: number | null;
+  linked_rollback_plan: number | null;
+  linked_manual_action: number;
+  execution_status: 'READY' | 'EXECUTED' | 'BLOCKED' | 'NOT_NEEDED';
+  rollback_type: string;
+  rollback_target_snapshot: Record<string, unknown>;
+  executed_by: string;
+  executed_at: string | null;
+  rationale: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RolloutPreparationRecommendation = {
+  id: number;
+  preparation_run: number;
+  target_candidate: number | null;
+  target_plan: number | null;
+  recommendation_type:
+    | 'PREPARE_MANUAL_ROLLOUT'
+    | 'DIRECT_APPLY_OK'
+    | 'REQUIRE_ROLLOUT_CHECKPOINTS'
+    | 'ROLLBACK_READY'
+    | 'EXECUTE_ROLLBACK_MANUALLY'
+    | 'REQUIRE_TARGET_RECHECK'
+    | 'DEFER_ROLLOUT'
+    | 'REORDER_ROLLOUT_PRIORITY';
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PromotionRolloutSummary = {
+  latest_run: Record<string, unknown> | null;
+  candidates: number;
+  ready: number;
+  blocked: number;
+  checkpoint_plans: number;
+  rollback_ready: number;
+  rollback_executed: number;
+  recommendation_summary: Record<string, number>;
+};

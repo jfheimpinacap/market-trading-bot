@@ -2804,3 +2804,28 @@ Boundaries preserved:
 - no auto-apply
 - no auto-rollout
 - no live execution or real money paths
+
+## Rollout preparation and manual rollback layer (promotion_committee)
+
+`promotion_committee` now includes a dedicated rollout-prep runtime that reuses existing adoption artifacts rather than replacing them.
+
+Services (`apps/promotion_committee/services/rollout_prep/`):
+- `candidate_building.py`
+- `rollout_planning.py`
+- `checkpoints.py`
+- `rollback_execution.py`
+- `recommendation.py`
+- `run.py`
+
+Behavior:
+- consumes `ManualAdoptionAction` (+ `AdoptionRollbackPlan` when available)
+- classifies `DIRECT_APPLY_OK` / `ROLLOUT_RECOMMENDED` / `ROLLOUT_REQUIRED`
+- prepares `ManualRolloutPlan` and `RolloutCheckpointPlan`
+- prepares and records `ManualRollbackExecution`
+- exposes manual rollback endpoint (`POST /api/promotion/rollback/<action_id>/`)
+- maintains paper/demo-only bridge metadata toward `rollout_manager`
+
+Explicitly out of scope:
+- any auto-rollout / auto-switch
+- live broker/exchange execution
+- silent mutation paths

@@ -1706,3 +1706,25 @@ Frontend service:
   - `applyPromotionCase(caseId)`
 
 The UI remains local-first, manual-first, and paper-only (no silent apply).
+
+## `/promotion` rollout prep board extension
+
+The promotion page now includes rollout-prep and rollback-control panels on top of adoption governance.
+
+New frontend service:
+- `src/services/promotionRollout.ts`
+  - `runPromotionRolloutPrep()`
+  - `getPromotionRolloutCandidates()`
+  - `getPromotionRolloutPlans()`
+  - `getPromotionCheckpointPlans()`
+  - `getPromotionRollbackExecutions()`
+  - `getPromotionRolloutRecommendations()`
+  - `getPromotionRolloutSummary()`
+  - `preparePromotionRollout(caseId)`
+  - `rollbackPromotionAction(actionId)`
+
+UX goals:
+- explicit run/prepare/rollback manual buttons
+- visible blocked/direct-apply states as valid outcomes
+- clear empty/loading/error behavior
+- no auto-rollout and no hidden apply actions

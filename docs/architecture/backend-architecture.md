@@ -1971,3 +1971,21 @@ Design principles:
 - rollback readiness for sensitive changes
 - rollout_manager bridge prepared as handoff only (paper/demo)
 - manual operator apply endpoint is the only apply path
+
+## Promotion rollout-prep bridge architecture (new)
+
+The promotion domain now has three explicit layers:
+1. promotion governance (`PromotionReviewCycleRun`, `PromotionCase`, evidence/recommendations)
+2. manual adoption bridge (`ManualAdoptionAction`, `AdoptionRollbackPlan`)
+3. rollout execution prep (`RolloutPreparationRun`, candidates/plans/checkpoints/rollback-execution/recommendations)
+
+This preserves separation of responsibilities:
+- committee approval is governance only
+- adoption actions remain explicit manual intents
+- rollout-prep creates auditable execution readiness, not automatic execution
+
+Cross-domain connections are metadata/trace oriented (no silent mutation):
+- `rollout_manager`: rollout artifact semantics/bridge markers
+- `champion_challenger`: staged binding rollout type when binding-sensitive
+- `policy_tuning` / `trust_calibration`: rollout plan typing by target
+- `evaluation_lab` / `experiment_lab` / `tuning_board`: monitoring/checkpoint rationale context

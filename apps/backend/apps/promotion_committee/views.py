@@ -12,12 +12,19 @@ from apps.promotion_committee.serializers import (
     ManualAdoptionActionSerializer,
     PromotionApplyRequestSerializer,
     PromotionAdoptionRunSerializer,
+    PromotionRollbackRequestSerializer,
     PromotionCaseSerializer,
     PromotionDecisionRecommendationSerializer,
     PromotionEvidencePackSerializer,
     PromotionReviewCycleRunSerializer,
     PromotionReviewRequestSerializer,
     PromotionReviewRunSerializer,
+    RolloutActionCandidateSerializer,
+    RolloutCheckpointPlanSerializer,
+    RolloutPreparationRecommendationSerializer,
+    RolloutPreparationRunSerializer,
+    ManualRollbackExecutionSerializer,
+    ManualRolloutPlanSerializer,
 )
 from apps.promotion_committee.services import (
     apply_review_decision,
@@ -28,6 +35,9 @@ from apps.promotion_committee.services import (
     run_governed_promotion_review,
     run_promotion_adoption_review,
     run_promotion_review,
+    run_rollout_preparation,
+    build_rollout_preparation_summary,
+    execute_manual_rollback,
 )
 from apps.promotion_committee.models import (
     AdoptionActionCandidate,
@@ -38,6 +48,12 @@ from apps.promotion_committee.models import (
     PromotionDecisionRecommendation,
     PromotionEvidencePack,
     PromotionReviewCycleRun,
+    RolloutActionCandidate,
+    ManualRolloutPlan,
+    RolloutCheckpointPlan,
+    ManualRollbackExecution,
+    RolloutPreparationRecommendation,
+    RolloutPreparationRun,
 )
 
 
@@ -273,3 +289,122 @@ class PromotionManualApplyCaseView(APIView):
         except ValidationError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(ManualAdoptionActionSerializer(action).data, status=status.HTTP_200_OK)
+
+
+class PromotionRunRolloutPrepView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = GovernedPromotionRunRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_rollout_preparation(
+            actor=serializer.validated_data.get('actor', 'promotion_ui'),
+            metadata=serializer.validated_data.get('metadata') or {},
+        )
+        return Response(RolloutPreparationRunSerializer(run).data, status=status.HTTP_201_CREATED)
+
+
+class PromotionRolloutCandidatesView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RolloutActionCandidateSerializer
+
+    def get_queryset(self):
+        return RolloutActionCandidate.objects.select_related(
+            'preparation_run', 'linked_manual_adoption_action', 'linked_promotion_case'
+        ).order_by('-created_at', '-id')[:200]
+
+
+class PromotionRolloutPlansView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ManualRolloutPlanSerializer
+
+    def get_queryset(self):
+        return ManualRolloutPlan.objects.select_related('linked_candidate', 'linked_manual_adoption_action').order_by('-created_at', '-id')[:200]
+
+
+class PromotionCheckpointPlansView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RolloutCheckpointPlanSerializer
+
+    def get_queryset(self):
+        return RolloutCheckpointPlan.objects.select_related('linked_rollout_plan').order_by('-created_at', '-id')[:300]
+
+
+class PromotionRollbackExecutionsView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ManualRollbackExecutionSerializer
+
+    def get_queryset(self):
+        return ManualRollbackExecution.objects.select_related(
+            'linked_rollout_plan', 'linked_rollback_plan', 'linked_manual_action'
+        ).order_by('-created_at', '-id')[:200]
+
+
+class PromotionRolloutRecommendationsView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RolloutPreparationRecommendationSerializer
+
+    def get_queryset(self):
+        return RolloutPreparationRecommendation.objects.select_related(
+            'preparation_run', 'target_candidate', 'target_plan'
+        ).order_by('-created_at', '-id')[:300]
+
+
+class PromotionRolloutSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        summary = build_rollout_preparation_summary()
+        return Response(
+            {
+                'latest_run': RolloutPreparationRunSerializer(summary['latest_run']).data if summary['latest_run'] else None,
+                'candidates': summary['candidates'],
+                'ready': summary['ready'],
+                'blocked': summary['blocked'],
+                'checkpoint_plans': summary['checkpoint_plans'],
+                'rollback_ready': summary['rollback_ready'],
+                'rollback_executed': summary['rollback_executed'],
+                'recommendation_summary': summary['recommendation_summary'],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PromotionPrepareRolloutView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, case_id: int, *args, **kwargs):
+        serializer = GovernedPromotionRunRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_rollout_preparation(
+            actor=serializer.validated_data.get('actor', 'promotion_ui'),
+            metadata={'target_case_id': case_id, **(serializer.validated_data.get('metadata') or {})},
+        )
+        plans = ManualRolloutPlan.objects.filter(linked_manual_adoption_action__linked_promotion_case_id=case_id).order_by('-created_at', '-id')
+        return Response(
+            {
+                'run': RolloutPreparationRunSerializer(run).data,
+                'plans': ManualRolloutPlanSerializer(plans[:20], many=True).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PromotionRollbackActionView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, action_id: int, *args, **kwargs):
+        serializer = PromotionRollbackRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        action = ManualAdoptionAction.objects.get(pk=action_id)
+        execution = execute_manual_rollback(action=action, actor=serializer.validated_data.get('actor', 'operator'))
+        return Response(ManualRollbackExecutionSerializer(execution).data, status=status.HTTP_200_OK)
