@@ -1832,3 +1832,22 @@ The certification page now includes a manual baseline response actions/tracking 
 - summary cards and manual action buttons (run, route, update tracking, close case)
 
 This UI is manual-first, local-first, and paper-only. It does not auto-route, auto-retune, auto-rollback, or auto-promote.
+
+## Certification downstream lifecycle UX (new)
+
+`/certification` now includes a dedicated downstream lifecycle section that complements baseline response actions/tracking.
+
+New UI blocks:
+- downstream lifecycle summary cards
+- downstream acknowledgements panel
+- review stage records panel
+- downstream lifecycle outcomes panel
+- lifecycle recommendations panel
+
+Manual actions exposed in the same page:
+- Run baseline response lifecycle
+- Acknowledge response case
+- Update response stage
+- Record downstream outcome
+
+The UI keeps explicit empty/loading/error states and treats `WAITING_MORE_EVIDENCE` and `NO_RESPONSE` as valid tracked outcomes.

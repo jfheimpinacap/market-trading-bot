@@ -2979,3 +2979,31 @@ Scope:
 - creates auditable `ResponseRoutingAction` and `ResponseCaseTrackingRecord`
 - keeps routing/apply explicitly manual (no auto-open of downstream boards)
 - paper-only, local-first, single-user conservative flow
+
+## Baseline downstream response lifecycle layer (new)
+
+`apps.certification_board` now includes a formal downstream lifecycle loop on top of baseline response actions/tracking.
+
+### New lifecycle entities
+- `BaselineResponseLifecycleRun`
+- `DownstreamAcknowledgement`
+- `ResponseReviewStageRecord`
+- `DownstreamLifecycleOutcome`
+- `ResponseLifecycleRecommendation`
+
+### API endpoints
+- `POST /api/certification/run-baseline-response-lifecycle/`
+- `GET /api/certification/downstream-acknowledgements/`
+- `GET /api/certification/review-stage-records/`
+- `GET /api/certification/downstream-lifecycle-outcomes/`
+- `GET /api/certification/response-lifecycle-recommendations/`
+- `GET /api/certification/response-lifecycle-summary/`
+- `POST /api/certification/acknowledge-response-case/<case_id>/`
+- `POST /api/certification/update-response-stage/<case_id>/`
+- `POST /api/certification/record-downstream-outcome/<case_id>/`
+
+### Design boundaries
+- consumes existing `ResponseRoutingAction` + `ResponseCaseTrackingRecord`
+- does not auto-open downstream board entities
+- does not auto-resolve cases and does not auto-apply tuning/rollback
+- remains local-first, manual-first, single-user, paper/sandbox only
