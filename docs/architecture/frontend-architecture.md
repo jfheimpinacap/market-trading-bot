@@ -1606,3 +1606,18 @@ All interactions are explicit button-driven API calls; there is no automatic bas
 ## Paper baseline activation board
 
 The certification domain now includes a **paper baseline activation board** that sits after `PaperBaselineConfirmation=CONFIRMED`. It creates manual activation candidates, resolves active-binding replacement targets, records before/after snapshots, updates an explicit active paper binding registry, and keeps rollback reversible and auditable. This layer is manual-first, paper-only, local-first, and does not auto-switch champion, auto-promote, or execute live trading.
+
+## Certification baseline-health UX extension (new)
+
+The existing `/certification` board now includes a baseline-health slice rather than introducing a new page.
+
+UI flow:
+1. operator runs `run-baseline-health-review`
+2. page renders health candidates, statuses, signals, and recommendations
+3. signals/recommendations provide bridges to evaluation/tuning/experiments/trace contexts
+
+This keeps the UI conservative and auditable:
+- manual-first actions only
+- clear empty/loading/error states
+- under-watch and insufficient-data are first-class valid states
+- no auto-retune, no auto-switch, no auto-deactivate controls

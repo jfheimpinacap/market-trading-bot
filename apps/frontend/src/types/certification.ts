@@ -335,3 +335,92 @@ export type BaselineActivationSummary = {
   binding_recheck_required_count: number;
   recommendation_summary: Record<string, number>;
 };
+
+export type BaselineHealthRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  linked_baseline_activation_run: number | null;
+  active_binding_count: number;
+  healthy_count: number;
+  watch_count: number;
+  degraded_count: number;
+  review_required_count: number;
+  rollback_review_count: number;
+  recommendation_summary: Record<string, number>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineHealthCandidate = {
+  id: number;
+  review_run: number;
+  linked_active_binding: number;
+  linked_baseline_activation: number | null;
+  target_component: string;
+  target_scope: string;
+  active_binding_type: string;
+  current_health_inputs: Record<string, unknown>;
+  readiness_status: 'READY' | 'NEEDS_MORE_DATA' | 'BLOCKED';
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineHealthStatus = {
+  id: number;
+  linked_candidate: number;
+  health_status:
+    | 'HEALTHY'
+    | 'UNDER_WATCH'
+    | 'DEGRADED'
+    | 'REVIEW_REQUIRED'
+    | 'ROLLBACK_REVIEW_RECOMMENDED'
+    | 'INSUFFICIENT_DATA';
+  calibration_health_score: string;
+  risk_gate_health_score: string;
+  opportunity_quality_health_score: string;
+  drift_risk_score: string;
+  regression_risk_score: string;
+  rationale: string;
+  reason_codes: string[];
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineHealthSignal = {
+  id: number;
+  linked_status: number;
+  signal_type: string;
+  signal_severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  signal_direction: 'improving' | 'stable' | 'degrading';
+  evidence_summary: Record<string, unknown>;
+  rationale: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineHealthRecommendationItem = {
+  id: number;
+  review_run: number;
+  target_status: number | null;
+  recommendation_type: string;
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineHealthSummary = {
+  latest_run: BaselineHealthRun | null;
+  active_baselines_reviewed: number;
+  healthy_count: number;
+  under_watch_count: number;
+  degraded_count: number;
+  review_required_count: number;
+  rollback_review_recommended_count: number;
+  recommendation_summary: Record<string, number>;
+};

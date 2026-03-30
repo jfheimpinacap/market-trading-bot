@@ -4,8 +4,15 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from apps.certification_board.models import CertificationLevel
+from apps.certification_board.models import (
+    BaselineHealthRecommendationType,
+    BaselineHealthStatus,
+    BaselineHealthStatusCode,
+    CertificationLevel,
+)
 from apps.certification_board.services.evidence import build_evidence_snapshot
+from apps.certification_board.services.baseline_health.recommendation import build_baseline_health_recommendation
+from apps.certification_board.services.baseline_health.run import run_baseline_health_review
 from apps.certification_board.services.recommendation import generate_recommendation
 from apps.chaos_lab.models import ChaosExperiment, ChaosRun, ResilienceBenchmark
 from apps.champion_challenger.models import ChampionChallengerRun
@@ -196,3 +203,78 @@ class CertificationBoardTests(TestCase):
             format='json',
         )
         self.assertEqual(activation_res.status_code, 200)
+
+    def _activate_one_baseline(self):
+        self.client.post(reverse('certification_board:run-post-rollout-review'), {'actor': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-confirmation'), {'actor': 'test'}, format='json')
+        candidates = self.client.get(reverse('certification_board:baseline-candidates')).json()
+        if not candidates:
+            self.skipTest('No baseline candidates available in current seed.')
+        self.client.post(
+            reverse('certification_board:confirm-baseline', kwargs={'decision_id': candidates[0]['linked_certification_decision']}),
+            {'actor': 'test'},
+            format='json',
+        )
+        self.client.post(reverse('certification_board:run-baseline-activation'), {'actor': 'test'}, format='json')
+        confirmations = self.client.get(reverse('certification_board:baseline-confirmations')).json()
+        self.client.post(
+            reverse('certification_board:activate-baseline', kwargs={'confirmation_id': confirmations[0]['id']}),
+            {'actor': 'test'},
+            format='json',
+        )
+
+    def test_baseline_health_run_and_summary_endpoints(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        run_response = self.client.post(reverse('certification_board:run-baseline-health-review'), {'actor': 'test'}, format='json')
+        self.assertEqual(run_response.status_code, 201)
+        summary_response = self.client.get(reverse('certification_board:health-summary'))
+        self.assertEqual(summary_response.status_code, 200)
+        self.assertIn('active_baselines_reviewed', summary_response.json())
+
+    def test_baseline_health_collections_endpoints(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-health-review'), {'actor': 'test'}, format='json')
+        self.assertEqual(self.client.get(reverse('certification_board:health-candidates')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('certification_board:health-status')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('certification_board:health-signals')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('certification_board:health-recommendations')).status_code, 200)
+
+    def test_baseline_health_status_progression(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        result = run_baseline_health_review(actor='test')
+        self.assertGreaterEqual(len(result['candidates']), 1)
+        statuses = list(BaselineHealthStatus.objects.all())
+        self.assertTrue(
+            any(
+                status.health_status
+                in {
+                    BaselineHealthStatusCode.HEALTHY,
+                    BaselineHealthStatusCode.UNDER_WATCH,
+                    BaselineHealthStatusCode.DEGRADED,
+                    BaselineHealthStatusCode.ROLLBACK_REVIEW_RECOMMENDED,
+                }
+                for status in statuses
+            )
+        )
+
+    def test_baseline_health_recommendation_mapping(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        result = run_baseline_health_review(actor='test')
+        self.assertGreaterEqual(len(result['statuses']), 1)
+        status = result['statuses'][0]
+        recommendation = build_baseline_health_recommendation(review_run=result['run'], status=status)
+        self.assertIn(
+            recommendation.recommendation_type,
+            {
+                BaselineHealthRecommendationType.KEEP_BASELINE_ACTIVE,
+                BaselineHealthRecommendationType.OPEN_TUNING_REVIEW,
+                BaselineHealthRecommendationType.PREPARE_ROLLBACK_REVIEW,
+                BaselineHealthRecommendationType.KEEP_UNDER_WATCH,
+                BaselineHealthRecommendationType.REQUIRE_REEVALUATION,
+                BaselineHealthRecommendationType.REQUIRE_MANUAL_BASELINE_REVIEW,
+            },
+        )

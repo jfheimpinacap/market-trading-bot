@@ -1781,3 +1781,20 @@ Service integration:
 ## Paper baseline activation board
 
 The certification domain now includes a **paper baseline activation board** that sits after `PaperBaselineConfirmation=CONFIRMED`. It creates manual activation candidates, resolves active-binding replacement targets, records before/after snapshots, updates an explicit active paper binding registry, and keeps rollback reversible and auditable. This layer is manual-first, paper-only, local-first, and does not auto-switch champion, auto-promote, or execute live trading.
+
+## `/certification` baseline health watch section (new)
+
+The certification page now includes an **active baseline health board** with:
+- summary cards (reviewed / healthy / under watch / degraded / review required / rollback review)
+- health candidates panel
+- health status panel
+- health signals panel
+- health recommendations panel
+- manual action button: `Run baseline health review`
+
+Frontend integration:
+- `src/services/baselineHealth.ts`
+- existing `/certification` view (no page split)
+- local-first loading/error/empty states including explicit no-active-baseline message
+
+No automatic retune/deactivate/switch behavior is introduced in the client.

@@ -1,6 +1,11 @@
 from rest_framework import serializers
 
 from apps.certification_board.models import (
+    BaselineHealthCandidate,
+    BaselineHealthRecommendation,
+    BaselineHealthRun,
+    BaselineHealthSignal,
+    BaselineHealthStatus,
     ActivePaperBindingRecord,
     BaselineActivationCandidate,
     BaselineActivationRecommendation,
@@ -179,4 +184,39 @@ class ActivePaperBindingRecordSerializer(serializers.ModelSerializer):
 class BaselineActivationRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = BaselineActivationRecommendation
+        fields = '__all__'
+
+
+class RunBaselineHealthReviewRequestSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui')
+    metadata = serializers.DictField(required=False)
+
+
+class BaselineHealthRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineHealthRun
+        fields = '__all__'
+
+
+class BaselineHealthCandidateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineHealthCandidate
+        fields = '__all__'
+
+
+class BaselineHealthStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineHealthStatus
+        fields = '__all__'
+
+
+class BaselineHealthSignalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineHealthSignal
+        fields = '__all__'
+
+
+class BaselineHealthRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineHealthRecommendation
         fields = '__all__'
