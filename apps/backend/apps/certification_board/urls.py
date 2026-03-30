@@ -11,6 +11,9 @@ from apps.certification_board.views import (
     BaselineHealthSignalListView,
     BaselineHealthStatusListView,
     BaselineHealthSummaryView,
+    BaselineResponseCaseListView,
+    BaselineResponseRecommendationListView,
+    BaselineResponseSummaryView,
     BaselineBindingSnapshotListView,
     BaselineConfirmationCandidateListView,
     BaselineConfirmationRecommendationListView,
@@ -33,8 +36,11 @@ from apps.certification_board.views import (
     RollbackPaperBaselineView,
     RunBaselineActivationReviewView,
     RunBaselineHealthReviewView,
+    RunBaselineResponseReviewView,
     RunBaselineConfirmationReviewView,
     RunPostRolloutCertificationReviewView,
+    ResponseEvidencePackListView,
+    ResponseRoutingDecisionListView,
 )
 
 urlpatterns = [
@@ -70,6 +76,12 @@ urlpatterns = [
     path('health-signals/', BaselineHealthSignalListView.as_view(), name='health-signals'),
     path('health-recommendations/', BaselineHealthRecommendationListView.as_view(), name='health-recommendations'),
     path('health-summary/', BaselineHealthSummaryView.as_view(), name='health-summary'),
+    path('run-baseline-response-review/', RunBaselineResponseReviewView.as_view(), name='run-baseline-response-review'),
+    path('response-cases/', BaselineResponseCaseListView.as_view(), name='response-cases'),
+    path('response-evidence-packs/', ResponseEvidencePackListView.as_view(), name='response-evidence-packs'),
+    path('response-routing-decisions/', ResponseRoutingDecisionListView.as_view(), name='response-routing-decisions'),
+    path('response-recommendations/', BaselineResponseRecommendationListView.as_view(), name='response-recommendations'),
+    path('response-summary/', BaselineResponseSummaryView.as_view(), name='response-summary'),
     path('activate-baseline/<int:confirmation_id>/', ActivatePaperBaselineView.as_view(), name='activate-baseline'),
     path('rollback-activation/<int:activation_id>/', RollbackBaselineActivationView.as_view(), name='rollback-activation'),
 ]

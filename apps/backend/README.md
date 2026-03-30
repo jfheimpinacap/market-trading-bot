@@ -2928,3 +2928,31 @@ Intent:
 - emit explicit recommendation-first follow-up (`KEEP_BASELINE_ACTIVE`, `REQUIRE_REEVALUATION`, `OPEN_TUNING_REVIEW`, `PREPARE_ROLLBACK_REVIEW`)
 
 Out of scope: auto-retune, auto-deactivate, auto-promote, auto-switch champion, live trading.
+
+## Baseline response board / degradation case registry (new)
+
+`apps.certification_board` now adds a **baseline response** layer after baseline health watch.
+
+Purpose:
+- consume `BaselineHealthStatus`, `BaselineHealthSignal`, `BaselineHealthRecommendation`
+- open auditable `BaselineResponseCase` records with manual-first statuses
+- attach `ResponseEvidencePack` with confidence/severity/urgency
+- attach `ResponseRoutingDecision` to `evaluation_lab`, `tuning_board`, `rollback_review`, `certification_board`, `promotion_committee`, or `monitoring_only`
+- emit `BaselineResponseRecommendation` without auto-applying any tuning/rollback/deactivation
+
+Run/service split:
+- `services/baseline_response/candidate_building.py`
+- `services/baseline_response/evidence_pack.py`
+- `services/baseline_response/routing.py`
+- `services/baseline_response/recommendation.py`
+- `services/baseline_response/run.py`
+
+API:
+- `POST /api/certification/run-baseline-response-review/`
+- `GET /api/certification/response-cases/`
+- `GET /api/certification/response-evidence-packs/`
+- `GET /api/certification/response-routing-decisions/`
+- `GET /api/certification/response-recommendations/`
+- `GET /api/certification/response-summary/`
+
+Out of scope (unchanged): no auto-retune, no auto-rollback, no auto-deactivate baseline, no live/real-money execution.

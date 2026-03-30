@@ -424,3 +424,104 @@ export type BaselineHealthSummary = {
   rollback_review_recommended_count: number;
   recommendation_summary: Record<string, number>;
 };
+
+export type BaselineResponseRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  linked_baseline_health_run: number | null;
+  candidate_count: number;
+  opened_case_count: number;
+  watch_case_count: number;
+  reevaluation_case_count: number;
+  tuning_case_count: number;
+  rollback_review_case_count: number;
+  recommendation_summary: Record<string, number>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineResponseCase = {
+  id: number;
+  review_run: number;
+  linked_active_binding: number | null;
+  linked_baseline_health_status: number | null;
+  linked_health_signals: Array<Record<string, unknown>>;
+  target_component: string;
+  target_scope: string;
+  response_type:
+    | 'KEEP_UNDER_WATCH'
+    | 'OPEN_REEVALUATION'
+    | 'OPEN_TUNING_REVIEW'
+    | 'REQUIRE_MANUAL_BASELINE_REVIEW'
+    | 'PREPARE_ROLLBACK_REVIEW'
+    | 'REQUIRE_COMMITTEE_RECHECK';
+  priority_level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  case_status: 'OPEN' | 'UNDER_REVIEW' | 'ROUTED' | 'DEFERRED' | 'CLOSED_NO_ACTION' | 'ESCALATED';
+  rationale: string;
+  reason_codes: string[];
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ResponseEvidencePack = {
+  id: number;
+  linked_response_case: number;
+  summary: string;
+  linked_health_status: number | null;
+  linked_health_signals: Array<Record<string, unknown>>;
+  linked_evaluation_metrics: Record<string, unknown>;
+  linked_risk_context: Record<string, unknown>;
+  linked_opportunity_context: Record<string, unknown>;
+  confidence_score: string;
+  severity_score: string;
+  urgency_score: string;
+  evidence_status: 'STRONG' | 'MIXED' | 'WEAK' | 'INSUFFICIENT';
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ResponseRoutingDecision = {
+  id: number;
+  linked_response_case: number;
+  routing_target:
+    | 'evaluation_lab'
+    | 'tuning_board'
+    | 'promotion_committee'
+    | 'certification_board'
+    | 'rollback_review'
+    | 'monitoring_only';
+  routing_status: 'PROPOSED' | 'READY' | 'SENT' | 'DEFERRED' | 'BLOCKED';
+  routing_rationale: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineResponseRecommendationItem = {
+  id: number;
+  review_run: number;
+  target_case: number | null;
+  recommendation_type: string;
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineResponseSummary = {
+  latest_run: BaselineResponseRun | null;
+  active_baselines_reviewed: number;
+  open_response_cases: number;
+  reevaluation_case_count: number;
+  tuning_case_count: number;
+  rollback_review_case_count: number;
+  watch_case_count: number;
+  recommendation_summary: Record<string, number>;
+  case_status_summary: Record<string, number>;
+  routing_status_summary: Record<string, number>;
+  evidence_status_summary: Record<string, number>;
+  recommendation_type_summary: Record<string, number>;
+};

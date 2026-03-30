@@ -1798,3 +1798,26 @@ Frontend integration:
 - local-first loading/error/empty states including explicit no-active-baseline message
 
 No automatic retune/deactivate/switch behavior is introduced in the client.
+
+## `/certification` baseline response section (new)
+
+`/certification` now includes a baseline response board that formalizes degradation handling after baseline health watch.
+
+UI blocks:
+- summary cards: reviewed baselines, open cases, reevaluation/tuning/rollback/watch counts
+- response cases table
+- evidence packs table
+- routing decisions table
+- response recommendations table
+- manual action button: `Run baseline response review`
+
+New frontend service:
+- `src/services/baselineResponse.ts`
+  - `runBaselineResponseReview`
+  - `getBaselineResponseCases`
+  - `getBaselineResponseEvidencePacks`
+  - `getBaselineResponseRoutingDecisions`
+  - `getBaselineResponseRecommendations`
+  - `getBaselineResponseSummary`
+
+Design constraints remain unchanged: local-first, paper-only, manual-first, no auto-retune/rollback/deactivate.

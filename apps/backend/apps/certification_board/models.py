@@ -702,3 +702,187 @@ class BaselineHealthRecommendation(TimeStampedModel):
     class Meta:
         ordering = ['-created_at', '-id']
         indexes = [models.Index(fields=['recommendation_type', '-created_at'])]
+
+
+class BaselineResponseType(models.TextChoices):
+    KEEP_UNDER_WATCH = 'KEEP_UNDER_WATCH', 'Keep under watch'
+    OPEN_REEVALUATION = 'OPEN_REEVALUATION', 'Open re-evaluation'
+    OPEN_TUNING_REVIEW = 'OPEN_TUNING_REVIEW', 'Open tuning review'
+    REQUIRE_MANUAL_BASELINE_REVIEW = 'REQUIRE_MANUAL_BASELINE_REVIEW', 'Require manual baseline review'
+    PREPARE_ROLLBACK_REVIEW = 'PREPARE_ROLLBACK_REVIEW', 'Prepare rollback review'
+    REQUIRE_COMMITTEE_RECHECK = 'REQUIRE_COMMITTEE_RECHECK', 'Require committee recheck'
+
+
+class BaselineResponsePriority(models.TextChoices):
+    LOW = 'LOW', 'Low'
+    MEDIUM = 'MEDIUM', 'Medium'
+    HIGH = 'HIGH', 'High'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class BaselineResponseCaseStatus(models.TextChoices):
+    OPEN = 'OPEN', 'Open'
+    UNDER_REVIEW = 'UNDER_REVIEW', 'Under review'
+    ROUTED = 'ROUTED', 'Routed'
+    DEFERRED = 'DEFERRED', 'Deferred'
+    CLOSED_NO_ACTION = 'CLOSED_NO_ACTION', 'Closed with no action'
+    ESCALATED = 'ESCALATED', 'Escalated'
+
+
+class BaselineResponseEvidenceStatus(models.TextChoices):
+    STRONG = 'STRONG', 'Strong'
+    MIXED = 'MIXED', 'Mixed'
+    WEAK = 'WEAK', 'Weak'
+    INSUFFICIENT = 'INSUFFICIENT', 'Insufficient'
+
+
+class BaselineResponseRoutingTarget(models.TextChoices):
+    EVALUATION_LAB = 'evaluation_lab', 'Evaluation lab'
+    TUNING_BOARD = 'tuning_board', 'Tuning board'
+    PROMOTION_COMMITTEE = 'promotion_committee', 'Promotion committee'
+    CERTIFICATION_BOARD = 'certification_board', 'Certification board'
+    ROLLBACK_REVIEW = 'rollback_review', 'Rollback review'
+    MONITORING_ONLY = 'monitoring_only', 'Monitoring only'
+
+
+class BaselineResponseRoutingStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    READY = 'READY', 'Ready'
+    SENT = 'SENT', 'Sent'
+    DEFERRED = 'DEFERRED', 'Deferred'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class BaselineResponseRecommendationType(models.TextChoices):
+    KEEP_UNDER_WATCH = 'KEEP_UNDER_WATCH', 'Keep under watch'
+    OPEN_REEVALUATION = 'OPEN_REEVALUATION', 'Open re-evaluation'
+    OPEN_TUNING_REVIEW = 'OPEN_TUNING_REVIEW', 'Open tuning review'
+    REQUIRE_MANUAL_BASELINE_REVIEW = 'REQUIRE_MANUAL_BASELINE_REVIEW', 'Require manual baseline review'
+    PREPARE_ROLLBACK_REVIEW = 'PREPARE_ROLLBACK_REVIEW', 'Prepare rollback review'
+    REQUIRE_MORE_EVIDENCE = 'REQUIRE_MORE_EVIDENCE', 'Require more evidence'
+    REORDER_RESPONSE_PRIORITY = 'REORDER_RESPONSE_PRIORITY', 'Reorder response priority'
+
+
+class BaselineResponseRun(TimeStampedModel):
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    linked_baseline_health_run = models.ForeignKey(
+        BaselineHealthRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='baseline_response_runs',
+    )
+    candidate_count = models.PositiveIntegerField(default=0)
+    opened_case_count = models.PositiveIntegerField(default=0)
+    watch_case_count = models.PositiveIntegerField(default=0)
+    reevaluation_case_count = models.PositiveIntegerField(default=0)
+    tuning_case_count = models.PositiveIntegerField(default=0)
+    rollback_review_case_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class BaselineResponseCase(TimeStampedModel):
+    review_run = models.ForeignKey(BaselineResponseRun, on_delete=models.CASCADE, related_name='cases')
+    linked_active_binding = models.ForeignKey(
+        ActivePaperBindingRecord,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='baseline_response_cases',
+    )
+    linked_baseline_health_status = models.ForeignKey(
+        BaselineHealthStatus,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='response_cases',
+    )
+    linked_health_signals = models.JSONField(default=list, blank=True)
+    target_component = models.CharField(max_length=32)
+    target_scope = models.CharField(max_length=24)
+    response_type = models.CharField(max_length=48, choices=BaselineResponseType.choices)
+    priority_level = models.CharField(max_length=16, choices=BaselineResponsePriority.choices, default=BaselineResponsePriority.MEDIUM)
+    case_status = models.CharField(max_length=24, choices=BaselineResponseCaseStatus.choices, default=BaselineResponseCaseStatus.OPEN)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['response_type', 'priority_level', 'case_status', '-created_at'])]
+
+
+class ResponseEvidencePack(TimeStampedModel):
+    linked_response_case = models.OneToOneField(
+        BaselineResponseCase,
+        on_delete=models.CASCADE,
+        related_name='evidence_pack',
+    )
+    summary = models.CharField(max_length=255)
+    linked_health_status = models.ForeignKey(
+        BaselineHealthStatus,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='response_evidence_packs',
+    )
+    linked_health_signals = models.JSONField(default=list, blank=True)
+    linked_evaluation_metrics = models.JSONField(default=dict, blank=True)
+    linked_risk_context = models.JSONField(default=dict, blank=True)
+    linked_opportunity_context = models.JSONField(default=dict, blank=True)
+    confidence_score = models.DecimalField(max_digits=6, decimal_places=4, default=0)
+    severity_score = models.DecimalField(max_digits=6, decimal_places=4, default=0)
+    urgency_score = models.DecimalField(max_digits=6, decimal_places=4, default=0)
+    evidence_status = models.CharField(
+        max_length=16,
+        choices=BaselineResponseEvidenceStatus.choices,
+        default=BaselineResponseEvidenceStatus.INSUFFICIENT,
+    )
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['evidence_status', '-created_at'])]
+
+
+class ResponseRoutingDecision(TimeStampedModel):
+    linked_response_case = models.OneToOneField(
+        BaselineResponseCase,
+        on_delete=models.CASCADE,
+        related_name='routing_decision',
+    )
+    routing_target = models.CharField(max_length=32, choices=BaselineResponseRoutingTarget.choices)
+    routing_status = models.CharField(max_length=16, choices=BaselineResponseRoutingStatus.choices, default=BaselineResponseRoutingStatus.PROPOSED)
+    routing_rationale = models.CharField(max_length=255)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['routing_target', 'routing_status', '-created_at'])]
+
+
+class BaselineResponseRecommendation(TimeStampedModel):
+    review_run = models.ForeignKey(BaselineResponseRun, on_delete=models.CASCADE, related_name='recommendations')
+    target_case = models.ForeignKey(
+        BaselineResponseCase,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    recommendation_type = models.CharField(max_length=48, choices=BaselineResponseRecommendationType.choices)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=6, decimal_places=4, default=0)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['recommendation_type', '-created_at'])]

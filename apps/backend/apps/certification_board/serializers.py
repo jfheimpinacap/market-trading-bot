@@ -1,6 +1,11 @@
 from rest_framework import serializers
 
 from apps.certification_board.models import (
+    BaselineResponseCase,
+    BaselineResponseRecommendation,
+    BaselineResponseRun,
+    ResponseEvidencePack,
+    ResponseRoutingDecision,
     BaselineHealthCandidate,
     BaselineHealthRecommendation,
     BaselineHealthRun,
@@ -219,4 +224,39 @@ class BaselineHealthSignalSerializer(serializers.ModelSerializer):
 class BaselineHealthRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = BaselineHealthRecommendation
+        fields = '__all__'
+
+
+class RunBaselineResponseReviewRequestSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui')
+    metadata = serializers.DictField(required=False)
+
+
+class BaselineResponseRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineResponseRun
+        fields = '__all__'
+
+
+class BaselineResponseCaseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineResponseCase
+        fields = '__all__'
+
+
+class ResponseEvidencePackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResponseEvidencePack
+        fields = '__all__'
+
+
+class ResponseRoutingDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResponseRoutingDecision
+        fields = '__all__'
+
+
+class BaselineResponseRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineResponseRecommendation
         fields = '__all__'
