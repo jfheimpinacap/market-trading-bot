@@ -1564,3 +1564,26 @@ This page provides:
 - recommendation board for prediction handoff
 
 The UX is manual-first and does not enable auto-trading or execution.
+
+## Risk runtime review board en `/risk-agent` (new)
+
+La vista `/risk-agent` ahora agrega una capa técnica de runtime review (sin reemplazar los controles legacy):
+
+- botón manual `Run risk runtime review`
+- summary cards: candidates, approved, approved reduced, blocked, watch required, sent to execution simulator
+- paneles para:
+  - approval decisions
+  - sizing plans (bounded/capped sizing)
+  - watch plans
+  - runtime recommendations
+- filtros por status (`APPROVED`, `APPROVED_REDUCED`, `BLOCKED`, `NEEDS_REVIEW`)
+- estados de empty/loading/error explícitos
+
+Frontend service nuevo:
+- `src/services/riskRuntime.ts`
+
+Sigue el límite operativo:
+- local-first
+- manual-first
+- paper/demo only
+- sin ejecución real y sin autoridad opaca de auto-trading

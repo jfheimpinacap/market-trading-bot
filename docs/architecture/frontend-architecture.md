@@ -1412,3 +1412,26 @@ Frontend now includes `/research-agent`, a technical board for market universe t
 - `/markets`, `/cockpit`, `/trace` for operator workflow continuity
 
 States include loading/error/empty and valid WATCHLIST/IGNORE outcomes.
+
+## Risk runtime review UX architecture (new)
+
+The `/risk-agent` route now includes a runtime-review section on top of legacy risk controls.
+
+Frontend layers:
+- API client integration through `src/services/riskRuntime.ts`
+- typed runtime models in `src/types/riskAgent.ts`
+- runtime board panels in `src/pages/RiskAgentPage.tsx`
+
+Runtime board responsibilities:
+- manual action: trigger `run-runtime-review`
+- summary cards: candidates / approved / approved reduced / blocked / watch required / sent to execution sim
+- decisions table: approval status, risk score, blockers, exposure hints
+- sizing table: mode, raw fraction, adjusted fraction, cap status, paper notional
+- watch table: status, triggers, interval, escalation path
+- recommendation table: approve/block/watch/exec-sim/review actions with rationale and confidence
+
+UX boundaries remain explicit:
+- manual-first actions
+- recommendation-first (no opaque execution authority)
+- paper/demo only
+- clear empty/loading/error states for runtime datasets
