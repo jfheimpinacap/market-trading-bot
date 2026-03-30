@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from apps.certification_board.models import (
+    BaselineBindingResolutionStatus,
+    BaselineConfirmationRecommendation,
+    BaselineConfirmationRecommendationType,
+    BaselineConfirmationRun,
     CertificationDecision,
     CertificationDecisionStatus,
     CertificationEvidenceSnapshot,
@@ -11,6 +15,8 @@ from apps.certification_board.models import (
     CertificationRecommendation as CertificationRecommendationModel,
     CertificationRecommendationCode,
     CertificationRecommendationType,
+    PaperBaselineConfirmation,
+    PaperBaselineConfirmationStatus,
     RolloutCertificationRun,
 )
 
@@ -182,4 +188,60 @@ def build_certification_recommendation(*, review_run: RolloutCertificationRun, d
             'decision_id': decision.id,
             'decision_status': decision.decision_status,
         },
+    )
+
+
+def build_baseline_confirmation_recommendation(
+    *, review_run: BaselineConfirmationRun, confirmation: PaperBaselineConfirmation
+) -> BaselineConfirmationRecommendation:
+    candidate = confirmation.linked_candidate
+
+    if confirmation.confirmation_status == PaperBaselineConfirmationStatus.CONFIRMED:
+        return BaselineConfirmationRecommendation.objects.create(
+            review_run=review_run,
+            target_confirmation=confirmation,
+            recommendation_type=BaselineConfirmationRecommendationType.PREPARE_BASELINE_ROLLBACK,
+            rationale='Confirmed baseline should keep an explicit rollback path to previous baseline.',
+            reason_codes=['ROLLBACK_SHOULD_STAY_AVAILABLE'],
+            confidence=Decimal('0.84'),
+            blockers=[],
+            metadata={'candidate_id': candidate.id},
+        )
+
+    if candidate.binding_resolution_status == BaselineBindingResolutionStatus.RESOLVED and candidate.ready_for_confirmation:
+        return BaselineConfirmationRecommendation.objects.create(
+            review_run=review_run,
+            target_confirmation=confirmation,
+            recommendation_type=BaselineConfirmationRecommendationType.CONFIRM_PAPER_BASELINE,
+            rationale='Certified decision has resolved previous/proposed references and is safe for manual confirmation.',
+            reason_codes=['CERTIFIED_AND_BINDINGS_RESOLVED'],
+            confidence=Decimal('0.86'),
+            blockers=[],
+            metadata={'candidate_id': candidate.id},
+        )
+
+    if candidate.binding_resolution_status in {
+        BaselineBindingResolutionStatus.BLOCKED,
+        BaselineBindingResolutionStatus.PARTIAL,
+    }:
+        return BaselineConfirmationRecommendation.objects.create(
+            review_run=review_run,
+            target_confirmation=confirmation,
+            recommendation_type=BaselineConfirmationRecommendationType.REQUIRE_BINDING_REVIEW,
+            rationale='Certification is available but baseline binding mapping is incomplete for safe manual adoption.',
+            reason_codes=['BINDING_MAPPING_INCOMPLETE'],
+            confidence=Decimal('0.78'),
+            blockers=candidate.blockers,
+            metadata={'candidate_id': candidate.id},
+        )
+
+    return BaselineConfirmationRecommendation.objects.create(
+        review_run=review_run,
+        target_confirmation=confirmation,
+        recommendation_type=BaselineConfirmationRecommendationType.DEFER_BASELINE_CONFIRMATION,
+        rationale='Baseline confirmation should be deferred until the committee re-checks evidence and priority.',
+        reason_codes=['DEFER_FOR_CONSERVATIVE_GOVERNANCE'],
+        confidence=Decimal('0.62'),
+        blockers=candidate.blockers,
+        metadata={'candidate_id': candidate.id},
     )

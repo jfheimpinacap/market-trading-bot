@@ -1,6 +1,11 @@
 from django.urls import path
 
 from apps.certification_board.views import (
+    BaselineBindingSnapshotListView,
+    BaselineConfirmationCandidateListView,
+    BaselineConfirmationRecommendationListView,
+    BaselineConfirmationSummaryView,
+    ConfirmPaperBaselineView,
     CertificationCandidateListView,
     CertificationDecisionListView,
     CertificationEvidencePackListView,
@@ -12,6 +17,9 @@ from apps.certification_board.views import (
     CertificationSummaryView,
     CurrentCertificationView,
     PostRolloutCertificationSummaryView,
+    PaperBaselineConfirmationListView,
+    RollbackPaperBaselineView,
+    RunBaselineConfirmationReviewView,
     RunPostRolloutCertificationReviewView,
 )
 
@@ -28,4 +36,12 @@ urlpatterns = [
     path('decisions/', CertificationDecisionListView.as_view(), name='decisions'),
     path('recommendations/', CertificationRecommendationListView.as_view(), name='recommendations'),
     path('post-rollout-summary/', PostRolloutCertificationSummaryView.as_view(), name='post-rollout-summary'),
+    path('run-baseline-confirmation/', RunBaselineConfirmationReviewView.as_view(), name='run-baseline-confirmation'),
+    path('baseline-candidates/', BaselineConfirmationCandidateListView.as_view(), name='baseline-candidates'),
+    path('baseline-confirmations/', PaperBaselineConfirmationListView.as_view(), name='baseline-confirmations'),
+    path('binding-snapshots/', BaselineBindingSnapshotListView.as_view(), name='binding-snapshots'),
+    path('baseline-recommendations/', BaselineConfirmationRecommendationListView.as_view(), name='baseline-recommendations'),
+    path('baseline-summary/', BaselineConfirmationSummaryView.as_view(), name='baseline-summary'),
+    path('confirm-baseline/<int:decision_id>/', ConfirmPaperBaselineView.as_view(), name='confirm-baseline'),
+    path('rollback-baseline/<int:confirmation_id>/', RollbackPaperBaselineView.as_view(), name='rollback-baseline'),
 ]

@@ -1,6 +1,10 @@
 from rest_framework import serializers
 
 from apps.certification_board.models import (
+    BaselineBindingSnapshot,
+    BaselineConfirmationCandidate,
+    BaselineConfirmationRecommendation,
+    BaselineConfirmationRun,
     CertificationCandidate,
     CertificationDecision,
     CertificationDecisionLog,
@@ -10,6 +14,7 @@ from apps.certification_board.models import (
     CertificationRun,
     RolloutCertificationRun,
     OperatingEnvelope,
+    PaperBaselineConfirmation,
 )
 
 
@@ -86,3 +91,43 @@ class RunPostRolloutReviewRequestSerializer(serializers.Serializer):
     actor = serializers.CharField(required=False, default='operator-ui')
     rollout_execution_run_id = serializers.IntegerField(required=False, min_value=1)
     metadata = serializers.DictField(required=False)
+
+
+class RunBaselineConfirmationReviewRequestSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui')
+    metadata = serializers.DictField(required=False)
+
+
+class ConfirmPaperBaselineRequestSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui')
+    rationale = serializers.CharField(required=False, allow_blank=True, default='')
+
+
+class BaselineConfirmationRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineConfirmationRun
+        fields = '__all__'
+
+
+class BaselineConfirmationCandidateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineConfirmationCandidate
+        fields = '__all__'
+
+
+class PaperBaselineConfirmationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaperBaselineConfirmation
+        fields = '__all__'
+
+
+class BaselineBindingSnapshotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineBindingSnapshot
+        fields = '__all__'
+
+
+class BaselineConfirmationRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineConfirmationRecommendation
+        fields = '__all__'

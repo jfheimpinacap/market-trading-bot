@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from apps.certification_board.models import CertificationCandidate, RolloutCertificationRun, StabilizationReadiness
+from apps.certification_board.models import (
+    BaselineBindingResolutionStatus,
+    BaselineConfirmationCandidate,
+    BaselineConfirmationRun,
+    CertificationCandidate,
+    CertificationDecision,
+    CertificationDecisionStatus,
+    RolloutCertificationRun,
+    StabilizationReadiness,
+)
+from apps.certification_board.services.binding_resolution import resolve_baseline_bindings
 from apps.promotion_committee.models import (
     PostRolloutStatus,
     PostRolloutStatusType,
@@ -94,6 +104,45 @@ def build_rollout_certification_candidates(
                     'manual_rollout_plan_id': execution.linked_rollout_plan_id,
                     'rollout_execution_id': execution.id,
                 },
+            },
+        )
+        candidates.append(candidate)
+
+    return candidates
+
+
+def build_baseline_confirmation_candidates(*, review_run: BaselineConfirmationRun) -> list[BaselineConfirmationCandidate]:
+    decisions = CertificationDecision.objects.select_related(
+        'linked_candidate',
+        'linked_candidate__linked_rollout_execution',
+        'linked_candidate__linked_promotion_case',
+    ).filter(decision_status=CertificationDecisionStatus.CERTIFIED_FOR_PAPER_BASELINE)
+
+    candidates: list[BaselineConfirmationCandidate] = []
+    for decision in decisions.order_by('-created_at', '-id'):
+        if BaselineConfirmationCandidate.objects.filter(linked_certification_decision=decision).exists():
+            continue
+
+        resolved = resolve_baseline_bindings(decision=decision)
+        ready = resolved.binding_resolution_status == BaselineBindingResolutionStatus.RESOLVED
+
+        candidate = BaselineConfirmationCandidate.objects.create(
+            review_run=review_run,
+            linked_certification_decision=decision,
+            linked_certification_candidate=decision.linked_candidate,
+            linked_rollout_execution=decision.linked_candidate.linked_rollout_execution,
+            target_component=decision.linked_candidate.target_component,
+            target_scope=decision.linked_candidate.target_scope,
+            certification_status=decision.decision_status,
+            previous_baseline_reference=resolved.previous_baseline_reference,
+            proposed_baseline_reference=resolved.proposed_baseline_reference,
+            binding_resolution_status=resolved.binding_resolution_status,
+            ready_for_confirmation=ready,
+            blockers=resolved.blockers,
+            metadata={
+                'binding_snapshot': resolved.snapshot,
+                'decision_id': decision.id,
+                'certification_candidate_id': decision.linked_candidate_id,
             },
         )
         candidates.append(candidate)

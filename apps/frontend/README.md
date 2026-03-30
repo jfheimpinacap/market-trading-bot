@@ -1760,3 +1760,19 @@ Data integration:
 Important boundary:
 - UI does not auto-certify, auto-promote, or auto-rollback.
 - paper/sandbox governance only.
+
+## `/certification` baseline confirmation section (new)
+
+The certification page now includes a dedicated baseline-confirmation board on top of post-rollout certification.
+
+It displays:
+- baseline summary cards (ready/blocked/confirmed/rollback-ready/binding-review-required)
+- baseline candidates (previous vs proposed baseline references + binding-resolution status)
+- paper baseline confirmations (manual status, actor, timestamp, rationale)
+- binding snapshots (previous/proposed/confirmed/reverted)
+- baseline recommendations (`CONFIRM_PAPER_BASELINE`, `REQUIRE_BINDING_REVIEW`, etc.)
+
+Service integration:
+- `src/services/baselineConfirmation.ts`
+- explicit manual actions: run baseline review, confirm baseline, prepare rollback
+- no automatic baseline/champion switch behavior

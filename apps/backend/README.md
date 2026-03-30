@@ -2886,3 +2886,22 @@ Boundary clarification:
 - rollout execution remains in `promotion_committee`.
 - certification consumes rollout evidence and emits recommendations only.
 - baseline confirmation stays explicit/manual; no active champion switch is applied automatically.
+
+## Baseline confirmation layer (certification_board)
+
+`apps.certification_board` now includes a post-certification baseline-adoption layer.
+
+Services:
+- `services/candidate_building.py`: builds baseline candidates from `CertificationDecision.CERTIFIED_FOR_PAPER_BASELINE`
+- `services/binding_resolution.py`: resolves previous/proposed baseline references + champion/policy/trust/rollout mapping snapshots
+- `services/confirmation.py`: creates `PaperBaselineConfirmation` and before/after binding snapshots; manual confirm endpoint only
+- `services/rollback.py`: prepares rollback availability using previous baseline snapshot
+- `services/recommendation.py`: emits conservative confirmation recommendations
+- `services/run.py`: orchestrates `BaselineConfirmationRun`
+
+Scope/constraints:
+- certify != baseline switch
+- no auto baseline mutation
+- no auto champion switch
+- explicit manual confirmation and rollback preparation only
+- paper/sandbox governance only

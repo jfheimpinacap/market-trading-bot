@@ -158,3 +158,90 @@ export type PostRolloutCertificationSummary = {
   recommendation_summary: Record<string, number>;
   decision_counts: Record<string, number>;
 };
+
+export type BaselineConfirmationRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  linked_certification_run: number | null;
+  candidate_count: number;
+  ready_to_confirm_count: number;
+  blocked_count: number;
+  confirmed_count: number;
+  rollback_ready_count: number;
+  recommendation_summary: Record<string, number>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineConfirmationCandidate = {
+  id: number;
+  review_run: number;
+  linked_certification_decision: number;
+  linked_certification_candidate: number;
+  linked_rollout_execution: number | null;
+  target_component: string;
+  target_scope: string;
+  certification_status: string;
+  previous_baseline_reference: string;
+  proposed_baseline_reference: string;
+  binding_resolution_status: 'RESOLVED' | 'PARTIAL' | 'BLOCKED' | 'UNKNOWN';
+  ready_for_confirmation: boolean;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type PaperBaselineConfirmation = {
+  id: number;
+  linked_candidate: number;
+  linked_certification_decision: number;
+  confirmation_status: string;
+  target_component: string;
+  target_scope: string;
+  previous_baseline_snapshot: Record<string, unknown>;
+  confirmed_baseline_snapshot: Record<string, unknown>;
+  confirmed_by: string;
+  confirmed_at: string | null;
+  rationale: string;
+  reason_codes: string[];
+  blockers: string[];
+  linked_binding_artifact: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BaselineBindingSnapshot = {
+  id: number;
+  linked_confirmation: number;
+  binding_type: string;
+  binding_status: 'PREVIOUS' | 'PROPOSED' | 'CONFIRMED' | 'REVERTED';
+  binding_snapshot: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineConfirmationRecommendationItem = {
+  id: number;
+  review_run: number;
+  target_confirmation: number | null;
+  recommendation_type: string;
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineConfirmationSummary = {
+  latest_run: BaselineConfirmationRun | null;
+  candidate_count: number;
+  ready_to_confirm_count: number;
+  blocked_count: number;
+  confirmed_count: number;
+  rollback_ready_count: number;
+  binding_review_required_count: number;
+  recommendation_summary: Record<string, number>;
+};

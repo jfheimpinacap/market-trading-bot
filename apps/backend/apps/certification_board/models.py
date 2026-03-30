@@ -239,3 +239,161 @@ class CertificationRecommendation(TimeStampedModel):
     class Meta:
         ordering = ['-created_at', '-id']
         indexes = [models.Index(fields=['recommendation_type', '-created_at'])]
+
+
+class BaselineBindingResolutionStatus(models.TextChoices):
+    RESOLVED = 'RESOLVED', 'Resolved'
+    PARTIAL = 'PARTIAL', 'Partial'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    UNKNOWN = 'UNKNOWN', 'Unknown'
+
+
+class PaperBaselineConfirmationStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    READY_TO_CONFIRM = 'READY_TO_CONFIRM', 'Ready to confirm'
+    CONFIRMED = 'CONFIRMED', 'Confirmed'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    DEFERRED = 'DEFERRED', 'Deferred'
+    ROLLBACK_AVAILABLE = 'ROLLBACK_AVAILABLE', 'Rollback available'
+
+
+class BaselineBindingType(models.TextChoices):
+    CHAMPION_REFERENCE = 'champion_reference', 'Champion reference'
+    STACK_PROFILE_BINDING = 'stack_profile_binding', 'Stack profile binding'
+    TRUST_CALIBRATION_BINDING = 'trust_calibration_binding', 'Trust calibration binding'
+    POLICY_TUNING_BINDING = 'policy_tuning_binding', 'Policy tuning binding'
+    ROLLOUT_REFERENCE = 'rollout_reference', 'Rollout reference'
+
+
+class BaselineBindingStatus(models.TextChoices):
+    PREVIOUS = 'PREVIOUS', 'Previous'
+    PROPOSED = 'PROPOSED', 'Proposed'
+    CONFIRMED = 'CONFIRMED', 'Confirmed'
+    REVERTED = 'REVERTED', 'Reverted'
+
+
+class BaselineConfirmationRecommendationType(models.TextChoices):
+    CONFIRM_PAPER_BASELINE = 'CONFIRM_PAPER_BASELINE', 'Confirm paper baseline'
+    REQUIRE_BINDING_REVIEW = 'REQUIRE_BINDING_REVIEW', 'Require binding review'
+    DEFER_BASELINE_CONFIRMATION = 'DEFER_BASELINE_CONFIRMATION', 'Defer baseline confirmation'
+    PREPARE_BASELINE_ROLLBACK = 'PREPARE_BASELINE_ROLLBACK', 'Prepare baseline rollback'
+    REQUIRE_COMMITTEE_RECHECK = 'REQUIRE_COMMITTEE_RECHECK', 'Require committee recheck'
+    REORDER_BASELINE_PRIORITY = 'REORDER_BASELINE_PRIORITY', 'Reorder baseline priority'
+
+
+class BaselineConfirmationRun(TimeStampedModel):
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    linked_certification_run = models.ForeignKey(
+        RolloutCertificationRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='baseline_confirmation_runs',
+    )
+    candidate_count = models.PositiveIntegerField(default=0)
+    ready_to_confirm_count = models.PositiveIntegerField(default=0)
+    blocked_count = models.PositiveIntegerField(default=0)
+    confirmed_count = models.PositiveIntegerField(default=0)
+    rollback_ready_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class BaselineConfirmationCandidate(TimeStampedModel):
+    review_run = models.ForeignKey(BaselineConfirmationRun, on_delete=models.CASCADE, related_name='candidates')
+    linked_certification_decision = models.ForeignKey(
+        CertificationDecision, on_delete=models.CASCADE, related_name='baseline_confirmation_candidates'
+    )
+    linked_certification_candidate = models.ForeignKey(
+        CertificationCandidate, on_delete=models.CASCADE, related_name='baseline_confirmation_candidates'
+    )
+    linked_rollout_execution = models.ForeignKey(
+        'promotion_committee.RolloutExecutionRecord',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='baseline_confirmation_candidates',
+    )
+    target_component = models.CharField(max_length=32)
+    target_scope = models.CharField(max_length=24)
+    certification_status = models.CharField(max_length=40, choices=CertificationDecisionStatus.choices)
+    previous_baseline_reference = models.CharField(max_length=255, blank=True)
+    proposed_baseline_reference = models.CharField(max_length=255, blank=True)
+    binding_resolution_status = models.CharField(
+        max_length=16, choices=BaselineBindingResolutionStatus.choices, default=BaselineBindingResolutionStatus.UNKNOWN
+    )
+    ready_for_confirmation = models.BooleanField(default=False)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['binding_resolution_status', '-created_at'])]
+
+
+class PaperBaselineConfirmation(TimeStampedModel):
+    linked_candidate = models.OneToOneField(
+        BaselineConfirmationCandidate, on_delete=models.CASCADE, related_name='baseline_confirmation'
+    )
+    linked_certification_decision = models.ForeignKey(
+        CertificationDecision, on_delete=models.CASCADE, related_name='paper_baseline_confirmations'
+    )
+    confirmation_status = models.CharField(
+        max_length=24, choices=PaperBaselineConfirmationStatus.choices, default=PaperBaselineConfirmationStatus.PROPOSED
+    )
+    target_component = models.CharField(max_length=32)
+    target_scope = models.CharField(max_length=24)
+    previous_baseline_snapshot = models.JSONField(default=dict, blank=True)
+    confirmed_baseline_snapshot = models.JSONField(default=dict, blank=True)
+    confirmed_by = models.CharField(max_length=120, blank=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    blockers = models.JSONField(default=list, blank=True)
+    linked_binding_artifact = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['confirmation_status', '-created_at'])]
+
+
+class BaselineBindingSnapshot(TimeStampedModel):
+    linked_confirmation = models.ForeignKey(
+        PaperBaselineConfirmation, on_delete=models.CASCADE, related_name='binding_snapshots'
+    )
+    binding_type = models.CharField(max_length=40, choices=BaselineBindingType.choices)
+    binding_status = models.CharField(max_length=16, choices=BaselineBindingStatus.choices)
+    binding_snapshot = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['binding_type', 'binding_status', '-created_at'])]
+
+
+class BaselineConfirmationRecommendation(TimeStampedModel):
+    review_run = models.ForeignKey(
+        BaselineConfirmationRun, on_delete=models.CASCADE, related_name='recommendations'
+    )
+    target_confirmation = models.ForeignKey(
+        PaperBaselineConfirmation,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    recommendation_type = models.CharField(max_length=48, choices=BaselineConfirmationRecommendationType.choices)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=6, decimal_places=4, default=0)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['recommendation_type', '-created_at'])]
