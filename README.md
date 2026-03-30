@@ -75,6 +75,33 @@ The platform now includes an **experiment runner** for profile-based comparison 
 - frontend route `/experiments` with profile cards, run launcher, run history, and side-by-side comparison table
 - strict scope remains paper/demo only: no real money, no real execution, no ML/LLM tuning
 
+### Governed tuning validation / champion-challenger paper loop (new)
+
+The experiments layer now includes a controlled validation loop between `tuning_board` proposals and manual promotion review:
+
+- consumes `TuningProposal` / `TuningProposalBundle` outputs without re-deriving proposals
+- creates auditable `TuningExperimentRun` + `ExperimentCandidate` records
+- runs explicit baseline/champion vs challenger comparisons in paper/replay-evaluation context
+- stores `TuningChampionChallengerComparison` deltas with status (`IMPROVED`, `DEGRADED`, `MIXED`, `INCONCLUSIVE`, `NEEDS_MORE_DATA`)
+- emits `ExperimentPromotionRecommendation` outcomes:
+  - `PROMOTE_TO_MANUAL_REVIEW`
+  - `KEEP_BASELINE`
+  - `REQUIRE_MORE_DATA`
+  - `REJECT_CHALLENGER`
+  - `BUNDLE_WITH_OTHER_CHANGES`
+
+API:
+- `POST /api/experiments/run-tuning-validation/`
+- `GET /api/experiments/tuning-candidates/`
+- `GET /api/experiments/champion-challenger-comparisons/`
+- `GET /api/experiments/promotion-recommendations/`
+- `GET /api/experiments/tuning-validation-summary/`
+
+Hard boundaries remain unchanged:
+- no auto-apply of tuning proposals
+- no auto-promotion to champion
+- no real-money or broker/exchange execution
+
 ### Execution-aware replay / evaluation realism / readiness impact (new)
 
 The platform now supports a practical execution realism bridge across replay, evaluation, experiments, and readiness:
@@ -1724,4 +1751,3 @@ Primary endpoints:
 - `GET /api/tuning/recommendations/`
 - `GET /api/tuning/summary/`
 - `GET /api/tuning/bundles/` (optional grouping panel)
-

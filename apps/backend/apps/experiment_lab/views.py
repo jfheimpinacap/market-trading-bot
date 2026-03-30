@@ -4,8 +4,23 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.experiment_lab.models import ExperimentRun, StrategyProfile
-from apps.experiment_lab.serializers import ExperimentRunRequestSerializer, ExperimentRunSerializer, StrategyProfileSerializer
-from apps.experiment_lab.services import compare_experiment_runs, execute_experiment, seed_strategy_profiles
+from apps.experiment_lab.serializers import (
+    ExperimentCandidateSerializer,
+    ExperimentPromotionRecommendationSerializer,
+    ExperimentRunRequestSerializer,
+    ExperimentRunSerializer,
+    StrategyProfileSerializer,
+    TuningChampionChallengerComparisonSerializer,
+    TuningValidationRunRequestSerializer,
+)
+from apps.experiment_lab.services import (
+    build_tuning_validation_summary,
+    compare_experiment_runs,
+    execute_experiment,
+    run_tuning_validation,
+    seed_strategy_profiles,
+)
+from apps.experiment_lab.models import ExperimentCandidate, ExperimentPromotionRecommendation, TuningChampionChallengerComparison
 
 
 class StrategyProfileListView(generics.ListAPIView):
@@ -92,3 +107,74 @@ class SeedStrategyProfilesView(APIView):
 
     def post(self, request, *args, **kwargs):
         return Response(seed_strategy_profiles(), status=status.HTTP_200_OK)
+
+
+class RunTuningValidationView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = TuningValidationRunRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_tuning_validation(
+            linked_tuning_review_run_id=serializer.validated_data.get('linked_tuning_review_run_id'),
+            metadata=serializer.validated_data.get('metadata') or {},
+        )
+        return Response(
+            {
+                'run_id': run.id,
+                'candidate_count': run.candidate_count,
+                'comparison_count': run.comparison_count,
+                'recommendation_summary': run.recommendation_summary,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class TuningCandidateListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ExperimentCandidateSerializer
+
+    def get_queryset(self):
+        queryset = ExperimentCandidate.objects.select_related('linked_tuning_proposal', 'linked_tuning_bundle', 'run').order_by('-created_at', '-id')
+        component = self.request.query_params.get('component')
+        scope = self.request.query_params.get('scope')
+        readiness = self.request.query_params.get('readiness_status')
+        if component:
+            queryset = queryset.filter(linked_tuning_proposal__target_component=component)
+        if scope:
+            queryset = queryset.filter(experiment_scope=scope)
+        if readiness:
+            queryset = queryset.filter(readiness_status=readiness)
+        return queryset[:200]
+
+
+class ChampionChallengerComparisonListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = TuningChampionChallengerComparisonSerializer
+
+    def get_queryset(self):
+        queryset = TuningChampionChallengerComparison.objects.select_related('linked_candidate', 'run').order_by('-created_at', '-id')
+        status_param = self.request.query_params.get('comparison_status')
+        if status_param:
+            queryset = queryset.filter(comparison_status=status_param)
+        return queryset[:200]
+
+
+class PromotionRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ExperimentPromotionRecommendationSerializer
+
+    def get_queryset(self):
+        return ExperimentPromotionRecommendation.objects.select_related('target_candidate', 'target_comparison', 'run').order_by('-created_at', '-id')[:200]
+
+
+class TuningValidationSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(build_tuning_validation_summary(), status=status.HTTP_200_OK)

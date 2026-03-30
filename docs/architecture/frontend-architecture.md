@@ -78,6 +78,7 @@ Instead, each page coordinates a small set of explicit service calls.
 - `services/riskDemo.ts` for pre-trade assessment
 - `services/policy.ts` for trade approval evaluation and policy decision summaries
 - `services/experiments.ts` for strategy profiles, experiment runs, and run comparisons
+- `services/tuningValidation.ts` for governed tuning candidates, champion-challenger comparisons, promotion recommendations, and summary in `/experiments`
 - `services/research.ts` for mixed narrative source management (`RSS` + `REDDIT` + optional `TWITTER`), ingest/analysis/full-scan controls, and shortlist/candidate data.
 - `services/policyRollout.ts` for rollout-monitor start/list/detail/evaluate/rollback/summary APIs tied to post-change policy tuning governance.
 - `services/predictionRuntime.ts` for runtime review run/candidates/assessments/recommendations/summary in `/prediction`.
@@ -425,6 +426,15 @@ The `/experiments` page introduces a technical A/B workflow without changing rou
 - fetches strategy profiles and run history with page-local state
 - executes profile-based experiment runs via `/api/experiments/run/`
 - compares two runs with `/api/experiments/comparison/`
+- adds governed tuning-validation blocks sourced from:
+  - `POST /api/experiments/run-tuning-validation/`
+  - `GET /api/experiments/tuning-candidates/`
+  - `GET /api/experiments/champion-challenger-comparisons/`
+  - `GET /api/experiments/promotion-recommendations/`
+  - `GET /api/experiments/tuning-validation-summary/`
+- presents explicit manual-first UX states for `READY`, `NEEDS_MORE_DATA`, `IMPROVED`, `DEGRADED`, `MIXED`, `INCONCLUSIVE`, and recommendation outcomes.
+
+This keeps one consolidated operator surface in `/experiments` instead of fragmenting into a parallel route, while preserving conservative behavior (no auto-promotion and no auto-apply).
 - links from evaluation/replay to keep navigation continuity
 
 UX remains sober and desktop-first: cards/tables/badges, clear loading/error/empty states, and explicit paper/demo-only messaging.
@@ -1494,4 +1504,3 @@ Primary endpoints:
 - `GET /api/tuning/recommendations/`
 - `GET /api/tuning/summary/`
 - `GET /api/tuning/bundles/` (optional grouping panel)
-

@@ -6,9 +6,14 @@ from apps.experiment_lab.views import (
     ExperimentRunDetailView,
     ExperimentRunListView,
     ExperimentSummaryView,
+    ChampionChallengerComparisonListView,
+    PromotionRecommendationListView,
+    RunTuningValidationView,
     SeedStrategyProfilesView,
     StrategyProfileDetailView,
     StrategyProfileListView,
+    TuningCandidateListView,
+    TuningValidationSummaryView,
 )
 
 urlpatterns = [
@@ -20,4 +25,9 @@ urlpatterns = [
     path('comparison/', ExperimentComparisonView.as_view(), name='comparison'),
     path('summary/', ExperimentSummaryView.as_view(), name='summary'),
     path('seed-profiles/', SeedStrategyProfilesView.as_view(), name='seed-profiles'),
+    path('run-tuning-validation/', RunTuningValidationView.as_view(), name='run-tuning-validation'),
+    path('tuning-candidates/', TuningCandidateListView.as_view(), name='tuning-candidates'),
+    path('champion-challenger-comparisons/', ChampionChallengerComparisonListView.as_view(), name='champion-challenger-comparisons'),
+    path('promotion-recommendations/', PromotionRecommendationListView.as_view(), name='promotion-recommendations'),
+    path('tuning-validation-summary/', TuningValidationSummaryView.as_view(), name='tuning-validation-summary'),
 ]

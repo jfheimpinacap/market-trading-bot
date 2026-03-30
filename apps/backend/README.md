@@ -56,6 +56,35 @@ Design boundaries:
 - recommendation-first handoff only
 - risk/policy/safety remain the downstream authority
 
+## Governed tuning validation layer (new)
+
+`apps.experiment_lab` now includes a dedicated governed experiment board for validating `tuning_board` proposals before any manual adoption step.
+
+Core entities:
+- `TuningExperimentRun`
+- `ExperimentCandidate`
+- `TuningChampionChallengerComparison`
+- `ExperimentPromotionRecommendation`
+
+Service split:
+- `services/candidate_building.py`
+- `services/baseline_challenger.py`
+- `services/tuning_comparison.py`
+- `services/recommendation.py`
+- `services/run.py`
+
+Endpoints:
+- `POST /api/experiments/run-tuning-validation/`
+- `GET /api/experiments/tuning-candidates/`
+- `GET /api/experiments/champion-challenger-comparisons/`
+- `GET /api/experiments/promotion-recommendations/`
+- `GET /api/experiments/tuning-validation-summary/`
+
+Boundary guarantees:
+- recommendation-first only (no auto-apply)
+- paper/replay/evaluation evidence only
+- no automatic champion promotion
+
 ## Internal structure
 
 ```text
@@ -2715,4 +2744,3 @@ Primary endpoints:
 - `GET /api/tuning/recommendations/`
 - `GET /api/tuning/summary/`
 - `GET /api/tuning/bundles/` (optional grouping panel)
-

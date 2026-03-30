@@ -12,7 +12,20 @@ import {
   runExperiment,
   seedExperimentProfiles,
 } from '../../services/experiments';
+import {
+  getChampionChallengerComparisons,
+  getExperimentPromotionRecommendations,
+  getTuningExperimentCandidates,
+  getTuningValidationSummary,
+  runTuningValidation,
+} from '../../services/tuningValidation';
 import type { ExperimentComparison, ExperimentRun, ExperimentRunType, RunExperimentPayload, StrategyProfile } from '../../types/experiments';
+import type {
+  ChampionChallengerComparison,
+  ExperimentCandidate,
+  ExperimentPromotionRecommendation,
+  TuningValidationSummary,
+} from '../../types/tuningValidation';
 
 function statusTone(value: string) {
   if (value === 'SUCCESS' || value === 'READY') return 'ready';
@@ -53,16 +66,40 @@ export function ExperimentsPage() {
   const [form, setForm] = useState<RunExperimentPayload>(defaultForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
+  const [isRunningValidation, setIsRunningValidation] = useState(false);
   const [seedBusy, setSeedBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tuningSummary, setTuningSummary] = useState<TuningValidationSummary | null>(null);
+  const [tuningCandidates, setTuningCandidates] = useState<ExperimentCandidate[]>([]);
+  const [governedComparisons, setGovernedComparisons] = useState<ChampionChallengerComparison[]>([]);
+  const [promotionRecommendations, setPromotionRecommendations] = useState<ExperimentPromotionRecommendation[]>([]);
+  const [componentFilter, setComponentFilter] = useState<string>('all');
+  const [scopeFilter, setScopeFilter] = useState<string>('all');
+  const [comparisonStatusFilter, setComparisonStatusFilter] = useState<string>('all');
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [profileResponse, runResponse] = await Promise.all([getStrategyProfiles(), getExperimentRuns()]);
+      const [profileResponse, runResponse, validationSummary, candidateResponse, comparisonResponse, recommendationResponse] = await Promise.all([
+        getStrategyProfiles(),
+        getExperimentRuns(),
+        getTuningValidationSummary(),
+        getTuningExperimentCandidates({
+          component: componentFilter === 'all' ? undefined : componentFilter,
+          scope: scopeFilter === 'all' ? undefined : scopeFilter,
+        }),
+        getChampionChallengerComparisons({
+          comparison_status: comparisonStatusFilter === 'all' ? undefined : comparisonStatusFilter,
+        }),
+        getExperimentPromotionRecommendations(),
+      ]);
       setProfiles(profileResponse);
       setRuns(runResponse);
+      setTuningSummary(validationSummary);
+      setTuningCandidates(candidateResponse);
+      setGovernedComparisons(comparisonResponse);
+      setPromotionRecommendations(recommendationResponse);
       if (!form.strategy_profile_id && profileResponse.length) {
         setForm((prev) => ({ ...prev, strategy_profile_id: profileResponse[0].id }));
       }
@@ -75,7 +112,7 @@ export function ExperimentsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [form.strategy_profile_id]);
+  }, [comparisonStatusFilter, componentFilter, form.strategy_profile_id, scopeFilter]);
 
   useEffect(() => {
     void loadData();
@@ -119,13 +156,26 @@ export function ExperimentsPage() {
     }
   }
 
+  async function runGovernedValidation() {
+    setIsRunningValidation(true);
+    setError(null);
+    try {
+      await runTuningValidation({ metadata: { triggered_from: '/experiments' } });
+      await loadData();
+    } catch (runError) {
+      setError(getErrorMessage(runError, 'Could not run tuning validation.'));
+    } finally {
+      setIsRunningValidation(false);
+    }
+  }
+
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Experiment runner / strategy profiles"
+        eyebrow="Experiments / governed tuning validation"
         title="Experiments"
-        description="Compare strategy profiles across replay and live-paper evaluation in a local-first, paper/demo-only workflow. No real-money execution is enabled."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/replay')}>Open Replay</button><button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>Open Evaluation</button><button type="button" className="secondary-button" onClick={() => navigate('/readiness')}>Open Readiness</button><button type="button" className="secondary-button" disabled={seedBusy} onClick={() => void seedProfiles()}>{seedBusy ? 'Seeding…' : 'Seed base profiles'}</button></div>}
+        description="Replay/paper experiment runner and governed tuning validation board. Local-first, manual-first, paper-only. No auto-promotion and no auto-apply."
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/replay')}>Open Replay</button><button type="button" className="secondary-button" onClick={() => navigate('/evaluation')}>Open Evaluation</button><button type="button" className="secondary-button" onClick={() => navigate('/tuning')}>Open Tuning</button><button type="button" className="secondary-button" disabled={seedBusy} onClick={() => void seedProfiles()}>{seedBusy ? 'Seeding…' : 'Seed base profiles'}</button><button type="button" className="primary-button" disabled={isRunningValidation} onClick={() => void runGovernedValidation()}>{isRunningValidation ? 'Running validation…' : 'Run tuning validation'}</button></div>}
       />
 
       <DataStateWrapper isLoading={isLoading} isError={Boolean(error)} errorMessage={error ?? undefined}>
@@ -288,6 +338,87 @@ export function ExperimentsPage() {
                     </>
                   ) : null}
                 </>
+              )}
+            </SectionCard>
+
+            <SectionCard eyebrow="Governed tuning validation" title="Summary" description="Controlled champion-challenger validation for tuning proposals before manual review.">
+              <div className="stats-grid">
+                <article><h3>Candidates reviewed</h3><p>{tuningSummary?.candidates_reviewed ?? 0}</p></article>
+                <article><h3>Comparisons run</h3><p>{tuningSummary?.comparisons_run ?? 0}</p></article>
+                <article><h3>Improved</h3><p>{tuningSummary?.improved ?? 0}</p></article>
+                <article><h3>Degraded</h3><p>{tuningSummary?.degraded ?? 0}</p></article>
+                <article><h3>Inconclusive</h3><p>{tuningSummary?.inconclusive ?? 0}</p></article>
+                <article><h3>Ready for manual review</h3><p>{tuningSummary?.ready_for_manual_review ?? 0}</p></article>
+              </div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Candidates" title="Tuning experiment candidates" description="Bounded challengers derived from tuning proposals for paper/replay comparison.">
+              <div className="system-metadata-grid">
+                <label>Component filter<input value={componentFilter} onChange={(event) => setComponentFilter(event.target.value || 'all')} placeholder="all / prediction / risk / calibration" /></label>
+                <label>Scope filter<input value={scopeFilter} onChange={(event) => setScopeFilter(event.target.value || 'all')} placeholder="all / global / provider / category" /></label>
+                <label>Status filter<input value={comparisonStatusFilter} onChange={(event) => setComparisonStatusFilter(event.target.value || 'all')} placeholder="all / IMPROVED / DEGRADED / MIXED" /></label>
+              </div>
+              {!tuningCandidates.length ? <EmptyState eyebrow="No governed candidates" title="No governed tuning experiment candidates are available yet." description="No governed tuning experiment candidates are available yet. Run tuning validation to compare challengers against the baseline." /> : (
+                <div className="table-wrapper">
+                  <table className="data-table">
+                    <thead><tr><th>Proposal</th><th>Component</th><th>Scope</th><th>Baseline</th><th>Challenger</th><th>Readiness</th><th>Blockers</th></tr></thead>
+                    <tbody>
+                      {tuningCandidates.map((candidate) => (
+                        <tr key={candidate.id}>
+                          <td>{candidate.metadata.proposal_type as string}</td>
+                          <td>{candidate.metadata.target_component as string}</td>
+                          <td>{candidate.experiment_scope}</td>
+                          <td>{candidate.baseline_reference}</td>
+                          <td>{candidate.challenger_label}</td>
+                          <td><StatusBadge tone={candidate.readiness_status === 'READY' ? 'ready' : candidate.readiness_status === 'BLOCKED' ? 'offline' : 'pending'}>{candidate.readiness_status}</StatusBadge></td>
+                          <td>{candidate.blockers.join(', ') || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </SectionCard>
+
+            <SectionCard eyebrow="Comparisons" title="Champion vs challenger results" description="Deltas sourced from paper/replay/evaluation metric context.">
+              {!governedComparisons.length ? <p className="muted-text">No comparisons yet.</p> : (
+                <div className="table-wrapper">
+                  <table className="data-table">
+                    <thead><tr><th>Baseline</th><th>Challenger</th><th>Status</th><th>Sample</th><th>Confidence</th><th>Rationale</th></tr></thead>
+                    <tbody>
+                      {governedComparisons.map((item) => (
+                        <tr key={item.id}>
+                          <td>{item.baseline_label}</td>
+                          <td>{item.challenger_label}</td>
+                          <td><StatusBadge tone={item.comparison_status === 'IMPROVED' ? 'ready' : item.comparison_status === 'DEGRADED' ? 'offline' : 'pending'}>{item.comparison_status}</StatusBadge></td>
+                          <td>{item.sample_count}</td>
+                          <td>{item.confidence_score}</td>
+                          <td>{item.rationale}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </SectionCard>
+
+            <SectionCard eyebrow="Recommendations" title="Promotion recommendations" description="Recommendation-first outcomes for manual governance. No auto-promotion.">
+              {!promotionRecommendations.length ? <p className="muted-text">No promotion recommendations yet.</p> : (
+                <div className="table-wrapper">
+                  <table className="data-table">
+                    <thead><tr><th>Recommendation</th><th>Rationale</th><th>Reason codes</th><th>Confidence</th></tr></thead>
+                    <tbody>
+                      {promotionRecommendations.map((item) => (
+                        <tr key={item.id}>
+                          <td><StatusBadge tone={item.recommendation_type === 'PROMOTE_TO_MANUAL_REVIEW' ? 'ready' : item.recommendation_type === 'REJECT_CHALLENGER' ? 'offline' : 'pending'}>{item.recommendation_type}</StatusBadge></td>
+                          <td>{item.rationale}</td>
+                          <td>{item.reason_codes.join(', ') || '—'}</td>
+                          <td>{item.confidence}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </SectionCard>
           </>
