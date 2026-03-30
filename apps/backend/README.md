@@ -2496,3 +2496,29 @@ Non-goals:
 - no real broker/exchange execution
 - no real-money execution
 - no opaque auto-apply to roadmap/scenario/program/manager
+
+## Autonomy seed review board layer (new)
+
+`apps.autonomy_seed_review` closes the seed handoff loop after `apps.autonomy_seed` registration.
+
+What it does:
+- consumes existing `GovernanceSeed` rows (does not register or deduplicate seeds)
+- persists auditable `SeedResolution` outcomes (`PENDING`, `ACKNOWLEDGED`, `ACCEPTED`, `DEFERRED`, `REJECTED`, `BLOCKED`, `CLOSED`)
+- emits `SeedReviewRecommendation` guidance and run snapshots (`SeedReviewRun`)
+- supports manual-first actions: acknowledge/accept/defer/reject
+
+What it does not do:
+- no auto-apply into roadmap/scenario/program/manager
+- no real broker/exchange execution
+- no opaque planner/ML authority
+
+Endpoints:
+- `GET /api/autonomy-seed-review/candidates/`
+- `POST /api/autonomy-seed-review/run-review/`
+- `GET /api/autonomy-seed-review/resolutions/`
+- `GET /api/autonomy-seed-review/recommendations/`
+- `GET /api/autonomy-seed-review/summary/`
+- `POST /api/autonomy-seed-review/acknowledge/<seed_id>/`
+- `POST /api/autonomy-seed-review/accept/<seed_id>/`
+- `POST /api/autonomy-seed-review/defer/<seed_id>/`
+- `POST /api/autonomy-seed-review/reject/<seed_id>/`

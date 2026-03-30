@@ -1585,3 +1585,14 @@ A new `autonomy_seed` layer now turns `autonomy_package_review` outcomes in `ADO
 - keeps full trace continuity from package/decision lineage into registered seed artifacts
 
 Out of scope remains unchanged: no real money, no real broker/exchange execution, and no opaque auto-apply planner behavior.
+
+### Autonomy seed review board / seed resolution tracker (new)
+
+The stack now includes a dedicated `autonomy_seed_review` layer (`/api/autonomy-seed-review/*` + `/autonomy-seed-review`) that closes the post-registration governance loop for next-cycle seeds.
+
+- consumes already-registered `autonomy_seed.GovernanceSeed` artifacts
+- records auditable downstream resolution states (`ACKNOWLEDGED`, `ACCEPTED`, `DEFERRED`, `REJECTED`, etc.)
+- emits recommendation-first review guidance and run snapshots
+- keeps seed adoption manual-first (no opaque auto-apply into roadmap/scenario/program/manager)
+
+Out of scope remains explicit: no real-money execution, no broker/exchange live routing, and no black-box planner authority.

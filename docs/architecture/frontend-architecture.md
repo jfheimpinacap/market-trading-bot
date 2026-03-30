@@ -1357,3 +1357,13 @@ Added `/autonomy-seed` as a dedicated governance board page with service-local s
 - recommendation-first posture
 - clear empty/loading/error states
 - no opaque auto-apply behavior in UI flow
+
+## Seed review UI integration (new)
+
+Added `/autonomy-seed-review` as a dedicated governance route with:
+- `services/autonomySeedReview.ts` API boundary
+- `types/autonomySeedReview.ts` typed payloads for candidates/resolutions/recommendations/summary
+- manual-first actions and explicit loading/error/empty states
+- drill-down links to `/trace` and quick links to `/autonomy-seed`, `/cockpit`, and governance neighbors
+
+Design intent remains conservative: recommendation-first tracking, no opaque auto-apply.

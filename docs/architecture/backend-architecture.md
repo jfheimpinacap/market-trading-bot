@@ -1709,3 +1709,22 @@ This keeps a closed, traceable loop from decision packaging to package resolutio
 - no re-registration of packages
 - no automatic mutation of roadmap/scenario/program/manager
 - output is explicit reusable seed artifacts for next-cycle planning input
+
+## Autonomy seed review architecture (new)
+
+`apps.autonomy_seed_review` is a post-registration governance boundary:
+
+- input: `autonomy_seed.GovernanceSeed`
+- output: `SeedResolution`, `SeedReviewRun`, `SeedReviewRecommendation`
+
+Service split:
+- `services/candidates.py`: candidate projection from registered seeds
+- `services/status.py`: explicit downstream status + readiness rules
+- `services/recommendation.py`: recommendation-first action guidance
+- `services/control.py`: manual acknowledge/accept/defer/reject actions
+- `services/run.py`: auditable run consolidation + recommendation summary
+
+Boundary:
+- seed registration remains in `autonomy_seed`
+- no roadmap/scenario/program/manager auto-mutation
+- local-first, single-user, paper/sandbox-only scope
