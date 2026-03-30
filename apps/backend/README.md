@@ -2829,3 +2829,27 @@ Explicitly out of scope:
 - any auto-rollout / auto-switch
 - live broker/exchange execution
 - silent mutation paths
+
+## Manual rollout execution + post-rollout safety loop (new)
+
+`apps.promotion_committee` now adds a dedicated manual execution layer on top of rollout preparation.
+
+### What it does
+- consumes `ManualRolloutPlan` + `RolloutCheckpointPlan` prepared by rollout prep
+- records manual rollout execution and stage progress
+- records auditable real checkpoint outcomes (`PASSED` / `FAILED` / `WARNING` / `SKIPPED`)
+- emits post-rollout safety state (`HEALTHY` / `CAUTION` / `REVIEW_REQUIRED` / `ROLLBACK_RECOMMENDED` / `REVERTED` / `INCOMPLETE`)
+- emits conservative bounded recommendations for manual continue/pause/review/rollback/close
+
+### Service split
+- `services/rollout_execution/execution.py`
+- `services/rollout_execution/checkpoint_outcomes.py`
+- `services/rollout_execution/post_rollout_status.py`
+- `services/rollout_execution/recommendation.py`
+- `services/rollout_execution/run.py`
+
+### Boundaries
+- no auto-rollout
+- no auto-rollback
+- no live trading / real-money execution
+- evaluation/risk/trust/policy contribute context signals only

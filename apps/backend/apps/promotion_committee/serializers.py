@@ -6,6 +6,11 @@ from apps.promotion_committee.models import (
     AdoptionActionRecommendation,
     AdoptionRollbackPlan,
     ManualRollbackExecution,
+    CheckpointOutcomeRecord,
+    PostRolloutStatus,
+    RolloutExecutionRecommendation,
+    RolloutExecutionRecord,
+    RolloutExecutionRun,
     ManualRolloutPlan,
     ManualAdoptionAction,
     PromotionCase,
@@ -69,6 +74,21 @@ class GovernedPromotionRunRequestSerializer(serializers.Serializer):
 class PromotionRollbackRequestSerializer(serializers.Serializer):
     actor = serializers.CharField(required=False, default='operator')
     notes = serializers.CharField(required=False, allow_blank=True, default='')
+
+
+class RolloutExecutionActionSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator')
+    notes = serializers.CharField(required=False, allow_blank=True, default='')
+    rationale = serializers.CharField(required=False, allow_blank=True, default='')
+    metadata = serializers.DictField(required=False)
+
+
+class CheckpointOutcomeRequestSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator')
+    outcome_status = serializers.ChoiceField(choices=['PASSED', 'FAILED', 'WARNING', 'SKIPPED'])
+    outcome_rationale = serializers.CharField(required=False, allow_blank=True, default='')
+    observed_metrics = serializers.DictField(required=False)
+    metadata = serializers.DictField(required=False)
 
 
 class PromotionReviewCycleRunSerializer(serializers.ModelSerializer):
@@ -158,4 +178,34 @@ class ManualRollbackExecutionSerializer(serializers.ModelSerializer):
 class RolloutPreparationRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RolloutPreparationRecommendation
+        fields = '__all__'
+
+
+class RolloutExecutionRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RolloutExecutionRun
+        fields = '__all__'
+
+
+class RolloutExecutionRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RolloutExecutionRecord
+        fields = '__all__'
+
+
+class CheckpointOutcomeRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CheckpointOutcomeRecord
+        fields = '__all__'
+
+
+class PostRolloutStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PostRolloutStatus
+        fields = '__all__'
+
+
+class RolloutExecutionRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RolloutExecutionRecommendation
         fields = '__all__'

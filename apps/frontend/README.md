@@ -1728,3 +1728,16 @@ UX goals:
 - visible blocked/direct-apply states as valid outcomes
 - clear empty/loading/error behavior
 - no auto-rollout and no hidden apply actions
+
+## Promotion manual rollout execution board (new)
+
+`/promotion` now includes a post-rollout execution control surface:
+
+- execution summary cards (ready/running/healthy/review/rollback)
+- rollout execution table with explicit manual close action
+- checkpoint outcome table (status + triggered action)
+- post-rollout safety status table with drift/risk/calibration flags
+- execution recommendation table (continue/pause/rollback/close)
+- explicit empty/loading/error states for no-execution yet scenarios
+
+Frontend integration uses `src/services/promotionRolloutExecution.ts` and keeps all controls manual-first and paper-only.

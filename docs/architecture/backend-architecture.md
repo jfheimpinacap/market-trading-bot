@@ -1989,3 +1989,19 @@ Cross-domain connections are metadata/trace oriented (no silent mutation):
 - `champion_challenger`: staged binding rollout type when binding-sensitive
 - `policy_tuning` / `trust_calibration`: rollout plan typing by target
 - `evaluation_lab` / `experiment_lab` / `tuning_board`: monitoring/checkpoint rationale context
+
+## Promotion rollout execution architecture (new)
+
+A new post-preparation layer extends `promotion_committee` without replacing existing rollout prep.
+
+Flow:
+1) `run-rollout-prep` prepares plans/checkpoints/rollback readiness.
+2) `run-rollout-execution` projects `READY` plans into `RolloutExecutionRecord` rows.
+3) operator explicitly executes plans and records checkpoint outcomes.
+4) post-rollout safety status is consolidated per execution.
+5) bounded manual recommendations are emitted for continue/pause/review/rollback/close.
+
+This keeps authority explicit:
+- plans are never auto-executed
+- rollback is never silently auto-triggered
+- policy/evaluation/risk/trust inputs are contextual signals only

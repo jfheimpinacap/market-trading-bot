@@ -15,14 +15,18 @@ from apps.experiment_lab.models import (
 )
 from apps.promotion_committee.models import (
     AdoptionRollbackPlan,
+    CheckpointOutcomeRecord,
     ManualRollbackExecution,
     ManualRolloutPlan,
     ManualAdoptionAction,
     ManualAdoptionActionStatus,
+    PostRolloutStatus,
     PromotionCase,
     PromotionCaseStatus,
     PromotionDecisionRecommendation,
     PromotionDecisionRecommendationType,
+    RolloutExecutionRecommendation,
+    RolloutExecutionStatus,
     RolloutActionCandidate,
     RolloutCheckpointPlan,
 )
@@ -242,3 +246,59 @@ class PromotionCommitteeTests(TestCase):
         summary_response = self.client.get(reverse('promotion_committee:rollout-summary'))
         self.assertEqual(summary_response.status_code, 200)
         self.assertIn('checkpoint_plans', summary_response.json())
+
+    def test_rollout_execution_review_creates_execution_records_from_ready_plans(self):
+        exp_run, *_ = self._create_candidate_bundle(sample_count=170, comparison_status='IMPROVED', confidence=Decimal('0.91'))
+        self.client.post(reverse('promotion_committee:governed-run-review'), {'linked_experiment_run_id': exp_run.id}, format='json')
+        self.client.post(reverse('promotion_committee:run-adoption-review'), {}, format='json')
+        self.client.post(reverse('promotion_committee:run-rollout-prep'), {}, format='json')
+
+        response = self.client.post(reverse('promotion_committee:run-rollout-execution'), {}, format='json')
+        self.assertEqual(response.status_code, 201)
+        execution_list = self.client.get(reverse('promotion_committee:rollout-executions'))
+        self.assertEqual(execution_list.status_code, 200)
+        self.assertGreaterEqual(len(execution_list.json()), 1)
+
+    def test_checkpoint_outcome_post_rollout_status_and_rollback_recommendation(self):
+        exp_run, *_ = self._create_candidate_bundle(sample_count=170, comparison_status='IMPROVED', confidence=Decimal('0.91'))
+        self.client.post(reverse('promotion_committee:governed-run-review'), {'linked_experiment_run_id': exp_run.id}, format='json')
+        self.client.post(reverse('promotion_committee:run-adoption-review'), {}, format='json')
+        self.client.post(reverse('promotion_committee:run-rollout-prep'), {}, format='json')
+        self.client.post(reverse('promotion_committee:run-rollout-execution'), {}, format='json')
+        plan = ManualRolloutPlan.objects.latest('id')
+
+        execute_response = self.client.post(reverse('promotion_committee:execute-rollout', kwargs={'plan_id': plan.id}), {}, format='json')
+        self.assertEqual(execute_response.status_code, 200)
+
+        checkpoint = RolloutCheckpointPlan.objects.filter(linked_rollout_plan=plan).first()
+        outcome_response = self.client.post(
+            reverse('promotion_committee:record-checkpoint-outcome', kwargs={'checkpoint_id': checkpoint.id}),
+            {'outcome_status': 'WARNING', 'outcome_rationale': 'Manual warning'},
+            format='json',
+        )
+        self.assertEqual(outcome_response.status_code, 201)
+        self.assertTrue(CheckpointOutcomeRecord.objects.filter(linked_checkpoint_plan=checkpoint).exists())
+        self.assertEqual(PostRolloutStatus.objects.latest('id').status, 'CAUTION')
+
+        checkpoint.checkpoint_type = 'rollback_readiness_check'
+        checkpoint.save(update_fields=['checkpoint_type', 'updated_at'])
+        rollback_outcome = self.client.post(
+            reverse('promotion_committee:record-checkpoint-outcome', kwargs={'checkpoint_id': checkpoint.id}),
+            {'outcome_status': 'FAILED', 'outcome_rationale': 'Critical rollback trigger'},
+            format='json',
+        )
+        self.assertEqual(rollback_outcome.status_code, 201)
+        self.assertEqual(PostRolloutStatus.objects.latest('id').status, 'ROLLBACK_RECOMMENDED')
+        self.assertTrue(RolloutExecutionRecommendation.objects.filter(recommendation_type='RECOMMEND_MANUAL_ROLLBACK').exists())
+
+    def test_rollout_execution_summary_endpoint(self):
+        exp_run, *_ = self._create_candidate_bundle(sample_count=170, comparison_status='IMPROVED', confidence=Decimal('0.91'))
+        self.client.post(reverse('promotion_committee:governed-run-review'), {'linked_experiment_run_id': exp_run.id}, format='json')
+        self.client.post(reverse('promotion_committee:run-adoption-review'), {}, format='json')
+        self.client.post(reverse('promotion_committee:run-rollout-prep'), {}, format='json')
+        self.client.post(reverse('promotion_committee:run-rollout-execution'), {}, format='json')
+        response = self.client.get(reverse('promotion_committee:rollout-execution-summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('rollout_plans_ready', payload)
+        self.assertIn('healthy_rollouts', payload)

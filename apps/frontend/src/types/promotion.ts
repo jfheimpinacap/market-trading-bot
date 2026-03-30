@@ -366,3 +366,98 @@ export type PromotionRolloutSummary = {
   rollback_executed: number;
   recommendation_summary: Record<string, number>;
 };
+
+export type RolloutExecutionRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  linked_rollout_preparation_run: number | null;
+  plan_count: number;
+  executed_count: number;
+  paused_count: number;
+  failed_count: number;
+  rollback_recommended_count: number;
+  rollback_executed_count: number;
+  recommendation_summary: Record<string, number>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RolloutExecutionRecord = {
+  id: number;
+  execution_run: number;
+  linked_rollout_plan: number;
+  execution_status: 'READY' | 'EXECUTING' | 'EXECUTED' | 'PAUSED' | 'FAILED' | 'ROLLBACK_RECOMMENDED' | 'REVERTED';
+  executed_step_count: number;
+  executed_by: string;
+  executed_at: string | null;
+  execution_notes: string;
+  rationale: string;
+  reason_codes: string[];
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CheckpointOutcomeRecord = {
+  id: number;
+  linked_rollout_execution: number;
+  linked_checkpoint_plan: number;
+  outcome_status: 'PASSED' | 'FAILED' | 'WARNING' | 'SKIPPED';
+  observed_metrics: Record<string, unknown>;
+  outcome_rationale: string;
+  triggered_action: 'CONTINUE' | 'PAUSE' | 'REQUIRE_REVIEW' | 'RECOMMEND_ROLLBACK';
+  recorded_by: string;
+  recorded_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PostRolloutStatus = {
+  id: number;
+  linked_rollout_execution: number;
+  status: 'HEALTHY' | 'CAUTION' | 'REVIEW_REQUIRED' | 'ROLLBACK_RECOMMENDED' | 'REVERTED' | 'INCOMPLETE';
+  status_rationale: string;
+  linked_checkpoint_outcomes: number[];
+  observed_drift_flags: string[];
+  observed_risk_flags: string[];
+  observed_calibration_flags: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RolloutExecutionRecommendation = {
+  id: number;
+  execution_run: number;
+  target_execution: number | null;
+  recommendation_type:
+    | 'EXECUTE_NEXT_STAGE'
+    | 'PAUSE_AND_REVIEW'
+    | 'MARK_ROLLOUT_HEALTHY'
+    | 'RECOMMEND_MANUAL_ROLLBACK'
+    | 'REQUIRE_MORE_OBSERVATION'
+    | 'CLOSE_ROLLOUT'
+    | 'REORDER_ROLLOUT_EXECUTION_PRIORITY';
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PromotionRolloutExecutionSummary = {
+  latest_run: RolloutExecutionRun | null;
+  rollout_plans_ready: number;
+  executions_running: number;
+  healthy_rollouts: number;
+  review_required: number;
+  rollback_recommended: number;
+  rollback_executed: number;
+  recommendation_summary: Record<string, number>;
+};
