@@ -1910,3 +1910,17 @@ UX boundaries stay explicit:
 - sizing recommendations table (type/rationale/blockers/confidence)
 
 UI stays paper-only and local-first; no live trading controls were added.
+
+## Scan agent consensus/divergence board (new)
+
+`/scan-agent` now includes a dedicated **Narrative Consensus & Market Divergence** section that strengthens scan→research handoff quality.
+
+It adds:
+- summary cards for considered signals/clusters, strong consensus, conflicted narratives, high divergence, ready-for-research
+- consensus records panel
+- market divergence panel
+- research handoff priorities panel
+- consensus recommendations panel
+- manual action: `Run consensus review`
+
+The UI remains technical, conservative, and explicit about boundaries: paper-only, no live execution, and no replacement of `research_agent` triage authority.

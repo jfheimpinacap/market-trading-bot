@@ -63,3 +63,71 @@ export type ScanSummary = {
   latest_run: SourceScanRun | null;
   latest_recommendations: ScanRecommendation[];
 };
+
+export type NarrativeConsensusRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_signal_count: number;
+  considered_cluster_count: number;
+  consensus_detected_count: number;
+  conflict_detected_count: number;
+  divergence_detected_count: number;
+  priority_handoff_count: number;
+  recommendation_summary: Record<string, number>;
+};
+
+export type NarrativeConsensusRecord = {
+  id: number;
+  topic_label: string;
+  source_mix: Record<string, unknown>;
+  source_count: number;
+  consensus_state: string;
+  sentiment_direction: string;
+  intensity_score: string;
+  novelty_score: string;
+  persistence_score: string;
+  confidence_score: string;
+  summary: string;
+};
+
+export type NarrativeMarketDivergenceRecord = {
+  id: number;
+  linked_market_title?: string;
+  narrative_bias: string;
+  market_probability: string | null;
+  divergence_state: string;
+  divergence_score: string;
+  market_context_summary: string;
+};
+
+export type ResearchHandoffPriority = {
+  id: number;
+  topic_label?: string;
+  linked_market_title?: string;
+  priority_bucket: string;
+  handoff_status: string;
+  priority_reason_codes: string[];
+  priority_score: string;
+  handoff_summary: string;
+};
+
+export type NarrativeConsensusRecommendation = {
+  id: number;
+  recommendation_type: string;
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+};
+
+export type ConsensusSummary = {
+  latest_run: number | null;
+  signals_considered: number;
+  clusters_considered: number;
+  strong_consensus_count: number;
+  conflicted_count: number;
+  high_divergence_count: number;
+  ready_for_research_count: number;
+  recommendation_summary: Record<string, number>;
+};

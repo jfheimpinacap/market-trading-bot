@@ -2042,3 +2042,24 @@ Guardrails stay unchanged:
 - portfolio-aware and risk-first discounts/caps
 - execution now consumes sizing decision notional/quantity for paper trades
 - remains strictly local-first, single-user, paper/sandbox only (no live routing, no real money)
+
+### Scan→Research intelligence handoff hardening (new)
+
+The scan layer now includes an explicit, auditable narrative-consensus handoff before research triage:
+
+- cross-source consensus/conflict clustering over RSS + Reddit + X/Twitter scan signals
+- narrative-vs-market divergence scoring
+- research handoff priority buckets/statuses with explicit reason codes
+- conservative recommendation outputs (send/watchlist/defer/block/manual-review)
+- traceability chain: `signals -> cluster -> consensus -> divergence -> handoff priority -> recommendation`
+
+API additions under `/api/scan-agent/`:
+- `POST run-consensus-review/`
+- `GET consensus-runs/`
+- `GET consensus-records/`
+- `GET market-divergence-records/`
+- `GET research-handoff-priorities/`
+- `GET consensus-recommendations/`
+- `GET consensus-summary/`
+
+This remains local-first, single-user, paper/sandbox only, and does **not** replace `research_agent` formal triage authority.

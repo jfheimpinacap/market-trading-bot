@@ -6,8 +6,30 @@ import { SectionCard } from '../components/SectionCard';
 import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
-import { getScanClusters, getScanRecommendations, getScanSignals, getScanSummary, runScanAgent } from '../services/scanAgent';
-import type { NarrativeCluster, NarrativeSignal, ScanRecommendation, ScanSummary } from '../types/scanAgent';
+import {
+  getConsensusRecommendations,
+  getConsensusRecords,
+  getConsensusSummary,
+  getDivergenceRecords,
+  getResearchHandoffPriorities,
+  getScanClusters,
+  getScanRecommendations,
+  getScanSignals,
+  getScanSummary,
+  runConsensusReview,
+  runScanAgent,
+} from '../services/scanAgent';
+import type {
+  ConsensusSummary,
+  NarrativeCluster,
+  NarrativeConsensusRecommendation,
+  NarrativeConsensusRecord,
+  NarrativeMarketDivergenceRecord,
+  NarrativeSignal,
+  ResearchHandoffPriority,
+  ScanRecommendation,
+  ScanSummary,
+} from '../types/scanAgent';
 
 const tone = (value: string): 'ready' | 'pending' | 'offline' | 'neutral' => {
   const normalized = value.toUpperCase();
@@ -22,26 +44,42 @@ export function ScanAgentPage() {
   const [signals, setSignals] = useState<NarrativeSignal[]>([]);
   const [clusters, setClusters] = useState<NarrativeCluster[]>([]);
   const [recommendations, setRecommendations] = useState<ScanRecommendation[]>([]);
+  const [consensusSummary, setConsensusSummary] = useState<ConsensusSummary | null>(null);
+  const [consensusRecords, setConsensusRecords] = useState<NarrativeConsensusRecord[]>([]);
+  const [divergenceRecords, setDivergenceRecords] = useState<NarrativeMarketDivergenceRecord[]>([]);
+  const [handoffPriorities, setHandoffPriorities] = useState<ResearchHandoffPriority[]>([]);
+  const [consensusRecommendations, setConsensusRecommendations] = useState<NarrativeConsensusRecommendation[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [recommendationFilter, setRecommendationFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [runLoading, setRunLoading] = useState(false);
+  const [consensusRunLoading, setConsensusRunLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [summaryRes, signalsRes, clustersRes, recommendationsRes] = await Promise.all([
+      const [summaryRes, signalsRes, clustersRes, recommendationsRes, consensusSummaryRes, consensusRecordsRes, divergenceRes, prioritiesRes, consensusRecommendationsRes] = await Promise.all([
         getScanSummary(),
         getScanSignals(statusFilter ? { status: statusFilter } : undefined),
         getScanClusters(),
         getScanRecommendations(recommendationFilter ? { recommendation_type: recommendationFilter } : undefined),
+        getConsensusSummary(),
+        getConsensusRecords(),
+        getDivergenceRecords(),
+        getResearchHandoffPriorities(),
+        getConsensusRecommendations(),
       ]);
       setSummary(summaryRes);
       setSignals(signalsRes);
       setClusters(clustersRes);
       setRecommendations(recommendationsRes);
+      setConsensusSummary(consensusSummaryRes);
+      setConsensusRecords(consensusRecordsRes);
+      setDivergenceRecords(divergenceRes);
+      setHandoffPriorities(prioritiesRes);
+      setConsensusRecommendations(consensusRecommendationsRes);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Could not load scan agent data.');
     } finally {
@@ -62,6 +100,15 @@ export function ScanAgentPage() {
       setRunLoading(false);
     }
   };
+  const runConsensus = async () => {
+    setConsensusRunLoading(true);
+    try {
+      await runConsensusReview();
+      await load();
+    } finally {
+      setConsensusRunLoading(false);
+    }
+  };
 
   const topSignals = useMemo(() => signals.slice(0, 25), [signals]);
 
@@ -70,8 +117,8 @@ export function ScanAgentPage() {
       <PageHeader
         eyebrow="Parallel source intelligence"
         title="/scan-agent"
-        description="Local-first, manual-first narrative scan filter hardening. Consolidates RSS/Reddit/X, deduplicates and clusters narratives, scores market divergence, and emits recommendation-first handoffs without social auto-trading."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/research-agent')}>Open research</button><button type="button" className="secondary-button" onClick={() => navigate('/prediction')}>Open prediction</button><button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Open cockpit</button><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Open trace</button><button type="button" className="primary-button" disabled={runLoading} onClick={() => void runScan()}>{runLoading ? 'Running scan...' : 'Run scan'}</button></div>}
+        description="Local-first, single-user, paper-only scan→research hardening. Consolidates RSS/Reddit/X, detects cross-source consensus/conflict, scores narrative-vs-market divergence, and prioritizes auditable research handoff without live execution."
+        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/research-agent')}>Open research</button><button type="button" className="secondary-button" onClick={() => navigate('/prediction')}>Open prediction</button><button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Open cockpit</button><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Open trace</button><button type="button" className="primary-button" disabled={runLoading} onClick={() => void runScan()}>{runLoading ? 'Running scan...' : 'Run scan'}</button><button type="button" className="primary-button" disabled={consensusRunLoading} onClick={() => void runConsensus()}>{consensusRunLoading ? 'Running consensus review...' : 'Run consensus review'}</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
@@ -137,6 +184,41 @@ export function ScanAgentPage() {
             </div>
           )}
         </SectionCard>
+
+        <SectionCard eyebrow="Narrative Consensus & Market Divergence" title="Consensus-to-research handoff hardening" description="Paper-only, cross-source consensus, divergence-aware, and explicitly non-live-execution.">
+          <div className="content-grid content-grid--three-columns">
+            <ul className="key-value-list">
+              <li><span>Signals considered</span><strong>{consensusSummary?.signals_considered ?? 0}</strong></li>
+              <li><span>Clusters considered</span><strong>{consensusSummary?.clusters_considered ?? 0}</strong></li>
+            </ul>
+            <ul className="key-value-list">
+              <li><span>Strong consensus</span><strong>{consensusSummary?.strong_consensus_count ?? 0}</strong></li>
+              <li><span>Conflicted narratives</span><strong>{consensusSummary?.conflicted_count ?? 0}</strong></li>
+            </ul>
+            <ul className="key-value-list">
+              <li><span>High divergence</span><strong>{consensusSummary?.high_divergence_count ?? 0}</strong></li>
+              <li><span>Ready for research</span><strong>{consensusSummary?.ready_for_research_count ?? 0}</strong></li>
+            </ul>
+          </div>
+        </SectionCard>
+
+        <div className="content-grid content-grid--two-columns">
+          <SectionCard eyebrow="Consensus records" title="Cross-source narrative consensus" description="Transparent narrative consolidation by cluster/topic.">
+            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Topic</th><th>Source mix</th><th>Consensus</th><th>Sentiment</th><th>Intensity</th><th>Novelty</th><th>Persistence</th><th>Confidence</th></tr></thead><tbody>{consensusRecords.slice(0, 15).map((item) => <tr key={item.id}><td>{item.topic_label}</td><td>{((item.source_mix.source_types as string[] | undefined) ?? []).join(', ') || '—'}</td><td>{item.consensus_state}</td><td>{item.sentiment_direction}</td><td>{item.intensity_score}</td><td>{item.novelty_score}</td><td>{item.persistence_score}</td><td>{item.confidence_score}</td></tr>)}</tbody></table></div>
+          </SectionCard>
+          <SectionCard eyebrow="Divergence records" title="Narrative vs market divergence" description="Compare source consensus against market-implied probability.">
+            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Market</th><th>Narrative bias</th><th>Market probability</th><th>Divergence state</th><th>Divergence score</th><th>Summary</th></tr></thead><tbody>{divergenceRecords.slice(0, 15).map((item) => <tr key={item.id}><td>{item.linked_market_title || '—'}</td><td>{item.narrative_bias}</td><td>{item.market_probability ?? '—'}</td><td>{item.divergence_state}</td><td>{item.divergence_score}</td><td>{item.market_context_summary}</td></tr>)}</tbody></table></div>
+          </SectionCard>
+        </div>
+
+        <div className="content-grid content-grid--two-columns">
+          <SectionCard eyebrow="Research handoff priorities" title="Scan→research prioritization queue" description="Prioritized intake that does not replace research-agent triage authority.">
+            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Market/topic</th><th>Priority bucket</th><th>Handoff status</th><th>Reason codes</th><th>Score</th><th>Summary</th></tr></thead><tbody>{handoffPriorities.slice(0, 20).map((item) => <tr key={item.id}><td>{item.linked_market_title || item.topic_label || '—'}</td><td>{item.priority_bucket}</td><td>{item.handoff_status}</td><td>{item.priority_reason_codes.join(', ') || '—'}</td><td>{item.priority_score}</td><td>{item.handoff_summary}</td></tr>)}</tbody></table></div>
+          </SectionCard>
+          <SectionCard eyebrow="Consensus recommendations" title="Conservative recommendation outputs" description="Explicit recommendation types with rationale, blockers, and confidence.">
+            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Reason codes</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{consensusRecommendations.slice(0, 20).map((item) => <tr key={item.id}><td>{item.recommendation_type}</td><td>{item.rationale}</td><td>{item.reason_codes.join(', ') || '—'}</td><td>{item.blockers.join(', ') || '—'}</td><td>{item.confidence}</td></tr>)}</tbody></table></div>
+          </SectionCard>
+        </div>
 
         <div className="content-grid content-grid--two-columns">
           <SectionCard eyebrow="Clusters" title="Narrative clusters" description="Deduplicated, grouped narrative themes across sources.">

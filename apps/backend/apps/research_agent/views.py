@@ -4,6 +4,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.research_agent.models import (
+    NarrativeConsensusRecommendation,
+    NarrativeConsensusRun,
+    NarrativeConsensusRecord,
+    NarrativeMarketDivergenceRecord,
+    ResearchHandoffPriority,
     MarketUniverseRun,
     MarketUniverseScanRun,
     MarketResearchCandidate,
@@ -21,6 +26,11 @@ from apps.research_agent.models import (
     SourceScanRun,
 )
 from apps.research_agent.serializers import (
+    NarrativeConsensusRecommendationSerializer,
+    NarrativeConsensusRunSerializer,
+    NarrativeConsensusRecordSerializer,
+    NarrativeMarketDivergenceRecordSerializer,
+    ResearchHandoffPrioritySerializer,
     MarketUniverseRunSerializer,
     MarketUniverseScanRunSerializer,
     MarketResearchCandidateSerializer,
@@ -43,6 +53,7 @@ from apps.research_agent.serializers import (
     UniverseScanRunRequestSerializer,
 )
 from apps.research_agent.services.run import get_latest_universe_summary, run_market_universe_triage, run_scan_agent
+from apps.research_agent.services.intelligence_handoff.run import get_consensus_summary, run_consensus_review
 from apps.research_agent.services.analyze import run_narrative_analysis
 from apps.research_agent.services.pursuit_board import get_latest_board_summary, get_pursuit_candidates_queryset
 from apps.research_agent.services.scan import run_full_research_scan, run_research_scan
@@ -322,6 +333,82 @@ class ScanAgentSummaryView(APIView):
             ).data,
         }
         return Response(payload, status=status.HTTP_200_OK)
+
+
+class ScanAgentConsensusRunView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        run = run_consensus_review(triggered_by='manual_api')
+        return Response(NarrativeConsensusRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class ScanAgentConsensusRunListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = NarrativeConsensusRunSerializer
+
+    def get_queryset(self):
+        return NarrativeConsensusRun.objects.order_by('-started_at', '-id')[:50]
+
+
+class ScanAgentConsensusRecordListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = NarrativeConsensusRecordSerializer
+
+    def get_queryset(self):
+        return NarrativeConsensusRecord.objects.select_related('linked_cluster', 'consensus_run').order_by('-created_at', '-id')[:300]
+
+
+class ScanAgentConsensusRecordDetailView(generics.RetrieveAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = NarrativeConsensusRecordSerializer
+    queryset = NarrativeConsensusRecord.objects.select_related('linked_cluster', 'consensus_run')
+
+
+class ScanAgentDivergenceRecordListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = NarrativeMarketDivergenceRecordSerializer
+
+    def get_queryset(self):
+        return NarrativeMarketDivergenceRecord.objects.select_related('linked_market', 'linked_consensus_record').order_by('-created_at', '-id')[:300]
+
+
+class ScanAgentHandoffPriorityListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResearchHandoffPrioritySerializer
+
+    def get_queryset(self):
+        return ResearchHandoffPriority.objects.select_related('linked_market', 'linked_consensus_record').order_by('-created_at', '-id')[:300]
+
+
+class ScanAgentHandoffPriorityDetailView(generics.RetrieveAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResearchHandoffPrioritySerializer
+    queryset = ResearchHandoffPriority.objects.select_related('linked_market', 'linked_consensus_record')
+
+
+class ScanAgentConsensusRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = NarrativeConsensusRecommendationSerializer
+
+    def get_queryset(self):
+        return NarrativeConsensusRecommendation.objects.select_related('target_market', 'target_handoff').order_by('-created_at', '-id')[:300]
+
+
+class ScanAgentConsensusSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(get_consensus_summary(), status=status.HTTP_200_OK)
 
 
 class ResearchAgentUniverseScanRunView(APIView):

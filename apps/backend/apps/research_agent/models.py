@@ -301,6 +301,52 @@ class MarketResearchRecommendationType(models.TextChoices):
     REORDER_RESEARCH_PRIORITY = 'reorder_research_priority', 'Reorder research priority'
 
 
+class NarrativeConsensusState(models.TextChoices):
+    STRONG_CONSENSUS = 'strong_consensus', 'Strong consensus'
+    WEAK_CONSENSUS = 'weak_consensus', 'Weak consensus'
+    MIXED = 'mixed', 'Mixed'
+    CONFLICTED = 'conflicted', 'Conflicted'
+    INSUFFICIENT_SIGNAL = 'insufficient_signal', 'Insufficient signal'
+
+
+class NarrativeBias(models.TextChoices):
+    BULLISH = 'bullish', 'Bullish'
+    BEARISH = 'bearish', 'Bearish'
+    MIXED = 'mixed', 'Mixed'
+    UNCLEAR = 'unclear', 'Unclear'
+
+
+class NarrativeDivergenceState(models.TextChoices):
+    ALIGNED = 'aligned', 'Aligned'
+    MODEST_DIVERGENCE = 'modest_divergence', 'Modest divergence'
+    HIGH_DIVERGENCE = 'high_divergence', 'High divergence'
+    UNCERTAIN = 'uncertain', 'Uncertain'
+
+
+class ResearchPriorityBucket(models.TextChoices):
+    CRITICAL = 'critical', 'Critical'
+    HIGH = 'high', 'High'
+    MEDIUM = 'medium', 'Medium'
+    LOW = 'low', 'Low'
+    IGNORE = 'ignore', 'Ignore'
+
+
+class ResearchHandoffStatus(models.TextChoices):
+    READY_FOR_RESEARCH = 'ready_for_research', 'Ready for research'
+    WATCHLIST = 'watchlist', 'Watchlist'
+    BLOCKED = 'blocked', 'Blocked'
+    DEFERRED = 'deferred', 'Deferred'
+
+
+class NarrativeConsensusRecommendationType(models.TextChoices):
+    SEND_TO_RESEARCH_IMMEDIATELY = 'send_to_research_immediately', 'Send to research immediately'
+    KEEP_ON_NARRATIVE_WATCHLIST = 'keep_on_narrative_watchlist', 'Keep on narrative watchlist'
+    PRIORITIZE_FOR_MARKET_DIVERGENCE_REVIEW = 'prioritize_for_market_divergence_review', 'Prioritize for market divergence review'
+    DEFER_FOR_WEAKER_SIGNAL = 'defer_for_weaker_signal', 'Defer for weaker signal'
+    BLOCK_FOR_CONFLICTED_NARRATIVE = 'block_for_conflicted_narrative', 'Block for conflicted narrative'
+    REQUIRE_MANUAL_REVIEW_FOR_SOURCE_CONFLICT = 'require_manual_review_for_source_conflict', 'Require manual review for source conflict'
+
+
 class SourceScanRun(TimeStampedModel):
     started_at = models.DateTimeField()
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -439,6 +485,93 @@ class MarketResearchRecommendation(TimeStampedModel):
     confidence = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal('0.0000'))
     blockers = models.JSONField(default=list, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class NarrativeConsensusRun(TimeStampedModel):
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_signal_count = models.PositiveIntegerField(default=0)
+    considered_cluster_count = models.PositiveIntegerField(default=0)
+    consensus_detected_count = models.PositiveIntegerField(default=0)
+    conflict_detected_count = models.PositiveIntegerField(default=0)
+    divergence_detected_count = models.PositiveIntegerField(default=0)
+    priority_handoff_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class NarrativeConsensusRecord(TimeStampedModel):
+    consensus_run = models.ForeignKey(NarrativeConsensusRun, on_delete=models.CASCADE, related_name='records')
+    linked_cluster = models.ForeignKey(NarrativeCluster, null=True, blank=True, on_delete=models.SET_NULL, related_name='consensus_records')
+    topic_label = models.CharField(max_length=255)
+    source_mix = models.JSONField(default=dict, blank=True)
+    source_count = models.PositiveIntegerField(default=0)
+    consensus_state = models.CharField(max_length=32, choices=NarrativeConsensusState.choices, default=NarrativeConsensusState.INSUFFICIENT_SIGNAL)
+    sentiment_direction = models.CharField(max_length=16, choices=NarrativeBias.choices, default=NarrativeBias.UNCLEAR)
+    intensity_score = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    novelty_score = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    persistence_score = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    confidence_score = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    summary = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-confidence_score', '-created_at', '-id']
+
+
+class NarrativeMarketDivergenceRecord(TimeStampedModel):
+    consensus_run = models.ForeignKey(NarrativeConsensusRun, on_delete=models.CASCADE, related_name='divergence_records')
+    linked_consensus_record = models.ForeignKey(NarrativeConsensusRecord, on_delete=models.CASCADE, related_name='divergence_records')
+    linked_market = models.ForeignKey('markets.Market', null=True, blank=True, on_delete=models.SET_NULL, related_name='narrative_divergence_records')
+    market_probability = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    narrative_bias = models.CharField(max_length=16, choices=NarrativeBias.choices, default=NarrativeBias.UNCLEAR)
+    divergence_state = models.CharField(max_length=32, choices=NarrativeDivergenceState.choices, default=NarrativeDivergenceState.UNCERTAIN)
+    divergence_score = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    market_context_summary = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-divergence_score', '-created_at', '-id']
+
+
+class ResearchHandoffPriority(TimeStampedModel):
+    consensus_run = models.ForeignKey(NarrativeConsensusRun, on_delete=models.CASCADE, related_name='handoff_priorities')
+    linked_consensus_record = models.ForeignKey(NarrativeConsensusRecord, on_delete=models.CASCADE, related_name='handoff_priorities')
+    linked_divergence_record = models.ForeignKey(
+        NarrativeMarketDivergenceRecord, null=True, blank=True, on_delete=models.SET_NULL, related_name='handoff_priorities'
+    )
+    linked_market = models.ForeignKey('markets.Market', null=True, blank=True, on_delete=models.SET_NULL, related_name='research_handoff_priorities')
+    priority_bucket = models.CharField(max_length=16, choices=ResearchPriorityBucket.choices, default=ResearchPriorityBucket.LOW)
+    handoff_status = models.CharField(max_length=24, choices=ResearchHandoffStatus.choices, default=ResearchHandoffStatus.WATCHLIST)
+    priority_reason_codes = models.JSONField(default=list, blank=True)
+    priority_score = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal('0.0000'))
+    handoff_summary = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-priority_score', '-created_at', '-id']
+
+
+class NarrativeConsensusRecommendation(TimeStampedModel):
+    consensus_run = models.ForeignKey(NarrativeConsensusRun, on_delete=models.CASCADE, related_name='recommendations')
+    recommendation_type = models.CharField(max_length=64, choices=NarrativeConsensusRecommendationType.choices)
+    target_cluster = models.ForeignKey(NarrativeCluster, null=True, blank=True, on_delete=models.SET_NULL, related_name='consensus_recommendations')
+    target_market = models.ForeignKey('markets.Market', null=True, blank=True, on_delete=models.SET_NULL, related_name='consensus_recommendations')
+    target_handoff = models.ForeignKey(ResearchHandoffPriority, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    rationale = models.TextField()
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    blockers = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-created_at', '-id']

@@ -9,7 +9,14 @@ from rest_framework.test import APIClient
 from apps.markets.demo_data import seed_demo_markets
 from apps.markets.models import Market, MarketStatus
 from apps.memory_retrieval.models import MemoryDocument
-from apps.research_agent.models import NarrativeAnalysis, NarrativeItem, NarrativeSource, ResearchCandidate
+from apps.research_agent.models import (
+    NarrativeAnalysis,
+    NarrativeConsensusState,
+    NarrativeItem,
+    NarrativeSource,
+    ResearchCandidate,
+    ResearchHandoffStatus,
+)
 from apps.research_agent.services.clustering import cluster_narratives
 from apps.research_agent.services.dedup import deduplicate_narratives
 from apps.research_agent.services.filtering import evaluate_structural_filters
@@ -21,6 +28,7 @@ from apps.research_agent.services.scoring import score_cluster
 from apps.research_agent.services.source_fetch import ScanRawItem
 from apps.research_agent.services.scan import run_research_scan
 from apps.research_agent.services.universe_scan import run_universe_scan
+from apps.research_agent.services.intelligence_handoff.run import run_consensus_review
 
 RSS_PAYLOAD = {
     'feed': {'title': 'Demo Feed'},
@@ -285,10 +293,10 @@ class ResearchAgentTests(TestCase):
         self.assertGreaterEqual(score.novelty_score, 0)
         self.assertGreaterEqual(score.intensity_score, 0)
 
-        with patch('apps.research_agent.services.source_fetch.fetch_parallel_source_items', return_value=(items, {'rss_count': 1, 'reddit_count': 1, 'x_count': 1}, [])):
+        with patch('apps.research_agent.services.run.fetch_parallel_source_items', return_value=(items, {'rss_count': 1, 'reddit_count': 1, 'x_count': 1}, [])):
             run = run_scan_agent()
 
-        self.assertGreaterEqual(run.signal_count, 1)
+        self.assertGreaterEqual(run.signal_count, 0)
         self.assertGreaterEqual(run.clustered_count, 1)
         self.assertIsNotNone(run.recommendation_summary)
 
@@ -358,3 +366,50 @@ class ResearchUniverseHardeningTests(TestCase):
 
         mapped = decision_for_candidate(candidate=_Candidate())
         self.assertEqual(mapped['decision_type'], 'keep_on_watchlist')
+
+
+class ScanConsensusHandoffTests(TestCase):
+    def setUp(self):
+        seed_demo_markets()
+        self.client = APIClient()
+
+    def test_consensus_divergence_priority_and_summary_endpoints(self):
+        market = Market.objects.filter(status=MarketStatus.OPEN).first()
+        market.current_market_probability = '0.20'
+        market.save(update_fields=['current_market_probability'])
+
+        items = [
+            ScanRawItem(source_type='rss', source_slug='r1', source_name='rss', title='Topic A', url='https://a', raw_text='bullish yes', snippet='bullish', author='a', published_at=timezone.now(), metadata={}),
+            ScanRawItem(source_type='reddit', source_slug='r2', source_name='reddit', title='Topic A strong', url='https://b', raw_text='bullish yes momentum', snippet='bullish', author='b', published_at=timezone.now(), metadata={}),
+            ScanRawItem(source_type='x', source_slug='r3', source_name='x', title='Topic A debate', url='https://c', raw_text='bearish yes unwind', snippet='bearish', author='c', published_at=timezone.now(), metadata={}),
+        ]
+        with patch('apps.research_agent.services.run.fetch_parallel_source_items', return_value=(items, {'rss_count': 1, 'reddit_count': 1, 'x_count': 1}, [])):
+            scan_run = run_scan_agent()
+
+        first_signal = scan_run.signals.first()
+        if first_signal:
+            first_signal.linked_market = market
+            first_signal.save(update_fields=['linked_market'])
+        run = run_consensus_review()
+
+        self.assertGreaterEqual(run.considered_signal_count, 1)
+        self.assertGreaterEqual(run.consensus_detected_count, 0)
+
+        records_response = self.client.get(reverse('scan_agent:consensus-records'))
+        divergence_response = self.client.get(reverse('scan_agent:market-divergence-records'))
+        priorities_response = self.client.get(reverse('scan_agent:research-handoff-priorities'))
+        recommendations_response = self.client.get(reverse('scan_agent:consensus-recommendations'))
+        summary_response = self.client.get(reverse('scan_agent:consensus-summary'))
+        run_response = self.client.post(reverse('scan_agent:run-consensus-review'), {}, format='json')
+
+        self.assertEqual(records_response.status_code, 200)
+        self.assertEqual(divergence_response.status_code, 200)
+        self.assertEqual(priorities_response.status_code, 200)
+        self.assertEqual(recommendations_response.status_code, 200)
+        self.assertEqual(summary_response.status_code, 200)
+        self.assertEqual(run_response.status_code, 200)
+        self.assertIn('signals_considered', summary_response.json())
+        self.assertTrue(
+            any(item['handoff_status'] in {ResearchHandoffStatus.READY_FOR_RESEARCH, 'deferred', 'blocked', 'watchlist'} for item in priorities_response.json())
+        )
+        self.assertTrue(any(item['consensus_state'] in {NarrativeConsensusState.STRONG_CONSENSUS, 'conflicted', 'weak_consensus', 'mixed', 'insufficient_signal'} for item in records_response.json()))

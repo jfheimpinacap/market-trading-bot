@@ -3107,3 +3107,26 @@ Boundary:
   - `GET /api/autonomous-trader/sizing-summary/`
 
 Boundary remains unchanged: paper-only, no broker/exchange live execution, no auto-retune, no auto-promote.
+
+## Scan-to-research intelligence handoff hardening (new)
+
+`apps.research_agent` now includes an explicit consensus/divergence/handoff-priority layer for scan output quality hardening.
+
+Models:
+- `NarrativeConsensusRun`
+- `NarrativeConsensusRecord`
+- `NarrativeMarketDivergenceRecord`
+- `ResearchHandoffPriority`
+- `NarrativeConsensusRecommendation`
+
+Service split:
+- `services/intelligence_handoff/consensus.py`
+- `services/intelligence_handoff/divergence.py`
+- `services/intelligence_handoff/handoff_priority.py`
+- `services/intelligence_handoff/recommendation.py`
+- `services/intelligence_handoff/run.py`
+
+Boundary guarantees:
+- improves scan→research handoff quality only
+- does not replace `research_agent` formal market triage authority
+- remains local-first, single-user, paper-only, no live execution

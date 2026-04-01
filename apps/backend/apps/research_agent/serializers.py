@@ -1,6 +1,11 @@
 from rest_framework import serializers
 
 from apps.research_agent.models import (
+    NarrativeConsensusRecommendation,
+    NarrativeConsensusRun,
+    NarrativeConsensusRecord,
+    NarrativeMarketDivergenceRecord,
+    ResearchHandoffPriority,
     MarketTriageDecision,
     MarketTriageDecisionV2,
     MarketUniverseRun,
@@ -283,6 +288,48 @@ class ScanRecommendationSerializer(serializers.ModelSerializer):
             'updated_at',
         )
         read_only_fields = fields
+
+
+class NarrativeConsensusRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NarrativeConsensusRun
+        fields = '__all__'
+
+
+class NarrativeConsensusRecordSerializer(serializers.ModelSerializer):
+    linked_cluster_topic = serializers.CharField(source='linked_cluster.canonical_topic', read_only=True)
+
+    class Meta:
+        model = NarrativeConsensusRecord
+        fields = '__all__'
+
+
+class NarrativeMarketDivergenceRecordSerializer(serializers.ModelSerializer):
+    linked_market_slug = serializers.CharField(source='linked_market.slug', read_only=True)
+    linked_market_title = serializers.CharField(source='linked_market.title', read_only=True)
+
+    class Meta:
+        model = NarrativeMarketDivergenceRecord
+        fields = '__all__'
+
+
+class ResearchHandoffPrioritySerializer(serializers.ModelSerializer):
+    linked_market_slug = serializers.CharField(source='linked_market.slug', read_only=True)
+    linked_market_title = serializers.CharField(source='linked_market.title', read_only=True)
+    topic_label = serializers.CharField(source='linked_consensus_record.topic_label', read_only=True)
+
+    class Meta:
+        model = ResearchHandoffPriority
+        fields = '__all__'
+
+
+class NarrativeConsensusRecommendationSerializer(serializers.ModelSerializer):
+    target_market_slug = serializers.CharField(source='target_market.slug', read_only=True)
+    target_market_title = serializers.CharField(source='target_market.title', read_only=True)
+
+    class Meta:
+        model = NarrativeConsensusRecommendation
+        fields = '__all__'
 
 
 class UniverseScanRunRequestSerializer(serializers.Serializer):
