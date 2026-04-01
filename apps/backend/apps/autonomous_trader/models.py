@@ -71,6 +71,38 @@ class AutonomousOutcomeStatus(models.TextChoices):
     DEFERRED = 'DEFERRED', 'Deferred'
 
 
+class AutonomousOutcomeHandoffStatus(models.TextChoices):
+    PENDING = 'PENDING', 'Pending'
+    EMITTED = 'EMITTED', 'Emitted'
+    DUPLICATE_SKIPPED = 'DUPLICATE_SKIPPED', 'Duplicate skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    COMPLETED = 'COMPLETED', 'Completed'
+
+
+class AutonomousPostmortemTriggerReason(models.TextChoices):
+    LOSS_EXIT = 'LOSS_EXIT', 'Loss exit'
+    EXIT_REVIEW_REQUIRED = 'EXIT_REVIEW_REQUIRED', 'Exit review required'
+    RISK_DRIFT = 'RISK_DRIFT', 'Risk drift'
+    SENTIMENT_REVERSAL = 'SENTIMENT_REVERSAL', 'Sentiment reversal'
+    MANUAL_STOP = 'MANUAL_STOP', 'Manual stop'
+
+
+class AutonomousLearningTriggerReason(models.TextChoices):
+    LOSS_REVIEW_COMPLETED = 'LOSS_REVIEW_COMPLETED', 'Loss review completed'
+    PROFITABLE_PATTERN_CAPTURE = 'PROFITABLE_PATTERN_CAPTURE', 'Profitable pattern capture'
+    MONITORING_LESSON = 'MONITORING_LESSON', 'Monitoring lesson'
+    NO_ACTION_LESSON = 'NO_ACTION_LESSON', 'No action lesson'
+
+
+class AutonomousOutcomeHandoffRecommendationType(models.TextChoices):
+    SEND_TO_POSTMORTEM_NOW = 'SEND_TO_POSTMORTEM_NOW', 'Send to postmortem now'
+    WAIT_FOR_OUTCOME_CLOSURE = 'WAIT_FOR_OUTCOME_CLOSURE', 'Wait for outcome closure'
+    SEND_TO_LEARNING_CAPTURE = 'SEND_TO_LEARNING_CAPTURE', 'Send to learning capture'
+    BLOCK_DUPLICATE_HANDOFF = 'BLOCK_DUPLICATE_HANDOFF', 'Block duplicate handoff'
+    REQUIRE_MANUAL_REVIEW_BEFORE_HANDOFF = 'REQUIRE_MANUAL_REVIEW_BEFORE_HANDOFF', 'Require manual review before handoff'
+    CLOSE_FEEDBACK_LOOP = 'CLOSE_FEEDBACK_LOOP', 'Close feedback loop'
+
+
 class AutonomousTradeCycleRun(TimeStampedModel):
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -156,6 +188,71 @@ class AutonomousTradeOutcome(TimeStampedModel):
     outcome_summary = models.CharField(max_length=255, blank=True)
     send_to_postmortem = models.BooleanField(default=False)
     send_to_learning = models.BooleanField(default=False)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousOutcomeHandoffRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_outcome_count = models.PositiveIntegerField(default=0)
+    eligible_postmortem_count = models.PositiveIntegerField(default=0)
+    eligible_learning_count = models.PositiveIntegerField(default=0)
+    postmortem_handoff_created_count = models.PositiveIntegerField(default=0)
+    learning_handoff_created_count = models.PositiveIntegerField(default=0)
+    duplicate_skipped_count = models.PositiveIntegerField(default=0)
+    blocked_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class AutonomousPostmortemHandoff(TimeStampedModel):
+    linked_outcome = models.ForeignKey(AutonomousTradeOutcome, on_delete=models.CASCADE, related_name='postmortem_handoffs')
+    linked_execution = models.ForeignKey(AutonomousTradeExecution, null=True, blank=True, on_delete=models.SET_NULL, related_name='postmortem_handoffs')
+    linked_candidate = models.ForeignKey(AutonomousTradeCandidate, null=True, blank=True, on_delete=models.SET_NULL, related_name='postmortem_handoffs')
+    handoff_status = models.CharField(max_length=24, choices=AutonomousOutcomeHandoffStatus.choices, default=AutonomousOutcomeHandoffStatus.PENDING)
+    trigger_reason = models.CharField(max_length=32, choices=AutonomousPostmortemTriggerReason.choices)
+    linked_postmortem_run = models.ForeignKey('postmortem_agents.PostmortemBoardRun', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_handoffs')
+    handoff_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        constraints = [
+            models.UniqueConstraint(fields=['linked_outcome', 'trigger_reason'], name='autonomous_unique_postmortem_handoff'),
+        ]
+
+
+class AutonomousLearningHandoff(TimeStampedModel):
+    linked_outcome = models.ForeignKey(AutonomousTradeOutcome, on_delete=models.CASCADE, related_name='learning_handoffs')
+    linked_postmortem_handoff = models.ForeignKey(AutonomousPostmortemHandoff, null=True, blank=True, on_delete=models.SET_NULL, related_name='learning_handoffs')
+    handoff_status = models.CharField(max_length=24, choices=AutonomousOutcomeHandoffStatus.choices, default=AutonomousOutcomeHandoffStatus.PENDING)
+    trigger_reason = models.CharField(max_length=40, choices=AutonomousLearningTriggerReason.choices)
+    linked_learning_run = models.ForeignKey('learning_memory.PostmortemLearningRun', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_handoffs')
+    handoff_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        constraints = [
+            models.UniqueConstraint(fields=['linked_outcome', 'trigger_reason'], name='autonomous_unique_learning_handoff'),
+        ]
+
+
+class AutonomousOutcomeHandoffRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=48, choices=AutonomousOutcomeHandoffRecommendationType.choices)
+    target_outcome = models.ForeignKey(AutonomousTradeOutcome, null=True, blank=True, on_delete=models.SET_NULL, related_name='handoff_recommendations')
+    target_postmortem_handoff = models.ForeignKey(AutonomousPostmortemHandoff, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    target_learning_handoff = models.ForeignKey(AutonomousLearningHandoff, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    rationale = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=5, decimal_places=4, default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
 
     class Meta:

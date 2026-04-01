@@ -1988,3 +1988,25 @@ A new `autonomous_trader` layer now runs a governed, paper-only autonomous missi
 - backend API under `/api/autonomous-trader/*` and frontend route `/autonomous-trader`
 
 Guardrails remain unchanged: runtime/policy/safety/certification still govern whether execution can proceed; this layer orchestrates and audits the cycle.
+
+### Autonomous outcome handoff engine (new)
+
+`autonomous_trader` now closes the paper-only post-trade loop with an explicit, auditable bridge:
+
+- `AutonomousTradeOutcome` → `AutonomousPostmortemHandoff` → `AutonomousLearningHandoff`
+- new run envelope: `AutonomousOutcomeHandoffRun`
+- transparent decision records: `AutonomousOutcomeHandoffRecommendation`
+- strict dedupe and blocker handling to avoid infinite re-emission
+- integration reuses existing authorities:
+  - `postmortem_agents` / `postmortem_demo` for postmortem board activation
+  - `learning_memory` for conservative learning capture
+
+New endpoints:
+- `POST /api/autonomous-trader/run-outcome-handoff/`
+- `GET /api/autonomous-trader/outcome-handoff-runs/`
+- `GET /api/autonomous-trader/postmortem-handoffs/`
+- `GET /api/autonomous-trader/learning-handoffs/`
+- `GET /api/autonomous-trader/outcome-handoff-recommendations/`
+- `GET /api/autonomous-trader/outcome-handoff-summary/`
+
+Boundaries remain unchanged: local-first, single-user, paper/sandbox only, no real money, no live broker/exchange routing, no auto-retune/auto-promote.

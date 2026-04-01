@@ -1,6 +1,10 @@
 from rest_framework import serializers
 
 from apps.autonomous_trader.models import (
+    AutonomousLearningHandoff,
+    AutonomousOutcomeHandoffRecommendation,
+    AutonomousOutcomeHandoffRun,
+    AutonomousPostmortemHandoff,
     AutonomousTradeCandidate,
     AutonomousTradeCycleRun,
     AutonomousTradeDecision,
@@ -14,6 +18,11 @@ class RunCycleSerializer(serializers.Serializer):
     actor = serializers.CharField(required=False, default='operator-ui', allow_blank=True)
     cycle_mode = serializers.CharField(required=False, default='FULL_AUTONOMOUS_PAPER_LOOP')
     limit = serializers.IntegerField(required=False, min_value=1, max_value=100, default=25)
+
+
+class RunOutcomeHandoffSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui', allow_blank=True)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=500, default=100)
 
 
 class AutonomousTradeCycleRunSerializer(serializers.ModelSerializer):
@@ -59,4 +68,32 @@ class AutonomousTradeOutcomeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AutonomousTradeOutcome
+        fields = '__all__'
+
+
+class AutonomousOutcomeHandoffRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousOutcomeHandoffRun
+        fields = '__all__'
+
+
+class AutonomousPostmortemHandoffSerializer(serializers.ModelSerializer):
+    outcome_type = serializers.CharField(source='linked_outcome.outcome_type', read_only=True)
+
+    class Meta:
+        model = AutonomousPostmortemHandoff
+        fields = '__all__'
+
+
+class AutonomousLearningHandoffSerializer(serializers.ModelSerializer):
+    outcome_type = serializers.CharField(source='linked_outcome.outcome_type', read_only=True)
+
+    class Meta:
+        model = AutonomousLearningHandoff
+        fields = '__all__'
+
+
+class AutonomousOutcomeHandoffRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousOutcomeHandoffRecommendation
         fields = '__all__'
