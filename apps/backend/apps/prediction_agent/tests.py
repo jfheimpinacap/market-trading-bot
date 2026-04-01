@@ -174,3 +174,104 @@ class PredictionAgentTests(TestCase):
                 ]
             )
         )
+
+from apps.prediction_agent.models import (
+    PredictionConvictionReviewStatus,
+    PredictionIntakeStatus,
+    RiskReadyPredictionHandoffStatus,
+)
+from apps.research_agent.models import (
+    PredictionHandoffCandidate,
+    PredictionHandoffStatus,
+    ResearchLiquidityState,
+    ResearchMarketActivityState,
+    ResearchPursuitPriorityBucket,
+    ResearchPursuitRun,
+    ResearchPursuitScore,
+    ResearchPursuitScoreStatus,
+    ResearchStructuralAssessment,
+    ResearchStructuralStatus,
+    ResearchTimeWindowState,
+    ResearchVolumeState,
+)
+
+
+class PredictionIntakeRuntimeTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.provider = Provider.objects.create(name='Polymarket', slug='polymarket')
+        self.event = Event.objects.create(provider=self.provider, title='Macro event', slug='macro-event')
+        self.market = Market.objects.create(
+            provider=self.provider,
+            event=self.event,
+            title='Will growth beat estimate?',
+            slug='growth-beat-estimate',
+            current_market_probability=Decimal('0.4400'),
+            source_type='real_read_only',
+            liquidity=Decimal('20000.00'),
+            volume_24h=Decimal('9000.00'),
+            resolution_time=timezone.now() + timezone.timedelta(days=8),
+        )
+        self.pursuit_run = ResearchPursuitRun.objects.create(started_at=timezone.now())
+        self.assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=self.pursuit_run,
+            linked_market=self.market,
+            liquidity_state=ResearchLiquidityState.STRONG,
+            volume_state=ResearchVolumeState.STRONG,
+            time_to_resolution_state=ResearchTimeWindowState.GOOD_WINDOW,
+            market_activity_state=ResearchMarketActivityState.ACTIVE,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        self.score = ResearchPursuitScore.objects.create(
+            pursuit_run=self.pursuit_run,
+            linked_assessment=self.assessment,
+            linked_market=self.market,
+            pursuit_score=Decimal('0.8200'),
+            priority_bucket=ResearchPursuitPriorityBucket.HIGH,
+            score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION,
+        )
+
+    def _create_handoff(self, confidence: str = '0.7800', status: str = PredictionHandoffStatus.READY):
+        return PredictionHandoffCandidate.objects.create(
+            pursuit_run=self.pursuit_run,
+            linked_market=self.market,
+            linked_pursuit_score=self.score,
+            linked_assessment=self.assessment,
+            handoff_status=status,
+            handoff_confidence=Decimal(confidence),
+            handoff_summary='Strong structural + narrative handoff',
+            handoff_reason_codes=['RESEARCH_READY'],
+        )
+
+    def test_strong_research_handoff_enters_runtime_ready(self):
+        self._create_handoff()
+        response = self.client.post(reverse('prediction_agent:run-intake-review'), {'triggered_by': 'test'}, format='json')
+        self.assertEqual(response.status_code, 201)
+        candidate = self.market.prediction_intake_candidates.order_by('-id').first()
+        self.assertEqual(candidate.intake_status, PredictionIntakeStatus.READY_FOR_RUNTIME)
+
+    def test_low_confidence_handoff_stays_out_of_runtime(self):
+        self._create_handoff(confidence='0.2000')
+        self.client.post(reverse('prediction_agent:run-intake-review'), {'triggered_by': 'test'}, format='json')
+        candidate = self.market.prediction_intake_candidates.order_by('-id').first()
+        self.assertEqual(candidate.intake_status, PredictionIntakeStatus.INSUFFICIENT_CONTEXT)
+
+    def test_intake_summary_endpoint(self):
+        self._create_handoff()
+        self.client.post(reverse('prediction_agent:run-intake-review'), {'triggered_by': 'test'}, format='json')
+        summary = self.client.get(reverse('prediction_agent:intake-summary'))
+        self.assertEqual(summary.status_code, 200)
+        self.assertIn('latest_run', summary.json())
+
+    def test_risk_handoff_created_for_ready_or_watch(self):
+        self._create_handoff()
+        self.client.post(reverse('prediction_agent:run-intake-review'), {'triggered_by': 'test'}, format='json')
+        handoff = self.market.risk_ready_prediction_handoffs.order_by('-id').first()
+        self.assertIn(handoff.handoff_status, [RiskReadyPredictionHandoffStatus.READY, RiskReadyPredictionHandoffStatus.WATCH, RiskReadyPredictionHandoffStatus.DEFERRED, RiskReadyPredictionHandoffStatus.BLOCKED])
+        self.assertIn(handoff.linked_conviction_review.review_status, [
+            PredictionConvictionReviewStatus.READY_FOR_RISK,
+            PredictionConvictionReviewStatus.KEEP_FOR_MONITORING,
+            PredictionConvictionReviewStatus.IGNORE_NO_EDGE,
+            PredictionConvictionReviewStatus.IGNORE_LOW_CONFIDENCE,
+            PredictionConvictionReviewStatus.REQUIRE_MANUAL_PREDICTION_REVIEW,
+        ])

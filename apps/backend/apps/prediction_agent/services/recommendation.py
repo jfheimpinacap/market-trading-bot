@@ -4,8 +4,14 @@ from decimal import Decimal
 
 from apps.prediction_agent.models import (
     PredictionAssessmentStatus,
+    PredictionConvictionReview,
+    PredictionConvictionReviewStatus,
+    PredictionIntakeRecommendation,
+    PredictionIntakeRecommendationType,
+    PredictionIntakeRun,
     PredictionRuntimeAssessment,
     PredictionRuntimeRecommendationType,
+    RiskReadyPredictionHandoff,
 )
 
 
@@ -81,4 +87,38 @@ def build_recommendation(assessment: PredictionRuntimeAssessment) -> tuple[str, 
         Decimal('0.5400'),
         ['needs_review'],
         'Assessment is currently better suited for monitoring than escalation.',
+    )
+
+
+def create_intake_recommendation(*, intake_run: PredictionIntakeRun, review: PredictionConvictionReview, handoff: RiskReadyPredictionHandoff) -> PredictionIntakeRecommendation:
+    recommendation_type = PredictionIntakeRecommendationType.KEEP_FOR_MONITORING
+    blockers: list[str] = []
+
+    if review.review_status == PredictionConvictionReviewStatus.READY_FOR_RISK:
+        recommendation_type = PredictionIntakeRecommendationType.SEND_TO_RISK_IMMEDIATELY
+    elif review.review_status == PredictionConvictionReviewStatus.IGNORE_NO_EDGE:
+        recommendation_type = PredictionIntakeRecommendationType.IGNORE_FOR_NO_EDGE
+        blockers.append('no_edge')
+    elif review.review_status == PredictionConvictionReviewStatus.IGNORE_LOW_CONFIDENCE:
+        recommendation_type = PredictionIntakeRecommendationType.IGNORE_FOR_LOW_CONFIDENCE
+        blockers.append('low_confidence')
+    elif review.review_status == PredictionConvictionReviewStatus.REQUIRE_MANUAL_PREDICTION_REVIEW:
+        recommendation_type = PredictionIntakeRecommendationType.REQUIRE_MANUAL_REVIEW_FOR_PREDICTION_CONFLICT
+        blockers.append('manual_review')
+    elif 'NARRATIVE_CONFLICT_DISCOUNT' in (review.reason_codes or []):
+        recommendation_type = PredictionIntakeRecommendationType.REDUCE_CONFIDENCE_FOR_NARRATIVE_CONFLICT
+    elif 'PRECEDENT_CAUTION_DISCOUNT' in (review.reason_codes or []):
+        recommendation_type = PredictionIntakeRecommendationType.REDUCE_CONFIDENCE_FOR_PRECEDENT_CAUTION
+
+    return PredictionIntakeRecommendation.objects.create(
+        intake_run=intake_run,
+        recommendation_type=recommendation_type,
+        target_market=review.linked_intake_candidate.linked_market,
+        target_intake_candidate=review.linked_intake_candidate,
+        target_conviction_review=review,
+        target_handoff=handoff,
+        rationale=f'Intake recommendation generated from conviction review status={review.review_status}.',
+        reason_codes=list(review.reason_codes or []),
+        confidence=review.confidence,
+        blockers=blockers,
     )

@@ -3170,3 +3170,33 @@ Design boundary:
 - no live broker/exchange execution
 - no real money
 - does not replace `prediction_agent`, `risk_agent`, policy, runtime, or safety authority
+
+## Prediction intake + conviction review bridge (new)
+
+`apps.prediction_agent` now adds a conservative, auditable layer between research and risk.
+
+New entities:
+- `PredictionIntakeRun`
+- `PredictionIntakeCandidate`
+- `PredictionConvictionReview`
+- `RiskReadyPredictionHandoff`
+- `PredictionIntakeRecommendation`
+
+New endpoints:
+- `POST /api/prediction/run-intake-review/`
+- `GET /api/prediction/intake-runs/`
+- `GET /api/prediction/intake-candidates/`
+- `GET /api/prediction/conviction-reviews/`
+- `GET /api/prediction/risk-handoffs/`
+- `GET /api/prediction/intake-recommendations/`
+- `GET /api/prediction/intake-summary/`
+
+Services:
+- `services/intake.py`
+- `services/conviction.py`
+- `services/uncertainty.py`
+- `services/risk_handoff.py`
+- `services/recommendation.py`
+- `services/run.py`
+
+Design boundaries remain strict: paper-only, no real execution, no risk-authority replacement.

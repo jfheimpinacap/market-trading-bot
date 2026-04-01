@@ -8,6 +8,11 @@ from apps.prediction_agent.models import (
     PredictionRuntimeRecommendation,
     PredictionRuntimeRun,
     PredictionScore,
+    PredictionIntakeRun,
+    PredictionIntakeCandidate,
+    PredictionConvictionReview,
+    RiskReadyPredictionHandoff,
+    PredictionIntakeRecommendation,
 )
 
 
@@ -198,3 +203,41 @@ class PredictionRuntimeRecommendationSerializer(serializers.ModelSerializer):
             'updated_at',
         )
         read_only_fields = fields
+
+
+class PredictionIntakeRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PredictionIntakeRun
+        fields = '__all__'
+
+
+class PredictionIntakeCandidateSerializer(serializers.ModelSerializer):
+    market_slug = serializers.CharField(source='linked_market.slug', read_only=True)
+    market_title = serializers.CharField(source='linked_market.title', read_only=True)
+
+    class Meta:
+        model = PredictionIntakeCandidate
+        fields = '__all__'
+
+
+class PredictionConvictionReviewSerializer(serializers.ModelSerializer):
+    intake_candidate = PredictionIntakeCandidateSerializer(source='linked_intake_candidate', read_only=True)
+
+    class Meta:
+        model = PredictionConvictionReview
+        fields = '__all__'
+
+
+class RiskReadyPredictionHandoffSerializer(serializers.ModelSerializer):
+    market_slug = serializers.CharField(source='linked_market.slug', read_only=True)
+    market_title = serializers.CharField(source='linked_market.title', read_only=True)
+
+    class Meta:
+        model = RiskReadyPredictionHandoff
+        fields = '__all__'
+
+
+class PredictionIntakeRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PredictionIntakeRecommendation
+        fields = '__all__'
