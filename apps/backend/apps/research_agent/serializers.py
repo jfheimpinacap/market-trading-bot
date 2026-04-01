@@ -10,7 +10,12 @@ from apps.research_agent.models import (
     MarketTriageDecisionV2,
     MarketUniverseRun,
     MarketUniverseScanRun,
+    PredictionHandoffCandidate,
     MarketResearchCandidate,
+    ResearchPursuitRecommendation,
+    ResearchPursuitRun,
+    ResearchPursuitScore,
+    ResearchStructuralAssessment,
     MarketResearchRecommendation,
     NarrativeCluster,
     NarrativeAnalysis,
@@ -528,3 +533,49 @@ class MarketResearchRecommendationSerializer(serializers.ModelSerializer):
             'updated_at',
         )
         read_only_fields = fields
+
+
+class RunPursuitReviewRequestSerializer(serializers.Serializer):
+    market_limit = serializers.IntegerField(min_value=10, max_value=400, required=False, default=120)
+
+
+class ResearchPursuitRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResearchPursuitRun
+        fields = '__all__'
+
+
+class ResearchStructuralAssessmentSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_market.title', read_only=True)
+    market_slug = serializers.CharField(source='linked_market.slug', read_only=True)
+
+    class Meta:
+        model = ResearchStructuralAssessment
+        fields = '__all__'
+
+
+class ResearchPursuitScoreSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_market.title', read_only=True)
+    market_slug = serializers.CharField(source='linked_market.slug', read_only=True)
+
+    class Meta:
+        model = ResearchPursuitScore
+        fields = '__all__'
+
+
+class PredictionHandoffCandidateSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_market.title', read_only=True)
+    market_slug = serializers.CharField(source='linked_market.slug', read_only=True)
+
+    class Meta:
+        model = PredictionHandoffCandidate
+        fields = '__all__'
+
+
+class ResearchPursuitRecommendationSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='target_market.title', read_only=True)
+    market_slug = serializers.CharField(source='target_market.slug', read_only=True)
+
+    class Meta:
+        model = ResearchPursuitRecommendation
+        fields = '__all__'

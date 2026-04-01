@@ -9,6 +9,11 @@ from apps.research_agent.models import (
     NarrativeConsensusRecord,
     NarrativeMarketDivergenceRecord,
     ResearchHandoffPriority,
+    ResearchPursuitRecommendation,
+    ResearchPursuitRun,
+    ResearchPursuitScore,
+    ResearchStructuralAssessment,
+    PredictionHandoffCandidate,
     MarketUniverseRun,
     MarketUniverseScanRun,
     MarketResearchCandidate,
@@ -31,6 +36,11 @@ from apps.research_agent.serializers import (
     NarrativeConsensusRecordSerializer,
     NarrativeMarketDivergenceRecordSerializer,
     ResearchHandoffPrioritySerializer,
+    ResearchPursuitRecommendationSerializer,
+    ResearchPursuitRunSerializer,
+    ResearchPursuitScoreSerializer,
+    ResearchStructuralAssessmentSerializer,
+    PredictionHandoffCandidateSerializer,
     MarketUniverseRunSerializer,
     MarketUniverseScanRunSerializer,
     MarketResearchCandidateSerializer,
@@ -45,6 +55,7 @@ from apps.research_agent.serializers import (
     PursuitCandidateSerializer,
     ResearchCandidateSerializer,
     ResearchRunRequestSerializer,
+    RunPursuitReviewRequestSerializer,
     ResearchScanRunSerializer,
     ScanRecommendationSerializer,
     ScanRunRequestSerializer,
@@ -53,6 +64,7 @@ from apps.research_agent.serializers import (
     UniverseScanRunRequestSerializer,
 )
 from apps.research_agent.services.run import get_latest_universe_summary, run_market_universe_triage, run_scan_agent
+from apps.research_agent.services.pursuit_scoring.run import get_latest_pursuit_summary, run_pursuit_review
 from apps.research_agent.services.intelligence_handoff.run import get_consensus_summary, run_consensus_review
 from apps.research_agent.services.analyze import run_narrative_analysis
 from apps.research_agent.services.pursuit_board import get_latest_board_summary, get_pursuit_candidates_queryset
@@ -473,3 +485,83 @@ class ResearchAgentUniverseSummaryView(APIView):
 
     def get(self, request, *args, **kwargs):
         return Response(get_latest_universe_summary(), status=status.HTTP_200_OK)
+
+
+class ResearchAgentRunPursuitReviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunPursuitReviewRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_pursuit_review(market_limit=serializer.validated_data['market_limit'], triggered_by='manual_api')
+        return Response(ResearchPursuitRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class ResearchAgentPursuitRunListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResearchPursuitRunSerializer
+
+    def get_queryset(self):
+        return ResearchPursuitRun.objects.order_by('-started_at', '-id')[:50]
+
+
+class ResearchAgentStructuralAssessmentListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResearchStructuralAssessmentSerializer
+
+    def get_queryset(self):
+        queryset = ResearchStructuralAssessment.objects.select_related('linked_market', 'linked_handoff_priority').order_by('-created_at', '-id')
+        run_id = self.request.query_params.get('run_id')
+        if run_id:
+            queryset = queryset.filter(pursuit_run_id=run_id)
+        return queryset[:300]
+
+
+class ResearchAgentPursuitScoreListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResearchPursuitScoreSerializer
+
+    def get_queryset(self):
+        queryset = ResearchPursuitScore.objects.select_related('linked_market', 'linked_assessment').order_by('-created_at', '-id')
+        run_id = self.request.query_params.get('run_id')
+        if run_id:
+            queryset = queryset.filter(pursuit_run_id=run_id)
+        return queryset[:300]
+
+
+class ResearchAgentPredictionHandoffListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PredictionHandoffCandidateSerializer
+
+    def get_queryset(self):
+        queryset = PredictionHandoffCandidate.objects.select_related('linked_market', 'linked_pursuit_score').order_by('-created_at', '-id')
+        run_id = self.request.query_params.get('run_id')
+        if run_id:
+            queryset = queryset.filter(pursuit_run_id=run_id)
+        return queryset[:300]
+
+
+class ResearchAgentPursuitRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResearchPursuitRecommendationSerializer
+
+    def get_queryset(self):
+        queryset = ResearchPursuitRecommendation.objects.select_related('target_market', 'target_assessment').order_by('-created_at', '-id')
+        run_id = self.request.query_params.get('run_id')
+        if run_id:
+            queryset = queryset.filter(pursuit_run_id=run_id)
+        return queryset[:300]
+
+
+class ResearchAgentPursuitSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(get_latest_pursuit_summary(), status=status.HTTP_200_OK)

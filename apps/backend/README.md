@@ -3138,3 +3138,35 @@ Boundary guarantees:
 - API: run-position-watch, position-watch-runs, position-watch-candidates, position-action-decisions, position-action-executions, position-watch-recommendations, position-watch-summary.
 - Strictly paper-only and traceable; no auto-retune, no auto-promote, no live trading path.
 >>>>>>> origin/main
+
+## Research pursuit hardening layer (new)
+
+`apps.research_agent` now adds a dedicated research→prediction bridge with auditable entities:
+
+- `ResearchPursuitRun`
+- `ResearchStructuralAssessment`
+- `ResearchPursuitScore`
+- `PredictionHandoffCandidate`
+- `ResearchPursuitRecommendation`
+
+Service split:
+- `services/pursuit_scoring/structural_assessment.py`
+- `services/pursuit_scoring/pursuit_score.py`
+- `services/pursuit_scoring/prediction_handoff.py`
+- `services/pursuit_scoring/recommendation.py`
+- `services/pursuit_scoring/run.py`
+
+New endpoints:
+- `POST /api/research-agent/run-pursuit-review/`
+- `GET /api/research-agent/pursuit-runs/`
+- `GET /api/research-agent/structural-assessments/`
+- `GET /api/research-agent/pursuit-scores/`
+- `GET /api/research-agent/prediction-handoffs/`
+- `GET /api/research-agent/pursuit-recommendations/`
+- `GET /api/research-agent/pursuit-summary/`
+
+Design boundary:
+- recommendation-first, transparent scoring components
+- no live broker/exchange execution
+- no real money
+- does not replace `prediction_agent`, `risk_agent`, policy, runtime, or safety authority

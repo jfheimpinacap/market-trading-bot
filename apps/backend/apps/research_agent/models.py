@@ -347,6 +347,76 @@ class NarrativeConsensusRecommendationType(models.TextChoices):
     REQUIRE_MANUAL_REVIEW_FOR_SOURCE_CONFLICT = 'require_manual_review_for_source_conflict', 'Require manual review for source conflict'
 
 
+class ResearchLiquidityState(models.TextChoices):
+    STRONG = 'strong', 'Strong'
+    ADEQUATE = 'adequate', 'Adequate'
+    WEAK = 'weak', 'Weak'
+    INSUFFICIENT = 'insufficient', 'Insufficient'
+
+
+class ResearchVolumeState(models.TextChoices):
+    STRONG = 'strong', 'Strong'
+    ADEQUATE = 'adequate', 'Adequate'
+    WEAK = 'weak', 'Weak'
+    INSUFFICIENT = 'insufficient', 'Insufficient'
+
+
+class ResearchTimeWindowState(models.TextChoices):
+    GOOD_WINDOW = 'good_window', 'Good window'
+    SHORT_WINDOW = 'short_window', 'Short window'
+    TOO_CLOSE = 'too_close', 'Too close'
+    TOO_FAR = 'too_far', 'Too far'
+
+
+class ResearchMarketActivityState(models.TextChoices):
+    ACTIVE = 'active', 'Active'
+    MODERATE = 'moderate', 'Moderate'
+    STALE = 'stale', 'Stale'
+    CLOSED_OR_BLOCKED = 'closed_or_blocked', 'Closed or blocked'
+
+
+class ResearchStructuralStatus(models.TextChoices):
+    PREDICTION_READY = 'prediction_ready', 'Prediction ready'
+    WATCHLIST_ONLY = 'watchlist_only', 'Watchlist only'
+    DEFERRED = 'deferred', 'Deferred'
+    BLOCKED = 'blocked', 'Blocked'
+
+
+class ResearchPursuitPriorityBucket(models.TextChoices):
+    CRITICAL = 'critical', 'Critical'
+    HIGH = 'high', 'High'
+    MEDIUM = 'medium', 'Medium'
+    LOW = 'low', 'Low'
+    IGNORE = 'ignore', 'Ignore'
+
+
+class ResearchPursuitScoreStatus(models.TextChoices):
+    READY_FOR_PREDICTION = 'ready_for_prediction', 'Ready for prediction'
+    KEEP_ON_RESEARCH_WATCHLIST = 'keep_on_research_watchlist', 'Keep on research watchlist'
+    DEFER = 'defer', 'Defer'
+    BLOCK = 'block', 'Block'
+
+
+class PredictionHandoffStatus(models.TextChoices):
+    READY = 'ready', 'Ready'
+    WATCH = 'watch', 'Watch'
+    BLOCKED = 'blocked', 'Blocked'
+    DEFERRED = 'deferred', 'Deferred'
+
+
+class ResearchPursuitRecommendationType(models.TextChoices):
+    SEND_TO_PREDICTION_IMMEDIATELY = 'send_to_prediction_immediately', 'Send to prediction immediately'
+    KEEP_ON_RESEARCH_WATCHLIST = 'keep_on_research_watchlist', 'Keep on research watchlist'
+    DEFER_FOR_LOW_LIQUIDITY = 'defer_for_low_liquidity', 'Defer for low liquidity'
+    DEFER_FOR_POOR_TIME_WINDOW = 'defer_for_poor_time_window', 'Defer for poor time window'
+    BLOCK_FOR_STALE_MARKET = 'block_for_stale_market', 'Block for stale market'
+    PRIORITIZE_FOR_NARRATIVE_DIVERGENCE = 'prioritize_for_narrative_divergence', 'Prioritize for narrative divergence'
+    REQUIRE_MANUAL_REVIEW_FOR_STRUCTURAL_CONFLICT = (
+        'require_manual_review_for_structural_conflict',
+        'Require manual review for structural conflict',
+    )
+
+
 class SourceScanRun(TimeStampedModel):
     started_at = models.DateTimeField()
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -571,6 +641,111 @@ class NarrativeConsensusRecommendation(TimeStampedModel):
     reason_codes = models.JSONField(default=list, blank=True)
     confidence = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
     blockers = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class ResearchPursuitRun(TimeStampedModel):
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_market_count = models.PositiveIntegerField(default=0)
+    considered_handoff_count = models.PositiveIntegerField(default=0)
+    prediction_ready_count = models.PositiveIntegerField(default=0)
+    research_watchlist_count = models.PositiveIntegerField(default=0)
+    blocked_count = models.PositiveIntegerField(default=0)
+    deferred_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class ResearchStructuralAssessment(TimeStampedModel):
+    pursuit_run = models.ForeignKey(ResearchPursuitRun, on_delete=models.CASCADE, related_name='assessments')
+    linked_market = models.ForeignKey('markets.Market', on_delete=models.CASCADE, related_name='research_structural_assessments')
+    linked_handoff_priority = models.ForeignKey(
+        ResearchHandoffPriority, null=True, blank=True, on_delete=models.SET_NULL, related_name='structural_assessments'
+    )
+    linked_consensus_record = models.ForeignKey(
+        NarrativeConsensusRecord, null=True, blank=True, on_delete=models.SET_NULL, related_name='structural_assessments'
+    )
+    linked_divergence_record = models.ForeignKey(
+        NarrativeMarketDivergenceRecord, null=True, blank=True, on_delete=models.SET_NULL, related_name='structural_assessments'
+    )
+    liquidity_state = models.CharField(max_length=16, choices=ResearchLiquidityState.choices, default=ResearchLiquidityState.INSUFFICIENT)
+    volume_state = models.CharField(max_length=16, choices=ResearchVolumeState.choices, default=ResearchVolumeState.INSUFFICIENT)
+    time_to_resolution_state = models.CharField(
+        max_length=16, choices=ResearchTimeWindowState.choices, default=ResearchTimeWindowState.TOO_CLOSE
+    )
+    market_activity_state = models.CharField(
+        max_length=24, choices=ResearchMarketActivityState.choices, default=ResearchMarketActivityState.CLOSED_OR_BLOCKED
+    )
+    structural_status = models.CharField(max_length=24, choices=ResearchStructuralStatus.choices, default=ResearchStructuralStatus.DEFERRED)
+    assessment_summary = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class ResearchPursuitScore(TimeStampedModel):
+    pursuit_run = models.ForeignKey(ResearchPursuitRun, on_delete=models.CASCADE, related_name='scores')
+    linked_assessment = models.ForeignKey(ResearchStructuralAssessment, on_delete=models.CASCADE, related_name='scores')
+    linked_market = models.ForeignKey('markets.Market', on_delete=models.CASCADE, related_name='research_pursuit_scores')
+    pursuit_score = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal('0.0000'))
+    priority_bucket = models.CharField(max_length=16, choices=ResearchPursuitPriorityBucket.choices, default=ResearchPursuitPriorityBucket.LOW)
+    score_components = models.JSONField(default=dict, blank=True)
+    score_status = models.CharField(max_length=32, choices=ResearchPursuitScoreStatus.choices, default=ResearchPursuitScoreStatus.DEFER)
+    score_summary = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-pursuit_score', '-created_at', '-id']
+
+
+class PredictionHandoffCandidate(TimeStampedModel):
+    pursuit_run = models.ForeignKey(ResearchPursuitRun, on_delete=models.CASCADE, related_name='prediction_handoffs')
+    linked_market = models.ForeignKey('markets.Market', on_delete=models.CASCADE, related_name='prediction_handoff_candidates')
+    linked_pursuit_score = models.ForeignKey(ResearchPursuitScore, on_delete=models.CASCADE, related_name='handoff_candidates')
+    linked_assessment = models.ForeignKey(ResearchStructuralAssessment, on_delete=models.CASCADE, related_name='handoff_candidates')
+    linked_consensus_record = models.ForeignKey(
+        NarrativeConsensusRecord, null=True, blank=True, on_delete=models.SET_NULL, related_name='prediction_handoff_candidates'
+    )
+    linked_divergence_record = models.ForeignKey(
+        NarrativeMarketDivergenceRecord, null=True, blank=True, on_delete=models.SET_NULL, related_name='prediction_handoff_candidates'
+    )
+    handoff_status = models.CharField(max_length=16, choices=PredictionHandoffStatus.choices, default=PredictionHandoffStatus.WATCH)
+    handoff_confidence = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    handoff_summary = models.TextField(blank=True)
+    handoff_reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class ResearchPursuitRecommendation(TimeStampedModel):
+    pursuit_run = models.ForeignKey(ResearchPursuitRun, on_delete=models.CASCADE, related_name='recommendations')
+    recommendation_type = models.CharField(max_length=64, choices=ResearchPursuitRecommendationType.choices)
+    target_market = models.ForeignKey('markets.Market', null=True, blank=True, on_delete=models.SET_NULL, related_name='research_pursuit_recommendations')
+    target_assessment = models.ForeignKey(
+        ResearchStructuralAssessment, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations'
+    )
+    target_handoff = models.ForeignKey(
+        PredictionHandoffCandidate, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations'
+    )
+    rationale = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.0000'))
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
