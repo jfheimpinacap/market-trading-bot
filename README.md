@@ -2042,3 +2042,9 @@ Guardrails stay unchanged:
 - portfolio-aware and risk-first discounts/caps
 - execution now consumes sizing decision notional/quantity for paper trades
 - remains strictly local-first, single-user, paper/sandbox only (no live routing, no real money)
+
+
+## Autonomous position watch hardening (paper-only)
+- Adds a post-entry autonomous watch loop for open paper positions with explicit HOLD/REDUCE/CLOSE/REVIEW_REQUIRED decisions.
+- Uses sentiment/narrative drift, risk posture, and portfolio pressure as inputs while keeping risk/policy/runtime/safety as authorities.
+- Executes only paper reduce/close actions with auditable lineage records; no real broker routing and no real money.
