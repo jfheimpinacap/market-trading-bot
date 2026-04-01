@@ -18,6 +18,11 @@ import type {
   AutonomousTradeOutcome,
   AutonomousTradeWatchRecord,
   AutonomousTraderSummary,
+  AutonomousDispatchRecord,
+  AutonomousExecutionDecision,
+  AutonomousExecutionIntakeCandidate,
+  AutonomousExecutionIntakeSummary,
+  AutonomousExecutionRecommendation,
   AutonomousPositionWatchSummary,
   AutonomousPositionWatchCandidate,
   AutonomousPositionActionDecision,
@@ -27,6 +32,13 @@ import type {
 
 export function runAutonomousTraderCycle() {
   return requestJson<{ run: number; candidate_count: number }>('/api/autonomous-trader/run-cycle/', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export function runAutonomousExecutionIntake() {
+  return requestJson<{ run: number; intake_candidate_count: number }>('/api/autonomous-trader/run-execution-intake/', {
     method: 'POST',
     body: JSON.stringify({}),
   });
@@ -92,3 +104,8 @@ export const getAutonomousPositionWatchCandidates = () => requestJson<Autonomous
 export const getAutonomousPositionActionDecisions = () => requestJson<AutonomousPositionActionDecision[]>('/api/autonomous-trader/position-action-decisions/');
 export const getAutonomousPositionActionExecutions = () => requestJson<AutonomousPositionActionExecution[]>('/api/autonomous-trader/position-action-executions/');
 export const getAutonomousPositionWatchRecommendations = () => requestJson<AutonomousPositionWatchRecommendation[]>('/api/autonomous-trader/position-watch-recommendations/');
+export const getAutonomousExecutionIntakeSummary = () => requestJson<AutonomousExecutionIntakeSummary>('/api/autonomous-trader/execution-intake-summary/');
+export const getAutonomousExecutionIntakeCandidates = () => requestJson<AutonomousExecutionIntakeCandidate[]>('/api/autonomous-trader/execution-intake-candidates/');
+export const getAutonomousExecutionDecisions = () => requestJson<AutonomousExecutionDecision[]>('/api/autonomous-trader/execution-decisions/');
+export const getAutonomousDispatchRecords = () => requestJson<AutonomousDispatchRecord[]>('/api/autonomous-trader/dispatch-records/');
+export const getAutonomousExecutionRecommendations = () => requestJson<AutonomousExecutionRecommendation[]>('/api/autonomous-trader/execution-intake-recommendations/');

@@ -32,8 +32,19 @@ import {
   getAutonomousPositionActionExecutions,
   getAutonomousPositionWatchRecommendations,
   runAutonomousPositionWatch,
+  getAutonomousDispatchRecords,
+  getAutonomousExecutionDecisions,
+  getAutonomousExecutionIntakeCandidates,
+  getAutonomousExecutionIntakeSummary,
+  getAutonomousExecutionRecommendations,
+  runAutonomousExecutionIntake,
 } from '../services/autonomousTrader';
 import type {
+  AutonomousDispatchRecord,
+  AutonomousExecutionDecision,
+  AutonomousExecutionIntakeCandidate,
+  AutonomousExecutionIntakeSummary,
+  AutonomousExecutionRecommendation,
   AutonomousTradeCandidate,
   AutonomousTradeDecision,
   AutonomousTradeExecution,
@@ -84,6 +95,11 @@ export function AutonomousTraderPage() {
   const [positionActionDecisions, setPositionActionDecisions] = useState<AutonomousPositionActionDecision[]>([]);
   const [positionActionExecutions, setPositionActionExecutions] = useState<AutonomousPositionActionExecution[]>([]);
   const [positionWatchRecommendations, setPositionWatchRecommendations] = useState<AutonomousPositionWatchRecommendation[]>([]);
+  const [executionIntakeSummary, setExecutionIntakeSummary] = useState<AutonomousExecutionIntakeSummary | null>(null);
+  const [executionIntakeCandidates, setExecutionIntakeCandidates] = useState<AutonomousExecutionIntakeCandidate[]>([]);
+  const [executionDecisions, setExecutionDecisions] = useState<AutonomousExecutionDecision[]>([]);
+  const [dispatchRecords, setDispatchRecords] = useState<AutonomousDispatchRecord[]>([]);
+  const [executionRecommendations, setExecutionRecommendations] = useState<AutonomousExecutionRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -92,7 +108,7 @@ export function AutonomousTraderPage() {
     setLoading(true);
     setError(null);
     try {
-      const [s, c, d, e, w, o, hs, ph, lh, recs, fs, fc, fi, fr, ss, sc, sd, sr, pws, pwc, pad, pae, pwr] = await Promise.all([
+      const [s, c, d, e, w, o, hs, ph, lh, recs, fs, fc, fi, fr, ss, sc, sd, sr, pws, pwc, pad, pae, pwr, eis, eic, eds, drs, ers] = await Promise.all([
         getAutonomousTraderSummary(),
         getAutonomousTraderCandidates(),
         getAutonomousTraderDecisions(),
@@ -116,12 +132,18 @@ export function AutonomousTraderPage() {
         getAutonomousPositionActionDecisions(),
         getAutonomousPositionActionExecutions(),
         getAutonomousPositionWatchRecommendations(),
+        getAutonomousExecutionIntakeSummary(),
+        getAutonomousExecutionIntakeCandidates(),
+        getAutonomousExecutionDecisions(),
+        getAutonomousDispatchRecords(),
+        getAutonomousExecutionRecommendations(),
       ]);
       setSummary(s); setCandidates(c); setDecisions(d); setExecutions(e); setWatchRecords(w); setOutcomes(o);
       setHandoffSummary(hs); setPostmortemHandoffs(ph); setLearningHandoffs(lh); setHandoffRecommendations(recs);
       setFeedbackSummary(fs); setFeedbackContexts(fc); setFeedbackInfluences(fi); setFeedbackRecommendations(fr);
       setSizingSummary(ss); setSizingContexts(sc); setSizingDecisions(sd); setSizingRecommendations(sr);
       setPositionWatchSummary(pws); setPositionWatchCandidates(pwc); setPositionActionDecisions(pad); setPositionActionExecutions(pae); setPositionWatchRecommendations(pwr);
+      setExecutionIntakeSummary(eis); setExecutionIntakeCandidates(eic); setExecutionDecisions(eds); setDispatchRecords(drs); setExecutionRecommendations(ers);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load autonomous trader.');
     } finally {
@@ -161,6 +183,11 @@ export function AutonomousTraderPage() {
     try { await runAutonomousPositionWatch(); await loadData(); } finally { setBusy(false); }
   }, [loadData]);
 
+  const runExecutionIntake = useCallback(async () => {
+    setBusy(true);
+    try { await runAutonomousExecutionIntake(); await loadData(); } finally { setBusy(false); }
+  }, [loadData]);
+
   const cards = useMemo(() => [
     ['Candidates considered', summary?.considered_candidate_count ?? 0],
     ['Watchlist', summary?.watchlist_count ?? 0],
@@ -173,12 +200,27 @@ export function AutonomousTraderPage() {
 
   return <div className="page-stack">
     <PageHeader eyebrow="Autonomous paper loop" title="/autonomous-trader" description="Paper-only, governed autonomy with minimal human intervention. No real money, no live broker routing, and explicit risk/policy/runtime authority boundaries."
-      actions={<div className="button-row"><button type="button" className="primary-button" disabled={busy} onClick={() => void runCycle()}>{busy ? 'Running...' : 'Run autonomous trade cycle'}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runWatchCycle()}>Run watch cycle</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runOutcomeHandoff()}>Run outcome handoff</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runFeedbackReuse()}>Run feedback reuse</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runSizing()}>Run sizing</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runPositionWatch()}>Run position watch</button></div>} />
+      actions={<div className="button-row"><button type="button" className="primary-button" disabled={busy} onClick={() => void runCycle()}>{busy ? 'Running...' : 'Run autonomous trade cycle'}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runExecutionIntake()}>Run execution intake</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runWatchCycle()}>Run watch cycle</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runOutcomeHandoff()}>Run outcome handoff</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runFeedbackReuse()}>Run feedback reuse</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runSizing()}>Run sizing</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runPositionWatch()}>Run position watch</button></div>} />
 
     <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined} loadingTitle="Loading autonomous trader" errorTitle="Could not load autonomous trader" loadingDescription="Collecting cycle summary, candidates, decisions, executions, watch records, and outcomes.">
       <SectionCard eyebrow="Summary" title="Cycle metrics" description="Autonomous paper trade-cycle run metrics with auditable counts.">
         <div className="dashboard-stat-grid">{cards.map(([label, value]) => <article key={label} className="dashboard-stat-card"><span>{label}</span><strong>{value}</strong></article>)}</div>
       </SectionCard>
+      <SectionCard eyebrow="Execution Readiness Intake" title="Risk → autonomous execution bridge" description="Paper-only, readiness-driven and dispatch-safe bridge. No live execution and no real money.">
+        <div className="dashboard-stat-grid">{[
+          ['Readiness considered', executionIntakeSummary?.considered_readiness_count ?? 0],
+          ['Execute now', executionIntakeSummary?.execute_now_count ?? 0],
+          ['Execute reduced', executionIntakeSummary?.execute_reduced_count ?? 0],
+          ['Watch', executionIntakeSummary?.watch_count ?? 0],
+          ['Defer', executionIntakeSummary?.defer_count ?? 0],
+          ['Blocked', executionIntakeSummary?.blocked_count ?? 0],
+          ['Dispatched', executionIntakeSummary?.dispatch_count ?? 0],
+        ].map(([label, value]) => <article key={label} className="dashboard-stat-card"><span>{label}</span><strong>{value}</strong></article>)}</div>
+      </SectionCard>
+      <SectionCard eyebrow="Execution intake candidates" title="Readiness intake candidates" description="Candidate-level readiness context consumed from risk outputs."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Readiness confidence</th><th>Approval</th><th>Sizing method</th><th>Status</th><th>Summary</th></tr></thead><tbody>{executionIntakeCandidates.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.readiness_confidence}</td><td>{x.approval_status || '-'}</td><td>{x.sizing_method || '-'}</td><td>{x.intake_status}</td><td>{x.execution_context_summary}</td></tr>)}</tbody></table></div></SectionCard>
+      <SectionCard eyebrow="Execution decisions" title="Governed execution decisions" description="Explicit execute/reduced/watch/defer/block/manual-review decisions."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Decision type</th><th>Status</th><th>Confidence</th><th>Rationale</th></tr></thead><tbody>{executionDecisions.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.decision_type}</td><td>{x.decision_status}</td><td>{x.decision_confidence}</td><td>{x.rationale}</td></tr>)}</tbody></table></div></SectionCard>
+      <SectionCard eyebrow="Dispatch records" title="Paper dispatch records" description="Dispatch status and mode for readiness-driven paper execution only."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Status</th><th>Mode</th><th>Quantity</th><th>Notional</th><th>Summary</th></tr></thead><tbody>{dispatchRecords.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.dispatch_status}</td><td>{x.dispatch_mode}</td><td>{x.dispatched_quantity ?? '-'}</td><td>{x.dispatched_notional ?? '-'}</td><td>{x.dispatch_summary}</td></tr>)}</tbody></table></div></SectionCard>
+      <SectionCard eyebrow="Execution recommendations" title="Conservative execution recommendations" description="Audit-friendly recommendation outputs for dispatch or non-dispatch paths."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{executionRecommendations.map((x) => <tr key={x.id}><td>{x.recommendation_type}</td><td>{x.rationale}</td><td>{x.blockers?.join(', ') || '-'}</td><td>{x.confidence}</td></tr>)}</tbody></table></div></SectionCard>
       <SectionCard eyebrow="Candidates" title="Consolidated intake" description="Candidates merged from opportunity/research/prediction/risk context."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Edge</th><th>Confidence</th><th>Status</th><th>Risk posture</th></tr></thead><tbody>{candidates.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.adjusted_edge}</td><td>{x.confidence}</td><td>{x.candidate_status}</td><td>{x.risk_posture}</td></tr>)}</tbody></table></div></SectionCard>
       <SectionCard eyebrow="Decisions" title="Autonomous decisioning" description="Transparent and explicit watch/execute/block decisions."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Decision</th><th>Rationale</th><th>Status</th></tr></thead><tbody>{decisions.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.decision_type}</td><td>{x.rationale}</td><td>{x.decision_status}</td></tr>)}</tbody></table></div></SectionCard>
       <SectionCard eyebrow="Executions" title="Paper executions" description="Paper-only execution linkage with sizing summary and linked paper trade."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Execution status</th><th>Sizing summary</th><th>Paper trade</th></tr></thead><tbody>{executions.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.execution_status}</td><td>{x.sizing_summary}</td><td>{x.linked_paper_trade ?? '-'}</td></tr>)}</tbody></table></div></SectionCard>

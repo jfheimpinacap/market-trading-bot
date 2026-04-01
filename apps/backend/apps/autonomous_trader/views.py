@@ -4,6 +4,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.autonomous_trader.models import (
+    AutonomousDispatchRecord,
+    AutonomousExecutionDecision,
+    AutonomousExecutionIntakeCandidate,
+    AutonomousExecutionIntakeRun,
+    AutonomousExecutionRecommendation,
     AutonomousFeedbackCandidateContext,
     AutonomousFeedbackInfluenceRecord,
     AutonomousFeedbackRecommendation,
@@ -29,6 +34,11 @@ from apps.autonomous_trader.models import (
     AutonomousTradeWatchRecord,
 )
 from apps.autonomous_trader.serializers import (
+    AutonomousDispatchRecordSerializer,
+    AutonomousExecutionDecisionSerializer,
+    AutonomousExecutionIntakeCandidateSerializer,
+    AutonomousExecutionIntakeRunSerializer,
+    AutonomousExecutionRecommendationSerializer,
     AutonomousFeedbackCandidateContextSerializer,
     AutonomousFeedbackInfluenceRecordSerializer,
     AutonomousFeedbackRecommendationSerializer,
@@ -52,6 +62,7 @@ from apps.autonomous_trader.serializers import (
     AutonomousTradeExecutionSerializer,
     AutonomousTradeOutcomeSerializer,
     AutonomousTradeWatchRecordSerializer,
+    RunExecutionIntakeSerializer,
     RunCycleSerializer,
     RunFeedbackReuseSerializer,
     RunSizingSerializer,
@@ -66,6 +77,7 @@ from apps.autonomous_trader.services import (
     run_feedback_reuse_engine,
     run_outcome_handoff_engine,
 )
+from apps.autonomous_trader.services.execution_intake import build_execution_intake_summary, run_execution_intake
 from apps.autonomous_trader.services.kelly_sizing import build_sizing_summary, run_sizing_bridge
 from apps.autonomous_trader.services.position_watch import build_position_watch_summary, run_position_watch
 
@@ -79,6 +91,17 @@ class AutonomousTradeRunCycleView(APIView):
         serializer.is_valid(raise_exception=True)
         result = run_autonomous_cycle(**serializer.validated_data)
         return Response({'run': result['run'].id, 'candidate_count': len(result['candidates'])}, status=status.HTTP_200_OK)
+
+
+class AutonomousTradeRunExecutionIntakeView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunExecutionIntakeSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_execution_intake(**serializer.validated_data)
+        return Response({'run': result['run'].id, 'intake_candidate_count': len(result['intake_candidates'])}, status=status.HTTP_200_OK)
 
 
 class AutonomousTradeRunWatchCycleView(APIView):
@@ -200,6 +223,77 @@ class AutonomousTradeSummaryView(APIView):
 
     def get(self, request, *args, **kwargs):
         return Response(build_summary())
+
+
+class AutonomousExecutionIntakeRunsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousExecutionIntakeRun.objects.order_by('-started_at', '-id')[:100]
+        return Response(AutonomousExecutionIntakeRunSerializer(rows, many=True).data)
+
+
+class AutonomousExecutionIntakeCandidatesView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousExecutionIntakeCandidate.objects.select_related('linked_market').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousExecutionIntakeCandidateSerializer(rows, many=True).data)
+
+
+class AutonomousExecutionIntakeCandidateDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, candidate_id: int, *args, **kwargs):
+        row = get_object_or_404(AutonomousExecutionIntakeCandidate, pk=candidate_id)
+        return Response(AutonomousExecutionIntakeCandidateSerializer(row).data)
+
+
+class AutonomousExecutionDecisionsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousExecutionDecision.objects.select_related('linked_intake_candidate__linked_market').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousExecutionDecisionSerializer(rows, many=True).data)
+
+
+class AutonomousExecutionDecisionDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, decision_id: int, *args, **kwargs):
+        row = get_object_or_404(AutonomousExecutionDecision, pk=decision_id)
+        return Response(AutonomousExecutionDecisionSerializer(row).data)
+
+
+class AutonomousDispatchRecordsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousDispatchRecord.objects.select_related('linked_execution_decision__linked_intake_candidate__linked_market').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousDispatchRecordSerializer(rows, many=True).data)
+
+
+class AutonomousExecutionRecommendationsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousExecutionRecommendation.objects.select_related('target_market').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousExecutionRecommendationSerializer(rows, many=True).data)
+
+
+class AutonomousExecutionIntakeSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(build_execution_intake_summary())
 
 
 class AutonomousOutcomeHandoffRunsView(APIView):

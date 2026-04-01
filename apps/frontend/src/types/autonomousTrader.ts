@@ -10,6 +10,56 @@ export type AutonomousTraderSummary = {
   recommendation_summary: Record<string, number>;
 };
 
+export type AutonomousExecutionIntakeSummary = {
+  latest_run_id: number | null;
+  considered_readiness_count: number;
+  execute_now_count: number;
+  execute_reduced_count: number;
+  watch_count: number;
+  defer_count: number;
+  blocked_count: number;
+  manual_review_count: number;
+  dispatch_count: number;
+  recommendation_summary: Record<string, number>;
+};
+
+export type AutonomousExecutionIntakeCandidate = {
+  id: number;
+  market_title: string;
+  readiness_confidence: string;
+  approval_status: string;
+  sizing_method: string;
+  intake_status: string;
+  execution_context_summary: string;
+};
+
+export type AutonomousExecutionDecision = {
+  id: number;
+  market_title: string;
+  decision_type: string;
+  decision_status: string;
+  decision_confidence: string;
+  rationale: string;
+};
+
+export type AutonomousDispatchRecord = {
+  id: number;
+  market_title: string;
+  dispatch_status: string;
+  dispatch_mode: string;
+  dispatched_quantity: string | null;
+  dispatched_notional: string | null;
+  dispatch_summary: string;
+};
+
+export type AutonomousExecutionRecommendation = {
+  id: number;
+  recommendation_type: string;
+  rationale: string;
+  blockers: string[];
+  confidence: string;
+};
+
 export type AutonomousOutcomeHandoffSummary = {
   latest_run_id: number | null;
   considered_outcome_count: number;

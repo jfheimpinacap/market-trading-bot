@@ -3226,3 +3226,25 @@ Primary endpoints:
 - `GET /api/risk-agent/intake-summary/`
 
 Boundary guarantees remain strict: paper-only, recommendation-first, and no live routing or real-money execution.
+
+## Autonomous execution intake bridge (new)
+
+`apps.autonomous_trader` now exposes a readiness-driven execution-intake layer sourced from `apps.risk_agent.AutonomousExecutionReadiness`.
+
+New endpoints:
+- `POST /api/autonomous-trader/run-execution-intake/`
+- `GET /api/autonomous-trader/execution-intake-runs/`
+- `GET /api/autonomous-trader/execution-intake-candidates/`
+- `GET /api/autonomous-trader/execution-decisions/`
+- `GET /api/autonomous-trader/dispatch-records/`
+- `GET /api/autonomous-trader/execution-intake-recommendations/`
+- `GET /api/autonomous-trader/execution-intake-summary/`
+
+Service split:
+- `services/execution_intake/intake.py`
+- `services/execution_intake/decision.py`
+- `services/execution_intake/dispatch.py`
+- `services/execution_intake/recommendation.py`
+- `services/execution_intake/run.py`
+
+This hardens risk→autonomous paper dispatch with explicit, auditable, policy-safe decisions and no live execution path.
