@@ -6,9 +6,14 @@ import {
   getAutonomousTraderCandidates,
   getAutonomousTraderDecisions,
   getAutonomousTraderExecutions,
+  getAutonomousLearningHandoffs,
+  getAutonomousOutcomeHandoffRecommendations,
+  getAutonomousOutcomeHandoffSummary,
+  getAutonomousPostmortemHandoffs,
   getAutonomousTraderOutcomes,
   getAutonomousTraderSummary,
   getAutonomousTraderWatchRecords,
+  runAutonomousOutcomeHandoff,
   runAutonomousTraderCycle,
   runAutonomousTraderWatchCycle,
 } from '../services/autonomousTrader';
@@ -19,6 +24,10 @@ import type {
   AutonomousTradeOutcome,
   AutonomousTradeWatchRecord,
   AutonomousTraderSummary,
+  AutonomousOutcomeHandoffSummary,
+  AutonomousPostmortemHandoff,
+  AutonomousLearningHandoff,
+  AutonomousOutcomeHandoffRecommendation,
 } from '../types/autonomousTrader';
 
 export function AutonomousTraderPage() {
@@ -28,6 +37,10 @@ export function AutonomousTraderPage() {
   const [executions, setExecutions] = useState<AutonomousTradeExecution[]>([]);
   const [watchRecords, setWatchRecords] = useState<AutonomousTradeWatchRecord[]>([]);
   const [outcomes, setOutcomes] = useState<AutonomousTradeOutcome[]>([]);
+  const [handoffSummary, setHandoffSummary] = useState<AutonomousOutcomeHandoffSummary | null>(null);
+  const [postmortemHandoffs, setPostmortemHandoffs] = useState<AutonomousPostmortemHandoff[]>([]);
+  const [learningHandoffs, setLearningHandoffs] = useState<AutonomousLearningHandoff[]>([]);
+  const [handoffRecommendations, setHandoffRecommendations] = useState<AutonomousOutcomeHandoffRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -36,15 +49,20 @@ export function AutonomousTraderPage() {
     setLoading(true);
     setError(null);
     try {
-      const [s, c, d, e, w, o] = await Promise.all([
+      const [s, c, d, e, w, o, hs, ph, lh, recs] = await Promise.all([
         getAutonomousTraderSummary(),
         getAutonomousTraderCandidates(),
         getAutonomousTraderDecisions(),
         getAutonomousTraderExecutions(),
         getAutonomousTraderWatchRecords(),
         getAutonomousTraderOutcomes(),
+        getAutonomousOutcomeHandoffSummary(),
+        getAutonomousPostmortemHandoffs(),
+        getAutonomousLearningHandoffs(),
+        getAutonomousOutcomeHandoffRecommendations(),
       ]);
       setSummary(s); setCandidates(c); setDecisions(d); setExecutions(e); setWatchRecords(w); setOutcomes(o);
+      setHandoffSummary(hs); setPostmortemHandoffs(ph); setLearningHandoffs(lh); setHandoffRecommendations(recs);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load autonomous trader.');
     } finally {
@@ -64,6 +82,11 @@ export function AutonomousTraderPage() {
     try { await runAutonomousTraderWatchCycle(); await loadData(); } finally { setBusy(false); }
   }, [loadData]);
 
+  const runOutcomeHandoff = useCallback(async () => {
+    setBusy(true);
+    try { await runAutonomousOutcomeHandoff(); await loadData(); } finally { setBusy(false); }
+  }, [loadData]);
+
   const cards = useMemo(() => [
     ['Candidates considered', summary?.considered_candidate_count ?? 0],
     ['Watchlist', summary?.watchlist_count ?? 0],
@@ -76,7 +99,7 @@ export function AutonomousTraderPage() {
 
   return <div className="page-stack">
     <PageHeader eyebrow="Autonomous paper loop" title="/autonomous-trader" description="Paper-only, governed autonomy with minimal human intervention. No real money, no live broker routing, and explicit risk/policy/runtime authority boundaries."
-      actions={<div className="button-row"><button type="button" className="primary-button" disabled={busy} onClick={() => void runCycle()}>{busy ? 'Running...' : 'Run autonomous trade cycle'}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runWatchCycle()}>Run watch cycle</button></div>} />
+      actions={<div className="button-row"><button type="button" className="primary-button" disabled={busy} onClick={() => void runCycle()}>{busy ? 'Running...' : 'Run autonomous trade cycle'}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runWatchCycle()}>Run watch cycle</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runOutcomeHandoff()}>Run outcome handoff</button></div>} />
 
     <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined} loadingTitle="Loading autonomous trader" errorTitle="Could not load autonomous trader" loadingDescription="Collecting cycle summary, candidates, decisions, executions, watch records, and outcomes.">
       <SectionCard eyebrow="Summary" title="Cycle metrics" description="Autonomous paper trade-cycle run metrics with auditable counts.">
@@ -87,6 +110,22 @@ export function AutonomousTraderPage() {
       <SectionCard eyebrow="Executions" title="Paper executions" description="Paper-only execution linkage with sizing summary and linked paper trade."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Execution status</th><th>Sizing summary</th><th>Paper trade</th></tr></thead><tbody>{executions.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.execution_status}</td><td>{x.sizing_summary}</td><td>{x.linked_paper_trade ?? '-'}</td></tr>)}</tbody></table></div></SectionCard>
       <SectionCard eyebrow="Watch" title="Automated watch records" description="Post-entry watch logic for sentiment, market move, and risk change."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Watch status</th><th>Sentiment shift</th><th>Market move</th><th>Risk change</th></tr></thead><tbody>{watchRecords.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.watch_status}</td><td>{x.sentiment_shift_detected ? 'YES' : 'NO'}</td><td>{x.market_move_detected ? 'YES' : 'NO'}</td><td>{x.risk_change_detected ? 'YES' : 'NO'}</td></tr>)}</tbody></table></div></SectionCard>
       <SectionCard eyebrow="Outcomes" title="Cycle outcomes" description="Outcome tracking and conservative postmortem/learning handoffs."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Outcome type</th><th>Status</th><th>Postmortem</th><th>Learning</th></tr></thead><tbody>{outcomes.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.outcome_type}</td><td>{x.outcome_status}</td><td>{x.send_to_postmortem ? 'YES' : 'NO'}</td><td>{x.send_to_learning ? 'YES' : 'NO'}</td></tr>)}</tbody></table></div></SectionCard>
+
+      <SectionCard eyebrow="Outcome Handoffs" title="Autonomous post-trade closure" description="Governed paper-only handoff engine from outcome → postmortem → learning. No real money and no live routing.">
+        <div className="dashboard-stat-grid">
+          {[
+            ['Outcomes considered', handoffSummary?.considered_outcome_count ?? 0],
+            ['Postmortem eligible', handoffSummary?.eligible_postmortem_count ?? 0],
+            ['Learning eligible', handoffSummary?.eligible_learning_count ?? 0],
+            ['Emitted', handoffSummary?.emitted_count ?? 0],
+            ['Duplicate skipped', handoffSummary?.duplicate_skipped_count ?? 0],
+            ['Blocked', handoffSummary?.blocked_count ?? 0],
+          ].map(([label, value]) => <article key={label} className="dashboard-stat-card"><span>{label}</span><strong>{value}</strong></article>)}
+        </div>
+      </SectionCard>
+      <SectionCard eyebrow="Postmortem handoffs" title="Postmortem activation bridge" description="Explicit lineage from autonomous outcomes into postmortem board runs."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Outcome</th><th>Trigger</th><th>Status</th><th>Postmortem run</th><th>Summary</th></tr></thead><tbody>{postmortemHandoffs.map((x) => <tr key={x.id}><td>{x.linked_outcome}</td><td>{x.trigger_reason}</td><td>{x.handoff_status}</td><td>{x.linked_postmortem_run ?? '-'}</td><td>{x.handoff_summary}</td></tr>)}</tbody></table></div></SectionCard>
+      <SectionCard eyebrow="Learning handoffs" title="Learning capture bridge" description="Conservative capture for later governed reuse; no auto-retune or auto-promote."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Outcome</th><th>Trigger</th><th>Status</th><th>Learning run</th><th>Summary</th></tr></thead><tbody>{learningHandoffs.map((x) => <tr key={x.id}><td>{x.linked_outcome}</td><td>{x.trigger_reason}</td><td>{x.handoff_status}</td><td>{x.linked_learning_run ?? '-'}</td><td>{x.handoff_summary}</td></tr>)}</tbody></table></div></SectionCard>
+      <SectionCard eyebrow="Recommendations" title="Conservative handoff guidance" description="Transparent recommendation records for every outcome-handoff decision."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{handoffRecommendations.map((x) => <tr key={x.id}><td>{x.recommendation_type}</td><td>{x.rationale}</td><td>{x.blockers?.join(', ') || '-'}</td><td>{x.confidence}</td></tr>)}</tbody></table></div></SectionCard>
     </DataStateWrapper>
   </div>;
 }

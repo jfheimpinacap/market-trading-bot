@@ -1870,3 +1870,15 @@ Frontend includes `/autonomous-trader`, a technical supervision view for governe
   - `Run watch cycle`
 
 The page is intentionally conservative and audit-oriented: paper-only, no real money, and no live broker execution.
+
+## `/autonomous-trader` outcome handoff section (new)
+
+The autonomous trader page now includes an **Outcome Handoffs** section to supervise paper-only loop closure:
+
+- summary cards (considered, eligible, emitted, duplicates, blocked)
+- postmortem handoffs panel
+- learning handoffs panel
+- conservative recommendation panel
+- manual action button: `Run outcome handoff`
+
+The UI is intentionally technical and governed: it shows explicit audit records and does not introduce real-money/live-routing behavior.

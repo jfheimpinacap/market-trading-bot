@@ -10,6 +10,19 @@ export type AutonomousTraderSummary = {
   recommendation_summary: Record<string, number>;
 };
 
+export type AutonomousOutcomeHandoffSummary = {
+  latest_run_id: number | null;
+  considered_outcome_count: number;
+  eligible_postmortem_count: number;
+  eligible_learning_count: number;
+  postmortem_handoff_created_count: number;
+  learning_handoff_created_count: number;
+  emitted_count: number;
+  duplicate_skipped_count: number;
+  blocked_count: number;
+  recommendation_summary: Record<string, number>;
+};
+
 export type AutonomousTradeCandidate = {
   id: number;
   market_title: string;
@@ -51,4 +64,30 @@ export type AutonomousTradeOutcome = {
   outcome_status: string;
   send_to_postmortem: boolean;
   send_to_learning: boolean;
+};
+
+export type AutonomousPostmortemHandoff = {
+  id: number;
+  linked_outcome: number;
+  trigger_reason: string;
+  handoff_status: string;
+  linked_postmortem_run: number | null;
+  handoff_summary: string;
+};
+
+export type AutonomousLearningHandoff = {
+  id: number;
+  linked_outcome: number;
+  trigger_reason: string;
+  handoff_status: string;
+  linked_learning_run: number | null;
+  handoff_summary: string;
+};
+
+export type AutonomousOutcomeHandoffRecommendation = {
+  id: number;
+  recommendation_type: string;
+  rationale: string;
+  blockers: string[];
+  confidence: string;
 };

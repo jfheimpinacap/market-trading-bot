@@ -3032,3 +3032,27 @@ Backend now includes `apps.autonomous_trader` as a paper-only orchestration laye
   - `GET /api/autonomous-trader/{cycles,candidates,decisions,executions,watch-records,outcomes,summary}/`
 
 The module is local-first and paper-only; it does not implement real broker/exchange auth or live order routing.
+
+## Autonomous outcome handoff closure (new)
+
+`apps.autonomous_trader` now includes a formal post-trade handoff engine that keeps governance explicit and auditable.
+
+New entities:
+- `AutonomousOutcomeHandoffRun`
+- `AutonomousPostmortemHandoff`
+- `AutonomousLearningHandoff`
+- `AutonomousOutcomeHandoffRecommendation`
+
+Service split:
+- `services/outcome_handoff/handoff_selection.py`
+- `services/outcome_handoff/postmortem_handoff.py`
+- `services/outcome_handoff/learning_handoff.py`
+- `services/outcome_handoff/recommendation.py`
+- `services/outcome_handoff/run.py`
+
+Integration model:
+- `autonomous_trader` decides *when* to hand off and records lineage/dedupe/audit status.
+- `postmortem_demo` + `postmortem_agents` remain the authority for postmortem generation and board execution.
+- `learning_memory` remains the authority for conservative learning capture.
+
+Still not implemented (by design): real execution, real money, auto-retune, auto-promote, or black-box planner authority.

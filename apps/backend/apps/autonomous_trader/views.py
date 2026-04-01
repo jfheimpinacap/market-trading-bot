@@ -4,6 +4,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.autonomous_trader.models import (
+    AutonomousLearningHandoff,
+    AutonomousOutcomeHandoffRecommendation,
+    AutonomousOutcomeHandoffRun,
+    AutonomousPostmortemHandoff,
     AutonomousTradeCandidate,
     AutonomousTradeCycleRun,
     AutonomousTradeDecision,
@@ -12,6 +16,10 @@ from apps.autonomous_trader.models import (
     AutonomousTradeWatchRecord,
 )
 from apps.autonomous_trader.serializers import (
+    AutonomousLearningHandoffSerializer,
+    AutonomousOutcomeHandoffRecommendationSerializer,
+    AutonomousOutcomeHandoffRunSerializer,
+    AutonomousPostmortemHandoffSerializer,
     AutonomousTradeCandidateSerializer,
     AutonomousTradeCycleRunSerializer,
     AutonomousTradeDecisionSerializer,
@@ -19,8 +27,14 @@ from apps.autonomous_trader.serializers import (
     AutonomousTradeOutcomeSerializer,
     AutonomousTradeWatchRecordSerializer,
     RunCycleSerializer,
+    RunOutcomeHandoffSerializer,
 )
-from apps.autonomous_trader.services import build_summary, run_autonomous_cycle
+from apps.autonomous_trader.services import (
+    build_outcome_handoff_summary,
+    build_summary,
+    run_autonomous_cycle,
+    run_outcome_handoff_engine,
+)
 
 
 class AutonomousTradeRunCycleView(APIView):
@@ -45,6 +59,17 @@ class AutonomousTradeRunWatchCycleView(APIView):
         data['cycle_mode'] = 'WATCH_ONLY'
         result = run_autonomous_cycle(**data)
         return Response({'run': result['run'].id, 'watch_records': len(result['watch_records'])}, status=status.HTTP_200_OK)
+
+
+class AutonomousTradeRunOutcomeHandoffView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunOutcomeHandoffSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_outcome_handoff_engine(**serializer.validated_data)
+        return Response({'run': run.id}, status=status.HTTP_200_OK)
 
 
 class AutonomousTradeCyclesView(APIView):
@@ -116,3 +141,47 @@ class AutonomousTradeSummaryView(APIView):
 
     def get(self, request, *args, **kwargs):
         return Response(build_summary())
+
+
+class AutonomousOutcomeHandoffRunsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousOutcomeHandoffRun.objects.order_by('-started_at', '-id')[:100]
+        return Response(AutonomousOutcomeHandoffRunSerializer(rows, many=True).data)
+
+
+class AutonomousPostmortemHandoffsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousPostmortemHandoff.objects.select_related('linked_outcome', 'linked_postmortem_run').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousPostmortemHandoffSerializer(rows, many=True).data)
+
+
+class AutonomousLearningHandoffsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousLearningHandoff.objects.select_related('linked_outcome', 'linked_learning_run').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousLearningHandoffSerializer(rows, many=True).data)
+
+
+class AutonomousOutcomeHandoffRecommendationsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousOutcomeHandoffRecommendation.objects.select_related('target_outcome').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousOutcomeHandoffRecommendationSerializer(rows, many=True).data)
+
+
+class AutonomousOutcomeHandoffSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(build_outcome_handoff_summary())
