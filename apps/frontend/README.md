@@ -1911,8 +1911,24 @@ UX boundaries stay explicit:
 
 UI stays paper-only and local-first; no live trading controls were added.
 
+<<<<<<< HEAD
+## Scan agent consensus/divergence board (new)
+
+`/scan-agent` now includes a dedicated **Narrative Consensus & Market Divergence** section that strengthens scan→research handoff quality.
+
+It adds:
+- summary cards for considered signals/clusters, strong consensus, conflicted narratives, high divergence, ready-for-research
+- consensus records panel
+- market divergence panel
+- research handoff priorities panel
+- consensus recommendations panel
+- manual action: `Run consensus review`
+
+The UI remains technical, conservative, and explicit about boundaries: paper-only, no live execution, and no replacement of `research_agent` triage authority.
+=======
 
 ## Open Position Management UI (/autonomous-trader)
 - Added a dedicated section to supervise post-entry autonomous position watch in paper mode.
 - Includes summary cards, watch candidates, action decisions, action executions, recommendations, and a manual "Run position watch" action.
 - Keeps explicit guardrails: paper-only, sentiment-aware, risk-first, no live execution.
+>>>>>>> origin/main
