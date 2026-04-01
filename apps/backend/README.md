@@ -3014,3 +3014,21 @@ Scope:
 - Keeps existing routing/tracking/lifecycle intact and does not auto-close cases. Final closure remains explicit via `POST /api/certification/resolve-response-case/<case_id>/`.
 - New run/board endpoint: `POST /api/certification/run-baseline-response-resolution/` with list/summary endpoints for candidates, resolutions, references, and recommendations.
 - Scope remains paper/sandbox only (no live trading, no auto-retune/rollback/deactivate/promote).
+
+## Autonomous trader module (new)
+
+Backend now includes `apps.autonomous_trader` as a paper-only orchestration layer for minimal-human-intervention cycles:
+
+- services split by responsibility:
+  - `services/candidate_intake.py`
+  - `services/decisioning.py`
+  - `services/execution.py`
+  - `services/watch.py`
+  - `services/outcomes.py`
+  - `services/run.py`
+- API:
+  - `POST /api/autonomous-trader/run-cycle/`
+  - `POST /api/autonomous-trader/run-watch-cycle/`
+  - `GET /api/autonomous-trader/{cycles,candidates,decisions,executions,watch-records,outcomes,summary}/`
+
+The module is local-first and paper-only; it does not implement real broker/exchange auth or live order routing.

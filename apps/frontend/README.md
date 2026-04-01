@@ -1858,3 +1858,15 @@ The UI keeps explicit empty/loading/error states and treats `WAITING_MORE_EVIDEN
 - Keeps existing routing/tracking/lifecycle intact and does not auto-close cases. Final closure remains explicit via `POST /api/certification/resolve-response-case/<case_id>/`.
 - New run/board endpoint: `POST /api/certification/run-baseline-response-resolution/` with list/summary endpoints for candidates, resolutions, references, and recommendations.
 - Scope remains paper/sandbox only (no live trading, no auto-retune/rollback/deactivate/promote).
+
+## Autonomous trader page (new)
+
+Frontend includes `/autonomous-trader`, a technical supervision view for governed autonomous paper cycles:
+
+- summary cards (considered/watch/approved/executed/blocked/closed/postmortem)
+- panels for candidates, decisions, executions, watch records, and outcomes
+- actions:
+  - `Run autonomous trade cycle`
+  - `Run watch cycle`
+
+The page is intentionally conservative and audit-oriented: paper-only, no real money, and no live broker execution.

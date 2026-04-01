@@ -84,6 +84,7 @@ import { AutonomyPackagePage } from '../pages/AutonomyPackagePage';
 import { AutonomyPackageReviewPage } from '../pages/AutonomyPackageReviewPage';
 import { AutonomySeedPage } from '../pages/AutonomySeedPage';
 import { AutonomySeedReviewPage } from '../pages/AutonomySeedReviewPage';
+import { AutonomousTraderPage } from '../pages/AutonomousTraderPage';
 import type { NavRoute } from '../types/system';
 
 export type AppRoute = NavRoute & {
@@ -132,6 +133,13 @@ export const appRoutes: AppRoute[] = [
     path: '/signals',
     description: 'Signal fusion opportunity board with composite ranking, proposal gating, and paper/demo-only execution boundaries.',
     component: SignalsPage,
+  },
+
+  {
+    label: 'Autonomous Trader',
+    path: '/autonomous-trader',
+    description: 'Autonomous paper trade-cycle executor with explicit intake, decisioning, execution, watch and outcome tracking.',
+    component: AutonomousTraderPage,
   },
   {
     label: 'Opportunity Cycle',

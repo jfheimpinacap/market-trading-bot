@@ -1,0 +1,29 @@
+from django.urls import path
+
+from apps.autonomous_trader.views import (
+    AutonomousTradeCandidatesView,
+    AutonomousTradeCycleDetailView,
+    AutonomousTradeCyclesView,
+    AutonomousTradeDecisionsView,
+    AutonomousTradeExecutionsView,
+    AutonomousTradeOutcomesView,
+    AutonomousTradeRunCycleView,
+    AutonomousTradeRunWatchCycleView,
+    AutonomousTradeSummaryView,
+    AutonomousTradeWatchRecordsView,
+)
+
+app_name = 'autonomous_trader'
+
+urlpatterns = [
+    path('run-cycle/', AutonomousTradeRunCycleView.as_view(), name='run-cycle'),
+    path('run-watch-cycle/', AutonomousTradeRunWatchCycleView.as_view(), name='run-watch-cycle'),
+    path('cycles/', AutonomousTradeCyclesView.as_view(), name='cycles'),
+    path('cycles/<int:cycle_id>/', AutonomousTradeCycleDetailView.as_view(), name='cycle-detail'),
+    path('candidates/', AutonomousTradeCandidatesView.as_view(), name='candidates'),
+    path('decisions/', AutonomousTradeDecisionsView.as_view(), name='decisions'),
+    path('executions/', AutonomousTradeExecutionsView.as_view(), name='executions'),
+    path('watch-records/', AutonomousTradeWatchRecordsView.as_view(), name='watch-records'),
+    path('outcomes/', AutonomousTradeOutcomesView.as_view(), name='outcomes'),
+    path('summary/', AutonomousTradeSummaryView.as_view(), name='summary'),
+]
