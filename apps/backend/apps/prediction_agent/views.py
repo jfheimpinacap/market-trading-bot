@@ -11,6 +11,11 @@ from apps.prediction_agent.models import (
     PredictionRuntimeRecommendation,
     PredictionRuntimeRun,
     PredictionScore,
+    PredictionIntakeRun,
+    PredictionIntakeCandidate,
+    PredictionConvictionReview,
+    RiskReadyPredictionHandoff,
+    PredictionIntakeRecommendation,
 )
 from apps.prediction_agent.serializers import (
     PredictionModelProfileSerializer,
@@ -21,10 +26,15 @@ from apps.prediction_agent.serializers import (
     PredictionRuntimeRunSerializer,
     PredictionScoreRequestSerializer,
     PredictionScoreSerializer,
+    PredictionIntakeRunSerializer,
+    PredictionIntakeCandidateSerializer,
+    PredictionConvictionReviewSerializer,
+    RiskReadyPredictionHandoffSerializer,
+    PredictionIntakeRecommendationSerializer,
 )
 from apps.prediction_agent.services.features import build_prediction_features
 from apps.prediction_agent.services.profiles import ensure_default_prediction_profiles
-from apps.prediction_agent.services.run import run_prediction_runtime_review
+from apps.prediction_agent.services.run import run_prediction_intake_review, run_prediction_runtime_review
 from apps.prediction_agent.services.scoring import score_market_prediction
 from apps.memory_retrieval.models import MemoryQueryType
 from apps.memory_retrieval.services import run_assist
@@ -248,5 +258,99 @@ class PredictionRuntimeSummaryView(APIView):
             'status_counts': status_counts,
             'recommendation_counts': recommendation_counts,
             'model_mode_counts': model_mode_counts,
+        }
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class PredictionRunIntakeReviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = PredictionRuntimeReviewRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_prediction_intake_review(triggered_by=serializer.validated_data.get('triggered_by', 'manual'))
+        return Response(PredictionIntakeRunSerializer(result.intake_run).data, status=status.HTTP_201_CREATED)
+
+
+class PredictionIntakeRunListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PredictionIntakeRunSerializer
+
+    def get_queryset(self):
+        return PredictionIntakeRun.objects.order_by('-created_at', '-id')[:100]
+
+
+class PredictionIntakeCandidateListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PredictionIntakeCandidateSerializer
+
+    def get_queryset(self):
+        queryset = PredictionIntakeCandidate.objects.select_related('linked_market', 'intake_run').order_by('-created_at', '-id')
+        run_id = self.request.query_params.get('run_id')
+        if run_id:
+            queryset = queryset.filter(intake_run_id=run_id)
+        return queryset[:200]
+
+
+class PredictionConvictionReviewListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PredictionConvictionReviewSerializer
+
+    def get_queryset(self):
+        queryset = PredictionConvictionReview.objects.select_related('linked_intake_candidate__linked_market').order_by('-created_at', '-id')
+        run_id = self.request.query_params.get('run_id')
+        if run_id:
+            queryset = queryset.filter(linked_intake_candidate__intake_run_id=run_id)
+        return queryset[:200]
+
+
+class PredictionRiskHandoffListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RiskReadyPredictionHandoffSerializer
+
+    def get_queryset(self):
+        queryset = RiskReadyPredictionHandoff.objects.select_related('linked_market', 'linked_conviction_review').order_by('-created_at', '-id')
+        run_id = self.request.query_params.get('run_id')
+        if run_id:
+            queryset = queryset.filter(linked_conviction_review__linked_intake_candidate__intake_run_id=run_id)
+        return queryset[:200]
+
+
+class PredictionIntakeRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PredictionIntakeRecommendationSerializer
+
+    def get_queryset(self):
+        queryset = PredictionIntakeRecommendation.objects.select_related('target_market', 'intake_run').order_by('-created_at', '-id')
+        run_id = self.request.query_params.get('run_id')
+        if run_id:
+            queryset = queryset.filter(intake_run_id=run_id)
+        return queryset[:200]
+
+
+class PredictionIntakeSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        latest_run = PredictionIntakeRun.objects.order_by('-started_at', '-id').first()
+        if latest_run is None:
+            return Response({'latest_run': None, 'review_status_counts': {}, 'handoff_status_counts': {}, 'recommendation_counts': {}}, status=status.HTTP_200_OK)
+
+        reviews = PredictionConvictionReview.objects.filter(linked_intake_candidate__intake_run=latest_run)
+        handoffs = RiskReadyPredictionHandoff.objects.filter(linked_conviction_review__linked_intake_candidate__intake_run=latest_run)
+        recommendations = PredictionIntakeRecommendation.objects.filter(intake_run=latest_run)
+
+        payload = {
+            'latest_run': PredictionIntakeRunSerializer(latest_run).data,
+            'review_status_counts': {row['review_status']: row['count'] for row in reviews.values('review_status').annotate(count=Count('id'))},
+            'handoff_status_counts': {row['handoff_status']: row['count'] for row in handoffs.values('handoff_status').annotate(count=Count('id'))},
+            'recommendation_counts': {row['recommendation_type']: row['count'] for row in recommendations.values('recommendation_type').annotate(count=Count('id'))},
         }
         return Response(payload, status=status.HTTP_200_OK)

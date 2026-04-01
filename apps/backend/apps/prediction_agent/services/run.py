@@ -8,18 +8,30 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.prediction_agent.models import (
+    PredictionConvictionReviewStatus,
+    PredictionIntakeRun,
+    PredictionIntakeStatus,
     PredictionRuntimeAssessment,
     PredictionRuntimeRecommendation,
     PredictionRuntimeRecommendationType,
     PredictionRuntimeRun,
+    RiskReadyPredictionHandoffStatus,
 )
 from apps.prediction_agent.services.calibration import q4, runtime_calibrated_probability, runtime_confidence_uncertainty
 from apps.prediction_agent.services.candidate_building import build_runtime_candidates
 from apps.prediction_agent.services.context_adjustment import apply_context_adjustment
+from apps.prediction_agent.services.conviction import review_candidate
 from apps.prediction_agent.services.features import build_prediction_features
+from apps.prediction_agent.services.intake import build_intake_candidates
 from apps.prediction_agent.services.model_runtime import resolve_runtime_probability
-from apps.prediction_agent.services.recommendation import build_recommendation, resolve_prediction_status
+from apps.prediction_agent.services.recommendation import build_recommendation, create_intake_recommendation, resolve_prediction_status
+from apps.prediction_agent.services.risk_handoff import build_risk_ready_handoff
 from apps.prediction_training.services.registry import get_active_model_artifact
+
+
+@dataclass
+class IntakeRunResult:
+    intake_run: PredictionIntakeRun
 
 
 @dataclass
@@ -35,6 +47,38 @@ def _safe_decimal(value: Decimal | None, default: str = '0.0000') -> Decimal:
 
 def _to_score(value: Decimal | None, default: str = '0.5000') -> Decimal:
     return max(Decimal('0.0001'), min(Decimal('0.9999'), _safe_decimal(value, default)))
+
+
+@transaction.atomic
+def run_prediction_intake_review(*, triggered_by: str = 'manual') -> IntakeRunResult:
+    intake_run = PredictionIntakeRun.objects.create(started_at=timezone.now(), metadata={'triggered_by': triggered_by})
+    intake_result = build_intake_candidates(intake_run=intake_run)
+
+    reviews = []
+    handoffs = []
+    recommendation_counter: Counter[str] = Counter()
+
+    for candidate in intake_result.candidates:
+        if candidate.intake_status != PredictionIntakeStatus.READY_FOR_RUNTIME:
+            continue
+        review = review_candidate(intake_candidate=candidate)
+        handoff = build_risk_ready_handoff(review=review)
+        recommendation = create_intake_recommendation(intake_run=intake_run, review=review, handoff=handoff)
+        recommendation_counter[recommendation.recommendation_type] += 1
+        reviews.append(review)
+        handoffs.append(handoff)
+
+    intake_run.completed_at = timezone.now()
+    intake_run.considered_handoff_count = intake_result.considered_count
+    intake_run.runtime_candidate_count = intake_result.runtime_ready_count
+    intake_run.risk_ready_count = sum(1 for item in handoffs if item.handoff_status == RiskReadyPredictionHandoffStatus.READY)
+    intake_run.monitoring_only_count = sum(1 for item in reviews if item.review_status == PredictionConvictionReviewStatus.KEEP_FOR_MONITORING)
+    intake_run.ignored_no_edge_count = sum(1 for item in reviews if item.review_status == PredictionConvictionReviewStatus.IGNORE_NO_EDGE)
+    intake_run.ignored_low_confidence_count = sum(1 for item in reviews if item.review_status == PredictionConvictionReviewStatus.IGNORE_LOW_CONFIDENCE)
+    intake_run.manual_review_count = sum(1 for item in reviews if item.review_status == PredictionConvictionReviewStatus.REQUIRE_MANUAL_PREDICTION_REVIEW)
+    intake_run.recommendation_summary = dict(recommendation_counter)
+    intake_run.save()
+    return IntakeRunResult(intake_run=intake_run)
 
 
 @transaction.atomic
@@ -176,19 +220,6 @@ def run_prediction_runtime_review(*, triggered_by: str = 'manual') -> RuntimeRev
     runtime_run.sent_to_risk_count = sent_to_risk_count
     runtime_run.sent_to_signal_fusion_count = sent_to_signal_fusion_count
     runtime_run.recommendation_summary = dict(recommendation_counter)
-    runtime_run.save(
-        update_fields=[
-            'completed_at',
-            'candidate_count',
-            'scored_count',
-            'blocked_count',
-            'high_edge_count',
-            'low_confidence_count',
-            'sent_to_risk_count',
-            'sent_to_signal_fusion_count',
-            'recommendation_summary',
-            'updated_at',
-        ]
-    )
+    runtime_run.save()
 
     return RuntimeReviewResult(runtime_run=runtime_run)

@@ -29,6 +29,12 @@ import {
   getPredictionRuntimeRecommendations,
   getPredictionRuntimeSummary,
   runPredictionRuntimeReview,
+  getPredictionIntakeSummary,
+  getPredictionIntakeCandidates,
+  getPredictionConvictionReviews,
+  getPredictionRiskHandoffs,
+  getPredictionIntakeRecommendations,
+  runPredictionIntakeReview,
 } from '../services/predictionRuntime';
 import type { MarketListItem } from '../types/markets';
 import type {
@@ -41,6 +47,11 @@ import type {
   PredictionRuntimeAssessment,
   PredictionRuntimeRecommendation,
   PredictionRuntimeSummary,
+  PredictionIntakeSummary,
+  PredictionIntakeCandidate,
+  PredictionConvictionReview,
+  PredictionRiskHandoff,
+  PredictionIntakeRecommendation,
   PredictionScore,
   PredictionSummary,
   PredictionTrainingRun,
@@ -84,6 +95,11 @@ export function PredictionPage() {
   const [recommendation, setRecommendation] = useState<ActiveModelRecommendation | null>(null);
   const [governanceSummary, setGovernanceSummary] = useState<ModelGovernanceSummary | null>(null);
   const [runtimeSummary, setRuntimeSummary] = useState<PredictionRuntimeSummary | null>(null);
+  const [intakeSummary, setIntakeSummary] = useState<PredictionIntakeSummary | null>(null);
+  const [intakeCandidates, setIntakeCandidates] = useState<PredictionIntakeCandidate[]>([]);
+  const [convictionReviews, setConvictionReviews] = useState<PredictionConvictionReview[]>([]);
+  const [riskHandoffs, setRiskHandoffs] = useState<PredictionRiskHandoff[]>([]);
+  const [intakeRecommendations, setIntakeRecommendations] = useState<PredictionIntakeRecommendation[]>([]);
   const [runtimeAssessments, setRuntimeAssessments] = useState<PredictionRuntimeAssessment[]>([]);
   const [runtimeRecommendations, setRuntimeRecommendations] = useState<PredictionRuntimeRecommendation[]>([]);
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(initialMarketId);
@@ -102,13 +118,14 @@ export function PredictionPage() {
   const [activatingModelId, setActivatingModelId] = useState<number | null>(null);
   const [comparingModels, setComparingModels] = useState(false);
   const [runningRuntimeReview, setRunningRuntimeReview] = useState(false);
+  const [runningIntakeReview, setRunningIntakeReview] = useState(false);
   const [runtimeStatusFilter, setRuntimeStatusFilter] = useState<string>('');
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [profilesRes, scoresRes, summaryRes, marketsRes, llmRes, trainingSummaryRes, trainingRunsRes, modelsRes, modelProfilesRes, comparisonRunsRes, recommendationRes, governanceSummaryRes, runtimeSummaryRes] = await Promise.all([
+      const [profilesRes, scoresRes, summaryRes, marketsRes, llmRes, trainingSummaryRes, trainingRunsRes, modelsRes, modelProfilesRes, comparisonRunsRes, recommendationRes, governanceSummaryRes, runtimeSummaryRes, intakeSummaryRes] = await Promise.all([
         getPredictionProfiles(),
         getPredictionScores(),
         getPredictionSummary(),
@@ -122,6 +139,7 @@ export function PredictionPage() {
         getActiveModelRecommendation(),
         getModelGovernanceSummary(),
         getPredictionRuntimeSummary(),
+        getPredictionIntakeSummary(),
       ]);
       setProfiles(profilesRes);
       setScores(scoresRes);
@@ -134,6 +152,7 @@ export function PredictionPage() {
       setRecommendation(recommendationRes);
       setGovernanceSummary(governanceSummaryRes);
       setRuntimeSummary(runtimeSummaryRes);
+      setIntakeSummary(intakeSummaryRes);
       const runId = runtimeSummaryRes.latest_run?.id;
       if (runId) {
         const [assessmentsRes, recommendationsRes] = await Promise.all([
@@ -145,6 +164,24 @@ export function PredictionPage() {
       } else {
         setRuntimeAssessments([]);
         setRuntimeRecommendations([]);
+      }
+      const intakeRunId = intakeSummaryRes.latest_run?.id;
+      if (intakeRunId) {
+        const [intakeCandidatesRes, convictionReviewsRes, riskHandoffsRes, intakeRecommendationsRes] = await Promise.all([
+          getPredictionIntakeCandidates(intakeRunId),
+          getPredictionConvictionReviews(intakeRunId),
+          getPredictionRiskHandoffs(intakeRunId),
+          getPredictionIntakeRecommendations(intakeRunId),
+        ]);
+        setIntakeCandidates(intakeCandidatesRes.slice(0, 100));
+        setConvictionReviews(convictionReviewsRes.slice(0, 100));
+        setRiskHandoffs(riskHandoffsRes.slice(0, 100));
+        setIntakeRecommendations(intakeRecommendationsRes.slice(0, 100));
+      } else {
+        setIntakeCandidates([]);
+        setConvictionReviews([]);
+        setRiskHandoffs([]);
+        setIntakeRecommendations([]);
       }
       setMarkets(marketsRes.slice(0, 200));
       setLlmReachable(Boolean(llmRes.reachable));
@@ -255,6 +292,19 @@ export function PredictionPage() {
 
   const recentScores = useMemo(() => scores.slice(0, 25), [scores]);
 
+  const runIntakeReview = async () => {
+    setRunningIntakeReview(true);
+    setError(null);
+    try {
+      await runPredictionIntakeReview({ triggered_by: 'prediction_page_intake_review' });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Intake review failed.');
+    } finally {
+      setRunningIntakeReview(false);
+    }
+  };
+
   const runRuntimeReview = async () => {
     setRunningRuntimeReview(true);
     setError(null);
@@ -331,6 +381,29 @@ export function PredictionPage() {
           {!runtimeSummary?.latest_run ? (
             <p style={{ marginTop: '0.75rem' }}>No prediction runtime assessments are available yet. Run a runtime review to score shortlisted markets.</p>
           ) : null}
+        </SectionCard>
+
+
+
+        <SectionCard
+          eyebrow="Prediction intake"
+          title="Prediction Intake & Conviction Review"
+          description="Research→prediction→risk bridge hardening. Paper-only calibrated runtime review with uncertainty-aware confidence controls; no live execution."
+        >
+          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+            <button type="button" className="secondary-button" disabled={runningIntakeReview} onClick={() => void runIntakeReview()}>
+              {runningIntakeReview ? 'Running intake review...' : 'Run intake review'}
+            </button>
+          </div>
+          <div className="system-metadata-grid">
+            <div><strong>Handoffs considered:</strong> {intakeSummary?.latest_run?.considered_handoff_count ?? 0}</div>
+            <div><strong>Runtime-ready:</strong> {intakeSummary?.latest_run?.runtime_candidate_count ?? 0}</div>
+            <div><strong>Risk-ready:</strong> {intakeSummary?.latest_run?.risk_ready_count ?? 0}</div>
+            <div><strong>Monitoring only:</strong> {intakeSummary?.latest_run?.monitoring_only_count ?? 0}</div>
+            <div><strong>Ignored no-edge:</strong> {intakeSummary?.latest_run?.ignored_no_edge_count ?? 0}</div>
+            <div><strong>Ignored low-confidence:</strong> {intakeSummary?.latest_run?.ignored_low_confidence_count ?? 0}</div>
+            <div><strong>Manual review:</strong> {intakeSummary?.latest_run?.manual_review_count ?? 0}</div>
+          </div>
         </SectionCard>
 
         <SectionCard eyebrow="Active model governance" title="Active model recommendation" description="Auditable recommendation only. Runtime model does not switch automatically.">
@@ -533,6 +606,23 @@ export function PredictionPage() {
               </table>
             </div>
           )}
+        </SectionCard>
+
+
+        <SectionCard eyebrow="Intake candidates" title="Prediction intake candidates" description="Candidates consumed from research handoff with context and intake disposition.">
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Market</th><th>Handoff confidence</th><th>Narrative priority</th><th>Structural priority</th><th>Status</th><th>Summary</th></tr></thead><tbody>{intakeCandidates.map((item) => <tr key={item.id}><td>{item.market_title}</td><td>{fmtPct(item.handoff_confidence)}</td><td>{fmtPct(item.narrative_priority)}</td><td>{fmtPct(item.structural_priority)}</td><td><StatusBadge tone={item.intake_status === 'READY_FOR_RUNTIME' ? 'ready' : item.intake_status === 'BLOCKED' ? 'offline' : 'pending'}>{item.intake_status}</StatusBadge></td><td>{item.context_summary || '—'}</td></tr>)}</tbody></table></div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Conviction reviews" title="Calibrated conviction reviews" description="Calibrated probability, adjusted edge, confidence and uncertainty for risk readiness.">
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Market</th><th>System</th><th>Market</th><th>Calibrated</th><th>Adjusted edge</th><th>Confidence</th><th>Uncertainty</th><th>Bucket</th><th>Status</th></tr></thead><tbody>{convictionReviews.map((item) => <tr key={item.id}><td>{item.intake_candidate.market_title}</td><td>{fmtPct(item.system_probability)}</td><td>{fmtPct(item.market_probability)}</td><td>{fmtPct(item.calibrated_probability)}</td><td>{fmtPct(item.adjusted_edge)}</td><td>{fmtPct(item.confidence)}</td><td>{fmtPct(item.uncertainty)}</td><td>{item.conviction_bucket}</td><td>{item.review_status}</td></tr>)}</tbody></table></div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Risk handoffs" title="Risk-ready prediction handoffs" description="Explicit prediction→risk handoff status and rationale.">
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Market</th><th>Status</th><th>Confidence</th><th>Reason codes</th><th>Summary</th></tr></thead><tbody>{riskHandoffs.map((item) => <tr key={item.id}><td>{item.market_title}</td><td>{item.handoff_status}</td><td>{fmtPct(item.handoff_confidence)}</td><td>{item.handoff_reason_codes.join(', ') || '—'}</td><td>{item.handoff_summary}</td></tr>)}</tbody></table></div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Intake recommendations" title="Prediction intake recommendations" description="Conservative recommendation layer for prediction→risk routing decisions.">
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{intakeRecommendations.map((item) => <tr key={item.id}><td>{item.recommendation_type}</td><td>{item.rationale}</td><td>{item.blockers.join(', ') || '—'}</td><td>{fmtPct(item.confidence)}</td></tr>)}</tbody></table></div>
         </SectionCard>
 
         <SectionCard eyebrow="Runtime assessments" title="Calibrated probability + adjusted edge board" description="Assessment-level runtime outputs for prediction→risk/signal handoff.">

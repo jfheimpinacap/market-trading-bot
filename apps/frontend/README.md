@@ -1945,3 +1945,17 @@ The UI remains technical, conservative, and explicit about boundaries: paper-onl
 - manual action button: `Run pursuit review`
 
 Scope remains paper-only and local-first; the board improves candidate quality before prediction and does not execute live trading.
+
+## Prediction intake & conviction review UI (new)
+
+`/prediction` now includes a dedicated “Prediction Intake & Conviction Review” section:
+
+- manual action: `Run intake review`
+- summary cards: handoffs considered, runtime-ready, risk-ready, monitoring, ignored no-edge/low-confidence, manual review
+- tables for:
+  - intake candidates
+  - conviction reviews
+  - risk handoffs
+  - intake recommendations
+
+This strengthens the research→prediction→risk bridge while keeping paper-only/manual-first boundaries.

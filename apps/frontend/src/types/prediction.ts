@@ -251,3 +251,91 @@ export type PredictionRuntimeSummary = {
   recommendation_counts: Record<string, number>;
   model_mode_counts: Record<string, number>;
 };
+
+export type PredictionIntakeRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_handoff_count: number;
+  runtime_candidate_count: number;
+  risk_ready_count: number;
+  monitoring_only_count: number;
+  ignored_no_edge_count: number;
+  ignored_low_confidence_count: number;
+  manual_review_count: number;
+  recommendation_summary: Record<string, number>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PredictionIntakeCandidate = {
+  id: number;
+  intake_run: number;
+  linked_market: number;
+  market_slug: string;
+  market_title: string;
+  intake_status: string;
+  narrative_priority: string;
+  structural_priority: string;
+  handoff_confidence: string;
+  context_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PredictionConvictionReview = {
+  id: number;
+  linked_intake_candidate: number;
+  intake_candidate: PredictionIntakeCandidate;
+  system_probability: string;
+  market_probability: string;
+  calibrated_probability: string;
+  raw_edge: string;
+  adjusted_edge: string;
+  confidence: string;
+  uncertainty: string;
+  conviction_bucket: string;
+  review_status: string;
+  review_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PredictionRiskHandoff = {
+  id: number;
+  linked_market: number;
+  market_slug: string;
+  market_title: string;
+  linked_conviction_review: number;
+  handoff_status: string;
+  handoff_confidence: string;
+  handoff_summary: string;
+  handoff_reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PredictionIntakeRecommendation = {
+  id: number;
+  intake_run: number;
+  recommendation_type: string;
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type PredictionIntakeSummary = {
+  latest_run: PredictionIntakeRun | null;
+  review_status_counts: Record<string, number>;
+  handoff_status_counts: Record<string, number>;
+  recommendation_counts: Record<string, number>;
+};

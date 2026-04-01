@@ -2083,3 +2083,22 @@ This remains local-first, single-user, paper/sandbox only, and does **not** repl
 - stores auditable recommendations and run summaries for `/research-agent`
 
 Boundaries remain unchanged: local-first, single-user, paper/sandbox only, no live execution, and `prediction_agent` remains probability/edge authority.
+
+### Prediction intake hardening / calibrated conviction review / risk-ready handoff (new)
+
+`prediction_agent` now includes an explicit intake bridge that consumes `PredictionHandoffCandidate` from `research_agent` and produces a smaller, auditable prediction set before `risk_agent`:
+
+- `PredictionIntakeRun`
+- `PredictionIntakeCandidate`
+- `PredictionConvictionReview`
+- `RiskReadyPredictionHandoff`
+- `PredictionIntakeRecommendation`
+
+Pipeline:
+`PredictionHandoffCandidate` → intake statusing → calibrated conviction review (probability/edge/confidence/uncertainty) → risk-ready handoff.
+
+Boundaries remain unchanged:
+- paper/sandbox only
+- no live broker/exchange execution
+- no real money
+- `risk_agent` remains final authority for approval/posture/sizing/watch.
