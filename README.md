@@ -2102,3 +2102,15 @@ Boundaries remain unchanged:
 - no live broker/exchange execution
 - no real money
 - `risk_agent` remains final authority for approval/posture/sizing/watch.
+
+
+### Risk intake hardening / approval+sizing-watch bridge / autonomous readiness (new)
+
+`risk_agent` now consumes `RiskReadyPredictionHandoff` directly and builds an auditable prediction→risk→autonomous bridge for paper-mode only:
+
+- `RiskRuntimeRun` now tracks handoffs considered, approval split (`APPROVED`, `APPROVED_REDUCED`, `BLOCKED`, `NEEDS_REVIEW`) and execution-ready counts.
+- Intake entities now preserve prediction conviction, uncertainty, portfolio pressure, and reason codes before approval.
+- Approval review feeds sizing + watch plans and emits explicit `AutonomousExecutionReadiness` states (`READY`, `READY_REDUCED`, `WATCH_ONLY`, `BLOCKED`, `DEFERRED`).
+- Recommendation output is now intake/readiness-aware (`APPROVE_FOR_AUTONOMOUS_EXECUTION`, `APPROVE_WITH_REDUCED_SIZE`, `BLOCK_FOR_RISK_POSTURE`, etc.).
+
+Scope remains unchanged: local-first, single-user, paper/sandbox-only, no real money, no broker/exchange execution, and no replacement of policy/safety/runtime/autonomous governance authorities.

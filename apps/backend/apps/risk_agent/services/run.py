@@ -4,9 +4,15 @@ from collections import Counter
 
 from django.utils import timezone
 
-from apps.risk_agent.models import RiskRuntimeApprovalStatus, RiskRuntimeRecommendation, RiskRuntimeRun
+from apps.risk_agent.models import (
+    AutonomousExecutionReadiness,
+    RiskIntakeRecommendation,
+    RiskRuntimeApprovalStatus,
+    RiskRuntimeRun,
+)
 from apps.risk_agent.services.approval import build_approval_decision
-from apps.risk_agent.services.candidate_building import build_runtime_candidates
+from apps.risk_agent.services.execution_readiness import build_execution_readiness
+from apps.risk_agent.services.intake import build_runtime_candidates
 from apps.risk_agent.services.recommendation import build_runtime_recommendations
 from apps.risk_agent.services.sizing_runtime import build_sizing_plan
 from apps.risk_agent.services.watch_plan import build_watch_plan
@@ -27,18 +33,21 @@ def run_risk_runtime_review(*, triggered_by: str = 'manual') -> RiskRuntimeRun:
     approved_count = 0
     blocked_count = 0
     reduced_count = 0
+    needs_review_count = 0
     watch_required_count = 0
-    sent_to_execution_sim_count = 0
+    execution_ready_count = 0
 
     for candidate in build_result.candidates:
         approval = build_approval_decision(candidate=candidate)
         sizing = build_sizing_plan(candidate=candidate, approval_decision=approval)
         watch_plan = build_watch_plan(candidate=candidate, sizing_plan=sizing, approval_decision=approval)
+        readiness = build_execution_readiness(approval_decision=approval, sizing_plan=sizing, watch_plan=watch_plan)
         recommendations = build_runtime_recommendations(
             runtime_run=runtime_run,
             candidate=candidate,
             approval_decision=approval,
             watch_plan=watch_plan,
+            readiness=readiness,
         )
 
         if approval.approval_status == RiskRuntimeApprovalStatus.APPROVED:
@@ -48,23 +57,28 @@ def run_risk_runtime_review(*, triggered_by: str = 'manual') -> RiskRuntimeRun:
         elif approval.approval_status == RiskRuntimeApprovalStatus.APPROVED_REDUCED:
             approved_count += 1
             reduced_count += 1
+        elif approval.approval_status == RiskRuntimeApprovalStatus.NEEDS_REVIEW:
+            needs_review_count += 1
 
         if approval.watch_required:
             watch_required_count += 1
 
-        if any(rec.recommendation_type == 'SEND_TO_EXECUTION_SIMULATOR' for rec in recommendations):
-            sent_to_execution_sim_count += 1
+        if readiness.readiness_status in {'READY', 'READY_REDUCED'}:
+            execution_ready_count += 1
 
     recommendation_counts = Counter(
-        RiskRuntimeRecommendation.objects.filter(runtime_run=runtime_run).values_list('recommendation_type', flat=True)
+        RiskIntakeRecommendation.objects.filter(runtime_run=runtime_run).values_list('recommendation_type', flat=True)
     )
 
     runtime_run.candidate_count = len(build_result.candidates)
+    runtime_run.considered_handoff_count = build_result.considered_count
     runtime_run.approved_count = approved_count
     runtime_run.blocked_count = blocked_count
     runtime_run.reduced_size_count = reduced_count
+    runtime_run.needs_review_count = needs_review_count
     runtime_run.watch_required_count = watch_required_count
-    runtime_run.sent_to_execution_sim_count = sent_to_execution_sim_count
+    runtime_run.execution_ready_count = execution_ready_count
+    runtime_run.sent_to_execution_sim_count = execution_ready_count
     runtime_run.recommendation_summary = dict(recommendation_counts)
     runtime_run.completed_at = timezone.now()
     runtime_run.metadata = {
@@ -76,10 +90,13 @@ def run_risk_runtime_review(*, triggered_by: str = 'manual') -> RiskRuntimeRun:
     runtime_run.save(
         update_fields=[
             'candidate_count',
+            'considered_handoff_count',
             'approved_count',
             'blocked_count',
             'reduced_size_count',
+            'needs_review_count',
             'watch_required_count',
+            'execution_ready_count',
             'sent_to_execution_sim_count',
             'recommendation_summary',
             'completed_at',

@@ -6,9 +6,11 @@ from apps.markets.models import Market
 from apps.prediction_agent.models import PredictionScore
 from apps.proposal_engine.models import TradeProposal
 from apps.risk_agent.models import (
+    AutonomousExecutionReadiness,
     PositionWatchEvent,
     PositionWatchPlan,
     PositionWatchRun,
+    RiskIntakeRecommendation,
     RiskApprovalDecision,
     RiskAssessment,
     RiskRuntimeCandidate,
@@ -128,3 +130,19 @@ class RiskRuntimeReviewRequestSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         return run_risk_runtime_review(triggered_by=validated_data.get('triggered_by', 'manual'))
+
+
+class AutonomousExecutionReadinessSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_market.title', read_only=True)
+
+    class Meta:
+        model = AutonomousExecutionReadiness
+        fields = '__all__'
+
+
+class RiskIntakeRecommendationSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='target_market.title', read_only=True)
+
+    class Meta:
+        model = RiskIntakeRecommendation
+        fields = '__all__'

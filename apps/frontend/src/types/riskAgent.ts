@@ -85,12 +85,15 @@ export type RiskRuntimeRun = {
 export type RiskRuntimeCandidate = {
   id: number;
   runtime_run: number;
-  linked_prediction_assessment: number;
+  linked_prediction_assessment: number | null;
   linked_market: number;
+  linked_risk_ready_prediction_handoff: number | null;
   market_title?: string;
   market_provider: string;
   category: string;
   calibrated_probability: string;
+  intake_status: 'READY_FOR_RISK_RUNTIME' | 'REDUCED_CONTEXT' | 'BLOCKED' | 'INSUFFICIENT_CONTEXT' | string;
+  market_probability: string;
   adjusted_edge: string;
   confidence_score: string;
   uncertainty_score: string;
@@ -109,6 +112,8 @@ export type RiskApprovalDecision = {
   linked_prediction_assessment: number;
   market_title?: string;
   approval_status: 'APPROVED' | 'APPROVED_REDUCED' | 'BLOCKED' | 'NEEDS_REVIEW' | string;
+  approval_confidence: string;
+  approval_summary: string;
   approval_rationale: string;
   reason_codes: string[];
   blockers: string[];
@@ -158,6 +163,21 @@ export type RiskRuntimeRecommendation = {
   reason_codes: string[];
   confidence: string;
   blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousExecutionReadiness = {
+  id: number;
+  linked_market: number;
+  linked_approval_review: number;
+  market_title?: string;
+  linked_sizing_plan: number | null;
+  linked_watch_plan: number | null;
+  readiness_status: 'READY' | 'READY_REDUCED' | 'WATCH_ONLY' | 'BLOCKED' | 'DEFERRED' | string;
+  readiness_confidence: string;
+  readiness_summary: string;
+  readiness_reason_codes: string[];
   metadata: Record<string, unknown>;
   created_at: string;
 };

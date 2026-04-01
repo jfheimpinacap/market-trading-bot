@@ -3200,3 +3200,29 @@ Services:
 - `services/run.py`
 
 Design boundaries remain strict: paper-only, no real execution, no risk-authority replacement.
+
+
+## Risk intake hardening layer (new)
+
+`apps.risk_agent` now includes a formal intake+approval bridge from `prediction_agent` handoffs to autonomous paper execution readiness:
+
+- runtime intake source: `prediction_agent.RiskReadyPredictionHandoff`
+- auditable runtime entities: intake candidate context on `RiskRuntimeCandidate`, approval review on `RiskApprovalDecision`, and `AutonomousExecutionReadiness`
+- recommendation layer: `RiskIntakeRecommendation` (conservative, explainable, reason-code driven)
+- service split:
+  - `services/intake.py`
+  - `services/approval.py`
+  - `services/execution_readiness.py`
+  - `services/recommendation.py`
+  - `services/run.py`
+
+Primary endpoints:
+- `POST /api/risk-agent/run-intake-review/`
+- `GET /api/risk-agent/intake-runs/`
+- `GET /api/risk-agent/intake-candidates/`
+- `GET /api/risk-agent/approval-reviews/`
+- `GET /api/risk-agent/execution-readiness/`
+- `GET /api/risk-agent/intake-recommendations/`
+- `GET /api/risk-agent/intake-summary/`
+
+Boundary guarantees remain strict: paper-only, recommendation-first, and no live routing or real-money execution.
