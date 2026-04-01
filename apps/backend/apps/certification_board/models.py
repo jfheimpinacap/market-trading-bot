@@ -1252,3 +1252,169 @@ class ResponseLifecycleRecommendation(TimeStampedModel):
     class Meta:
         ordering = ['-created_at', '-id']
         indexes = [models.Index(fields=['recommendation_type', '-created_at'])]
+
+
+class ResponseResolutionProgressStatus(models.TextChoices):
+    READY_TO_RESOLVE = 'READY_TO_RESOLVE', 'Ready to resolve'
+    WAITING_EVIDENCE = 'WAITING_EVIDENCE', 'Waiting evidence'
+    IN_PROGRESS = 'IN_PROGRESS', 'In progress'
+    FOLLOWUP_REQUIRED = 'FOLLOWUP_REQUIRED', 'Follow-up required'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    UNKNOWN = 'UNKNOWN', 'Unknown'
+
+
+class ResponseCaseResolutionType(models.TextChoices):
+    RESOLVED_BY_REEVALUATION = 'RESOLVED_BY_REEVALUATION', 'Resolved by reevaluation'
+    RESOLVED_BY_TUNING_REVIEW = 'RESOLVED_BY_TUNING_REVIEW', 'Resolved by tuning review'
+    RESOLVED_BY_ROLLBACK_REVIEW = 'RESOLVED_BY_ROLLBACK_REVIEW', 'Resolved by rollback review'
+    RESOLVED_BY_MONITORING_ONLY = 'RESOLVED_BY_MONITORING_ONLY', 'Resolved by monitoring only'
+    CLOSED_NO_ACTION = 'CLOSED_NO_ACTION', 'Closed with no action'
+    DEFERRED_WAITING_EVIDENCE = 'DEFERRED_WAITING_EVIDENCE', 'Deferred waiting evidence'
+    ESCALATED_FOR_MANUAL_REVIEW = 'ESCALATED_FOR_MANUAL_REVIEW', 'Escalated for manual review'
+
+
+class ResponseCaseResolutionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    READY_TO_CLOSE = 'READY_TO_CLOSE', 'Ready to close'
+    RESOLVED = 'RESOLVED', 'Resolved'
+    DEFERRED = 'DEFERRED', 'Deferred'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    ESCALATED = 'ESCALATED', 'Escalated'
+
+
+class DownstreamOutcomeReferenceType(models.TextChoices):
+    EVALUATION_REVIEW = 'evaluation_review', 'Evaluation review'
+    TUNING_REVIEW = 'tuning_review', 'Tuning review'
+    EXPERIMENT_REVIEW = 'experiment_review', 'Experiment review'
+    PROMOTION_RECHECK = 'promotion_recheck', 'Promotion recheck'
+    ROLLBACK_REVIEW = 'rollback_review', 'Rollback review'
+    MONITORING_DECISION = 'monitoring_decision', 'Monitoring decision'
+    MANUAL_NOTE = 'manual_note', 'Manual note'
+
+
+class DownstreamOutcomeReferenceStatus(models.TextChoices):
+    LINKED = 'LINKED', 'Linked'
+    PARTIAL = 'PARTIAL', 'Partial'
+    MISSING = 'MISSING', 'Missing'
+
+
+class ResponseResolutionRecommendationType(models.TextChoices):
+    CLOSE_CASE_AS_RESOLVED = 'CLOSE_CASE_AS_RESOLVED', 'Close case as resolved'
+    KEEP_WAITING_FOR_EVIDENCE = 'KEEP_WAITING_FOR_EVIDENCE', 'Keep waiting for evidence'
+    ESCALATE_FOR_MANUAL_REVIEW = 'ESCALATE_FOR_MANUAL_REVIEW', 'Escalate for manual review'
+    CLOSE_CASE_NO_ACTION = 'CLOSE_CASE_NO_ACTION', 'Close case no action'
+    REQUIRE_DOWNSTREAM_REFERENCE = 'REQUIRE_DOWNSTREAM_REFERENCE', 'Require downstream reference'
+    REORDER_CASE_RESOLUTION_PRIORITY = 'REORDER_CASE_RESOLUTION_PRIORITY', 'Reorder case resolution priority'
+
+
+class BaselineResponseResolutionRun(TimeStampedModel):
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    linked_baseline_response_lifecycle_run = models.ForeignKey(
+        BaselineResponseLifecycleRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='resolution_runs',
+    )
+    candidate_count = models.PositiveIntegerField(default=0)
+    ready_to_close_count = models.PositiveIntegerField(default=0)
+    resolved_count = models.PositiveIntegerField(default=0)
+    waiting_evidence_count = models.PositiveIntegerField(default=0)
+    closed_no_action_count = models.PositiveIntegerField(default=0)
+    escalated_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class ResponseResolutionCandidate(TimeStampedModel):
+    resolution_run = models.ForeignKey(BaselineResponseResolutionRun, on_delete=models.CASCADE, related_name='candidates')
+    linked_response_case = models.ForeignKey(BaselineResponseCase, on_delete=models.CASCADE, related_name='resolution_candidates')
+    linked_routing_action = models.ForeignKey(
+        ResponseRoutingAction, null=True, blank=True, on_delete=models.SET_NULL, related_name='resolution_candidates'
+    )
+    latest_tracking_record = models.ForeignKey(
+        ResponseCaseTrackingRecord, null=True, blank=True, on_delete=models.SET_NULL, related_name='resolution_candidates'
+    )
+    latest_acknowledgement = models.ForeignKey(
+        DownstreamAcknowledgement, null=True, blank=True, on_delete=models.SET_NULL, related_name='resolution_candidates'
+    )
+    latest_lifecycle_outcome = models.ForeignKey(
+        DownstreamLifecycleOutcome, null=True, blank=True, on_delete=models.SET_NULL, related_name='resolution_candidates'
+    )
+    target_component = models.CharField(max_length=32)
+    target_scope = models.CharField(max_length=24)
+    downstream_progress_status = models.CharField(
+        max_length=24, choices=ResponseResolutionProgressStatus.choices, default=ResponseResolutionProgressStatus.UNKNOWN
+    )
+    ready_for_resolution = models.BooleanField(default=False)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['downstream_progress_status', 'ready_for_resolution', '-created_at'])]
+
+
+class ResponseCaseResolution(TimeStampedModel):
+    linked_candidate = models.ForeignKey(
+        ResponseResolutionCandidate, null=True, blank=True, on_delete=models.SET_NULL, related_name='resolutions'
+    )
+    linked_response_case = models.ForeignKey(BaselineResponseCase, on_delete=models.CASCADE, related_name='case_resolutions')
+    resolution_type = models.CharField(max_length=48, choices=ResponseCaseResolutionType.choices)
+    resolution_status = models.CharField(
+        max_length=20, choices=ResponseCaseResolutionStatus.choices, default=ResponseCaseResolutionStatus.PROPOSED
+    )
+    rationale = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    blockers = models.JSONField(default=list, blank=True)
+    resolved_by = models.CharField(max_length=120, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['resolution_type', 'resolution_status', '-created_at'])]
+
+
+class DownstreamOutcomeReference(TimeStampedModel):
+    linked_resolution = models.ForeignKey(
+        ResponseCaseResolution,
+        on_delete=models.CASCADE,
+        related_name='downstream_references',
+    )
+    reference_type = models.CharField(max_length=32, choices=DownstreamOutcomeReferenceType.choices)
+    reference_status = models.CharField(max_length=16, choices=DownstreamOutcomeReferenceStatus.choices)
+    downstream_reference_id = models.CharField(max_length=120, blank=True)
+    downstream_reference_label = models.CharField(max_length=255, blank=True)
+    summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['reference_type', 'reference_status', '-created_at'])]
+
+
+class ResponseResolutionRecommendation(TimeStampedModel):
+    resolution_run = models.ForeignKey(
+        BaselineResponseResolutionRun, on_delete=models.CASCADE, related_name='recommendations'
+    )
+    target_resolution = models.ForeignKey(
+        ResponseCaseResolution, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations'
+    )
+    target_case = models.ForeignKey(
+        BaselineResponseCase, null=True, blank=True, on_delete=models.SET_NULL, related_name='resolution_recommendations'
+    )
+    recommendation_type = models.CharField(max_length=48, choices=ResponseResolutionRecommendationType.choices)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=6, decimal_places=4, default=0)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['recommendation_type', '-created_at'])]

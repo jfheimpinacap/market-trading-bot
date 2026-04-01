@@ -696,3 +696,91 @@ export type BaselineResponseActionSummary = {
   action_status_summary: Record<string, number>;
   recommendation_type_summary: Record<string, number>;
 };
+
+export type BaselineResponseResolutionRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  linked_baseline_response_lifecycle_run: number | null;
+  candidate_count: number;
+  ready_to_close_count: number;
+  resolved_count: number;
+  waiting_evidence_count: number;
+  closed_no_action_count: number;
+  escalated_count: number;
+  recommendation_summary: Record<string, number>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ResponseResolutionCandidate = {
+  id: number;
+  resolution_run: number;
+  linked_response_case: number;
+  linked_routing_action: number | null;
+  latest_tracking_record: number | null;
+  latest_acknowledgement: number | null;
+  latest_lifecycle_outcome: number | null;
+  target_component: string;
+  target_scope: string;
+  downstream_progress_status: 'READY_TO_RESOLVE' | 'WAITING_EVIDENCE' | 'IN_PROGRESS' | 'FOLLOWUP_REQUIRED' | 'BLOCKED' | 'UNKNOWN';
+  ready_for_resolution: boolean;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ResponseCaseResolution = {
+  id: number;
+  linked_candidate: number | null;
+  linked_response_case: number;
+  resolution_type: string;
+  resolution_status: 'PROPOSED' | 'READY_TO_CLOSE' | 'RESOLVED' | 'DEFERRED' | 'BLOCKED' | 'ESCALATED';
+  rationale: string;
+  reason_codes: string[];
+  blockers: string[];
+  resolved_by: string;
+  resolved_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type DownstreamOutcomeReference = {
+  id: number;
+  linked_resolution: number;
+  reference_type: string;
+  reference_status: 'LINKED' | 'PARTIAL' | 'MISSING';
+  downstream_reference_id: string;
+  downstream_reference_label: string;
+  summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ResponseResolutionRecommendationItem = {
+  id: number;
+  resolution_run: number;
+  target_resolution: number | null;
+  target_case: number | null;
+  recommendation_type: 'CLOSE_CASE_AS_RESOLVED' | 'KEEP_WAITING_FOR_EVIDENCE' | 'ESCALATE_FOR_MANUAL_REVIEW' | 'CLOSE_CASE_NO_ACTION' | 'REQUIRE_DOWNSTREAM_REFERENCE' | 'REORDER_CASE_RESOLUTION_PRIORITY';
+  rationale: string;
+  reason_codes: string[];
+  confidence: string;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type BaselineResponseResolutionSummary = {
+  latest_run: BaselineResponseResolutionRun | null;
+  tracked_open_cases: number;
+  total_candidates: number;
+  ready_to_resolve: number;
+  waiting_evidence: number;
+  resolved: number;
+  escalated: number;
+  closed_no_action: number;
+  deferred: number;
+  resolution_type_summary: Record<string, number>;
+  recommendation_summary: Record<string, number>;
+};
