@@ -3056,3 +3056,33 @@ Integration model:
 - `learning_memory` remains the authority for conservative learning capture.
 
 Still not implemented (by design): real execution, real money, auto-retune, auto-promote, or black-box planner authority.
+
+## Autonomous feedback reuse bridge (new)
+
+`apps.autonomous_trader` now includes a dedicated feedback-reuse layer that consumes retrieval context from `memory_retrieval` and learning/postmortem traces to influence the **next paper cycle** conservatively.
+
+Added entities:
+- `AutonomousFeedbackReuseRun`
+- `AutonomousFeedbackCandidateContext`
+- `AutonomousFeedbackInfluenceRecord`
+- `AutonomousFeedbackRecommendation`
+
+Service split:
+- `services/feedback_reuse/feedback_retrieval.py`
+- `services/feedback_reuse/influence.py`
+- `services/feedback_reuse/watch_feedback.py`
+- `services/feedback_reuse/recommendation.py`
+- `services/feedback_reuse/run.py`
+
+Endpoints:
+- `POST /api/autonomous-trader/run-feedback-reuse/`
+- `GET /api/autonomous-trader/feedback-reuse-runs/`
+- `GET /api/autonomous-trader/feedback-candidate-contexts/`
+- `GET /api/autonomous-trader/feedback-influences/`
+- `GET /api/autonomous-trader/feedback-recommendations/`
+- `GET /api/autonomous-trader/feedback-summary/`
+
+Boundary:
+- bounded influence only (caution/confidence/watch/block-repeat)
+- no override of risk/policy/safety authority
+- paper-only and local-first unchanged

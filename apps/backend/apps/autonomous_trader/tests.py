@@ -1,10 +1,14 @@
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.autonomous_trader.models import (
+    AutonomousFeedbackCandidateContext,
+    AutonomousFeedbackInfluenceRecord,
+    AutonomousFeedbackRecommendation,
     AutonomousLearningHandoff,
     AutonomousOutcomeHandoffRecommendation,
     AutonomousPostmortemHandoff,
@@ -145,3 +149,117 @@ class AutonomousTraderFlowTests(TestCase):
         payload = response.json()
         self.assertIn('considered_outcome_count', payload)
         self.assertIn('duplicate_skipped_count', payload)
+
+
+class AutonomousFeedbackReuseTests(TestCase):
+    def setUp(self):
+        ensure_demo_account()
+        self.client = APIClient()
+        provider = Provider.objects.create(name='Demo Provider', slug='demo-provider-feedback')
+        event = Event.objects.create(provider=provider, title='Macro', slug='macro-2026')
+        self.market = Market.objects.create(
+            provider=provider,
+            event=event,
+            title='Will inflation cool by Q4?',
+            slug='inflation-cool-q4',
+            status=MarketStatus.OPEN,
+            current_yes_price=Decimal('0.55'),
+            current_no_price=Decimal('0.45'),
+            volume_total=Decimal('500000.00'),
+            liquidity=Decimal('250000.00'),
+            close_time=timezone.now() + timezone.timedelta(days=45),
+        )
+        runtime_run = OpportunityCycleRuntimeRun.objects.create(started_at=timezone.now())
+        OpportunityFusionCandidate.objects.create(
+            runtime_run=runtime_run,
+            linked_market=self.market,
+            adjusted_edge=Decimal('0.0900'),
+            confidence_score=Decimal('0.7900'),
+            market_probability=Decimal('0.5500'),
+            metadata={},
+        )
+        cycle = AutonomousTradeCycleRun.objects.create()
+        intake = consolidate_candidates(cycle_run=cycle)
+        self.candidate = intake.candidates[0]
+
+    @patch('apps.autonomous_trader.services.feedback_reuse.feedback_retrieval.run_assist')
+    def test_feedback_retrieval_context_created(self, mock_run_assist):
+        mock_run_assist.return_value = type(
+            'Assist',
+            (),
+            {
+                'summary': {'matches': 1, 'prior_failure_modes': ['late sentiment reversal'], 'top_lessons': ['tighten exits']},
+                'retrieval_run': type('Run', (), {'id': 7})(),
+                'precedent_confidence': 0.74,
+                'influence_mode': 'confidence_adjust',
+                'caution_flags': ['sentiment drift'],
+            },
+        )()
+
+        response = self.client.post('/api/autonomous-trader/run-feedback-reuse/', {'limit': 5}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(AutonomousFeedbackCandidateContext.objects.filter(linked_candidate=self.candidate).exists())
+
+    @patch('apps.autonomous_trader.services.feedback_reuse.feedback_retrieval.run_assist')
+    def test_negative_precedent_reduces_confidence(self, mock_run_assist):
+        mock_run_assist.return_value = type(
+            'Assist',
+            (),
+            {
+                'summary': {'matches': 2, 'prior_failure_modes': ['drawdown'], 'top_lessons': ['reduce confidence']},
+                'retrieval_run': type('Run', (), {'id': 8})(),
+                'precedent_confidence': 0.81,
+                'influence_mode': 'confidence_adjust',
+                'caution_flags': ['drawdown'],
+            },
+        )()
+        before = self.candidate.confidence
+        self.client.post('/api/autonomous-trader/run-feedback-reuse/', {'limit': 5}, format='json')
+        self.candidate.refresh_from_db()
+        influence = AutonomousFeedbackInfluenceRecord.objects.filter(linked_candidate=self.candidate).latest('id')
+        self.assertEqual(influence.influence_type, 'CONFIDENCE_REDUCTION')
+        self.assertLess(self.candidate.confidence, before)
+
+    @patch('apps.autonomous_trader.services.feedback_reuse.feedback_retrieval.run_assist')
+    def test_repeat_loss_pattern_blocks_candidate(self, mock_run_assist):
+        mock_run_assist.return_value = type(
+            'Assist',
+            (),
+            {
+                'summary': {'matches': 3, 'prior_failure_modes': ['repeat loss pattern'], 'top_lessons': ['block recurrence']},
+                'retrieval_run': type('Run', (), {'id': 9})(),
+                'precedent_confidence': 0.9,
+                'influence_mode': 'caution_boost',
+                'caution_flags': ['repeat loss'],
+            },
+        )()
+        self.client.post('/api/autonomous-trader/run-feedback-reuse/', {'limit': 5}, format='json')
+        self.candidate.refresh_from_db()
+        influence = AutonomousFeedbackInfluenceRecord.objects.filter(linked_candidate=self.candidate).latest('id')
+        self.assertEqual(influence.influence_type, 'BLOCK_REPEAT_PATTERN')
+        self.assertEqual(self.candidate.candidate_status, 'BLOCKED')
+
+    @patch('apps.autonomous_trader.services.feedback_reuse.feedback_retrieval.run_assist')
+    def test_no_hits_creates_no_relevant_learning_recommendation(self, mock_run_assist):
+        mock_run_assist.return_value = type(
+            'Assist',
+            (),
+            {
+                'summary': {'matches': 0, 'prior_failure_modes': [], 'top_lessons': []},
+                'retrieval_run': type('Run', (), {'id': 10})(),
+                'precedent_confidence': 0.3,
+                'influence_mode': 'rationale_only',
+                'caution_flags': [],
+            },
+        )()
+        self.client.post('/api/autonomous-trader/run-feedback-reuse/', {'limit': 5}, format='json')
+        self.assertTrue(
+            AutonomousFeedbackRecommendation.objects.filter(recommendation_type='NO_RELEVANT_LEARNING_FOUND').exists()
+        )
+
+    def test_feedback_summary_endpoint(self):
+        response = self.client.get('/api/autonomous-trader/feedback-summary/')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('considered_candidate_count', payload)
+        self.assertIn('recommendation_summary', payload)

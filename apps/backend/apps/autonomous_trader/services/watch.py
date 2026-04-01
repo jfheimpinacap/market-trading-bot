@@ -9,8 +9,11 @@ def create_watch_record(*, execution: AutonomousTradeExecution) -> AutonomousTra
     risk_change = execution.linked_candidate.risk_posture in {'BLOCKED', 'NEEDS_REVIEW'}
     market_move = bool(trade and trade.position and trade.position.unrealized_pnl < 0)
 
+    feedback = (execution.linked_candidate.metadata or {}).get('feedback_reuse') or {}
     if trade and trade.position and trade.position.status == 'CLOSED':
         status = AutonomousWatchStatus.CLOSED
+    elif feedback.get('caution_boost'):
+        status = AutonomousWatchStatus.EXIT_REVIEW_REQUIRED
     elif risk_change:
         status = AutonomousWatchStatus.EXIT_REVIEW_REQUIRED
     elif market_move:

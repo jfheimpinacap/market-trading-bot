@@ -9,6 +9,7 @@ from apps.autonomous_trader.models import AutonomousTradeCycleRun
 from apps.autonomous_trader.services.candidate_intake import consolidate_candidates
 from apps.autonomous_trader.services.decisioning import decide_candidate
 from apps.autonomous_trader.services.execution import execute_candidate
+from apps.autonomous_trader.services.feedback_reuse import run_feedback_reuse_engine
 from apps.autonomous_trader.services.outcomes import create_outcome
 from apps.autonomous_trader.services.watch import create_watch_record
 
@@ -17,6 +18,7 @@ from apps.autonomous_trader.services.watch import create_watch_record
 def run_autonomous_cycle(*, actor: str = 'operator-ui', cycle_mode: str = 'FULL_AUTONOMOUS_PAPER_LOOP', limit: int = 25):
     run = AutonomousTradeCycleRun.objects.create(cycle_mode=cycle_mode, metadata={'actor': actor})
     intake = consolidate_candidates(cycle_run=run, limit=limit)
+    feedback_reuse_run = run_feedback_reuse_engine(cycle_run=run, actor=actor, limit=limit)
 
     decisions = [decide_candidate(candidate=candidate) for candidate in intake.candidates]
     executions = [execute_candidate(decision=decision) for decision in decisions]
@@ -32,6 +34,7 @@ def run_autonomous_cycle(*, actor: str = 'operator-ui', cycle_mode: str = 'FULL_
     run.closed_position_count = sum(1 for o in outcomes if o.outcome_status == 'CLOSED')
     run.postmortem_handoff_count = sum(1 for o in outcomes if o.send_to_postmortem)
     run.recommendation_summary = dict(decision_counter)
+    run.metadata = {**(run.metadata or {}), 'feedback_reuse_run_id': feedback_reuse_run.id}
     run.completed_at = timezone.now()
     run.save(
         update_fields=[
