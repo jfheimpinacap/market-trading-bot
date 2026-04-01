@@ -4,25 +4,27 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.risk_agent.models import (
+    AutonomousExecutionReadiness,
     PositionWatchEvent,
     PositionWatchPlan,
+    RiskIntakeRecommendation,
     RiskApprovalDecision,
     RiskAssessment,
     RiskRuntimeCandidate,
-    RiskRuntimeRecommendation,
     RiskRuntimeRun,
     RiskSizingPlan,
 )
 from apps.memory_retrieval.models import MemoryQueryType
 from apps.memory_retrieval.services import run_assist
 from apps.risk_agent.serializers import (
+    AutonomousExecutionReadinessSerializer,
     PositionWatchEventSerializer,
     PositionWatchPlanSerializer,
     RiskAssessRequestSerializer,
     RiskApprovalDecisionSerializer,
     RiskAssessmentSerializer,
     RiskRuntimeCandidateSerializer,
-    RiskRuntimeRecommendationSerializer,
+    RiskIntakeRecommendationSerializer,
     RiskRuntimeReviewRequestSerializer,
     RiskRuntimeRunSerializer,
     RiskSizeRequestSerializer,
@@ -208,10 +210,10 @@ class RiskWatchPlanListView(generics.ListAPIView):
 class RiskRuntimeRecommendationListView(generics.ListAPIView):
     authentication_classes = []
     permission_classes = []
-    serializer_class = RiskRuntimeRecommendationSerializer
+    serializer_class = RiskIntakeRecommendationSerializer
 
     def get_queryset(self):
-        queryset = RiskRuntimeRecommendation.objects.select_related('runtime_run', 'target_candidate__linked_market')
+        queryset = RiskIntakeRecommendation.objects.select_related('runtime_run', 'target_market')
         run_id = self.request.query_params.get('run_id')
         recommendation_type = self.request.query_params.get('recommendation_type')
         if run_id:
@@ -219,6 +221,28 @@ class RiskRuntimeRecommendationListView(generics.ListAPIView):
         if recommendation_type:
             queryset = queryset.filter(recommendation_type=recommendation_type)
         return queryset.order_by('-created_at', '-id')[:200]
+
+
+class AutonomousExecutionReadinessListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = AutonomousExecutionReadinessSerializer
+
+    def get_queryset(self):
+        queryset = AutonomousExecutionReadiness.objects.select_related('linked_market', 'linked_approval_review')
+        run_id = self.request.query_params.get('run_id')
+        if run_id:
+            queryset = queryset.filter(linked_approval_review__linked_candidate__runtime_run_id=run_id)
+        return queryset.order_by('-created_at', '-id')[:200]
+
+
+class RiskRuntimeRunListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RiskRuntimeRunSerializer
+
+    def get_queryset(self):
+        return RiskRuntimeRun.objects.order_by('-started_at', '-id')[:100]
 
 
 class RiskRuntimeSummaryView(APIView):
@@ -246,7 +270,7 @@ class RiskRuntimeSummaryView(APIView):
         }
         recommendation_counts = {
             row['recommendation_type']: row['count']
-            for row in RiskRuntimeRecommendation.objects.filter(runtime_run=latest_run)
+            for row in RiskIntakeRecommendation.objects.filter(runtime_run=latest_run)
             .values('recommendation_type')
             .annotate(count=Count('id'))
         }

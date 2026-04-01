@@ -33,6 +33,11 @@ def build_approval_decision(*, candidate: RiskRuntimeCandidate) -> RiskApprovalD
         risk_score += Decimal('0.10')
         reason_codes.append('NEAR_RESOLUTION_WINDOW')
 
+    if candidate.intake_status == 'BLOCKED':
+        blockers.append('INTAKE_BLOCKED')
+    if candidate.intake_status == 'INSUFFICIENT_CONTEXT':
+        blockers.append('INSUFFICIENT_CONTEXT')
+
     if confidence < Decimal('0.42'):
         blockers.append('LOW_CONFIDENCE')
     if uncertainty > Decimal('0.72'):
@@ -45,7 +50,10 @@ def build_approval_decision(*, candidate: RiskRuntimeCandidate) -> RiskApprovalD
     elif caution <= Decimal('0.20'):
         reason_codes.append('LOW_PRECEDENT_CAUTION')
 
-    if blockers:
+    if 'INSUFFICIENT_CONTEXT' in blockers:
+        approval_status = RiskRuntimeApprovalStatus.NEEDS_REVIEW
+        watch_required = True
+    elif blockers:
         approval_status = RiskRuntimeApprovalStatus.BLOCKED
         watch_required = True
     elif confidence < Decimal('0.58') or uncertainty > Decimal('0.55') or caution > Decimal('0.60'):
@@ -67,12 +75,16 @@ def build_approval_decision(*, candidate: RiskRuntimeCandidate) -> RiskApprovalD
 
     rationale = (
         f'confidence={confidence}, uncertainty={uncertainty}, edge={adjusted_edge}, '
-        f'liquidity={liquidity_bucket}, evidence_quality={evidence_quality}, precedent_caution={caution}.'
+        f'liquidity={liquidity_bucket}, evidence_quality={evidence_quality}, precedent_caution={caution}, '
+        f'intake_status={candidate.intake_status}, portfolio_pressure={candidate.portfolio_pressure_state}.'
     )
+    approval_confidence = max(Decimal('0.0000'), min(Decimal('1.0000'), confidence - (uncertainty * Decimal('0.35'))))
 
     return RiskApprovalDecision.objects.create(
         linked_candidate=candidate,
         approval_status=approval_status,
+        approval_confidence=approval_confidence,
+        approval_summary=f'Risk approval review {approval_status} for market {candidate.linked_market_id}.',
         approval_rationale=rationale,
         reason_codes=reason_codes,
         blockers=blockers,

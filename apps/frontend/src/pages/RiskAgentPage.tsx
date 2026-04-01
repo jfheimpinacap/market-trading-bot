@@ -7,7 +7,9 @@ import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
 import { getRiskAssessments, getRiskSummary, getRiskWatchEvents, runRiskAssessment, runRiskSizing, runRiskWatch } from '../services/riskAgent';
 import {
+  getAutonomousExecutionReadiness,
   getRiskApprovalDecisions,
+  getRiskRuntimeCandidates,
   getRiskRuntimeRecommendations,
   getRiskRuntimeSummary,
   getRiskSizingPlans,
@@ -17,7 +19,8 @@ import {
 
 function riskTone(level: string): 'ready' | 'pending' | 'offline' | 'neutral' {
   if (level === 'LOW' || level === 'APPROVED') return 'ready';
-  if (level === 'MEDIUM' || level === 'APPROVED_REDUCED' || level === 'NEEDS_REVIEW') return 'pending';
+  if (level === 'MEDIUM' || level === 'APPROVED_REDUCED' || level === 'NEEDS_REVIEW' || level === 'READY_REDUCED' || level === 'WATCH_ONLY' || level === 'DEFERRED' || level === 'REDUCED_CONTEXT') return 'pending';
+  if (level === 'READY' || level === 'READY_FOR_RISK_RUNTIME') return 'ready';
   if (level === 'HIGH' || level === 'BLOCKED') return 'offline';
   return 'neutral';
 }
@@ -38,6 +41,8 @@ export function RiskAgentPage() {
   const [summary, setSummary] = useState<any | null>(null);
   const [runtimeSummary, setRuntimeSummary] = useState<any | null>(null);
   const [approvals, setApprovals] = useState<any[]>([]);
+  const [intakeCandidates, setIntakeCandidates] = useState<any[]>([]);
+  const [executionReadiness, setExecutionReadiness] = useState<any[]>([]);
   const [sizingPlans, setSizingPlans] = useState<any[]>([]);
   const [watchPlans, setWatchPlans] = useState<any[]>([]);
   const [runtimeRecommendations, setRuntimeRecommendations] = useState<any[]>([]);
@@ -60,22 +65,26 @@ export function RiskAgentPage() {
         getRiskRuntimeSummary(),
       ]);
       const runId = runtimeSummaryRes.latest_run?.id;
-      const [approvalRes, sizingRes, watchRes, recommendationRes] = runId
+      const [candidateRes, approvalRes, sizingRes, watchRes, readinessRes, recommendationRes] = runId
         ? await Promise.all([
+            getRiskRuntimeCandidates({ run_id: runId }),
             getRiskApprovalDecisions({ run_id: runId, status: statusFilter || undefined }),
             getRiskSizingPlans({ run_id: runId }),
             getRiskWatchPlans({ run_id: runId }),
+            getAutonomousExecutionReadiness({ run_id: runId }),
             getRiskRuntimeRecommendations({ run_id: runId }),
           ])
-        : [[], [], [], []];
+        : [[], [], [], [], [], []];
 
       setSummary(summaryRes);
       setAssessments(assessmentsRes);
       setEvents(eventsRes);
       setRuntimeSummary(runtimeSummaryRes);
+      setIntakeCandidates(candidateRes);
       setApprovals(approvalRes);
       setSizingPlans(sizingRes);
       setWatchPlans(watchRes);
+      setExecutionReadiness(readinessRes);
       setRuntimeRecommendations(recommendationRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load risk-agent data.');
@@ -169,9 +178,9 @@ export function RiskAgentPage() {
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
-        <SectionCard eyebrow="Runtime review" title="Risk runtime controls" description="Manual trigger for prediction→risk runtime gating and recommendation-first handoff to execution simulator.">
+        <SectionCard eyebrow="Prediction intake & execution readiness" title="Risk runtime controls" description="Fortifies prediction→risk→autonomous execution bridge in paper-only, risk-first, approval-aware mode. No live execution.">
           <div className="button-row">
-            <button type="button" className="primary-button" disabled={busy} onClick={() => void handleRunRuntime()}>Run risk runtime review</button>
+            <button type="button" className="primary-button" disabled={busy} onClick={() => void handleRunRuntime()}>Run intake review</button>
             <button type="button" className="secondary-button" onClick={() => navigate('/opportunity-cycle')}>Open opportunity cycle</button>
             <label>
               Filter status
@@ -197,14 +206,24 @@ export function RiskAgentPage() {
           <SectionCard eyebrow="Runtime summary" title="Paper risk board" description="Auditable summary cards for risk runtime decision quality.">
             <div className="metric-grid">
               <article className="metric-card"><h3>Candidates</h3><strong>{runtimeSummary.latest_run.candidate_count}</strong></article>
+              <article className="metric-card"><h3>Handoffs considered</h3><strong>{runtimeSummary.latest_run.considered_handoff_count ?? 0}</strong></article>
               <article className="metric-card"><h3>Approved</h3><strong>{decisionCountByStatus.APPROVED ?? 0}</strong></article>
               <article className="metric-card"><h3>Approved reduced</h3><strong>{decisionCountByStatus.APPROVED_REDUCED ?? 0}</strong></article>
               <article className="metric-card"><h3>Blocked</h3><strong>{decisionCountByStatus.BLOCKED ?? 0}</strong></article>
+              <article className="metric-card"><h3>Needs review</h3><strong>{runtimeSummary.latest_run.needs_review_count ?? 0}</strong></article>
               <article className="metric-card"><h3>Watch required</h3><strong>{runtimeSummary.latest_run.watch_required_count}</strong></article>
-              <article className="metric-card"><h3>Sent to execution sim</h3><strong>{runtimeSummary.latest_run.sent_to_execution_sim_count}</strong></article>
+              <article className="metric-card"><h3>Execution-ready</h3><strong>{runtimeSummary.latest_run.execution_ready_count ?? 0}</strong></article>
             </div>
           </SectionCard>
         ) : null}
+
+        <SectionCard eyebrow="Intake candidates" title="Prediction intake candidates" description="Risk intake status and traceability from risk-ready handoff context.">
+          {intakeCandidates.length === 0 ? <EmptyState title="No intake candidates" description="Run intake review to convert prediction handoffs into risk intake candidates." /> : (
+            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Market</th><th>Calibrated</th><th>Market</th><th>Edge</th><th>Confidence</th><th>Uncertainty</th><th>Conviction</th><th>Status</th><th>Summary</th></tr></thead><tbody>
+              {intakeCandidates.slice(0, 30).map((item) => <tr key={item.id}><td>{item.market_title ?? '—'}</td><td>{item.calibrated_probability}</td><td>{item.market_probability}</td><td>{item.adjusted_edge}</td><td>{item.confidence_score}</td><td>{item.uncertainty_score}</td><td>{item.conviction_bucket || '—'}</td><td><StatusBadge tone={riskTone(item.intake_status)}>{item.intake_status}</StatusBadge></td><td>{item.context_summary}</td></tr>)}
+            </tbody></table></div>
+          )}
+        </SectionCard>
 
         <SectionCard eyebrow="Runtime decisions" title="Approval decisions" description="Status, score, blockers, and context for each prediction candidate.">
           {approvals.length === 0 ? <EmptyState title="No runtime approval decisions" description="Run risk runtime review to generate explicit risk approvals and blocks." /> : (
@@ -290,6 +309,14 @@ export function RiskAgentPage() {
                 </tbody>
               </table>
             </div>
+          )}
+        </SectionCard>
+
+        <SectionCard eyebrow="Autonomous bridge" title="Execution readiness" description="Formal risk→autonomous_trader readiness state for paper-cycle orchestration.">
+          {executionReadiness.length === 0 ? <EmptyState title="No readiness records" description="Run intake review to build autonomous execution readiness records." /> : (
+            <div className="table-wrapper"><table className="data-table"><thead><tr><th>Market</th><th>Status</th><th>Confidence</th><th>Reason codes</th><th>Summary</th></tr></thead><tbody>
+              {executionReadiness.slice(0, 30).map((item) => <tr key={item.id}><td>{item.market_title ?? '—'}</td><td><StatusBadge tone={riskTone(item.readiness_status)}>{item.readiness_status}</StatusBadge></td><td>{item.readiness_confidence}</td><td>{(item.readiness_reason_codes ?? []).join(', ') || '—'}</td><td>{item.readiness_summary}</td></tr>)}
+            </tbody></table></div>
           )}
         </SectionCard>
 

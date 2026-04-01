@@ -1959,3 +1959,18 @@ Scope remains paper-only and local-first; the board improves candidate quality b
   - intake recommendations
 
 This strengthens the research→prediction→risk bridge while keeping paper-only/manual-first boundaries.
+
+
+## Risk Agent intake/readiness board (new)
+
+La vista `/risk-agent` ahora refuerza explícitamente el paso prediction→risk→autonomous (paper-only):
+
+- acción manual: `Run intake review`
+- summary cards: handoffs considered, runtime-ready, approved, approved reduced, blocked, needs review, execution-ready
+- paneles técnicos:
+  - intake candidates
+  - approval reviews
+  - execution readiness
+  - intake recommendations
+
+Se mantiene el mismo límite operativo: local-first, risk-first, approval-aware, sin ejecución real ni dinero real.

@@ -77,6 +77,30 @@ class RiskRuntimeRecommendationType(models.TextChoices):
     REORDER_RISK_PRIORITY = 'REORDER_RISK_PRIORITY', 'Reorder risk priority'
 
 
+class RiskIntakeStatus(models.TextChoices):
+    READY_FOR_RISK_RUNTIME = 'READY_FOR_RISK_RUNTIME', 'Ready for risk runtime'
+    REDUCED_CONTEXT = 'REDUCED_CONTEXT', 'Reduced context'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    INSUFFICIENT_CONTEXT = 'INSUFFICIENT_CONTEXT', 'Insufficient context'
+
+
+class AutonomousExecutionReadinessStatus(models.TextChoices):
+    READY = 'READY', 'Ready'
+    READY_REDUCED = 'READY_REDUCED', 'Ready reduced'
+    WATCH_ONLY = 'WATCH_ONLY', 'Watch only'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    DEFERRED = 'DEFERRED', 'Deferred'
+
+
+class RiskIntakeRecommendationType(models.TextChoices):
+    APPROVE_FOR_AUTONOMOUS_EXECUTION = 'APPROVE_FOR_AUTONOMOUS_EXECUTION', 'Approve for autonomous execution'
+    APPROVE_WITH_REDUCED_SIZE = 'APPROVE_WITH_REDUCED_SIZE', 'Approve with reduced size'
+    BLOCK_FOR_RISK_POSTURE = 'BLOCK_FOR_RISK_POSTURE', 'Block for risk posture'
+    BLOCK_FOR_PORTFOLIO_PRESSURE = 'BLOCK_FOR_PORTFOLIO_PRESSURE', 'Block for portfolio pressure'
+    KEEP_ON_WATCH_ONLY = 'KEEP_ON_WATCH_ONLY', 'Keep on watch only'
+    REQUIRE_MANUAL_RISK_REVIEW = 'REQUIRE_MANUAL_RISK_REVIEW', 'Require manual risk review'
+
+
 class RiskAssessment(TimeStampedModel):
     market = models.ForeignKey(Market, on_delete=models.SET_NULL, null=True, blank=True, related_name='risk_agent_assessments')
     proposal = models.ForeignKey(TradeProposal, on_delete=models.SET_NULL, null=True, blank=True, related_name='risk_agent_assessments')
@@ -148,6 +172,9 @@ class RiskRuntimeRun(TimeStampedModel):
     reduced_size_count = models.PositiveIntegerField(default=0)
     watch_required_count = models.PositiveIntegerField(default=0)
     sent_to_execution_sim_count = models.PositiveIntegerField(default=0)
+    considered_handoff_count = models.PositiveIntegerField(default=0)
+    needs_review_count = models.PositiveIntegerField(default=0)
+    execution_ready_count = models.PositiveIntegerField(default=0)
     recommendation_summary = models.JSONField(default=dict, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
 
@@ -161,16 +188,47 @@ class RiskRuntimeCandidate(TimeStampedModel):
         'prediction_agent.PredictionRuntimeAssessment',
         on_delete=models.CASCADE,
         related_name='risk_runtime_candidates',
+        null=True,
+        blank=True,
+    )
+    linked_risk_ready_prediction_handoff = models.ForeignKey(
+        'prediction_agent.RiskReadyPredictionHandoff',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='risk_runtime_candidates',
+    )
+    linked_prediction_conviction_review = models.ForeignKey(
+        'prediction_agent.PredictionConvictionReview',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='risk_runtime_candidates',
+    )
+    linked_prediction_intake_candidate = models.ForeignKey(
+        'prediction_agent.PredictionIntakeCandidate',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='risk_runtime_candidates',
     )
     linked_market = models.ForeignKey('markets.Market', on_delete=models.CASCADE, related_name='risk_runtime_candidates')
     market_provider = models.CharField(max_length=64, blank=True)
     category = models.CharField(max_length=100, blank=True)
     calibrated_probability = models.DecimalField(max_digits=7, decimal_places=4)
+    market_probability = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal('0.0000'))
     adjusted_edge = models.DecimalField(max_digits=8, decimal_places=4)
+    intake_status = models.CharField(max_length=32, choices=RiskIntakeStatus.choices, default=RiskIntakeStatus.INSUFFICIENT_CONTEXT)
     confidence_score = models.DecimalField(max_digits=7, decimal_places=4)
     uncertainty_score = models.DecimalField(max_digits=7, decimal_places=4)
+    conviction_bucket = models.CharField(max_length=24, blank=True)
+    portfolio_pressure_state = models.CharField(max_length=32, blank=True)
+    context_summary = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
     evidence_quality_score = models.DecimalField(max_digits=7, decimal_places=4)
     precedent_caution_score = models.DecimalField(max_digits=7, decimal_places=4)
+    linked_portfolio_context = models.JSONField(default=dict, blank=True)
+    linked_feedback_context = models.JSONField(default=dict, blank=True)
     market_liquidity_context = models.JSONField(default=dict, blank=True)
     time_to_resolution = models.PositiveIntegerField(null=True, blank=True)
     predicted_status = models.CharField(max_length=24, blank=True)
@@ -187,6 +245,8 @@ class RiskRuntimeCandidate(TimeStampedModel):
 class RiskApprovalDecision(TimeStampedModel):
     linked_candidate = models.OneToOneField(RiskRuntimeCandidate, on_delete=models.CASCADE, related_name='approval_decision')
     approval_status = models.CharField(max_length=24, choices=RiskRuntimeApprovalStatus.choices)
+    approval_confidence = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal('0.0000'))
+    approval_summary = models.TextField(blank=True)
     approval_rationale = models.TextField(blank=True)
     reason_codes = models.JSONField(default=list, blank=True)
     blockers = models.JSONField(default=list, blank=True)
@@ -239,6 +299,68 @@ class RiskRuntimeRecommendation(TimeStampedModel):
         related_name='recommendations',
     )
     recommendation_type = models.CharField(max_length=64, choices=RiskRuntimeRecommendationType.choices)
+    rationale = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal('0.0000'))
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousExecutionReadiness(TimeStampedModel):
+    linked_market = models.ForeignKey('markets.Market', on_delete=models.CASCADE, related_name='autonomous_execution_readiness')
+    linked_approval_review = models.ForeignKey(RiskApprovalDecision, on_delete=models.CASCADE, related_name='execution_readiness')
+    linked_sizing_plan = models.ForeignKey(
+        RiskSizingPlan,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='execution_readiness',
+    )
+    linked_watch_plan = models.ForeignKey(
+        PositionWatchPlan,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='execution_readiness',
+    )
+    readiness_status = models.CharField(max_length=24, choices=AutonomousExecutionReadinessStatus.choices)
+    readiness_confidence = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal('0.0000'))
+    readiness_summary = models.TextField(blank=True)
+    readiness_reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class RiskIntakeRecommendation(TimeStampedModel):
+    runtime_run = models.ForeignKey(RiskRuntimeRun, on_delete=models.CASCADE, related_name='intake_recommendations')
+    recommendation_type = models.CharField(max_length=80, choices=RiskIntakeRecommendationType.choices)
+    target_market = models.ForeignKey('markets.Market', null=True, blank=True, on_delete=models.SET_NULL, related_name='risk_intake_recommendations')
+    target_intake_candidate = models.ForeignKey(
+        RiskRuntimeCandidate,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='intake_recommendations',
+    )
+    target_approval_review = models.ForeignKey(
+        RiskApprovalDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='intake_recommendations',
+    )
+    target_readiness = models.ForeignKey(
+        AutonomousExecutionReadiness,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='intake_recommendations',
+    )
     rationale = models.TextField(blank=True)
     reason_codes = models.JSONField(default=list, blank=True)
     confidence = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal('0.0000'))
