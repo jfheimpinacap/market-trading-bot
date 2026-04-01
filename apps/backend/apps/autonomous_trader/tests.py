@@ -318,3 +318,125 @@ class AutonomousFeedbackReuseTests(TestCase):
         payload = response.json()
         self.assertIn('considered_candidate_count', payload)
         self.assertIn('recommendation_summary', payload)
+
+from apps.autonomous_trader.models import (
+    AutonomousPositionActionDecision,
+    AutonomousPositionActionExecution,
+    AutonomousPositionWatchCandidate,
+)
+from apps.paper_trading.services.execution import execute_paper_trade
+from apps.portfolio_governor.models import PortfolioThrottleDecision
+from apps.research_agent.models import MarketUniverseRun, MarketResearchCandidate, NarrativeSignal, SourceScanRun
+
+
+class AutonomousPositionWatchTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.account, _ = ensure_demo_account()
+        provider = Provider.objects.create(name='Watch Provider', slug='watch-provider')
+        event = Event.objects.create(provider=provider, title='Watch Event', slug='watch-event')
+        self.market = Market.objects.create(
+            provider=provider,
+            event=event,
+            title='Will reform pass?',
+            slug='reform-pass',
+            status=MarketStatus.OPEN,
+            current_yes_price=Decimal('0.55'),
+            current_no_price=Decimal('0.45'),
+            volume_total=Decimal('90000.00'),
+            liquidity=Decimal('40000.00'),
+            close_time=timezone.now() + timezone.timedelta(days=10),
+        )
+        execute_paper_trade(market=self.market, trade_type='BUY', side='YES', quantity=Decimal('10'), account=self.account)
+        self.universe_run = MarketUniverseRun.objects.create(started_at=timezone.now())
+        MarketResearchCandidate.objects.create(
+            universe_run=self.universe_run,
+            linked_market=self.market,
+            market_title=self.market.title,
+            market_provider=self.market.provider.name,
+        )
+
+    def _emit_signal(self, score: Decimal):
+        scan_run = SourceScanRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        NarrativeSignal.objects.create(
+            scan_run=scan_run,
+            canonical_label='watch',
+            topic='watch',
+            linked_market=self.market,
+            sentiment_score=score,
+            total_signal_score=Decimal('0.5000') + score,
+        )
+
+    def test_watch_candidate_created_for_open_position(self):
+        self._emit_signal(Decimal('0.01'))
+        response = self.client.post('/api/autonomous-trader/run-position-watch/', {}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(AutonomousPositionWatchCandidate.objects.filter(linked_market=self.market).exists())
+
+    def test_sentiment_weakening_can_reduce(self):
+        self._emit_signal(Decimal('-0.10'))
+        self.client.post('/api/autonomous-trader/run-position-watch/', {}, format='json')
+        self.assertTrue(AutonomousPositionActionDecision.objects.filter(decision_type='REDUCE_POSITION').exists())
+
+    def test_narrative_reversal_can_close(self):
+        self._emit_signal(Decimal('-0.35'))
+        self.client.post('/api/autonomous-trader/run-position-watch/', {}, format='json')
+        self.assertTrue(AutonomousPositionActionDecision.objects.filter(decision_type='CLOSE_POSITION').exists())
+
+    def test_portfolio_pressure_can_reduce(self):
+        self._emit_signal(Decimal('0.02'))
+        PortfolioThrottleDecision.objects.create(state='THROTTLED')
+        self.client.post('/api/autonomous-trader/run-position-watch/', {}, format='json')
+        self.assertTrue(AutonomousPositionActionDecision.objects.filter(decision_type='REDUCE_POSITION').exists())
+
+    def test_review_required_when_signals_conflict(self):
+        self._emit_signal(Decimal('0.35'))
+        from apps.prediction_agent.models import PredictionRuntimeAssessment, PredictionRuntimeCandidate, PredictionRuntimeRun
+        from apps.risk_agent.models import RiskRuntimeRun, RiskRuntimeCandidate, RiskRuntimeRecommendation
+
+        pr = PredictionRuntimeRun.objects.create(started_at=timezone.now())
+        pc = PredictionRuntimeCandidate.objects.create(
+            runtime_run=pr,
+            linked_market=self.market,
+            market_provider=self.market.provider.name,
+            market_probability=Decimal('0.5000'),
+            candidate_quality_score=Decimal('0.5000'),
+        )
+        pa = PredictionRuntimeAssessment.objects.create(
+            linked_candidate=pc,
+            model_mode='blended',
+            system_probability=Decimal('0.5000'),
+            calibrated_probability=Decimal('0.5000'),
+            market_probability=Decimal('0.5000'),
+            raw_edge=Decimal('0.0000'),
+            adjusted_edge=Decimal('0.0000'),
+            confidence_score=Decimal('0.5000'),
+            uncertainty_score=Decimal('0.5000'),
+            evidence_quality_score=Decimal('0.5000'),
+            precedent_caution_score=Decimal('0.5000'),
+            narrative_influence_score=Decimal('0.5000'),
+            prediction_status='NEEDS_REVIEW',
+        )
+
+        rr = RiskRuntimeRun.objects.create(started_at=timezone.now())
+        rc = RiskRuntimeCandidate.objects.create(
+            runtime_run=rr,
+            linked_prediction_assessment=pa,
+            linked_market=self.market,
+            calibrated_probability=Decimal('0.5'),
+            adjusted_edge=Decimal('0'),
+            confidence_score=Decimal('0.5'),
+            uncertainty_score=Decimal('0.5'),
+            evidence_quality_score=Decimal('0.5'),
+            precedent_caution_score=Decimal('0.5'),
+        )
+        RiskRuntimeRecommendation.objects.create(runtime_run=rr, target_candidate=rc, recommendation_type='REQUIRE_MANUAL_RISK_REVIEW')
+        self.client.post('/api/autonomous-trader/run-position-watch/', {}, format='json')
+        self.assertTrue(AutonomousPositionActionDecision.objects.filter(decision_type='REVIEW_REQUIRED').exists())
+
+    def test_position_watch_summary_endpoint(self):
+        self._emit_signal(Decimal('-0.10'))
+        self.client.post('/api/autonomous-trader/run-position-watch/', {}, format='json')
+        response = self.client.get('/api/autonomous-trader/position-watch-summary/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('considered_position_count', response.json())

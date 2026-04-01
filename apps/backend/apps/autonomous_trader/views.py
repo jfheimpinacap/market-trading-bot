@@ -16,6 +16,11 @@ from apps.autonomous_trader.models import (
     AutonomousSizingDecision,
     AutonomousSizingRecommendation,
     AutonomousSizingRun,
+    AutonomousPositionActionDecision,
+    AutonomousPositionActionExecution,
+    AutonomousPositionWatchCandidate,
+    AutonomousPositionWatchRecommendation,
+    AutonomousPositionWatchRun,
     AutonomousTradeCandidate,
     AutonomousTradeCycleRun,
     AutonomousTradeDecision,
@@ -36,6 +41,11 @@ from apps.autonomous_trader.serializers import (
     AutonomousSizingDecisionSerializer,
     AutonomousSizingRecommendationSerializer,
     AutonomousSizingRunSerializer,
+    AutonomousPositionActionDecisionSerializer,
+    AutonomousPositionActionExecutionSerializer,
+    AutonomousPositionWatchCandidateSerializer,
+    AutonomousPositionWatchRecommendationSerializer,
+    AutonomousPositionWatchRunSerializer,
     AutonomousTradeCandidateSerializer,
     AutonomousTradeCycleRunSerializer,
     AutonomousTradeDecisionSerializer,
@@ -45,6 +55,7 @@ from apps.autonomous_trader.serializers import (
     RunCycleSerializer,
     RunFeedbackReuseSerializer,
     RunSizingSerializer,
+    RunPositionWatchSerializer,
     RunOutcomeHandoffSerializer,
 )
 from apps.autonomous_trader.services import (
@@ -56,6 +67,7 @@ from apps.autonomous_trader.services import (
     run_outcome_handoff_engine,
 )
 from apps.autonomous_trader.services.kelly_sizing import build_sizing_summary, run_sizing_bridge
+from apps.autonomous_trader.services.position_watch import build_position_watch_summary, run_position_watch
 
 
 class AutonomousTradeRunCycleView(APIView):
@@ -276,6 +288,70 @@ class AutonomousFeedbackSummaryView(APIView):
 
     def get(self, request, *args, **kwargs):
         return Response(build_feedback_summary())
+
+
+class AutonomousPositionWatchRunView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunPositionWatchSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_position_watch(**serializer.validated_data)
+        return Response({'run': result['run'].id, 'considered': len(result['candidates'])}, status=status.HTTP_200_OK)
+
+
+class AutonomousPositionWatchRunsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousPositionWatchRun.objects.order_by('-started_at', '-id')[:100]
+        return Response(AutonomousPositionWatchRunSerializer(rows, many=True).data)
+
+
+class AutonomousPositionWatchCandidatesView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousPositionWatchCandidate.objects.select_related('linked_market', 'linked_position').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousPositionWatchCandidateSerializer(rows, many=True).data)
+
+
+class AutonomousPositionActionDecisionsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousPositionActionDecision.objects.select_related('linked_watch_candidate__linked_market').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousPositionActionDecisionSerializer(rows, many=True).data)
+
+
+class AutonomousPositionActionExecutionsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousPositionActionExecution.objects.select_related('linked_position__market', 'linked_paper_trade').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousPositionActionExecutionSerializer(rows, many=True).data)
+
+
+class AutonomousPositionWatchRecommendationsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousPositionWatchRecommendation.objects.select_related('target_position__market').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousPositionWatchRecommendationSerializer(rows, many=True).data)
+
+
+class AutonomousPositionWatchSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(build_position_watch_summary())
 
 
 class AutonomousSizingRunsView(APIView):

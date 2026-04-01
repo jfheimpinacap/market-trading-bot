@@ -2043,6 +2043,7 @@ Guardrails stay unchanged:
 - execution now consumes sizing decision notional/quantity for paper trades
 - remains strictly local-first, single-user, paper/sandbox only (no live routing, no real money)
 
+<<<<<<< HEAD
 ### Scan→Research intelligence handoff hardening (new)
 
 The scan layer now includes an explicit, auditable narrative-consensus handoff before research triage:
@@ -2063,3 +2064,10 @@ API additions under `/api/scan-agent/`:
 - `GET consensus-summary/`
 
 This remains local-first, single-user, paper/sandbox only, and does **not** replace `research_agent` formal triage authority.
+=======
+
+## Autonomous position watch hardening (paper-only)
+- Adds a post-entry autonomous watch loop for open paper positions with explicit HOLD/REDUCE/CLOSE/REVIEW_REQUIRED decisions.
+- Uses sentiment/narrative drift, risk posture, and portfolio pressure as inputs while keeping risk/policy/runtime/safety as authorities.
+- Executes only paper reduce/close actions with auditable lineage records; no real broker routing and no real money.
+>>>>>>> origin/main

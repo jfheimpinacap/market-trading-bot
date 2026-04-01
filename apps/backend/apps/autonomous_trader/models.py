@@ -258,6 +258,160 @@ class AutonomousTradeOutcome(TimeStampedModel):
         ordering = ['-created_at', '-id']
 
 
+
+class AutonomousPositionWatchCandidateStatus(models.TextChoices):
+    ACTIVE_MONITORING = 'ACTIVE_MONITORING', 'Active monitoring'
+    REDUCE_ELIGIBLE = 'REDUCE_ELIGIBLE', 'Reduce eligible'
+    CLOSE_ELIGIBLE = 'CLOSE_ELIGIBLE', 'Close eligible'
+    REVIEW_REQUIRED = 'REVIEW_REQUIRED', 'Review required'
+    NO_ACTION = 'NO_ACTION', 'No action'
+
+
+class AutonomousSentimentState(models.TextChoices):
+    IMPROVING = 'IMPROVING', 'Improving'
+    STABLE = 'STABLE', 'Stable'
+    WEAKENING = 'WEAKENING', 'Weakening'
+    REVERSING = 'REVERSING', 'Reversing'
+    UNKNOWN = 'UNKNOWN', 'Unknown'
+
+
+class AutonomousRiskState(models.TextChoices):
+    NORMAL = 'NORMAL', 'Normal'
+    CAUTION = 'CAUTION', 'Caution'
+    ELEVATED = 'ELEVATED', 'Elevated'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousPortfolioPressureState(models.TextChoices):
+    NORMAL = 'NORMAL', 'Normal'
+    CAUTION = 'CAUTION', 'Caution'
+    THROTTLED = 'THROTTLED', 'Throttled'
+    BLOCK_NEW_ENTRIES = 'BLOCK_NEW_ENTRIES', 'Block new entries'
+
+
+class AutonomousPositionActionDecisionType(models.TextChoices):
+    HOLD_POSITION = 'HOLD_POSITION', 'Hold position'
+    REDUCE_POSITION = 'REDUCE_POSITION', 'Reduce position'
+    CLOSE_POSITION = 'CLOSE_POSITION', 'Close position'
+    REVIEW_REQUIRED = 'REVIEW_REQUIRED', 'Review required'
+
+
+class AutonomousPositionActionDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousPositionActionExecutionType(models.TextChoices):
+    REDUCE_EXECUTION = 'REDUCE_EXECUTION', 'Reduce execution'
+    CLOSE_EXECUTION = 'CLOSE_EXECUTION', 'Close execution'
+
+
+class AutonomousPositionActionExecutionStatus(models.TextChoices):
+    QUEUED = 'QUEUED', 'Queued'
+    SUBMITTED = 'SUBMITTED', 'Submitted'
+    FILLED = 'FILLED', 'Filled'
+    PARTIAL = 'PARTIAL', 'Partial'
+    NO_FILL = 'NO_FILL', 'No fill'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousPositionWatchRecommendationType(models.TextChoices):
+    KEEP_HOLDING_POSITION = 'KEEP_HOLDING_POSITION', 'Keep holding position'
+    REDUCE_FOR_SENTIMENT_WEAKENING = 'REDUCE_FOR_SENTIMENT_WEAKENING', 'Reduce for sentiment weakening'
+    CLOSE_FOR_NARRATIVE_REVERSAL = 'CLOSE_FOR_NARRATIVE_REVERSAL', 'Close for narrative reversal'
+    REDUCE_FOR_PORTFOLIO_PRESSURE = 'REDUCE_FOR_PORTFOLIO_PRESSURE', 'Reduce for portfolio pressure'
+    CLOSE_FOR_RISK_DETERIORATION = 'CLOSE_FOR_RISK_DETERIORATION', 'Close for risk deterioration'
+    REQUIRE_MANUAL_REVIEW_FOR_SIGNAL_CONFLICT = 'REQUIRE_MANUAL_REVIEW_FOR_SIGNAL_CONFLICT', 'Require manual review for signal conflict'
+
+
+class AutonomousPositionWatchRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_position_count = models.PositiveIntegerField(default=0)
+    hold_count = models.PositiveIntegerField(default=0)
+    reduce_count = models.PositiveIntegerField(default=0)
+    close_count = models.PositiveIntegerField(default=0)
+    review_required_count = models.PositiveIntegerField(default=0)
+    executed_reduce_count = models.PositiveIntegerField(default=0)
+    executed_close_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class AutonomousPositionWatchCandidate(TimeStampedModel):
+    linked_watch_run = models.ForeignKey('autonomous_trader.AutonomousPositionWatchRun', on_delete=models.CASCADE, related_name='candidates')
+    linked_position = models.ForeignKey('paper_trading.PaperPosition', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_watch_candidates')
+    linked_paper_trade = models.ForeignKey('paper_trading.PaperTrade', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_watch_candidates')
+    linked_autonomous_execution = models.ForeignKey('autonomous_trader.AutonomousTradeExecution', null=True, blank=True, on_delete=models.SET_NULL, related_name='position_watch_candidates')
+    linked_market = models.ForeignKey('markets.Market', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_watch_candidates')
+    linked_latest_scan_signal = models.ForeignKey('research_agent.NarrativeSignal', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_watch_candidates')
+    linked_latest_research_context = models.ForeignKey('research_agent.MarketResearchCandidate', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_watch_candidates')
+    candidate_status = models.CharField(max_length=24, choices=AutonomousPositionWatchCandidateStatus.choices, default=AutonomousPositionWatchCandidateStatus.ACTIVE_MONITORING)
+    entry_probability = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    current_probability = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    entry_edge = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    current_edge = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    sentiment_state = models.CharField(max_length=16, choices=AutonomousSentimentState.choices, default=AutonomousSentimentState.UNKNOWN)
+    risk_state = models.CharField(max_length=16, choices=AutonomousRiskState.choices, default=AutonomousRiskState.NORMAL)
+    portfolio_pressure_state = models.CharField(max_length=24, choices=AutonomousPortfolioPressureState.choices, default=AutonomousPortfolioPressureState.NORMAL)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousPositionActionDecision(TimeStampedModel):
+    linked_watch_candidate = models.ForeignKey('autonomous_trader.AutonomousPositionWatchCandidate', on_delete=models.CASCADE, related_name='action_decisions')
+    decision_type = models.CharField(max_length=24, choices=AutonomousPositionActionDecisionType.choices)
+    decision_status = models.CharField(max_length=16, choices=AutonomousPositionActionDecisionStatus.choices, default=AutonomousPositionActionDecisionStatus.PROPOSED)
+    decision_confidence = models.DecimalField(max_digits=6, decimal_places=4, default=0)
+    reduction_fraction = models.DecimalField(max_digits=6, decimal_places=4, null=True, blank=True)
+    rationale = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousPositionActionExecution(TimeStampedModel):
+    linked_action_decision = models.ForeignKey('autonomous_trader.AutonomousPositionActionDecision', on_delete=models.CASCADE, related_name='executions')
+    linked_position = models.ForeignKey('paper_trading.PaperPosition', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_action_executions')
+    linked_paper_trade = models.ForeignKey('paper_trading.PaperTrade', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_action_executions')
+    execution_type = models.CharField(max_length=24, choices=AutonomousPositionActionExecutionType.choices)
+    execution_status = models.CharField(max_length=12, choices=AutonomousPositionActionExecutionStatus.choices, default=AutonomousPositionActionExecutionStatus.QUEUED)
+    quantity_before = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    quantity_after = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    notional_before = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    notional_after = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousPositionWatchRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=64, choices=AutonomousPositionWatchRecommendationType.choices)
+    target_position = models.ForeignKey('paper_trading.PaperPosition', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_watch_recommendations')
+    target_watch_candidate = models.ForeignKey('autonomous_trader.AutonomousPositionWatchCandidate', null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    target_action_decision = models.ForeignKey('autonomous_trader.AutonomousPositionActionDecision', null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    rationale = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=5, decimal_places=4, default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
 class AutonomousOutcomeHandoffRun(TimeStampedModel):
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)

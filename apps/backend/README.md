@@ -3108,6 +3108,7 @@ Boundary:
 
 Boundary remains unchanged: paper-only, no broker/exchange live execution, no auto-retune, no auto-promote.
 
+<<<<<<< HEAD
 ## Scan-to-research intelligence handoff hardening (new)
 
 `apps.research_agent` now includes an explicit consensus/divergence/handoff-priority layer for scan output quality hardening.
@@ -3130,3 +3131,10 @@ Boundary guarantees:
 - improves scan→research handoff quality only
 - does not replace `research_agent` formal market triage authority
 - remains local-first, single-user, paper-only, no live execution
+=======
+
+## Autonomous position watch bridge
+- New autonomous-trader position-watch services implement conservative open-position management (candidate assessment, action decision, paper execution, recommendation, run summary).
+- API: run-position-watch, position-watch-runs, position-watch-candidates, position-action-decisions, position-action-executions, position-watch-recommendations, position-watch-summary.
+- Strictly paper-only and traceable; no auto-retune, no auto-promote, no live trading path.
+>>>>>>> origin/main
