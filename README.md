@@ -2130,3 +2130,9 @@ Bridge flow:
 `AutonomousExecutionReadiness` → intake candidate → explicit decision (`EXECUTE_NOW`, `EXECUTE_REDUCED`, `KEEP_ON_WATCH`, `DEFER`, `BLOCK`, `REQUIRE_MANUAL_REVIEW`) → paper-only dispatch record.
 
 Boundaries remain unchanged: local-first, single-user, paper/sandbox only, no real money, no live broker/exchange routing, and no bypass of risk/policy/runtime/safety/certification authorities.
+
+
+## Mission Control Autonomous Runtime Loop
+- New governed autonomous runtime loop orchestration is available under `/api/mission-control/run-autonomous-runtime/` and related autonomous runtime list/summary endpoints.
+- This layer is paper-only, local-first, and single-user. It orchestrates cycle plan → execution → outcome → recommendation without replacing `autonomous_trader` operational authority.
+- It reinforces runtime/safety/portfolio guardrails and supports reduced or blocked cycles rather than forcing execution.

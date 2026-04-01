@@ -3248,3 +3248,9 @@ Service split:
 - `services/execution_intake/run.py`
 
 This hardens risk→autonomous paper dispatch with explicit, auditable, policy-safe decisions and no live execution path.
+
+
+## Autonomous Runtime Loop (Mission Control)
+- Mission Control now includes an auditable autonomous runtime run model with cycle plans, executions, outcomes, and recommendations.
+- The loop remains paper/sandbox only and does not perform live broker/exchange routing.
+- Services are split into `cycle_plan`, `cycle_execution`, `cycle_outcome`, `recommendation`, and `run` under `apps/mission_control/services/autonomous_runtime/`.
