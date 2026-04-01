@@ -1975,3 +1975,16 @@ This layer is manual-first and auditable. It does **not** auto-open downstream b
 - Keeps existing routing/tracking/lifecycle intact and does not auto-close cases. Final closure remains explicit via `POST /api/certification/resolve-response-case/<case_id>/`.
 - New run/board endpoint: `POST /api/certification/run-baseline-response-resolution/` with list/summary endpoints for candidates, resolutions, references, and recommendations.
 - Scope remains paper/sandbox only (no live trading, no auto-retune/rollback/deactivate/promote).
+
+## Autonomous paper trade-cycle executor (Prompt 134)
+
+A new `autonomous_trader` layer now runs a governed, paper-only autonomous mission loop with minimal human intervention:
+
+- explicit cycle run audit (`AutonomousTradeCycleRun`) from candidate intake to outcome summary
+- candidate consolidation from existing opportunity/research/prediction/risk context (`AutonomousTradeCandidate`)
+- transparent decisioning (`WATCH`, `EXECUTE_PAPER_TRADE`, and explicit blocks/skips)
+- paper execution linkage only (reuses `paper_trading` execution service; no live routing)
+- automated watch records and outcome records with conservative postmortem/learning handoff flags
+- backend API under `/api/autonomous-trader/*` and frontend route `/autonomous-trader`
+
+Guardrails remain unchanged: runtime/policy/safety/certification still govern whether execution can proceed; this layer orchestrates and audits the cycle.

@@ -148,6 +148,7 @@ LOCAL_APPS = [
     'apps.autonomy_package_review',
     'apps.autonomy_seed',
     'apps.autonomy_seed_review',
+    'apps.autonomous_trader',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
