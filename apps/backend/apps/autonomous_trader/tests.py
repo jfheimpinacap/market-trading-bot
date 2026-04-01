@@ -8,8 +8,12 @@ from rest_framework.test import APIClient
 from apps.autonomous_trader.models import (
     AutonomousFeedbackCandidateContext,
     AutonomousFeedbackInfluenceRecord,
+    AutonomousFeedbackReuseRun,
     AutonomousFeedbackRecommendation,
     AutonomousLearningHandoff,
+    AutonomousSizingContext,
+    AutonomousSizingDecision,
+    AutonomousSizingRecommendation,
     AutonomousOutcomeHandoffRecommendation,
     AutonomousPostmortemHandoff,
     AutonomousTradeCycleRun,
@@ -21,6 +25,7 @@ from apps.autonomous_trader.models import (
 from apps.autonomous_trader.services.candidate_intake import consolidate_candidates
 from apps.autonomous_trader.services.decisioning import decide_candidate
 from apps.autonomous_trader.services.execution import execute_candidate
+from apps.autonomous_trader.services.kelly_sizing import run_sizing_bridge
 from apps.markets.models import Event, Market, MarketStatus, Provider
 from apps.opportunity_supervisor.models import OpportunityCycleRuntimeRun, OpportunityFusionCandidate
 from apps.paper_trading.models import PaperTrade, PaperTradeStatus, PaperTradeType
@@ -149,6 +154,56 @@ class AutonomousTraderFlowTests(TestCase):
         payload = response.json()
         self.assertIn('considered_outcome_count', payload)
         self.assertIn('duplicate_skipped_count', payload)
+
+    def test_sizing_context_created_for_eligible_candidate(self):
+        cycle = AutonomousTradeCycleRun.objects.create()
+        intake = consolidate_candidates(cycle_run=cycle)
+        run_sizing_bridge(cycle_run_id=cycle.id, limit=10)
+        self.assertTrue(AutonomousSizingContext.objects.filter(linked_candidate=intake.candidates[0]).exists())
+
+    def test_kelly_and_adjustments_are_conservative(self):
+        cycle = AutonomousTradeCycleRun.objects.create()
+        intake = consolidate_candidates(cycle_run=cycle)
+        run_sizing_bridge(cycle_run_id=cycle.id, limit=10)
+        decision = AutonomousSizingDecision.objects.filter(linked_candidate=intake.candidates[0]).latest('id')
+        self.assertLessEqual(Decimal(decision.applied_fraction), Decimal('0.050000'))
+        self.assertLessEqual(Decimal(decision.notional_after_adjustment or 0), Decimal('1000.00'))
+
+    def test_feedback_caution_reduces_size(self):
+        cycle = AutonomousTradeCycleRun.objects.create()
+        intake = consolidate_candidates(cycle_run=cycle)
+        candidate = intake.candidates[0]
+        candidate.system_probability = Decimal('0.6200')
+        candidate.market_probability = Decimal('0.5500')
+        candidate.save(update_fields=['system_probability', 'market_probability', 'updated_at'])
+        reuse_run = AutonomousFeedbackReuseRun.objects.create()
+        context = AutonomousFeedbackCandidateContext.objects.create(
+            linked_reuse_run=reuse_run,
+            linked_cycle_run=cycle,
+            linked_candidate=candidate,
+            linked_market=self.market,
+            retrieval_status='HITS_FOUND',
+        )
+        AutonomousFeedbackInfluenceRecord.objects.create(
+            linked_candidate_context=context,
+            linked_candidate=candidate,
+            influence_type='CAUTION_BOOST',
+            influence_status='APPLIED',
+            influence_reason_codes=['REPEAT_LOSS_PATTERN'],
+        )
+        run_sizing_bridge(cycle_run_id=cycle.id, limit=10)
+        decision = AutonomousSizingDecision.objects.filter(linked_candidate=candidate).latest('id')
+        self.assertIn('FEEDBACK_CAUTION_DISCOUNT', decision.adjustment_reason_codes)
+
+    def test_sizing_summary_endpoint(self):
+        cycle = AutonomousTradeCycleRun.objects.create()
+        consolidate_candidates(cycle_run=cycle)
+        self.client.post('/api/autonomous-trader/run-sizing/', {'cycle_run_id': cycle.id}, format='json')
+        response = self.client.get('/api/autonomous-trader/sizing-summary/')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('considered_candidate_count', payload)
+        self.assertIn('sized_for_execution_count', payload)
 
 
 class AutonomousFeedbackReuseTests(TestCase):

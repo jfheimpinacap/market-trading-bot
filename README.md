@@ -2032,3 +2032,13 @@ Guardrails stay unchanged:
 - no real money, no real broker routing
 - no auto-retune, no auto-promote, no opaque model switching
 - risk/policy/safety remain final authority boundaries
+
+### Autonomous Kelly sizing bridge (new)
+
+`autonomous_trader` now includes a conservative, auditable paper-sizing bridge that links prediction, risk, portfolio governor, allocation context, and feedback reuse before execution.
+
+- bounded/fractional Kelly-informed sizing only (no aggressive Kelly)
+- explicit context -> decision -> recommendation traceability
+- portfolio-aware and risk-first discounts/caps
+- execution now consumes sizing decision notional/quantity for paper trades
+- remains strictly local-first, single-user, paper/sandbox only (no live routing, no real money)

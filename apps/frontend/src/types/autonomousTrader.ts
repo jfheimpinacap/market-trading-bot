@@ -130,3 +130,46 @@ export type AutonomousFeedbackRecommendation = {
   blockers: string[];
   confidence: string;
 };
+
+export type AutonomousSizingSummary = {
+  latest_run_id: number | null;
+  considered_candidate_count: number;
+  approved_for_sizing_count: number;
+  reduced_by_portfolio_count: number;
+  reduced_by_risk_count: number;
+  blocked_for_sizing_count: number;
+  sized_for_execution_count: number;
+  recommendation_summary: Record<string, number>;
+};
+
+export type AutonomousSizingContext = {
+  id: number;
+  market_title: string;
+  adjusted_edge: string;
+  confidence: string;
+  uncertainty: string | null;
+  risk_posture: string;
+  portfolio_posture: string;
+  context_status: string;
+};
+
+export type AutonomousSizingDecision = {
+  id: number;
+  market_title: string;
+  sizing_method: string;
+  decision_status: string;
+  base_kelly_fraction: string | null;
+  applied_fraction: string | null;
+  notional_before_adjustment: string | null;
+  notional_after_adjustment: string | null;
+  final_paper_quantity: string | null;
+  decision_summary: string;
+};
+
+export type AutonomousSizingRecommendation = {
+  id: number;
+  recommendation_type: string;
+  rationale: string;
+  blockers: string[];
+  confidence: string;
+};

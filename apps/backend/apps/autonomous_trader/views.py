@@ -12,6 +12,10 @@ from apps.autonomous_trader.models import (
     AutonomousOutcomeHandoffRecommendation,
     AutonomousOutcomeHandoffRun,
     AutonomousPostmortemHandoff,
+    AutonomousSizingContext,
+    AutonomousSizingDecision,
+    AutonomousSizingRecommendation,
+    AutonomousSizingRun,
     AutonomousTradeCandidate,
     AutonomousTradeCycleRun,
     AutonomousTradeDecision,
@@ -28,6 +32,10 @@ from apps.autonomous_trader.serializers import (
     AutonomousOutcomeHandoffRecommendationSerializer,
     AutonomousOutcomeHandoffRunSerializer,
     AutonomousPostmortemHandoffSerializer,
+    AutonomousSizingContextSerializer,
+    AutonomousSizingDecisionSerializer,
+    AutonomousSizingRecommendationSerializer,
+    AutonomousSizingRunSerializer,
     AutonomousTradeCandidateSerializer,
     AutonomousTradeCycleRunSerializer,
     AutonomousTradeDecisionSerializer,
@@ -36,6 +44,7 @@ from apps.autonomous_trader.serializers import (
     AutonomousTradeWatchRecordSerializer,
     RunCycleSerializer,
     RunFeedbackReuseSerializer,
+    RunSizingSerializer,
     RunOutcomeHandoffSerializer,
 )
 from apps.autonomous_trader.services import (
@@ -46,6 +55,7 @@ from apps.autonomous_trader.services import (
     run_feedback_reuse_engine,
     run_outcome_handoff_engine,
 )
+from apps.autonomous_trader.services.kelly_sizing import build_sizing_summary, run_sizing_bridge
 
 
 class AutonomousTradeRunCycleView(APIView):
@@ -96,6 +106,17 @@ class AutonomousTradeRunFeedbackReuseView(APIView):
             cycle_run = get_object_or_404(AutonomousTradeCycleRun, pk=data['cycle_run_id'])
         run = run_feedback_reuse_engine(cycle_run=cycle_run, actor=data.get('actor') or 'operator-ui', limit=data.get('limit', 25))
         return Response({'run': run.id}, status=status.HTTP_200_OK)
+
+
+class AutonomousTradeRunSizingView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunSizingSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_sizing_bridge(**serializer.validated_data)
+        return Response({'run': result['run'].id, 'decision_count': len(result['decisions'])}, status=status.HTTP_200_OK)
 
 
 class AutonomousTradeCyclesView(APIView):
@@ -255,3 +276,47 @@ class AutonomousFeedbackSummaryView(APIView):
 
     def get(self, request, *args, **kwargs):
         return Response(build_feedback_summary())
+
+
+class AutonomousSizingRunsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousSizingRun.objects.order_by('-started_at', '-id')[:100]
+        return Response(AutonomousSizingRunSerializer(rows, many=True).data)
+
+
+class AutonomousSizingContextsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousSizingContext.objects.select_related('linked_candidate__linked_market').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousSizingContextSerializer(rows, many=True).data)
+
+
+class AutonomousSizingDecisionsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousSizingDecision.objects.select_related('linked_candidate__linked_market').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousSizingDecisionSerializer(rows, many=True).data)
+
+
+class AutonomousSizingRecommendationsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousSizingRecommendation.objects.select_related('target_candidate__linked_market').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousSizingRecommendationSerializer(rows, many=True).data)
+
+
+class AutonomousSizingSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(build_sizing_summary())

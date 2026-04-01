@@ -19,10 +19,11 @@ def execute_candidate(*, decision: AutonomousTradeDecision) -> AutonomousTradeEx
             metadata={'paper_only': True},
         )
 
-    notional = Decimal('50.00')
+    sizing_decision = candidate.sizing_decisions.order_by('-created_at', '-id').first()
+    notional = sizing_decision.notional_after_adjustment if sizing_decision and sizing_decision.notional_after_adjustment else Decimal('50.00')
     market_probability = candidate.market_probability or Decimal('0.50')
     price = max(Decimal('0.10'), min(Decimal('0.90'), market_probability))
-    quantity = (notional / price).quantize(Decimal('0.0001'))
+    quantity = sizing_decision.final_paper_quantity if sizing_decision and sizing_decision.final_paper_quantity else (notional / price).quantize(Decimal('0.0001'))
 
     try:
         result = execute_paper_trade(
@@ -38,6 +39,7 @@ def execute_candidate(*, decision: AutonomousTradeDecision) -> AutonomousTradeEx
         return AutonomousTradeExecution.objects.create(
             linked_candidate=candidate,
             linked_decision=decision,
+            linked_sizing_decision=sizing_decision,
             execution_status=AutonomousExecutionStatus.NO_FILL,
             sizing_summary=f'Execution blocked: {exc}',
             watch_plan_summary='No watch plan due to failed submission.',
@@ -50,9 +52,10 @@ def execute_candidate(*, decision: AutonomousTradeDecision) -> AutonomousTradeEx
     return AutonomousTradeExecution.objects.create(
         linked_candidate=candidate,
         linked_decision=decision,
+        linked_sizing_decision=sizing_decision,
         linked_paper_trade=result.trade,
         execution_status=AutonomousExecutionStatus.FILLED,
-        sizing_summary=f'notional={notional} quantity={quantity} price={price}',
+        sizing_summary=f'notional={notional} quantity={quantity} price={price} sizing_decision_id={sizing_decision.id if sizing_decision else None}',
         watch_plan_summary='Track drift, risk change and position PnL each cycle.',
-        metadata={'paper_only': True, 'paper_trade_id': result.trade.id},
+        metadata={'paper_only': True, 'paper_trade_id': result.trade.id, 'sizing_decision_id': sizing_decision.id if sizing_decision else None},
     )
