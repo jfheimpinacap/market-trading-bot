@@ -2,13 +2,28 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.mission_control.models import MissionControlCycle, MissionControlSession
+from apps.mission_control.models import (
+    AutonomousMissionCycleExecution,
+    AutonomousMissionCycleOutcome,
+    AutonomousMissionCyclePlan,
+    AutonomousMissionRuntimeRecommendation,
+    AutonomousMissionRuntimeRun,
+    MissionControlCycle,
+    MissionControlSession,
+)
 from apps.mission_control.serializers import (
+    AutonomousCycleExecutionSerializer,
+    AutonomousCycleOutcomeSerializer,
+    AutonomousCyclePlanSerializer,
+    AutonomousRuntimeRecommendationSerializer,
+    AutonomousRuntimeRunRequestSerializer,
+    AutonomousRuntimeRunSerializer,
     MissionControlCycleSerializer,
     MissionControlSessionSerializer,
     MissionControlStartSerializer,
 )
 from apps.mission_control.services import pause_session, resume_session, run_cycle_now, start_session, status_snapshot, stop_session
+from apps.mission_control.services.autonomous_runtime import build_autonomous_runtime_summary, run_autonomous_runtime
 
 
 class MissionControlStatusView(APIView):
@@ -84,3 +99,41 @@ class MissionControlSummaryView(APIView):
             'session_count': MissionControlSession.objects.count(),
             'cycle_count': MissionControlCycle.objects.count(),
         }, status=status.HTTP_200_OK)
+
+
+class RunAutonomousRuntimeView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = AutonomousRuntimeRunRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        runtime_run = run_autonomous_runtime(**serializer.validated_data)
+        return Response(AutonomousRuntimeRunSerializer(runtime_run).data, status=status.HTTP_200_OK)
+
+
+class AutonomousRuntimeRunListView(generics.ListAPIView):
+    serializer_class = AutonomousRuntimeRunSerializer
+    queryset = AutonomousMissionRuntimeRun.objects.order_by('-started_at', '-id')[:50]
+
+
+class AutonomousCyclePlanListView(generics.ListAPIView):
+    serializer_class = AutonomousCyclePlanSerializer
+    queryset = AutonomousMissionCyclePlan.objects.select_related('linked_runtime_run').order_by('-created_at', '-id')[:100]
+
+
+class AutonomousCycleExecutionListView(generics.ListAPIView):
+    serializer_class = AutonomousCycleExecutionSerializer
+    queryset = AutonomousMissionCycleExecution.objects.select_related('linked_cycle_plan').order_by('-created_at', '-id')[:100]
+
+
+class AutonomousCycleOutcomeListView(generics.ListAPIView):
+    serializer_class = AutonomousCycleOutcomeSerializer
+    queryset = AutonomousMissionCycleOutcome.objects.select_related('linked_cycle_execution').order_by('-created_at', '-id')[:100]
+
+
+class AutonomousRuntimeRecommendationListView(generics.ListAPIView):
+    serializer_class = AutonomousRuntimeRecommendationSerializer
+    queryset = AutonomousMissionRuntimeRecommendation.objects.order_by('-created_at', '-id')[:100]
+
+
+class AutonomousRuntimeSummaryView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(build_autonomous_runtime_summary(), status=status.HTTP_200_OK)

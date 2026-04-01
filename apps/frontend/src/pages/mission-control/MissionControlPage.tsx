@@ -1,147 +1,108 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { EmptyState } from '../../components/EmptyState';
+import { useCallback, useEffect, useState } from 'react';
 import { PageHeader } from '../../components/PageHeader';
 import { SectionCard } from '../../components/SectionCard';
 import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
-import { navigate } from '../../lib/router';
 import {
-  getMissionControlCycles,
+  getAutonomousCycleExecutions,
+  getAutonomousCycleOutcomes,
+  getAutonomousCyclePlans,
+  getAutonomousRuntimeRecommendations,
+  getAutonomousRuntimeRuns,
+  getAutonomousRuntimeSummary,
   getMissionControlStatus,
-  pauseMissionControl,
-  resumeMissionControl,
-  runMissionControlCycle,
-  startMissionControl,
-  stopMissionControl,
+  runAutonomousRuntime,
 } from '../../services/missionControl';
-import type { MissionControlCycle, MissionControlStatusResponse } from '../../types/missionControl';
-
-const formatDate = (v: string | null) => (v ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(v)) : 'Pending');
-const tone = (v: string) => (v === 'RUNNING' || v === 'SUCCESS' ? 'ready' : v === 'PAUSED' || v === 'PARTIAL' ? 'pending' : v === 'FAILED' ? 'offline' : 'neutral');
+import type {
+  AutonomousCycleExecution,
+  AutonomousCycleOutcome,
+  AutonomousCyclePlan,
+  AutonomousRuntimeRecommendation,
+  AutonomousRuntimeRun,
+  AutonomousRuntimeSummary,
+  MissionControlStatusResponse,
+} from '../../types/missionControl';
 
 export function MissionControlPage() {
   const [status, setStatus] = useState<MissionControlStatusResponse | null>(null);
-  const [cycles, setCycles] = useState<MissionControlCycle[]>([]);
+  const [runs, setRuns] = useState<AutonomousRuntimeRun[]>([]);
+  const [plans, setPlans] = useState<AutonomousCyclePlan[]>([]);
+  const [executions, setExecutions] = useState<AutonomousCycleExecution[]>([]);
+  const [outcomes, setOutcomes] = useState<AutonomousCycleOutcome[]>([]);
+  const [recommendations, setRecommendations] = useState<AutonomousRuntimeRecommendation[]>([]);
+  const [summary, setSummary] = useState<AutonomousRuntimeSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
-  const [profile, setProfile] = useState('balanced_mission_control');
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [s, c] = await Promise.all([getMissionControlStatus(), getMissionControlCycles()]);
+      const [s, r, p, e, o, rec, sum] = await Promise.all([
+        getMissionControlStatus(),
+        getAutonomousRuntimeRuns(),
+        getAutonomousCyclePlans(),
+        getAutonomousCycleExecutions(),
+        getAutonomousCycleOutcomes(),
+        getAutonomousRuntimeRecommendations(),
+        getAutonomousRuntimeSummary(),
+      ]);
       setStatus(s);
-      setCycles(c);
-      if (s.state?.profile_slug) setProfile(s.state.profile_slug);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load mission control.');
+      setRuns(r);
+      setPlans(p);
+      setExecutions(e);
+      setOutcomes(o);
+      setRecommendations(rec);
+      setSummary(sum);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load autonomous runtime loop.');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
-
-  const runAction = useCallback(async (fn: () => Promise<unknown>, message: string) => {
-    setActionLoading(true);
-    setActionMessage(null);
-    try {
-      await fn();
-      setActionMessage(message);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Mission control action failed.');
-    } finally {
-      setActionLoading(false);
-    }
+  useEffect(() => {
+    void load();
   }, [load]);
-
-  const runtimeStatus = status?.state?.status ?? 'IDLE';
-  const controls = useMemo(() => ({
-    canStart: runtimeStatus !== 'RUNNING',
-    canPause: runtimeStatus === 'RUNNING',
-    canResume: runtimeStatus === 'PAUSED',
-    canStop: runtimeStatus === 'RUNNING' || runtimeStatus === 'PAUSED' || runtimeStatus === 'DEGRADED',
-  }), [runtimeStatus]);
 
   return (
     <div className="page-stack">
       <PageHeader
         eyebrow="Mission control"
-        title="/mission-control"
-        description="Autonomous operations scheduler / closed-loop supervision for paper/demo-only operation. Explicit and auditable, no real-money execution."
-        actions={<div className="button-row"><button type="button" className="secondary-button" onClick={() => navigate('/runtime')}>Open Runtime</button><button type="button" className="secondary-button" onClick={() => navigate('/opportunities')}>Open Opportunities</button><button type="button" className="secondary-button" onClick={() => navigate('/alerts')}>Open Alerts</button><button type="button" className="secondary-button" onClick={() => navigate('/chaos')}>Open Chaos Lab</button><button type="button" className="secondary-button" onClick={() => navigate('/incidents')}>Open Incidents</button><button type="button" className="secondary-button" onClick={() => navigate('/notifications')}>Open Notifications</button><button type="button" className="secondary-button" onClick={() => navigate('/portfolio-governor')}>Open Portfolio Governor</button><button type="button" className="secondary-button" onClick={() => navigate('/profile-manager')}>Open Profile Manager</button><button type="button" className="secondary-button" onClick={() => navigate('/promotion')}>Open Promotion</button><button type="button" className="secondary-button" onClick={() => navigate('/rollout')}>Open Rollout</button><button type="button" className="secondary-button" onClick={() => navigate('/certification')}>Open Certification</button><button type="button" className="secondary-button" onClick={() => navigate('/trace')}>Open Trace Explorer</button></div>}
+        title="Autonomous Runtime Loop"
+        description="Continuous closed-cycle orchestration layer for paper-only operation: minimal human intervention, runtime-governed, no live execution."
+        actions={<button type="button" className="primary-button" onClick={async () => { await runAutonomousRuntime({ cycle_count: 1 }); await load(); }}>Run autonomous runtime</button>}
       />
 
-      <SectionCard eyebrow="Control panel" title="Session controls" description="Start, pause, resume, stop, and run one cycle with explicit profile selection.">
-        <div className="button-row">
-          <label className="field-group"><span>Profile</span><select className="select-input" value={profile} onChange={(e) => setProfile(e.target.value)}>{(status?.profiles ?? []).map((p) => <option key={p.slug} value={p.slug}>{p.label}</option>)}</select></label>
-          <button type="button" className="primary-button" disabled={actionLoading || !controls.canStart} onClick={() => runAction(() => startMissionControl({ profile_slug: profile }), 'Mission control started.')}>Start</button>
-          <button type="button" className="secondary-button" disabled={actionLoading || !controls.canPause} onClick={() => runAction(() => pauseMissionControl(), 'Mission control paused.')}>Pause</button>
-          <button type="button" className="secondary-button" disabled={actionLoading || !controls.canResume} onClick={() => runAction(() => resumeMissionControl(), 'Mission control resumed.')}>Resume</button>
-          <button type="button" className="ghost-button" disabled={actionLoading || !controls.canStop} onClick={() => runAction(() => stopMissionControl(), 'Mission control stop requested.')}>Stop</button>
-          <button type="button" className="ghost-button" disabled={actionLoading} onClick={() => runAction(() => runMissionControlCycle({ profile_slug: profile }), 'Cycle completed.')}>Run one cycle</button>
-        </div>
-        {actionMessage ? <p>{actionMessage}</p> : null}
-        {status?.safety?.kill_switch_enabled || status?.safety?.hard_stop_active ? <p><strong>Safety influence:</strong> {status?.safety?.status} · {status?.safety?.status_message ?? 'Guardrail active.'}</p> : null}
-      </SectionCard>
-
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
-        <div className="content-grid content-grid--two-columns">
-          <SectionCard eyebrow="Current state" title="Mission runtime" description="What is running now and why.">
-            <div className="system-metadata-grid">
-              <div><strong>Status:</strong> <StatusBadge tone={tone(runtimeStatus)}>{runtimeStatus}</StatusBadge></div>
-              <div><strong>Active session:</strong> {status?.active_session?.id ?? 'None'}</div>
-              <div><strong>Last cycle:</strong> {formatDate(status?.latest_cycle?.finished_at ?? null)}</div>
-              <div><strong>Cycle interval:</strong> {String(status?.state?.settings_snapshot?.cycle_interval_seconds ?? 'n/a')} sec</div>
-              <div><strong>Runtime mode:</strong> {status?.runtime?.current_mode ?? 'UNKNOWN'}</div>
-              <div><strong>Safety status:</strong> {status?.safety?.status ?? 'UNKNOWN'}</div>
-              <div><strong>Kill switch:</strong> {status?.safety?.kill_switch_enabled ? 'ON' : 'OFF'}</div>
-              <div><strong>Cycle in progress:</strong> {status?.state?.cycle_in_progress ? 'yes' : 'no'}</div>
-              <div><strong>Rollout status:</strong> {status?.rollout?.current_status ?? 'None'}</div>
-              <div><strong>Rollout canary %:</strong> {status?.rollout?.canary_percentage ?? 0}%</div>
-              <div><strong>Active incidents:</strong> {status?.incident_summary?.active_incidents ?? 0}</div>
-              <div><strong>Degraded mode:</strong> {status?.degraded_mode?.state ?? 'normal'}</div>
-            </div>
-          </SectionCard>
+        <SectionCard eyebrow="Summary" title="Runtime loop counters" description="Auditable aggregate counters per autonomous runtime run.">
+          <div className="system-metadata-grid">
+            <div><strong>Cycles planned:</strong> {summary?.cycle_plan_count ?? 0}</div>
+            <div><strong>Cycles executed:</strong> {summary?.cycle_execution_count ?? 0}</div>
+            <div><strong>Blocked cycles:</strong> {runs[0]?.blocked_cycle_count ?? 0}</div>
+            <div><strong>Dispatches:</strong> {summary?.totals.dispatch_count ?? 0}</div>
+            <div><strong>Closed outcomes:</strong> {summary?.totals.closed_outcome_count ?? 0}</div>
+            <div><strong>Postmortem handoffs:</strong> {summary?.totals.postmortem_handoff_count ?? 0}</div>
+            <div><strong>Learning/reuse updates:</strong> {(summary?.totals.learning_handoff_count ?? 0) + (summary?.totals.reuse_applied_count ?? 0)}</div>
+            <div><strong>Runtime mode:</strong> {status?.runtime.current_mode ?? 'unknown'}</div>
+            <div><strong>Safety:</strong> {status?.safety.status ?? 'unknown'}</div>
+          </div>
+        </SectionCard>
 
-          <SectionCard eyebrow="Latest step trace" title="Cycle step visibility" description="Audit-friendly breakdown of the latest cycle.">
-            {!status?.latest_cycle?.steps?.length ? <p className="muted-text">Start mission control to begin autonomous paper operations.</p> : (
-              <ul>
-                {status.latest_cycle.steps.map((step) => <li key={step.id}><StatusBadge tone={tone(step.status)}>{step.status}</StatusBadge> <strong>{step.step_type}</strong> — {step.summary}</li>)}
-              </ul>
-            )}
-          </SectionCard>
-        </div>
+        <SectionCard eyebrow="Cycle plans" title="Autonomous cycle plans" description="Per-cycle gating posture and planned steps.">
+          <ul>{plans.slice(0, 6).map((p) => <li key={p.id}><StatusBadge tone="pending">{p.plan_status}</StatusBadge> mode={p.runtime_mode} portfolio={p.portfolio_posture} safety={p.safety_posture} steps={Object.keys(p.planned_step_flags).filter((k) => p.planned_step_flags[k]).join(', ')}</li>)}</ul>
+        </SectionCard>
 
-        <SectionCard eyebrow="Recent cycles" title="Cycle history" description="Status, timing, and queue/auto/blocked outcomes for mission loops.">
-          {cycles.length === 0 ? (
-            <EmptyState title="No mission control cycles yet" description="Start mission control to begin autonomous paper operations." eyebrow="Mission control" />
-          ) : (
-            <div className="table-wrapper">
-              <table className="data-table">
-                <thead><tr><th>Cycle</th><th>Status</th><th>Started</th><th>Finished</th><th>Opportunities</th><th>Queue</th><th>Auto</th><th>Blocked</th><th>Summary</th></tr></thead>
-                <tbody>
-                  {cycles.slice(0, 15).map((cycle) => (
-                    <tr key={cycle.id}>
-                      <td>{cycle.cycle_number}</td>
-                      <td><StatusBadge tone={tone(cycle.status)}>{cycle.status}</StatusBadge></td>
-                      <td>{formatDate(cycle.started_at)}</td>
-                      <td>{formatDate(cycle.finished_at)}</td>
-                      <td>{cycle.opportunities_built}</td>
-                      <td>{cycle.queue_count}</td>
-                      <td>{cycle.auto_execute_count}</td>
-                      <td>{cycle.blocked_count}</td>
-                      <td>{cycle.summary}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <SectionCard eyebrow="Cycle execution" title="Execution trace" description="Executed/skipped/blocked steps with linkage to upstream/downstream runs.">
+          <ul>{executions.slice(0, 6).map((e) => <li key={e.id}><StatusBadge tone="ready">{e.execution_status}</StatusBadge> executed=[{e.executed_steps.join(', ')}] skipped=[{e.skipped_steps.join(', ')}] blocked=[{e.blocked_steps.join(', ')}]</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Cycle outcomes" title="Outcome consolidation" description="Dispatch/watch/close/postmortem/learning counters per cycle.">
+          <ul>{outcomes.slice(0, 6).map((o) => <li key={o.id}><StatusBadge tone="ready">{o.outcome_status}</StatusBadge> dispatch={o.dispatch_count} watch={o.watch_update_count} close={o.close_action_count} postmortem={o.postmortem_count} learning={o.learning_count} reuse={o.reuse_count}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Recommendations" title="Runtime recommendations" description="Conservative explicit recommendation stream for each cycle run.">
+          <ul>{recommendations.slice(0, 6).map((r) => <li key={r.id}><strong>{r.recommendation_type}</strong> — {r.rationale} blockers=[{r.blockers.join(', ')}] confidence={r.confidence}</li>)}</ul>
         </SectionCard>
       </DataStateWrapper>
     </div>

@@ -1,5 +1,16 @@
 import { requestJson } from './api/client';
-import type { MissionControlCycle, MissionControlSession, MissionControlStatusResponse, MissionControlSummary } from '../types/missionControl';
+import type {
+  AutonomousCycleExecution,
+  AutonomousCycleOutcome,
+  AutonomousCyclePlan,
+  AutonomousRuntimeRecommendation,
+  AutonomousRuntimeRun,
+  AutonomousRuntimeSummary,
+  MissionControlCycle,
+  MissionControlSession,
+  MissionControlStatusResponse,
+  MissionControlSummary,
+} from '../types/missionControl';
 
 export function getMissionControlStatus() {
   return requestJson<MissionControlStatusResponse>('/api/mission-control/status/');
@@ -43,4 +54,32 @@ export function getMissionControlCycle(id: number) {
 
 export function getMissionControlSummary() {
   return requestJson<MissionControlSummary>('/api/mission-control/summary/');
+}
+
+export function runAutonomousRuntime(payload: Record<string, unknown> = {}) {
+  return requestJson<AutonomousRuntimeRun>('/api/mission-control/run-autonomous-runtime/', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function getAutonomousRuntimeRuns() {
+  return requestJson<AutonomousRuntimeRun[]>('/api/mission-control/autonomous-runtime-runs/');
+}
+
+export function getAutonomousCyclePlans() {
+  return requestJson<AutonomousCyclePlan[]>('/api/mission-control/autonomous-cycle-plans/');
+}
+
+export function getAutonomousCycleExecutions() {
+  return requestJson<AutonomousCycleExecution[]>('/api/mission-control/autonomous-cycle-executions/');
+}
+
+export function getAutonomousCycleOutcomes() {
+  return requestJson<AutonomousCycleOutcome[]>('/api/mission-control/autonomous-cycle-outcomes/');
+}
+
+export function getAutonomousRuntimeRecommendations() {
+  return requestJson<AutonomousRuntimeRecommendation[]>('/api/mission-control/autonomous-runtime-recommendations/');
+}
+
+export function getAutonomousRuntimeSummary() {
+  return requestJson<AutonomousRuntimeSummary>('/api/mission-control/autonomous-runtime-summary/');
 }

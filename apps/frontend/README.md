@@ -1988,3 +1988,9 @@ It adds:
 - manual action button: `Run execution intake`
 
 UI scope remains strictly paper-only and readiness-driven; no live execution path is introduced.
+
+
+## Mission Control / Autonomous Runtime Loop
+- `/mission-control` now includes an **Autonomous Runtime Loop** section with summary cards and panels for cycle plans, executions, outcomes, and recommendations.
+- Manual action available: **Run autonomous runtime**.
+- UI messaging remains explicit: paper-only, runtime-governed, minimal-human-intervention, and no live execution.

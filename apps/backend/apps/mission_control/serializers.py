@@ -1,6 +1,16 @@
 from rest_framework import serializers
 
-from apps.mission_control.models import MissionControlCycle, MissionControlSession, MissionControlState, MissionControlStep
+from apps.mission_control.models import (
+    AutonomousMissionCycleExecution,
+    AutonomousMissionCycleOutcome,
+    AutonomousMissionCyclePlan,
+    AutonomousMissionRuntimeRecommendation,
+    AutonomousMissionRuntimeRun,
+    MissionControlCycle,
+    MissionControlSession,
+    MissionControlState,
+    MissionControlStep,
+)
 
 
 class MissionControlStepSerializer(serializers.ModelSerializer):
@@ -40,3 +50,38 @@ class MissionControlStartSerializer(serializers.Serializer):
     profile_slug = serializers.CharField(required=False, allow_blank=True)
     cycle_interval_seconds = serializers.IntegerField(required=False, min_value=5)
     max_cycles_per_session = serializers.IntegerField(required=False, min_value=1)
+
+
+class AutonomousRuntimeRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousMissionRuntimeRun
+        fields = '__all__'
+
+
+class AutonomousCyclePlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousMissionCyclePlan
+        fields = '__all__'
+
+
+class AutonomousCycleExecutionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousMissionCycleExecution
+        fields = '__all__'
+
+
+class AutonomousCycleOutcomeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousMissionCycleOutcome
+        fields = '__all__'
+
+
+class AutonomousRuntimeRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousMissionRuntimeRecommendation
+        fields = '__all__'
+
+
+class AutonomousRuntimeRunRequestSerializer(serializers.Serializer):
+    cycle_count = serializers.IntegerField(required=False, min_value=1, max_value=20, default=1)
+    profile_slug = serializers.CharField(required=False, allow_blank=True)

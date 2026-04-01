@@ -27,6 +27,51 @@ class MissionControlStepStatus(models.TextChoices):
     SKIPPED = 'SKIPPED', 'Skipped'
 
 
+class AutonomousMissionRuntimeStatus(models.TextChoices):
+    RUNNING = 'RUNNING', 'Running'
+    PAUSED = 'PAUSED', 'Paused'
+    STOPPED = 'STOPPED', 'Stopped'
+    DEGRADED = 'DEGRADED', 'Degraded'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    COMPLETED = 'COMPLETED', 'Completed'
+
+
+class AutonomousMissionCyclePlanStatus(models.TextChoices):
+    READY = 'READY', 'Ready'
+    REDUCED = 'REDUCED', 'Reduced'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    SKIPPED = 'SKIPPED', 'Skipped'
+
+
+class AutonomousMissionCycleExecutionStatus(models.TextChoices):
+    STARTED = 'STARTED', 'Started'
+    COMPLETED = 'COMPLETED', 'Completed'
+    PARTIAL = 'PARTIAL', 'Partial'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    FAILED = 'FAILED', 'Failed'
+    SKIPPED = 'SKIPPED', 'Skipped'
+
+
+class AutonomousMissionCycleOutcomeStatus(models.TextChoices):
+    NO_ACTION = 'NO_ACTION', 'No action'
+    WATCH_ONLY = 'WATCH_ONLY', 'Watch only'
+    EXECUTION_OCCURRED = 'EXECUTION_OCCURRED', 'Execution occurred'
+    EXECUTION_REDUCED = 'EXECUTION_REDUCED', 'Execution reduced'
+    POSITIONS_UPDATED = 'POSITIONS_UPDATED', 'Positions updated'
+    OUTCOMES_CLOSED = 'OUTCOMES_CLOSED', 'Outcomes closed'
+    LEARNING_UPDATED = 'LEARNING_UPDATED', 'Learning updated'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousMissionRecommendationType(models.TextChoices):
+    RUN_FULL_CYCLE = 'RUN_FULL_CYCLE', 'Run full cycle'
+    RUN_REDUCED_CYCLE = 'RUN_REDUCED_CYCLE', 'Run reduced cycle'
+    SKIP_EXECUTION_AND_MONITOR_ONLY = 'SKIP_EXECUTION_AND_MONITOR_ONLY', 'Skip execution and monitor only'
+    PAUSE_FOR_PORTFOLIO_PRESSURE = 'PAUSE_FOR_PORTFOLIO_PRESSURE', 'Pause for portfolio pressure'
+    PAUSE_FOR_SAFETY_OR_RUNTIME_BLOCK = 'PAUSE_FOR_SAFETY_OR_RUNTIME_BLOCK', 'Pause for safety or runtime block'
+    REQUIRE_MANUAL_RUNTIME_REVIEW = 'REQUIRE_MANUAL_RUNTIME_REVIEW', 'Require manual runtime review'
+
+
 class MissionControlState(TimeStampedModel):
     status = models.CharField(max_length=12, choices=MissionControlSessionStatus.choices, default=MissionControlSessionStatus.IDLE)
     active_session = models.ForeignKey('MissionControlSession', null=True, blank=True, on_delete=models.SET_NULL, related_name='state_records')
@@ -85,3 +130,89 @@ class MissionControlStep(TimeStampedModel):
 
     class Meta:
         ordering = ['started_at', 'id']
+
+
+class AutonomousMissionRuntimeRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    runtime_status = models.CharField(max_length=12, choices=AutonomousMissionRuntimeStatus.choices, default=AutonomousMissionRuntimeStatus.RUNNING)
+    cycle_count = models.PositiveIntegerField(default=0)
+    executed_cycle_count = models.PositiveIntegerField(default=0)
+    blocked_cycle_count = models.PositiveIntegerField(default=0)
+    dispatch_count = models.PositiveIntegerField(default=0)
+    closed_outcome_count = models.PositiveIntegerField(default=0)
+    postmortem_handoff_count = models.PositiveIntegerField(default=0)
+    learning_handoff_count = models.PositiveIntegerField(default=0)
+    reuse_applied_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class AutonomousMissionCyclePlan(TimeStampedModel):
+    linked_runtime_run = models.ForeignKey(AutonomousMissionRuntimeRun, on_delete=models.CASCADE, related_name='cycle_plans')
+    planned_step_flags = models.JSONField(default=dict, blank=True)
+    plan_status = models.CharField(max_length=12, choices=AutonomousMissionCyclePlanStatus.choices, default=AutonomousMissionCyclePlanStatus.READY)
+    runtime_mode = models.CharField(max_length=32, blank=True)
+    portfolio_posture = models.CharField(max_length=32, blank=True)
+    safety_posture = models.CharField(max_length=32, blank=True)
+    degraded_mode_state = models.CharField(max_length=32, blank=True)
+    plan_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousMissionCycleExecution(TimeStampedModel):
+    linked_cycle_plan = models.OneToOneField(AutonomousMissionCyclePlan, on_delete=models.CASCADE, related_name='execution')
+    execution_status = models.CharField(max_length=12, choices=AutonomousMissionCycleExecutionStatus.choices, default=AutonomousMissionCycleExecutionStatus.STARTED)
+    executed_steps = models.JSONField(default=list, blank=True)
+    skipped_steps = models.JSONField(default=list, blank=True)
+    blocked_steps = models.JSONField(default=list, blank=True)
+    linked_scan_run = models.CharField(max_length=64, blank=True)
+    linked_pursuit_run = models.CharField(max_length=64, blank=True)
+    linked_prediction_intake_run = models.CharField(max_length=64, blank=True)
+    linked_risk_intake_run = models.CharField(max_length=64, blank=True)
+    linked_execution_intake_run = models.CharField(max_length=64, blank=True)
+    linked_position_watch_run = models.CharField(max_length=64, blank=True)
+    linked_outcome_handoff_run = models.CharField(max_length=64, blank=True)
+    linked_feedback_reuse_run = models.CharField(max_length=64, blank=True)
+    execution_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousMissionCycleOutcome(TimeStampedModel):
+    linked_cycle_execution = models.OneToOneField(AutonomousMissionCycleExecution, on_delete=models.CASCADE, related_name='outcome')
+    outcome_status = models.CharField(max_length=24, choices=AutonomousMissionCycleOutcomeStatus.choices, default=AutonomousMissionCycleOutcomeStatus.NO_ACTION)
+    dispatch_count = models.PositiveIntegerField(default=0)
+    watch_update_count = models.PositiveIntegerField(default=0)
+    close_action_count = models.PositiveIntegerField(default=0)
+    postmortem_count = models.PositiveIntegerField(default=0)
+    learning_count = models.PositiveIntegerField(default=0)
+    reuse_count = models.PositiveIntegerField(default=0)
+    outcome_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousMissionRuntimeRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=48, choices=AutonomousMissionRecommendationType.choices)
+    target_runtime_run = models.ForeignKey(AutonomousMissionRuntimeRun, on_delete=models.SET_NULL, null=True, blank=True, related_name='recommendations')
+    target_cycle_plan = models.ForeignKey(AutonomousMissionCyclePlan, on_delete=models.SET_NULL, null=True, blank=True, related_name='recommendations')
+    target_cycle_execution = models.ForeignKey(AutonomousMissionCycleExecution, on_delete=models.SET_NULL, null=True, blank=True, related_name='recommendations')
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']

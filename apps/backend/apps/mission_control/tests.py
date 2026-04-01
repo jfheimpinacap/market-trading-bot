@@ -30,7 +30,7 @@ class MissionControlApiTests(TestCase):
     def test_runtime_blocking_is_respected(self, mock_caps):
         mock_caps.return_value = {
             'allow_signal_generation': False,
-'allow_proposals': False,
+            'allow_proposals': False,
             'allow_auto_execution': False,
             'allow_continuous_loop': False,
             'max_auto_trades_per_cycle': 0,
@@ -76,3 +76,44 @@ class MissionControlApiTests(TestCase):
     def test_state_record_created(self):
         self.client.get(reverse('mission_control:status'))
         self.assertEqual(MissionControlState.objects.count(), 1)
+
+
+class AutonomousRuntimeApiTests(TestCase):
+    @patch('apps.mission_control.services.cycle_runner.run_position_watch', return_value={'ok': True})
+    @patch('apps.mission_control.services.cycle_runner.run_opportunity_cycle')
+    def test_run_autonomous_runtime_full_cycle(self, mock_opp, _mock_watch):
+        class Result:
+            id = 12
+            status = 'COMPLETED'
+            summary = 'full'
+            opportunities_built = 3
+            proposals_generated = 2
+            queued_count = 0
+            auto_executed_count = 1
+            blocked_count = 0
+
+        mock_opp.return_value = Result()
+        response = self.client.post(reverse('mission_control:run-autonomous-runtime'), data=json.dumps({'cycle_count': 1}), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['cycle_count'], 1)
+        self.assertGreaterEqual(payload['executed_cycle_count'], 1)
+
+    @patch('apps.mission_control.services.autonomous_runtime.cycle_plan.get_capabilities_for_current_mode')
+    def test_runtime_block_reduces_or_blocks_cycle(self, mock_caps):
+        mock_caps.return_value = {
+            'allow_signal_generation': False,
+            'allow_proposals': False,
+            'allow_auto_execution': False,
+        }
+        response = self.client.post(reverse('mission_control:run-autonomous-runtime'), data=json.dumps({'cycle_count': 1}), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        run_id = response.json()['id']
+        plans = self.client.get(reverse('mission_control:autonomous-cycle-plans')).json()
+        self.assertTrue(any(p['linked_runtime_run'] == run_id and p['plan_status'] == 'BLOCKED' for p in plans))
+
+    def test_autonomous_runtime_summary_endpoint(self):
+        self.client.post(reverse('mission_control:run-autonomous-runtime'), data=json.dumps({'cycle_count': 1}), content_type='application/json')
+        response = self.client.get(reverse('mission_control:autonomous-runtime-summary'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('totals', response.json())
