@@ -1851,3 +1851,10 @@ Manual actions exposed in the same page:
 - Record downstream outcome
 
 The UI keeps explicit empty/loading/error states and treats `WAITING_MORE_EVIDENCE` and `NO_RESPONSE` as valid tracked outcomes.
+
+
+### Baseline response resolution (Prompt 133 revised)
+- Adds a formal manual-first layer after downstream lifecycle: resolution candidates, proposed case resolutions, downstream evidence references, and conservative closure recommendations.
+- Keeps existing routing/tracking/lifecycle intact and does not auto-close cases. Final closure remains explicit via `POST /api/certification/resolve-response-case/<case_id>/`.
+- New run/board endpoint: `POST /api/certification/run-baseline-response-resolution/` with list/summary endpoints for candidates, resolutions, references, and recommendations.
+- Scope remains paper/sandbox only (no live trading, no auto-retune/rollback/deactivate/promote).

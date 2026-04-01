@@ -47,6 +47,15 @@ import {
   updateBaselineResponseStage,
 } from '../../services/baselineResponseLifecycle';
 import {
+  getBaselineResponseCaseResolutions,
+  getBaselineResponseResolutionCandidates,
+  getBaselineResponseResolutionRecommendations,
+  getBaselineResponseResolutionSummary,
+  getDownstreamOutcomeReferences,
+  resolveBaselineResponseCase,
+  runBaselineResponseResolution,
+} from '../../services/baselineResponseResolution';
+import {
   getBaselineHealthCandidates,
   getBaselineHealthRecommendations,
   getBaselineHealthSignals,
@@ -91,6 +100,11 @@ import type {
   DownstreamLifecycleOutcome,
   ResponseLifecycleRecommendationItem,
   ResponseLifecycleSummary,
+  BaselineResponseResolutionSummary,
+  ResponseResolutionCandidate,
+  ResponseCaseResolution,
+  DownstreamOutcomeReference,
+  ResponseResolutionRecommendationItem,
   ResponseReviewStageRecord,
   ResponseActionRecommendationItem,
   BaselineResponseRecommendationItem,
@@ -160,6 +174,11 @@ export function CertificationPage() {
   const [reviewStageRecords, setReviewStageRecords] = useState<ResponseReviewStageRecord[]>([]);
   const [downstreamOutcomes, setDownstreamOutcomes] = useState<DownstreamLifecycleOutcome[]>([]);
   const [lifecycleRecommendations, setLifecycleRecommendations] = useState<ResponseLifecycleRecommendationItem[]>([]);
+  const [resolutionSummary, setResolutionSummary] = useState<BaselineResponseResolutionSummary | null>(null);
+  const [resolutionCandidates, setResolutionCandidates] = useState<ResponseResolutionCandidate[]>([]);
+  const [caseResolutions, setCaseResolutions] = useState<ResponseCaseResolution[]>([]);
+  const [downstreamReferences, setDownstreamReferences] = useState<DownstreamOutcomeReference[]>([]);
+  const [resolutionRecommendations, setResolutionRecommendations] = useState<ResponseResolutionRecommendationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runningBaseline, setRunningBaseline] = useState(false);
@@ -168,13 +187,14 @@ export function CertificationPage() {
   const [runningResponse, setRunningResponse] = useState(false);
   const [runningResponseActions, setRunningResponseActions] = useState(false);
   const [runningLifecycle, setRunningLifecycle] = useState(false);
+  const [runningResolution, setRunningResolution] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [summaryRes, candidatesRes, evidenceRes, decisionsRes, recommendationsRes, baselineSummaryRes, baselineCandidatesRes, baselineConfirmationsRes, bindingSnapshotsRes, baselineRecommendationsRes, activationSummaryRes, activationCandidatesRes, baselineActivationsRes, activeBindingsRes, activationRecommendationsRes, healthSummaryRes, healthCandidatesRes, healthStatusesRes, healthSignalsRes, healthRecommendationsRes, responseSummaryRes, responseCasesRes, responseEvidencePacksRes, responseRoutingRes, responseRecommendationsRes, responseActionSummaryRes, responseActionCandidatesRes, responseRoutingActionsRes, responseTrackingRecordsRes, responseActionRecommendationsRes, lifecycleSummaryRes, downstreamAcknowledgementsRes, reviewStageRecordsRes, downstreamOutcomesRes, lifecycleRecommendationsRes] = await Promise.all([
+      const [summaryRes, candidatesRes, evidenceRes, decisionsRes, recommendationsRes, baselineSummaryRes, baselineCandidatesRes, baselineConfirmationsRes, bindingSnapshotsRes, baselineRecommendationsRes, activationSummaryRes, activationCandidatesRes, baselineActivationsRes, activeBindingsRes, activationRecommendationsRes, healthSummaryRes, healthCandidatesRes, healthStatusesRes, healthSignalsRes, healthRecommendationsRes, responseSummaryRes, responseCasesRes, responseEvidencePacksRes, responseRoutingRes, responseRecommendationsRes, responseActionSummaryRes, responseActionCandidatesRes, responseRoutingActionsRes, responseTrackingRecordsRes, responseActionRecommendationsRes, lifecycleSummaryRes, downstreamAcknowledgementsRes, reviewStageRecordsRes, downstreamOutcomesRes, lifecycleRecommendationsRes, resolutionSummaryRes, resolutionCandidatesRes, caseResolutionsRes, downstreamReferencesRes, resolutionRecommendationsRes] = await Promise.all([
         getCertificationSummary(),
         getCertificationCandidates(),
         getCertificationEvidencePacks(),
@@ -210,6 +230,11 @@ export function CertificationPage() {
         getReviewStageRecords(),
         getDownstreamLifecycleOutcomes(),
         getResponseLifecycleRecommendations(),
+        getBaselineResponseResolutionSummary(),
+        getBaselineResponseResolutionCandidates(),
+        getBaselineResponseCaseResolutions(),
+        getDownstreamOutcomeReferences(),
+        getBaselineResponseResolutionRecommendations(),
       ]);
       setSummary(summaryRes);
       setCandidates(candidatesRes);
@@ -246,6 +271,11 @@ export function CertificationPage() {
       setReviewStageRecords(reviewStageRecordsRes);
       setDownstreamOutcomes(downstreamOutcomesRes);
       setLifecycleRecommendations(lifecycleRecommendationsRes);
+      setResolutionSummary(resolutionSummaryRes);
+      setResolutionCandidates(resolutionCandidatesRes);
+      setCaseResolutions(caseResolutionsRes);
+      setDownstreamReferences(downstreamReferencesRes);
+      setResolutionRecommendations(resolutionRecommendationsRes);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load certification stabilization state.');
     } finally {
@@ -422,6 +452,19 @@ export function CertificationPage() {
     }
   }, [load]);
 
+  const runResolutionReview = useCallback(async () => {
+    setRunningResolution(true);
+    setError(null);
+    try {
+      await runBaselineResponseResolution({ actor: 'certification_ui', metadata: { initiated_from: 'certification_ui' } });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not run baseline response resolution.');
+    } finally {
+      setRunningResolution(false);
+    }
+  }, [load]);
+
   const hasCandidates = useMemo(() => candidates.length > 0, [candidates.length]);
 
   return (
@@ -442,6 +485,7 @@ export function CertificationPage() {
           <button type="button" className="secondary-button" onClick={() => void runResponseReview()} disabled={runningResponse} style={{ marginLeft: 8 }}>{runningResponse ? 'Running…' : 'Run baseline response review'}</button>
           <button type="button" className="secondary-button" onClick={() => void runResponseActionsReview()} disabled={runningResponseActions} style={{ marginLeft: 8 }}>{runningResponseActions ? 'Running…' : 'Run baseline response actions'}</button>
           <button type="button" className="secondary-button" onClick={() => void runLifecycleReview()} disabled={runningLifecycle} style={{ marginLeft: 8 }}>{runningLifecycle ? 'Running…' : 'Run baseline response lifecycle'}</button>
+          <button type="button" className="secondary-button" onClick={() => void runResolutionReview()} disabled={runningResolution} style={{ marginLeft: 8 }}>{runningResolution ? 'Running…' : 'Run baseline response resolution'}</button>
         </SectionCard>
 
         <SectionCard eyebrow="Summary" title="Stabilization outcomes" description="Latest review counters for certification, observation, manual review, rollback recommendation, and rejection.">
@@ -928,6 +972,76 @@ export function CertificationPage() {
                     <td>{row.rationale}</td>
                     <td>{row.reason_codes.join(', ') || '—'}</td>
                     <td>{row.confidence}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Baseline response resolution" title="Formal resolution and manual close board" description="Local-first, manual-first, paper-only. This layer prepares candidates and formal resolutions, but never auto-closes response cases.">
+              <div className="cockpit-metric-grid">
+                <div className="metric-tile"><span>Tracked/open cases</span><strong>{resolutionSummary?.tracked_open_cases ?? 0}</strong></div>
+                <div className="metric-tile"><span>Ready to resolve</span><strong>{resolutionSummary?.ready_to_resolve ?? 0}</strong></div>
+                <div className="metric-tile"><span>Waiting evidence</span><strong>{resolutionSummary?.waiting_evidence ?? 0}</strong></div>
+                <div className="metric-tile"><span>Resolved</span><strong>{resolutionSummary?.resolved ?? 0}</strong></div>
+                <div className="metric-tile"><span>Escalated</span><strong>{resolutionSummary?.escalated ?? 0}</strong></div>
+                <div className="metric-tile"><span>Closed no action</span><strong>{resolutionSummary?.closed_no_action ?? 0}</strong></div>
+              </div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Resolution candidates" title="Cases eligible for formal resolution" description="No baseline response resolution candidates are available yet. Run baseline response resolution to prepare formal closure of tracked baseline response cases. WAITING_EVIDENCE is a valid state.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Component</th><th>Scope</th><th>Downstream progress</th><th>Ready</th><th>Blockers</th><th>Action</th></tr></thead><tbody>
+                {resolutionCandidates.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_response_case}</td>
+                    <td>{row.target_component}</td>
+                    <td>{row.target_scope}</td>
+                    <td><StatusBadge tone={toneFromState(row.downstream_progress_status)}>{row.downstream_progress_status}</StatusBadge></td>
+                    <td>{row.ready_for_resolution ? 'Yes' : 'No'}</td>
+                    <td>{row.blockers.join(', ') || '—'}</td>
+                    <td><button type="button" className="secondary-button" onClick={() => void resolveBaselineResponseCase(row.linked_response_case, { resolution_type: row.ready_for_resolution ? 'RESOLVED_BY_REEVALUATION' : 'DEFERRED_WAITING_EVIDENCE', rationale: 'Manual close from certification resolution board', reason_codes: ['manual_close'], resolved_by: 'certification_ui' }).then(load)}>Resolve response case</button></td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Case resolutions" title="Formal case closure registry" description="Formal outcome registry per response case: PROPOSED/READY_TO_CLOSE stay non-final until explicit manual resolve/close action.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Type</th><th>Status</th><th>Rationale</th><th>Resolved by / at</th><th>Reason codes</th></tr></thead><tbody>
+                {caseResolutions.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_response_case}</td>
+                    <td><StatusBadge tone={toneFromState(row.resolution_type)}>{row.resolution_type}</StatusBadge></td>
+                    <td><StatusBadge tone={toneFromState(row.resolution_status)}>{row.resolution_status}</StatusBadge></td>
+                    <td>{row.rationale || '—'}</td>
+                    <td>{row.resolved_by || '—'} · {formatDate(row.resolved_at)}</td>
+                    <td>{row.reason_codes.join(', ') || '—'}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Downstream references" title="Evidence links behind formal closure" description="References can be LINKED/PARTIAL/MISSING and can use manual_note while formal downstream artifacts are still pending.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Resolution</th><th>Type</th><th>Status</th><th>Label / id</th><th>Summary</th></tr></thead><tbody>
+                {downstreamReferences.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>#{row.linked_resolution}</td>
+                    <td>{row.reference_type}</td>
+                    <td><StatusBadge tone={toneFromState(row.reference_status)}>{row.reference_status}</StatusBadge></td>
+                    <td>{row.downstream_reference_label || row.downstream_reference_id || '—'}</td>
+                    <td>{row.summary || '—'}</td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            </SectionCard>
+
+            <SectionCard eyebrow="Resolution recommendations" title="Conservative closure guidance" description="CLOSE_CASE_AS_RESOLVED / KEEP_WAITING_FOR_EVIDENCE / ESCALATE_FOR_MANUAL_REVIEW / CLOSE_CASE_NO_ACTION / REQUIRE_DOWNSTREAM_REFERENCE.">
+              <div className="table-wrapper"><table className="data-table"><thead><tr><th>Case</th><th>Recommendation</th><th>Rationale</th><th>Confidence</th><th>Blockers</th></tr></thead><tbody>
+                {resolutionRecommendations.slice(0, 100).map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.target_case ? `#${row.target_case}` : '—'}</td>
+                    <td><StatusBadge tone={toneFromState(row.recommendation_type)}>{row.recommendation_type}</StatusBadge></td>
+                    <td>{row.rationale}</td>
+                    <td>{row.confidence}</td>
+                    <td>{row.blockers.join(', ') || '—'}</td>
                   </tr>
                 ))}
               </tbody></table></div>

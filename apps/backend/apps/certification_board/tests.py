@@ -703,3 +703,82 @@ class CertificationBoardTests(TestCase):
         summary_res = self.client.get(reverse('certification_board:response-lifecycle-summary'))
         self.assertEqual(summary_res.status_code, 200)
         self.assertIn('routed_cases', summary_res.json())
+
+    def test_response_resolution_run_builds_candidates_and_summary(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-response-actions'), {'actor': 'test'}, format='json')
+        case_id = self.client.get(reverse('certification_board:response-cases')).json()[0]['id']
+        self.client.post(reverse('certification_board:route-response-case', kwargs={'case_id': case_id}), {'routed_by': 'test'}, format='json')
+        self.client.post(
+            reverse('certification_board:record-downstream-outcome', kwargs={'case_id': case_id}),
+            {'outcome_type': 'WAITING_EVIDENCE', 'outcome_status': 'DEFERRED', 'outcome_rationale': 'Need more evidence'},
+            format='json',
+        )
+
+        run_res = self.client.post(reverse('certification_board:run-baseline-response-resolution'), {'actor': 'test'}, format='json')
+        self.assertEqual(run_res.status_code, 201)
+        candidates = self.client.get(reverse('certification_board:response-resolution-candidates')).json()
+        self.assertGreaterEqual(len(candidates), 1)
+        self.assertIn(candidates[0]['downstream_progress_status'], {'WAITING_EVIDENCE', 'IN_PROGRESS', 'UNKNOWN'})
+
+        summary_res = self.client.get(reverse('certification_board:response-resolution-summary'))
+        self.assertEqual(summary_res.status_code, 200)
+        self.assertIn('waiting_evidence', summary_res.json())
+
+    def test_response_resolution_recommendations_include_require_reference_and_waiting(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-response-actions'), {'actor': 'test'}, format='json')
+        case_id = self.client.get(reverse('certification_board:response-cases')).json()[0]['id']
+        self.client.post(reverse('certification_board:route-response-case', kwargs={'case_id': case_id}), {'routed_by': 'test'}, format='json')
+        self.client.post(
+            reverse('certification_board:record-downstream-outcome', kwargs={'case_id': case_id}),
+            {'outcome_type': 'WAITING_EVIDENCE', 'outcome_status': 'DEFERRED', 'outcome_rationale': 'Need more evidence'},
+            format='json',
+        )
+        self.client.post(reverse('certification_board:run-baseline-response-resolution'), {'actor': 'test'}, format='json')
+        recommendation_types = {
+            item['recommendation_type']
+            for item in self.client.get(reverse('certification_board:response-resolution-recommendations')).json()
+        }
+        self.assertIn('KEEP_WAITING_FOR_EVIDENCE', recommendation_types)
+
+    def test_response_resolution_derivation_and_manual_resolve_endpoint(self):
+        self._seed_baseline()
+        self._activate_one_baseline()
+        self.client.post(reverse('certification_board:run-baseline-response-review'), {'actor': 'test'}, format='json')
+        self.client.post(reverse('certification_board:run-baseline-response-actions'), {'actor': 'test'}, format='json')
+        case_id = self.client.get(reverse('certification_board:response-cases')).json()[0]['id']
+        self.client.post(reverse('certification_board:route-response-case', kwargs={'case_id': case_id}), {'routed_by': 'test'}, format='json')
+        self.client.post(
+            reverse('certification_board:record-downstream-outcome', kwargs={'case_id': case_id}),
+            {'outcome_type': 'RESOLVED_BY_TARGET', 'outcome_status': 'CONFIRMED', 'outcome_rationale': 'Resolved', 'linked_target_reference': 'evaluation:123'},
+            format='json',
+        )
+
+        self.client.post(reverse('certification_board:run-baseline-response-resolution'), {'actor': 'test'}, format='json')
+        resolutions = self.client.get(reverse('certification_board:response-case-resolutions')).json()
+        self.assertGreaterEqual(len(resolutions), 1)
+
+        resolve_res = self.client.post(
+            reverse('certification_board:resolve-response-case', kwargs={'case_id': case_id}),
+            {
+                'resolution_type': 'RESOLVED_BY_REEVALUATION',
+                'resolution_status': 'RESOLVED',
+                'rationale': 'Ready for manual closure',
+                'reason_codes': ['reevaluation_reference'],
+                'resolved_by': 'test',
+                'downstream_reference': {
+                    'reference_type': 'evaluation_review',
+                    'reference_status': 'LINKED',
+                    'downstream_reference_id': 'evaluation:123',
+                    'summary': 'Evaluation review confirms closure.',
+                },
+            },
+            format='json',
+        )
+        self.assertEqual(resolve_res.status_code, 200)
+        self.assertEqual(resolve_res.json()['resolution_status'], 'RESOLVED')

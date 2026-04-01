@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.certification_board.models import (
+    BaselineResponseResolutionRun,
     BaselineResponseLifecycleRun,
     BaselineResponseActionRun,
     DownstreamAcknowledgement,
@@ -10,6 +11,15 @@ from apps.certification_board.models import (
     DownstreamLifecycleOutcomeType,
     ResponseLifecycleRecommendation,
     ResponseLifecycleRecommendationType,
+    ResponseCaseResolution,
+    ResponseCaseResolutionStatus,
+    ResponseCaseResolutionType,
+    ResponseResolutionCandidate,
+    ResponseResolutionRecommendation,
+    ResponseResolutionRecommendationType,
+    DownstreamOutcomeReference,
+    DownstreamOutcomeReferenceStatus,
+    DownstreamOutcomeReferenceType,
     ResponseReviewStageRecord,
     ResponseReviewStageStatus,
     ResponseReviewStageType,
@@ -403,4 +413,63 @@ class CloseResponseCaseRequestSerializer(serializers.Serializer):
     tracked_by = serializers.CharField(required=False, default='operator-ui')
     tracking_notes = serializers.CharField(required=False, allow_blank=True, default='')
     linked_downstream_reference = serializers.CharField(required=False, allow_blank=True, default='')
+    metadata = serializers.DictField(required=False)
+
+
+class RunBaselineResponseResolutionRequestSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui')
+    metadata = serializers.DictField(required=False)
+
+
+class BaselineResponseResolutionRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BaselineResponseResolutionRun
+        fields = '__all__'
+
+
+class ResponseResolutionCandidateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResponseResolutionCandidate
+        fields = '__all__'
+
+
+class ResponseCaseResolutionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResponseCaseResolution
+        fields = '__all__'
+
+
+class DownstreamOutcomeReferenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DownstreamOutcomeReference
+        fields = '__all__'
+
+
+class ResponseResolutionRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResponseResolutionRecommendation
+        fields = '__all__'
+
+
+class ResolveResponseCaseRequestSerializer(serializers.Serializer):
+    resolution_type = serializers.ChoiceField(choices=ResponseCaseResolutionType.choices)
+    resolution_status = serializers.ChoiceField(
+        choices=ResponseCaseResolutionStatus.choices, required=False, default=ResponseCaseResolutionStatus.RESOLVED
+    )
+    rationale = serializers.CharField(required=False, allow_blank=True, default='')
+    reason_codes = serializers.ListField(child=serializers.CharField(), required=False)
+    blockers = serializers.ListField(child=serializers.CharField(), required=False)
+    resolved_by = serializers.CharField(required=False, default='operator-ui')
+    tracking_notes = serializers.CharField(required=False, allow_blank=True, default='')
+    linked_downstream_reference = serializers.CharField(required=False, allow_blank=True, default='')
+    downstream_reference = serializers.DictField(required=False)
+    metadata = serializers.DictField(required=False)
+
+
+class DownstreamReferencePayloadSerializer(serializers.Serializer):
+    reference_type = serializers.ChoiceField(choices=DownstreamOutcomeReferenceType.choices, required=False)
+    reference_status = serializers.ChoiceField(choices=DownstreamOutcomeReferenceStatus.choices, required=False)
+    downstream_reference_id = serializers.CharField(required=False, allow_blank=True, default='')
+    downstream_reference_label = serializers.CharField(required=False, allow_blank=True, default='')
+    summary = serializers.CharField(required=False, allow_blank=True, default='')
     metadata = serializers.DictField(required=False)

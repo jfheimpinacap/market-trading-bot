@@ -20,6 +20,7 @@ from apps.certification_board.models import (
     BaselineResponseActionRun,
     BaselineResponseCase,
     BaselineResponseLifecycleRun,
+    BaselineResponseResolutionRun,
     BaselineResponseRecommendation,
     BaselineResponseRun,
     CertificationCandidate,
@@ -29,6 +30,7 @@ from apps.certification_board.models import (
     CertificationRecommendation,
     CertificationRun,
     DownstreamAcknowledgement,
+    DownstreamOutcomeReference,
     DownstreamLifecycleOutcome,
     PaperBaselineActivation,
     PaperBaselineConfirmation,
@@ -39,6 +41,9 @@ from apps.certification_board.models import (
     ResponseCaseTrackingRecord,
     ResponseEvidencePack,
     ResponseLifecycleRecommendation,
+    ResponseCaseResolution,
+    ResponseResolutionCandidate,
+    ResponseResolutionRecommendation,
     ResponseReviewStageRecord,
     ResponseRoutingAction,
     ResponseRoutingActionStatus,
@@ -65,6 +70,7 @@ from apps.certification_board.serializers import (
     BaselineResponseActionRunSerializer,
     BaselineResponseCaseSerializer,
     BaselineResponseLifecycleRunSerializer,
+    BaselineResponseResolutionRunSerializer,
     BaselineResponseRecommendationSerializer,
     BaselineResponseRunSerializer,
     CertificationCandidateSerializer,
@@ -76,14 +82,19 @@ from apps.certification_board.serializers import (
     ConfirmPaperBaselineRequestSerializer,
     DownstreamAcknowledgementSerializer,
     DownstreamLifecycleOutcomeSerializer,
+    DownstreamOutcomeReferenceSerializer,
     PaperBaselineActivationSerializer,
     PaperBaselineConfirmationSerializer,
     RecordDownstreamOutcomeRequestSerializer,
+    ResolveResponseCaseRequestSerializer,
     ResponseActionCandidateSerializer,
     ResponseActionRecommendationSerializer,
     ResponseCaseTrackingRecordSerializer,
     ResponseEvidencePackSerializer,
     ResponseLifecycleRecommendationSerializer,
+    ResponseCaseResolutionSerializer,
+    ResponseResolutionCandidateSerializer,
+    ResponseResolutionRecommendationSerializer,
     ResponseReviewStageRecordSerializer,
     ResponseRoutingActionSerializer,
     ResponseRoutingDecisionSerializer,
@@ -95,6 +106,7 @@ from apps.certification_board.serializers import (
     RunBaselineHealthReviewRequestSerializer,
     RunBaselineResponseActionsRequestSerializer,
     RunBaselineResponseLifecycleRequestSerializer,
+    RunBaselineResponseResolutionRequestSerializer,
     RunBaselineResponseReviewRequestSerializer,
     RunCertificationReviewRequestSerializer,
     RunPostRolloutReviewRequestSerializer,
@@ -108,7 +120,6 @@ from apps.certification_board.services import (
     build_baseline_response_summary,
     build_certification_summary,
     build_response_lifecycle_summary,
-    close_response_case_no_action,
     confirm_paper_baseline,
     create_or_update_acknowledgement,
     create_tracking_record,
@@ -126,6 +137,11 @@ from apps.certification_board.services import (
     run_certification_review,
     run_post_rollout_certification_review,
 )
+from apps.certification_board.services.baseline_response_resolution.run import (
+    build_response_resolution_summary,
+    run_baseline_response_resolution,
+)
+from apps.certification_board.services.baseline_response_resolution.resolution import resolve_response_case_manually
 from django.utils import timezone
 
 
@@ -881,16 +897,125 @@ class CloseResponseCaseView(APIView):
         serializer = CloseResponseCaseRequestSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
         payload = serializer.validated_data
-        action = ResponseRoutingAction.objects.filter(linked_response_case=response_case).order_by('-created_at', '-id').first()
-        tracking = close_response_case_no_action(
+        resolution = resolve_response_case_manually(
             response_case=response_case,
-            routing_action=action,
-            tracked_by=payload.get('tracked_by', 'operator-ui'),
-            tracking_notes=payload.get('tracking_notes') or 'Case closed manually with no downstream action.',
-            linked_downstream_reference=payload.get('linked_downstream_reference', ''),
-            metadata={**(payload.get('metadata') or {}), 'source': 'close-response-case'},
+            payload={
+                'resolution_type': 'CLOSED_NO_ACTION',
+                'resolution_status': 'RESOLVED',
+                'rationale': payload.get('tracking_notes') or 'Case closed manually with no downstream action.',
+                'reason_codes': ['legacy_close_endpoint'],
+                'resolved_by': payload.get('tracked_by', 'operator-ui'),
+                'linked_downstream_reference': payload.get('linked_downstream_reference', ''),
+                'tracking_notes': payload.get('tracking_notes') or 'Case closed manually with no downstream action.',
+                'metadata': {**(payload.get('metadata') or {}), 'source': 'close-response-case'},
+            },
         )
-        return Response(ResponseCaseTrackingRecordSerializer(tracking).data, status=status.HTTP_200_OK)
+        return Response(ResponseCaseResolutionSerializer(resolution).data, status=status.HTTP_200_OK)
+
+
+class RunBaselineResponseResolutionView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunBaselineResponseResolutionRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_baseline_response_resolution(
+            actor=serializer.validated_data.get('actor', 'operator-ui'),
+            metadata=serializer.validated_data.get('metadata') or {},
+        )
+        return Response(
+            {
+                'run': BaselineResponseResolutionRunSerializer(result['run']).data,
+                'candidate_count': len(result['candidates']),
+                'resolution_count': len(result['resolutions']),
+                'recommendation_count': len(result['recommendations']),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ResponseResolutionCandidateListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseResolutionCandidateSerializer
+
+    def get_queryset(self):
+        return ResponseResolutionCandidate.objects.select_related(
+            'resolution_run',
+            'linked_response_case',
+            'linked_routing_action',
+            'latest_tracking_record',
+            'latest_acknowledgement',
+            'latest_lifecycle_outcome',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class ResponseCaseResolutionListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseCaseResolutionSerializer
+
+    def get_queryset(self):
+        return ResponseCaseResolution.objects.select_related('linked_candidate', 'linked_response_case').order_by('-created_at', '-id')[:500]
+
+
+class DownstreamOutcomeReferenceListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = DownstreamOutcomeReferenceSerializer
+
+    def get_queryset(self):
+        return DownstreamOutcomeReference.objects.select_related('linked_resolution').order_by('-created_at', '-id')[:500]
+
+
+class ResponseResolutionRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = ResponseResolutionRecommendationSerializer
+
+    def get_queryset(self):
+        return ResponseResolutionRecommendation.objects.select_related(
+            'resolution_run',
+            'target_resolution',
+            'target_case',
+        ).order_by('-created_at', '-id')[:500]
+
+
+class ResponseResolutionSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        summary = build_response_resolution_summary()
+        return Response(
+            {
+                'latest_run': BaselineResponseResolutionRunSerializer(summary['latest_run']).data if summary['latest_run'] else None,
+                'tracked_open_cases': summary['tracked_open_cases'],
+                'total_candidates': summary['total_candidates'],
+                'ready_to_resolve': summary['ready_to_resolve'],
+                'waiting_evidence': summary['waiting_evidence'],
+                'resolved': summary['resolved'],
+                'escalated': summary['escalated'],
+                'closed_no_action': summary['closed_no_action'],
+                'deferred': summary['deferred'],
+                'resolution_type_summary': summary['resolution_type_summary'],
+                'recommendation_summary': summary['recommendation_summary'],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ResolveResponseCaseView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, case_id: int, *args, **kwargs):
+        response_case = BaselineResponseCase.objects.get(pk=case_id)
+        serializer = ResolveResponseCaseRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        resolution = resolve_response_case_manually(response_case=response_case, payload=serializer.validated_data)
+        return Response(ResponseCaseResolutionSerializer(resolution).data, status=status.HTTP_200_OK)
 
 
 class RunBaselineResponseLifecycleView(APIView):
