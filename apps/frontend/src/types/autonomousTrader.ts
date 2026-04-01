@@ -91,3 +91,42 @@ export type AutonomousOutcomeHandoffRecommendation = {
   blockers: string[];
   confidence: string;
 };
+
+export type AutonomousFeedbackSummary = {
+  latest_run_id: number | null;
+  considered_candidate_count: number;
+  retrieval_hit_count: number;
+  influence_applied_count: number;
+  watch_caution_count: number;
+  blocked_or_reduced_count: number;
+  no_relevant_learning_found_count: number;
+  recommendation_summary: Record<string, number>;
+};
+
+export type AutonomousFeedbackCandidateContext = {
+  id: number;
+  linked_candidate: number;
+  market_title: string;
+  retrieval_status: string;
+  top_precedent_count: number;
+  context_summary: string;
+};
+
+export type AutonomousFeedbackInfluence = {
+  id: number;
+  market_title: string;
+  influence_type: string;
+  influence_status: string;
+  influence_reason_codes: string[];
+  pre_adjust_confidence: string | null;
+  post_adjust_confidence: string | null;
+  influence_summary: string;
+};
+
+export type AutonomousFeedbackRecommendation = {
+  id: number;
+  recommendation_type: string;
+  rationale: string;
+  blockers: string[];
+  confidence: string;
+};

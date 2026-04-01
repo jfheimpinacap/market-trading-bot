@@ -1,6 +1,10 @@
 from rest_framework import serializers
 
 from apps.autonomous_trader.models import (
+    AutonomousFeedbackCandidateContext,
+    AutonomousFeedbackInfluenceRecord,
+    AutonomousFeedbackRecommendation,
+    AutonomousFeedbackReuseRun,
     AutonomousLearningHandoff,
     AutonomousOutcomeHandoffRecommendation,
     AutonomousOutcomeHandoffRun,
@@ -23,6 +27,12 @@ class RunCycleSerializer(serializers.Serializer):
 class RunOutcomeHandoffSerializer(serializers.Serializer):
     actor = serializers.CharField(required=False, default='operator-ui', allow_blank=True)
     limit = serializers.IntegerField(required=False, min_value=1, max_value=500, default=100)
+
+
+class RunFeedbackReuseSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui', allow_blank=True)
+    cycle_run_id = serializers.IntegerField(required=False, min_value=1)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=25)
 
 
 class AutonomousTradeCycleRunSerializer(serializers.ModelSerializer):
@@ -96,4 +106,32 @@ class AutonomousLearningHandoffSerializer(serializers.ModelSerializer):
 class AutonomousOutcomeHandoffRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousOutcomeHandoffRecommendation
+        fields = '__all__'
+
+
+class AutonomousFeedbackReuseRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousFeedbackReuseRun
+        fields = '__all__'
+
+
+class AutonomousFeedbackCandidateContextSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_market.title', read_only=True)
+
+    class Meta:
+        model = AutonomousFeedbackCandidateContext
+        fields = '__all__'
+
+
+class AutonomousFeedbackInfluenceRecordSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_candidate.linked_market.title', read_only=True)
+
+    class Meta:
+        model = AutonomousFeedbackInfluenceRecord
+        fields = '__all__'
+
+
+class AutonomousFeedbackRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousFeedbackRecommendation
         fields = '__all__'

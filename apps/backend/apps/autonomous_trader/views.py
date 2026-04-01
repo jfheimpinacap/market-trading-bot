@@ -4,6 +4,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.autonomous_trader.models import (
+    AutonomousFeedbackCandidateContext,
+    AutonomousFeedbackInfluenceRecord,
+    AutonomousFeedbackRecommendation,
+    AutonomousFeedbackReuseRun,
     AutonomousLearningHandoff,
     AutonomousOutcomeHandoffRecommendation,
     AutonomousOutcomeHandoffRun,
@@ -16,6 +20,10 @@ from apps.autonomous_trader.models import (
     AutonomousTradeWatchRecord,
 )
 from apps.autonomous_trader.serializers import (
+    AutonomousFeedbackCandidateContextSerializer,
+    AutonomousFeedbackInfluenceRecordSerializer,
+    AutonomousFeedbackRecommendationSerializer,
+    AutonomousFeedbackReuseRunSerializer,
     AutonomousLearningHandoffSerializer,
     AutonomousOutcomeHandoffRecommendationSerializer,
     AutonomousOutcomeHandoffRunSerializer,
@@ -27,12 +35,15 @@ from apps.autonomous_trader.serializers import (
     AutonomousTradeOutcomeSerializer,
     AutonomousTradeWatchRecordSerializer,
     RunCycleSerializer,
+    RunFeedbackReuseSerializer,
     RunOutcomeHandoffSerializer,
 )
 from apps.autonomous_trader.services import (
+    build_feedback_summary,
     build_outcome_handoff_summary,
     build_summary,
     run_autonomous_cycle,
+    run_feedback_reuse_engine,
     run_outcome_handoff_engine,
 )
 
@@ -69,6 +80,21 @@ class AutonomousTradeRunOutcomeHandoffView(APIView):
         serializer = RunOutcomeHandoffSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
         run = run_outcome_handoff_engine(**serializer.validated_data)
+        return Response({'run': run.id}, status=status.HTTP_200_OK)
+
+
+class AutonomousTradeRunFeedbackReuseView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunFeedbackReuseSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        cycle_run = None
+        if data.get('cycle_run_id'):
+            cycle_run = get_object_or_404(AutonomousTradeCycleRun, pk=data['cycle_run_id'])
+        run = run_feedback_reuse_engine(cycle_run=cycle_run, actor=data.get('actor') or 'operator-ui', limit=data.get('limit', 25))
         return Response({'run': run.id}, status=status.HTTP_200_OK)
 
 
@@ -185,3 +211,47 @@ class AutonomousOutcomeHandoffSummaryView(APIView):
 
     def get(self, request, *args, **kwargs):
         return Response(build_outcome_handoff_summary())
+
+
+class AutonomousFeedbackReuseRunsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousFeedbackReuseRun.objects.order_by('-started_at', '-id')[:100]
+        return Response(AutonomousFeedbackReuseRunSerializer(rows, many=True).data)
+
+
+class AutonomousFeedbackCandidateContextsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousFeedbackCandidateContext.objects.select_related('linked_market', 'linked_candidate').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousFeedbackCandidateContextSerializer(rows, many=True).data)
+
+
+class AutonomousFeedbackInfluencesView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousFeedbackInfluenceRecord.objects.select_related('linked_candidate__linked_market', 'linked_candidate_context').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousFeedbackInfluenceRecordSerializer(rows, many=True).data)
+
+
+class AutonomousFeedbackRecommendationsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rows = AutonomousFeedbackRecommendation.objects.select_related('target_candidate').order_by('-created_at', '-id')[:200]
+        return Response(AutonomousFeedbackRecommendationSerializer(rows, many=True).data)
+
+
+class AutonomousFeedbackSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(build_feedback_summary())

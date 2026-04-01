@@ -2,6 +2,11 @@ from django.urls import path
 
 from apps.autonomous_trader.views import (
     AutonomousLearningHandoffsView,
+    AutonomousFeedbackCandidateContextsView,
+    AutonomousFeedbackInfluencesView,
+    AutonomousFeedbackRecommendationsView,
+    AutonomousFeedbackReuseRunsView,
+    AutonomousFeedbackSummaryView,
     AutonomousOutcomeHandoffRecommendationsView,
     AutonomousOutcomeHandoffRunsView,
     AutonomousOutcomeHandoffSummaryView,
@@ -14,6 +19,7 @@ from apps.autonomous_trader.views import (
     AutonomousTradeOutcomesView,
     AutonomousTradeRunCycleView,
     AutonomousTradeRunOutcomeHandoffView,
+    AutonomousTradeRunFeedbackReuseView,
     AutonomousTradeRunWatchCycleView,
     AutonomousTradeSummaryView,
     AutonomousTradeWatchRecordsView,
@@ -25,6 +31,7 @@ urlpatterns = [
     path('run-cycle/', AutonomousTradeRunCycleView.as_view(), name='run-cycle'),
     path('run-watch-cycle/', AutonomousTradeRunWatchCycleView.as_view(), name='run-watch-cycle'),
     path('run-outcome-handoff/', AutonomousTradeRunOutcomeHandoffView.as_view(), name='run-outcome-handoff'),
+    path('run-feedback-reuse/', AutonomousTradeRunFeedbackReuseView.as_view(), name='run-feedback-reuse'),
     path('cycles/', AutonomousTradeCyclesView.as_view(), name='cycles'),
     path('cycles/<int:cycle_id>/', AutonomousTradeCycleDetailView.as_view(), name='cycle-detail'),
     path('candidates/', AutonomousTradeCandidatesView.as_view(), name='candidates'),
@@ -38,4 +45,9 @@ urlpatterns = [
     path('learning-handoffs/', AutonomousLearningHandoffsView.as_view(), name='learning-handoffs'),
     path('outcome-handoff-recommendations/', AutonomousOutcomeHandoffRecommendationsView.as_view(), name='outcome-handoff-recommendations'),
     path('outcome-handoff-summary/', AutonomousOutcomeHandoffSummaryView.as_view(), name='outcome-handoff-summary'),
+    path('feedback-reuse-runs/', AutonomousFeedbackReuseRunsView.as_view(), name='feedback-reuse-runs'),
+    path('feedback-candidate-contexts/', AutonomousFeedbackCandidateContextsView.as_view(), name='feedback-candidate-contexts'),
+    path('feedback-influences/', AutonomousFeedbackInfluencesView.as_view(), name='feedback-influences'),
+    path('feedback-recommendations/', AutonomousFeedbackRecommendationsView.as_view(), name='feedback-recommendations'),
+    path('feedback-summary/', AutonomousFeedbackSummaryView.as_view(), name='feedback-summary'),
 ]

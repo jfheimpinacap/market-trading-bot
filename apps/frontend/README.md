@@ -1882,3 +1882,19 @@ The autonomous trader page now includes an **Outcome Handoffs** section to super
 - manual action button: `Run outcome handoff`
 
 The UI is intentionally technical and governed: it shows explicit audit records and does not introduce real-money/live-routing behavior.
+
+## `/autonomous-trader` feedback reuse section (new)
+
+The `/autonomous-trader` page now includes **Learning & Feedback Reuse** to expose how prior losses/lessons/precedents influence the next paper cycle.
+
+Includes:
+- summary cards (candidates, retrieval hits, influences, caution, blocked/reduced, no-learning)
+- candidate feedback contexts panel
+- influence records panel (type/status/reason codes/confidence before→after)
+- recommendation panel
+- manual action button: `Run feedback reuse`
+
+UX boundaries stay explicit:
+- paper-only
+- bounded learning influence
+- no auto-retune, no black-box model switching, no live execution

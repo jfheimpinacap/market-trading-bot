@@ -2010,3 +2010,25 @@ New endpoints:
 - `GET /api/autonomous-trader/outcome-handoff-summary/`
 
 Boundaries remain unchanged: local-first, single-user, paper/sandbox only, no real money, no live broker/exchange routing, no auto-retune/auto-promote.
+
+### Autonomous feedback reuse bridge (new)
+
+`autonomous_trader` now includes a conservative **learning-informed next-cycle feedback reuse bridge** that connects:
+- `postmortem_board` outcomes and handoff lineage
+- `learning_memory` adjustments and lessons
+- `memory_retrieval` precedent retrieval
+
+into the next autonomous paper cycle.
+
+What it adds:
+- auditable feedback reuse run records
+- candidate-level retrieved learning contexts
+- bounded influence records (context/caution/confidence reduction/repeat-pattern block)
+- explicit recommendations and summary telemetry
+- `/autonomous-trader` UI section: **Learning & Feedback Reuse**
+
+Guardrails stay unchanged:
+- paper/sandbox only
+- no real money, no real broker routing
+- no auto-retune, no auto-promote, no opaque model switching
+- risk/policy/safety remain final authority boundaries

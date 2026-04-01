@@ -7,6 +7,10 @@ import {
   getAutonomousTraderDecisions,
   getAutonomousTraderExecutions,
   getAutonomousLearningHandoffs,
+  getAutonomousFeedbackCandidateContexts,
+  getAutonomousFeedbackInfluences,
+  getAutonomousFeedbackRecommendations,
+  getAutonomousFeedbackSummary,
   getAutonomousOutcomeHandoffRecommendations,
   getAutonomousOutcomeHandoffSummary,
   getAutonomousPostmortemHandoffs,
@@ -16,6 +20,7 @@ import {
   runAutonomousOutcomeHandoff,
   runAutonomousTraderCycle,
   runAutonomousTraderWatchCycle,
+  runAutonomousFeedbackReuse,
 } from '../services/autonomousTrader';
 import type {
   AutonomousTradeCandidate,
@@ -28,6 +33,10 @@ import type {
   AutonomousPostmortemHandoff,
   AutonomousLearningHandoff,
   AutonomousOutcomeHandoffRecommendation,
+  AutonomousFeedbackCandidateContext,
+  AutonomousFeedbackInfluence,
+  AutonomousFeedbackRecommendation,
+  AutonomousFeedbackSummary,
 } from '../types/autonomousTrader';
 
 export function AutonomousTraderPage() {
@@ -41,6 +50,10 @@ export function AutonomousTraderPage() {
   const [postmortemHandoffs, setPostmortemHandoffs] = useState<AutonomousPostmortemHandoff[]>([]);
   const [learningHandoffs, setLearningHandoffs] = useState<AutonomousLearningHandoff[]>([]);
   const [handoffRecommendations, setHandoffRecommendations] = useState<AutonomousOutcomeHandoffRecommendation[]>([]);
+  const [feedbackSummary, setFeedbackSummary] = useState<AutonomousFeedbackSummary | null>(null);
+  const [feedbackContexts, setFeedbackContexts] = useState<AutonomousFeedbackCandidateContext[]>([]);
+  const [feedbackInfluences, setFeedbackInfluences] = useState<AutonomousFeedbackInfluence[]>([]);
+  const [feedbackRecommendations, setFeedbackRecommendations] = useState<AutonomousFeedbackRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,7 +62,7 @@ export function AutonomousTraderPage() {
     setLoading(true);
     setError(null);
     try {
-      const [s, c, d, e, w, o, hs, ph, lh, recs] = await Promise.all([
+      const [s, c, d, e, w, o, hs, ph, lh, recs, fs, fc, fi, fr] = await Promise.all([
         getAutonomousTraderSummary(),
         getAutonomousTraderCandidates(),
         getAutonomousTraderDecisions(),
@@ -60,9 +73,14 @@ export function AutonomousTraderPage() {
         getAutonomousPostmortemHandoffs(),
         getAutonomousLearningHandoffs(),
         getAutonomousOutcomeHandoffRecommendations(),
+        getAutonomousFeedbackSummary(),
+        getAutonomousFeedbackCandidateContexts(),
+        getAutonomousFeedbackInfluences(),
+        getAutonomousFeedbackRecommendations(),
       ]);
       setSummary(s); setCandidates(c); setDecisions(d); setExecutions(e); setWatchRecords(w); setOutcomes(o);
       setHandoffSummary(hs); setPostmortemHandoffs(ph); setLearningHandoffs(lh); setHandoffRecommendations(recs);
+      setFeedbackSummary(fs); setFeedbackContexts(fc); setFeedbackInfluences(fi); setFeedbackRecommendations(fr);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load autonomous trader.');
     } finally {
@@ -87,6 +105,11 @@ export function AutonomousTraderPage() {
     try { await runAutonomousOutcomeHandoff(); await loadData(); } finally { setBusy(false); }
   }, [loadData]);
 
+  const runFeedbackReuse = useCallback(async () => {
+    setBusy(true);
+    try { await runAutonomousFeedbackReuse(); await loadData(); } finally { setBusy(false); }
+  }, [loadData]);
+
   const cards = useMemo(() => [
     ['Candidates considered', summary?.considered_candidate_count ?? 0],
     ['Watchlist', summary?.watchlist_count ?? 0],
@@ -99,7 +122,7 @@ export function AutonomousTraderPage() {
 
   return <div className="page-stack">
     <PageHeader eyebrow="Autonomous paper loop" title="/autonomous-trader" description="Paper-only, governed autonomy with minimal human intervention. No real money, no live broker routing, and explicit risk/policy/runtime authority boundaries."
-      actions={<div className="button-row"><button type="button" className="primary-button" disabled={busy} onClick={() => void runCycle()}>{busy ? 'Running...' : 'Run autonomous trade cycle'}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runWatchCycle()}>Run watch cycle</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runOutcomeHandoff()}>Run outcome handoff</button></div>} />
+      actions={<div className="button-row"><button type="button" className="primary-button" disabled={busy} onClick={() => void runCycle()}>{busy ? 'Running...' : 'Run autonomous trade cycle'}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runWatchCycle()}>Run watch cycle</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runOutcomeHandoff()}>Run outcome handoff</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runFeedbackReuse()}>Run feedback reuse</button></div>} />
 
     <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined} loadingTitle="Loading autonomous trader" errorTitle="Could not load autonomous trader" loadingDescription="Collecting cycle summary, candidates, decisions, executions, watch records, and outcomes.">
       <SectionCard eyebrow="Summary" title="Cycle metrics" description="Autonomous paper trade-cycle run metrics with auditable counts.">
@@ -126,6 +149,22 @@ export function AutonomousTraderPage() {
       <SectionCard eyebrow="Postmortem handoffs" title="Postmortem activation bridge" description="Explicit lineage from autonomous outcomes into postmortem board runs."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Outcome</th><th>Trigger</th><th>Status</th><th>Postmortem run</th><th>Summary</th></tr></thead><tbody>{postmortemHandoffs.map((x) => <tr key={x.id}><td>{x.linked_outcome}</td><td>{x.trigger_reason}</td><td>{x.handoff_status}</td><td>{x.linked_postmortem_run ?? '-'}</td><td>{x.handoff_summary}</td></tr>)}</tbody></table></div></SectionCard>
       <SectionCard eyebrow="Learning handoffs" title="Learning capture bridge" description="Conservative capture for later governed reuse; no auto-retune or auto-promote."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Outcome</th><th>Trigger</th><th>Status</th><th>Learning run</th><th>Summary</th></tr></thead><tbody>{learningHandoffs.map((x) => <tr key={x.id}><td>{x.linked_outcome}</td><td>{x.trigger_reason}</td><td>{x.handoff_status}</td><td>{x.linked_learning_run ?? '-'}</td><td>{x.handoff_summary}</td></tr>)}</tbody></table></div></SectionCard>
       <SectionCard eyebrow="Recommendations" title="Conservative handoff guidance" description="Transparent recommendation records for every outcome-handoff decision."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{handoffRecommendations.map((x) => <tr key={x.id}><td>{x.recommendation_type}</td><td>{x.rationale}</td><td>{x.blockers?.join(', ') || '-'}</td><td>{x.confidence}</td></tr>)}</tbody></table></div></SectionCard>
+
+      <SectionCard eyebrow="Learning & Feedback Reuse" title="Next-cycle conservative memory bridge" description="Reuses postmortem and learning precedents for the next paper cycle with bounded influence only. No auto-retune and no model switching.">
+        <div className="dashboard-stat-grid">
+          {[
+            ['Candidates considered', feedbackSummary?.considered_candidate_count ?? 0],
+            ['Retrieval hits', feedbackSummary?.retrieval_hit_count ?? 0],
+            ['Influence applied', feedbackSummary?.influence_applied_count ?? 0],
+            ['Caution boosts', feedbackSummary?.watch_caution_count ?? 0],
+            ['Blocked/reduced', feedbackSummary?.blocked_or_reduced_count ?? 0],
+            ['No relevant learning', feedbackSummary?.no_relevant_learning_found_count ?? 0],
+          ].map(([label, value]) => <article key={label} className="dashboard-stat-card"><span>{label}</span><strong>{value}</strong></article>)}
+        </div>
+      </SectionCard>
+      <SectionCard eyebrow="Feedback contexts" title="Candidate memory context" description="Retrieved precedents and lessons before autonomous decisioning."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Status</th><th>Top precedents</th><th>Summary</th></tr></thead><tbody>{feedbackContexts.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.retrieval_status}</td><td>{x.top_precedent_count}</td><td>{x.context_summary}</td></tr>)}</tbody></table></div></SectionCard>
+      <SectionCard eyebrow="Feedback influence" title="Bounded influence records" description="Auditable confidence/caution/block actions derived from memory context."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Type</th><th>Status</th><th>Reason codes</th><th>Confidence</th><th>Summary</th></tr></thead><tbody>{feedbackInfluences.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.influence_type}</td><td>{x.influence_status}</td><td>{x.influence_reason_codes?.join(', ') || '-'}</td><td>{x.pre_adjust_confidence ?? '-'} → {x.post_adjust_confidence ?? '-'}</td><td>{x.influence_summary}</td></tr>)}</tbody></table></div></SectionCard>
+      <SectionCard eyebrow="Feedback recommendations" title="Conservative reuse recommendations" description="Explicit recommendations for caution, watch handling, and repeat-pattern blocking."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{feedbackRecommendations.map((x) => <tr key={x.id}><td>{x.recommendation_type}</td><td>{x.rationale}</td><td>{x.blockers?.join(', ') || '-'}</td><td>{x.confidence}</td></tr>)}</tbody></table></div></SectionCard>
     </DataStateWrapper>
   </div>;
 }
