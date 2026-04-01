@@ -3086,3 +3086,24 @@ Boundary:
 - bounded influence only (caution/confidence/watch/block-repeat)
 - no override of risk/policy/safety authority
 - paper-only and local-first unchanged
+
+## Autonomous trader Kelly sizing bridge (new)
+
+`apps.autonomous_trader` now includes a risk-first paper sizing bridge:
+
+- `AutonomousSizingRun`, `AutonomousSizingContext`, `AutonomousSizingDecision`, `AutonomousSizingRecommendation`
+- service split under `services/kelly_sizing/`:
+  - `sizing_context.py`
+  - `kelly.py`
+  - `adjustment.py`
+  - `recommendation.py`
+  - `run.py`
+- endpoints:
+  - `POST /api/autonomous-trader/run-sizing/`
+  - `GET /api/autonomous-trader/sizing-runs/`
+  - `GET /api/autonomous-trader/sizing-contexts/`
+  - `GET /api/autonomous-trader/sizing-decisions/`
+  - `GET /api/autonomous-trader/sizing-recommendations/`
+  - `GET /api/autonomous-trader/sizing-summary/`
+
+Boundary remains unchanged: paper-only, no broker/exchange live execution, no auto-retune, no auto-promote.

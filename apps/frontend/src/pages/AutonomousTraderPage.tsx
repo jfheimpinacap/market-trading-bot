@@ -21,6 +21,11 @@ import {
   runAutonomousTraderCycle,
   runAutonomousTraderWatchCycle,
   runAutonomousFeedbackReuse,
+  runAutonomousSizing,
+  getAutonomousSizingSummary,
+  getAutonomousSizingContexts,
+  getAutonomousSizingDecisions,
+  getAutonomousSizingRecommendations,
 } from '../services/autonomousTrader';
 import type {
   AutonomousTradeCandidate,
@@ -37,6 +42,10 @@ import type {
   AutonomousFeedbackInfluence,
   AutonomousFeedbackRecommendation,
   AutonomousFeedbackSummary,
+  AutonomousSizingSummary,
+  AutonomousSizingContext,
+  AutonomousSizingDecision,
+  AutonomousSizingRecommendation,
 } from '../types/autonomousTrader';
 
 export function AutonomousTraderPage() {
@@ -54,6 +63,11 @@ export function AutonomousTraderPage() {
   const [feedbackContexts, setFeedbackContexts] = useState<AutonomousFeedbackCandidateContext[]>([]);
   const [feedbackInfluences, setFeedbackInfluences] = useState<AutonomousFeedbackInfluence[]>([]);
   const [feedbackRecommendations, setFeedbackRecommendations] = useState<AutonomousFeedbackRecommendation[]>([]);
+
+  const [sizingSummary, setSizingSummary] = useState<AutonomousSizingSummary | null>(null);
+  const [sizingContexts, setSizingContexts] = useState<AutonomousSizingContext[]>([]);
+  const [sizingDecisions, setSizingDecisions] = useState<AutonomousSizingDecision[]>([]);
+  const [sizingRecommendations, setSizingRecommendations] = useState<AutonomousSizingRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -62,7 +76,7 @@ export function AutonomousTraderPage() {
     setLoading(true);
     setError(null);
     try {
-      const [s, c, d, e, w, o, hs, ph, lh, recs, fs, fc, fi, fr] = await Promise.all([
+      const [s, c, d, e, w, o, hs, ph, lh, recs, fs, fc, fi, fr, ss, sc, sd, sr] = await Promise.all([
         getAutonomousTraderSummary(),
         getAutonomousTraderCandidates(),
         getAutonomousTraderDecisions(),
@@ -77,10 +91,15 @@ export function AutonomousTraderPage() {
         getAutonomousFeedbackCandidateContexts(),
         getAutonomousFeedbackInfluences(),
         getAutonomousFeedbackRecommendations(),
+        getAutonomousSizingSummary(),
+        getAutonomousSizingContexts(),
+        getAutonomousSizingDecisions(),
+        getAutonomousSizingRecommendations(),
       ]);
       setSummary(s); setCandidates(c); setDecisions(d); setExecutions(e); setWatchRecords(w); setOutcomes(o);
       setHandoffSummary(hs); setPostmortemHandoffs(ph); setLearningHandoffs(lh); setHandoffRecommendations(recs);
       setFeedbackSummary(fs); setFeedbackContexts(fc); setFeedbackInfluences(fi); setFeedbackRecommendations(fr);
+      setSizingSummary(ss); setSizingContexts(sc); setSizingDecisions(sd); setSizingRecommendations(sr);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load autonomous trader.');
     } finally {
@@ -110,6 +129,11 @@ export function AutonomousTraderPage() {
     try { await runAutonomousFeedbackReuse(); await loadData(); } finally { setBusy(false); }
   }, [loadData]);
 
+  const runSizing = useCallback(async () => {
+    setBusy(true);
+    try { await runAutonomousSizing(); await loadData(); } finally { setBusy(false); }
+  }, [loadData]);
+
   const cards = useMemo(() => [
     ['Candidates considered', summary?.considered_candidate_count ?? 0],
     ['Watchlist', summary?.watchlist_count ?? 0],
@@ -122,7 +146,7 @@ export function AutonomousTraderPage() {
 
   return <div className="page-stack">
     <PageHeader eyebrow="Autonomous paper loop" title="/autonomous-trader" description="Paper-only, governed autonomy with minimal human intervention. No real money, no live broker routing, and explicit risk/policy/runtime authority boundaries."
-      actions={<div className="button-row"><button type="button" className="primary-button" disabled={busy} onClick={() => void runCycle()}>{busy ? 'Running...' : 'Run autonomous trade cycle'}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runWatchCycle()}>Run watch cycle</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runOutcomeHandoff()}>Run outcome handoff</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runFeedbackReuse()}>Run feedback reuse</button></div>} />
+      actions={<div className="button-row"><button type="button" className="primary-button" disabled={busy} onClick={() => void runCycle()}>{busy ? 'Running...' : 'Run autonomous trade cycle'}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runWatchCycle()}>Run watch cycle</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runOutcomeHandoff()}>Run outcome handoff</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runFeedbackReuse()}>Run feedback reuse</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runSizing()}>Run sizing</button></div>} />
 
     <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined} loadingTitle="Loading autonomous trader" errorTitle="Could not load autonomous trader" loadingDescription="Collecting cycle summary, candidates, decisions, executions, watch records, and outcomes.">
       <SectionCard eyebrow="Summary" title="Cycle metrics" description="Autonomous paper trade-cycle run metrics with auditable counts.">
@@ -133,6 +157,21 @@ export function AutonomousTraderPage() {
       <SectionCard eyebrow="Executions" title="Paper executions" description="Paper-only execution linkage with sizing summary and linked paper trade."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Execution status</th><th>Sizing summary</th><th>Paper trade</th></tr></thead><tbody>{executions.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.execution_status}</td><td>{x.sizing_summary}</td><td>{x.linked_paper_trade ?? '-'}</td></tr>)}</tbody></table></div></SectionCard>
       <SectionCard eyebrow="Watch" title="Automated watch records" description="Post-entry watch logic for sentiment, market move, and risk change."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Watch status</th><th>Sentiment shift</th><th>Market move</th><th>Risk change</th></tr></thead><tbody>{watchRecords.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.watch_status}</td><td>{x.sentiment_shift_detected ? 'YES' : 'NO'}</td><td>{x.market_move_detected ? 'YES' : 'NO'}</td><td>{x.risk_change_detected ? 'YES' : 'NO'}</td></tr>)}</tbody></table></div></SectionCard>
       <SectionCard eyebrow="Outcomes" title="Cycle outcomes" description="Outcome tracking and conservative postmortem/learning handoffs."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Outcome type</th><th>Status</th><th>Postmortem</th><th>Learning</th></tr></thead><tbody>{outcomes.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.outcome_type}</td><td>{x.outcome_status}</td><td>{x.send_to_postmortem ? 'YES' : 'NO'}</td><td>{x.send_to_learning ? 'YES' : 'NO'}</td></tr>)}</tbody></table></div></SectionCard>
+
+
+      <SectionCard eyebrow="Risk & Kelly Sizing" title="Autonomous paper sizing bridge" description="Paper-only bounded Kelly sizing that remains risk-first and portfolio-aware. No live execution and no real money.">
+        <div className="dashboard-stat-grid">{[
+          ['Candidates considered', sizingSummary?.considered_candidate_count ?? 0],
+          ['Approved for sizing', sizingSummary?.approved_for_sizing_count ?? 0],
+          ['Reduced by risk', sizingSummary?.reduced_by_risk_count ?? 0],
+          ['Reduced by portfolio', sizingSummary?.reduced_by_portfolio_count ?? 0],
+          ['Blocked', sizingSummary?.blocked_for_sizing_count ?? 0],
+          ['Sized for execution', sizingSummary?.sized_for_execution_count ?? 0],
+        ].map(([label, value]) => <article key={label} className="dashboard-stat-card"><span>{label}</span><strong>{value}</strong></article>)}</div>
+      </SectionCard>
+      <SectionCard eyebrow="Sizing contexts" title="Context inputs" description="Traceable prediction/risk/portfolio/feedback context before sizing."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Edge</th><th>Confidence</th><th>Uncertainty</th><th>Risk posture</th><th>Portfolio posture</th><th>Status</th></tr></thead><tbody>{sizingContexts.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.adjusted_edge}</td><td>{x.confidence}</td><td>{x.uncertainty ?? '-'}</td><td>{x.risk_posture}</td><td>{x.portfolio_posture}</td><td>{x.context_status}</td></tr>)}</tbody></table></div></SectionCard>
+      <SectionCard eyebrow="Sizing decisions" title="Bounded Kelly decisions" description="Pre-adjustment to final paper quantity with conservative caps and discounts."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Method</th><th>Status</th><th>Kelly base</th><th>Applied fraction</th><th>Notional before/after</th><th>Final qty</th><th>Summary</th></tr></thead><tbody>{sizingDecisions.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.sizing_method}</td><td>{x.decision_status}</td><td>{x.base_kelly_fraction ?? '-'}</td><td>{x.applied_fraction ?? '-'}</td><td>{x.notional_before_adjustment ?? '-'} → {x.notional_after_adjustment ?? '-'}</td><td>{x.final_paper_quantity ?? '-'}</td><td>{x.decision_summary}</td></tr>)}</tbody></table></div></SectionCard>
+      <SectionCard eyebrow="Sizing recommendations" title="Conservative guidance" description="Explicit recommendation records for blocks, caps, and fallback modes."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{sizingRecommendations.map((x) => <tr key={x.id}><td>{x.recommendation_type}</td><td>{x.rationale}</td><td>{x.blockers?.join(', ') || '-'}</td><td>{x.confidence}</td></tr>)}</tbody></table></div></SectionCard>
 
       <SectionCard eyebrow="Outcome Handoffs" title="Autonomous post-trade closure" description="Governed paper-only handoff engine from outcome → postmortem → learning. No real money and no live routing.">
         <div className="dashboard-stat-grid">

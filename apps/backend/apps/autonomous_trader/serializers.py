@@ -9,6 +9,10 @@ from apps.autonomous_trader.models import (
     AutonomousOutcomeHandoffRecommendation,
     AutonomousOutcomeHandoffRun,
     AutonomousPostmortemHandoff,
+    AutonomousSizingContext,
+    AutonomousSizingDecision,
+    AutonomousSizingRecommendation,
+    AutonomousSizingRun,
     AutonomousTradeCandidate,
     AutonomousTradeCycleRun,
     AutonomousTradeDecision,
@@ -30,6 +34,12 @@ class RunOutcomeHandoffSerializer(serializers.Serializer):
 
 
 class RunFeedbackReuseSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui', allow_blank=True)
+    cycle_run_id = serializers.IntegerField(required=False, min_value=1)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=25)
+
+
+class RunSizingSerializer(serializers.Serializer):
     actor = serializers.CharField(required=False, default='operator-ui', allow_blank=True)
     cycle_run_id = serializers.IntegerField(required=False, min_value=1)
     limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=25)
@@ -134,4 +144,32 @@ class AutonomousFeedbackInfluenceRecordSerializer(serializers.ModelSerializer):
 class AutonomousFeedbackRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousFeedbackRecommendation
+        fields = '__all__'
+
+
+class AutonomousSizingRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSizingRun
+        fields = '__all__'
+
+
+class AutonomousSizingContextSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_candidate.linked_market.title', read_only=True)
+
+    class Meta:
+        model = AutonomousSizingContext
+        fields = '__all__'
+
+
+class AutonomousSizingDecisionSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_candidate.linked_market.title', read_only=True)
+
+    class Meta:
+        model = AutonomousSizingDecision
+        fields = '__all__'
+
+
+class AutonomousSizingRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSizingRecommendation
         fields = '__all__'

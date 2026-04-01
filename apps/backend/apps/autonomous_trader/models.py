@@ -135,6 +135,37 @@ class AutonomousFeedbackRecommendationType(models.TextChoices):
     NO_RELEVANT_LEARNING_FOUND = 'NO_RELEVANT_LEARNING_FOUND', 'No relevant learning found'
 
 
+class AutonomousSizingContextStatus(models.TextChoices):
+    READY = 'READY', 'Ready'
+    REDUCED = 'REDUCED', 'Reduced'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    INSUFFICIENT_CONTEXT = 'INSUFFICIENT_CONTEXT', 'Insufficient context'
+
+
+class AutonomousSizingMethod(models.TextChoices):
+    FIXED_NOTIONAL = 'FIXED_NOTIONAL', 'Fixed notional'
+    FRACTIONAL_KELLY = 'FRACTIONAL_KELLY', 'Fractional Kelly'
+    KELLY_CAPPED = 'KELLY_CAPPED', 'Kelly capped'
+    RISK_REDUCED_FRACTIONAL = 'RISK_REDUCED_FRACTIONAL', 'Risk reduced fractional'
+    PORTFOLIO_THROTTLED = 'PORTFOLIO_THROTTLED', 'Portfolio throttled'
+
+
+class AutonomousSizingDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    APPLIED = 'APPLIED', 'Applied'
+    REDUCED = 'REDUCED', 'Reduced'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousSizingRecommendationType(models.TextChoices):
+    APPLY_CAPPED_FRACTIONAL_KELLY = 'APPLY_CAPPED_FRACTIONAL_KELLY', 'Apply capped fractional Kelly'
+    REDUCE_SIZE_FOR_LOW_CONFIDENCE = 'REDUCE_SIZE_FOR_LOW_CONFIDENCE', 'Reduce size for low confidence'
+    REDUCE_SIZE_FOR_PORTFOLIO_PRESSURE = 'REDUCE_SIZE_FOR_PORTFOLIO_PRESSURE', 'Reduce size for portfolio pressure'
+    BLOCK_SIZE_FOR_RISK_POSTURE = 'BLOCK_SIZE_FOR_RISK_POSTURE', 'Block size for risk posture'
+    USE_MINIMAL_FIXED_NOTIONAL = 'USE_MINIMAL_FIXED_NOTIONAL', 'Use minimal fixed notional'
+    REQUIRE_MANUAL_REVIEW_FOR_SIZING_CONFLICT = 'REQUIRE_MANUAL_REVIEW_FOR_SIZING_CONFLICT', 'Require manual review for sizing conflict'
+
+
 class AutonomousTradeCycleRun(TimeStampedModel):
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -188,6 +219,7 @@ class AutonomousTradeDecision(TimeStampedModel):
 class AutonomousTradeExecution(TimeStampedModel):
     linked_candidate = models.ForeignKey(AutonomousTradeCandidate, on_delete=models.CASCADE, related_name='executions')
     linked_decision = models.ForeignKey(AutonomousTradeDecision, on_delete=models.CASCADE, related_name='executions')
+    linked_sizing_decision = models.ForeignKey('autonomous_trader.AutonomousSizingDecision', null=True, blank=True, on_delete=models.SET_NULL, related_name='executions')
     linked_paper_trade = models.ForeignKey('paper_trading.PaperTrade', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_trade_executions')
     execution_status = models.CharField(max_length=16, choices=AutonomousExecutionStatus.choices, default=AutonomousExecutionStatus.QUEUED)
     sizing_summary = models.CharField(max_length=255, blank=True)
@@ -344,6 +376,79 @@ class AutonomousFeedbackRecommendation(TimeStampedModel):
     target_candidate = models.ForeignKey(AutonomousTradeCandidate, null=True, blank=True, on_delete=models.SET_NULL, related_name='feedback_recommendations')
     target_context = models.ForeignKey(AutonomousFeedbackCandidateContext, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
     target_influence_record = models.ForeignKey(AutonomousFeedbackInfluenceRecord, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    rationale = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=5, decimal_places=4, default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousSizingRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_candidate_count = models.PositiveIntegerField(default=0)
+    approved_for_sizing_count = models.PositiveIntegerField(default=0)
+    reduced_by_portfolio_count = models.PositiveIntegerField(default=0)
+    reduced_by_risk_count = models.PositiveIntegerField(default=0)
+    blocked_for_sizing_count = models.PositiveIntegerField(default=0)
+    sized_for_execution_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class AutonomousSizingContext(TimeStampedModel):
+    linked_run = models.ForeignKey(AutonomousSizingRun, on_delete=models.CASCADE, related_name='contexts')
+    linked_cycle_run = models.ForeignKey(AutonomousTradeCycleRun, on_delete=models.CASCADE, related_name='sizing_contexts')
+    linked_candidate = models.ForeignKey(AutonomousTradeCandidate, on_delete=models.CASCADE, related_name='sizing_contexts')
+    linked_prediction_recommendation = models.ForeignKey('prediction_agent.PredictionRuntimeRecommendation', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_sizing_contexts')
+    linked_risk_recommendation = models.ForeignKey('risk_agent.RiskRuntimeRecommendation', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_sizing_contexts')
+    linked_portfolio_snapshot = models.ForeignKey('portfolio_governor.PortfolioExposureSnapshot', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_sizing_contexts')
+    linked_feedback_influence = models.ForeignKey('autonomous_trader.AutonomousFeedbackInfluenceRecord', null=True, blank=True, on_delete=models.SET_NULL, related_name='sizing_contexts')
+    linked_allocation_context = models.ForeignKey('allocation_engine.AllocationDecision', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_sizing_contexts')
+    system_probability = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    market_probability = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    adjusted_edge = models.DecimalField(max_digits=8, decimal_places=4, default=0)
+    confidence = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    uncertainty = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    risk_posture = models.CharField(max_length=32, blank=True)
+    portfolio_posture = models.CharField(max_length=32, blank=True)
+    context_status = models.CharField(max_length=32, choices=AutonomousSizingContextStatus.choices, default=AutonomousSizingContextStatus.INSUFFICIENT_CONTEXT)
+    context_summary = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousSizingDecision(TimeStampedModel):
+    linked_context = models.ForeignKey(AutonomousSizingContext, on_delete=models.CASCADE, related_name='sizing_decisions')
+    linked_candidate = models.ForeignKey(AutonomousTradeCandidate, on_delete=models.CASCADE, related_name='sizing_decisions')
+    sizing_method = models.CharField(max_length=40, choices=AutonomousSizingMethod.choices, default=AutonomousSizingMethod.FIXED_NOTIONAL)
+    decision_status = models.CharField(max_length=16, choices=AutonomousSizingDecisionStatus.choices, default=AutonomousSizingDecisionStatus.PROPOSED)
+    base_kelly_fraction = models.DecimalField(max_digits=8, decimal_places=6, null=True, blank=True)
+    applied_fraction = models.DecimalField(max_digits=8, decimal_places=6, null=True, blank=True)
+    notional_before_adjustment = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    notional_after_adjustment = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    final_paper_quantity = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    adjustment_reason_codes = models.JSONField(default=list, blank=True)
+    decision_summary = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousSizingRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=64, choices=AutonomousSizingRecommendationType.choices)
+    target_candidate = models.ForeignKey(AutonomousTradeCandidate, null=True, blank=True, on_delete=models.SET_NULL, related_name='sizing_recommendations')
+    target_context = models.ForeignKey(AutonomousSizingContext, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    target_sizing_decision = models.ForeignKey(AutonomousSizingDecision, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
     rationale = models.TextField(blank=True)
     reason_codes = models.JSONField(default=list, blank=True)
     confidence = models.DecimalField(max_digits=5, decimal_places=4, default=0.5)

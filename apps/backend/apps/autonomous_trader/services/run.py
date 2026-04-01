@@ -10,6 +10,7 @@ from apps.autonomous_trader.services.candidate_intake import consolidate_candida
 from apps.autonomous_trader.services.decisioning import decide_candidate
 from apps.autonomous_trader.services.execution import execute_candidate
 from apps.autonomous_trader.services.feedback_reuse import run_feedback_reuse_engine
+from apps.autonomous_trader.services.kelly_sizing import run_sizing_bridge
 from apps.autonomous_trader.services.outcomes import create_outcome
 from apps.autonomous_trader.services.watch import create_watch_record
 
@@ -21,6 +22,7 @@ def run_autonomous_cycle(*, actor: str = 'operator-ui', cycle_mode: str = 'FULL_
     feedback_reuse_run = run_feedback_reuse_engine(cycle_run=run, actor=actor, limit=limit)
 
     decisions = [decide_candidate(candidate=candidate) for candidate in intake.candidates]
+    sizing_result = run_sizing_bridge(actor=actor, cycle_run_id=run.id, limit=limit)
     executions = [execute_candidate(decision=decision) for decision in decisions]
     watch_records = [create_watch_record(execution=execution) for execution in executions]
     outcomes = [create_outcome(execution=execution, watch_record=watch) for execution, watch in zip(executions, watch_records, strict=False)]
@@ -34,7 +36,11 @@ def run_autonomous_cycle(*, actor: str = 'operator-ui', cycle_mode: str = 'FULL_
     run.closed_position_count = sum(1 for o in outcomes if o.outcome_status == 'CLOSED')
     run.postmortem_handoff_count = sum(1 for o in outcomes if o.send_to_postmortem)
     run.recommendation_summary = dict(decision_counter)
-    run.metadata = {**(run.metadata or {}), 'feedback_reuse_run_id': feedback_reuse_run.id}
+    run.metadata = {
+        **(run.metadata or {}),
+        'feedback_reuse_run_id': feedback_reuse_run.id,
+        'sizing_run_id': sizing_result['run'].id,
+    }
     run.completed_at = timezone.now()
     run.save(
         update_fields=[

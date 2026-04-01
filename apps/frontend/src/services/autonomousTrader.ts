@@ -5,6 +5,10 @@ import type {
   AutonomousFeedbackInfluence,
   AutonomousFeedbackRecommendation,
   AutonomousFeedbackSummary,
+  AutonomousSizingContext,
+  AutonomousSizingDecision,
+  AutonomousSizingRecommendation,
+  AutonomousSizingSummary,
   AutonomousOutcomeHandoffRecommendation,
   AutonomousOutcomeHandoffSummary,
   AutonomousPostmortemHandoff,
@@ -44,6 +48,13 @@ export function runAutonomousFeedbackReuse() {
   });
 }
 
+export function runAutonomousSizing() {
+  return requestJson<{ run: number; decision_count: number }>('/api/autonomous-trader/run-sizing/', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
 export const getAutonomousTraderSummary = () => requestJson<AutonomousTraderSummary>('/api/autonomous-trader/summary/');
 export const getAutonomousTraderCandidates = () => requestJson<AutonomousTradeCandidate[]>('/api/autonomous-trader/candidates/');
 export const getAutonomousTraderDecisions = () => requestJson<AutonomousTradeDecision[]>('/api/autonomous-trader/decisions/');
@@ -58,3 +69,7 @@ export const getAutonomousFeedbackSummary = () => requestJson<AutonomousFeedback
 export const getAutonomousFeedbackCandidateContexts = () => requestJson<AutonomousFeedbackCandidateContext[]>('/api/autonomous-trader/feedback-candidate-contexts/');
 export const getAutonomousFeedbackInfluences = () => requestJson<AutonomousFeedbackInfluence[]>('/api/autonomous-trader/feedback-influences/');
 export const getAutonomousFeedbackRecommendations = () => requestJson<AutonomousFeedbackRecommendation[]>('/api/autonomous-trader/feedback-recommendations/');
+export const getAutonomousSizingSummary = () => requestJson<AutonomousSizingSummary>('/api/autonomous-trader/sizing-summary/');
+export const getAutonomousSizingContexts = () => requestJson<AutonomousSizingContext[]>('/api/autonomous-trader/sizing-contexts/');
+export const getAutonomousSizingDecisions = () => requestJson<AutonomousSizingDecision[]>('/api/autonomous-trader/sizing-decisions/');
+export const getAutonomousSizingRecommendations = () => requestJson<AutonomousSizingRecommendation[]>('/api/autonomous-trader/sizing-recommendations/');

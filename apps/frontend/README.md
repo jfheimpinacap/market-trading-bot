@@ -1898,3 +1898,15 @@ UX boundaries stay explicit:
 - paper-only
 - bounded learning influence
 - no auto-retune, no black-box model switching, no live execution
+
+## Autonomous Trader: Risk & Kelly Sizing (new)
+
+`/autonomous-trader` now includes a dedicated **Risk & Kelly Sizing** section:
+
+- manual action: `Run sizing`
+- summary cards for sizing run counts
+- sizing contexts table (edge/confidence/uncertainty/risk posture/portfolio posture/status)
+- sizing decisions table (method/status/kelly fractions/notional before-after/final quantity)
+- sizing recommendations table (type/rationale/blockers/confidence)
+
+UI stays paper-only and local-first; no live trading controls were added.
