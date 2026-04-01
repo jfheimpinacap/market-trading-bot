@@ -1932,3 +1932,16 @@ The UI remains technical, conservative, and explicit about boundaries: paper-onl
 - Includes summary cards, watch candidates, action decisions, action executions, recommendations, and a manual "Run position watch" action.
 - Keeps explicit guardrails: paper-only, sentiment-aware, risk-first, no live execution.
 >>>>>>> origin/main
+
+## Research pursuit & prediction handoff board (new)
+
+`/research-agent` now includes an explicit section for hardening the research→prediction bridge:
+
+- summary cards for considered/prediction-ready/watch/deferred/blocked/high-divergence
+- structural assessment table (liquidity, volume, time window, activity, status)
+- pursuit score table with component visibility
+- prediction handoff candidate table with confidence/reason codes
+- pursuit recommendation table with rationale/blockers
+- manual action button: `Run pursuit review`
+
+Scope remains paper-only and local-first; the board improves candidate quality before prediction and does not execute live trading.

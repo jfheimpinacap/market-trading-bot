@@ -10,13 +10,17 @@ from apps.markets.demo_data import seed_demo_markets
 from apps.markets.models import Market, MarketStatus
 from apps.memory_retrieval.models import MemoryDocument
 from apps.research_agent.models import (
+    MarketResearchCandidate,
+    MarketUniverseRun,
     NarrativeAnalysis,
     NarrativeConsensusState,
     NarrativeItem,
     NarrativeSource,
+    ResearchPursuitScoreStatus,
     ResearchCandidate,
     ResearchHandoffStatus,
 )
+from apps.research_agent.services.pursuit_scoring.run import run_pursuit_review
 from apps.research_agent.services.clustering import cluster_narratives
 from apps.research_agent.services.dedup import deduplicate_narratives
 from apps.research_agent.services.filtering import evaluate_structural_filters
@@ -357,6 +361,88 @@ class ResearchUniverseHardeningTests(TestCase):
         self.assertTrue(len(candidate_payload) > 0)
         decision_payload = decisions.json()[0]
         self.assertIn(decision_payload['decision_type'], {'send_to_prediction', 'keep_on_watchlist', 'ignore_market', 'require_manual_review', 'research_followup'})
+
+
+class ResearchPursuitHardeningTests(TestCase):
+    def setUp(self):
+        seed_demo_markets()
+        self.client = APIClient()
+        run_scan_agent()
+        run_consensus_review(triggered_by='test')
+        self.universe_run = MarketUniverseRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+
+    def _seed_candidate(self, market):
+        MarketResearchCandidate.objects.update_or_create(
+            universe_run=self.universe_run,
+            linked_market=market,
+            defaults={
+                'market_title': market.title,
+                'market_provider': market.provider.slug,
+                'category': market.category,
+                'time_to_resolution_hours': 24,
+                'liquidity_score': '0.7000',
+                'volume_score': '0.7000',
+                'freshness_score': '0.7000',
+                'market_quality_score': '0.7000',
+                'narrative_support_score': '0.7000',
+                'divergence_score': '0.6000',
+                'pursue_worthiness_score': '0.7000',
+                'status': 'shortlist',
+                'rationale': 'test candidate',
+            },
+        )
+
+    def test_structurally_strong_market_is_prediction_ready(self):
+        market = Market.objects.filter(status=MarketStatus.OPEN).first()
+        market.liquidity = 50000
+        market.volume_24h = 25000
+        market.updated_at = timezone.now()
+        market.resolution_time = timezone.now() + timedelta(days=10)
+        market.save(update_fields=['liquidity', 'volume_24h', 'updated_at', 'resolution_time'])
+        self._seed_candidate(market)
+
+        run = run_pursuit_review(market_limit=50, triggered_by='test')
+        score = run.scores.filter(linked_market=market).order_by('-id').first()
+        self.assertIsNotNone(score)
+        self.assertEqual(score.score_status, ResearchPursuitScoreStatus.READY_FOR_PREDICTION)
+
+    def test_low_liquidity_or_stale_market_gets_deferred_or_blocked(self):
+        market = Market.objects.filter(status=MarketStatus.OPEN).first()
+        market.liquidity = 50
+        market.volume_24h = 80
+        market.updated_at = timezone.now() - timedelta(days=9)
+        market.resolution_time = timezone.now() + timedelta(days=7)
+        market.save(update_fields=['liquidity', 'volume_24h', 'updated_at', 'resolution_time'])
+        self._seed_candidate(market)
+
+        run = run_pursuit_review(market_limit=50, triggered_by='test')
+        score = run.scores.filter(linked_market=market).order_by('-id').first()
+        self.assertIn(score.score_status, {ResearchPursuitScoreStatus.DEFER, ResearchPursuitScoreStatus.BLOCK})
+
+    def test_high_divergence_increases_priority_bucket(self):
+        run = run_pursuit_review(market_limit=50, triggered_by='test')
+        high_divergence_score = run.scores.filter(linked_assessment__linked_divergence_record__divergence_state='high_divergence').first()
+        if high_divergence_score:
+            self.assertIn(high_divergence_score.priority_bucket, {'critical', 'high', 'medium'})
+
+    def test_poor_time_window_defers_handoff(self):
+        market = Market.objects.filter(status=MarketStatus.OPEN).first()
+        market.liquidity = 40000
+        market.volume_24h = 15000
+        market.resolution_time = timezone.now() + timedelta(hours=3)
+        market.updated_at = timezone.now()
+        market.save(update_fields=['liquidity', 'volume_24h', 'resolution_time', 'updated_at'])
+        self._seed_candidate(market)
+
+        run = run_pursuit_review(market_limit=50, triggered_by='test')
+        handoff = run.prediction_handoffs.filter(linked_market=market).order_by('-id').first()
+        self.assertIn(handoff.handoff_status, {'deferred', 'blocked'})
+
+    def test_pursuit_summary_endpoint(self):
+        self.client.post('/api/research-agent/run-pursuit-review/', {}, format='json')
+        response = self.client.get('/api/research-agent/pursuit-summary/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('totals', response.json())
 
         # recommendation helper maps status cleanly
         class _Candidate:

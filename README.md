@@ -2071,3 +2071,15 @@ This remains local-first, single-user, paper/sandbox only, and does **not** repl
 - Uses sentiment/narrative drift, risk posture, and portfolio pressure as inputs while keeping risk/policy/runtime/safety as authorities.
 - Executes only paper reduce/close actions with auditable lineage records; no real broker routing and no real money.
 >>>>>>> origin/main
+
+### Research pursuit scoring hardening (new)
+
+`research_agent` now includes an explicit structural triage + pursuit scoring + prediction-handoff bridge:
+
+- consumes `ResearchHandoffPriority` from scan→research consensus/divergence output
+- performs structural assessment (liquidity, volume, time window, activity)
+- computes transparent pursuit-worthiness components (no opaque black-box ranking)
+- emits prediction-handoff candidates (`READY`/`WATCH`/`DEFERRED`/`BLOCKED`) with reason codes
+- stores auditable recommendations and run summaries for `/research-agent`
+
+Boundaries remain unchanged: local-first, single-user, paper/sandbox only, no live execution, and `prediction_agent` remains probability/edge authority.
