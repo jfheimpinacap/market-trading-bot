@@ -1,6 +1,14 @@
 from django.urls import path
 
 from apps.autonomous_trader.views import (
+    AutonomousDispatchRecordsView,
+    AutonomousExecutionDecisionDetailView,
+    AutonomousExecutionDecisionsView,
+    AutonomousExecutionIntakeCandidateDetailView,
+    AutonomousExecutionIntakeCandidatesView,
+    AutonomousExecutionIntakeRunsView,
+    AutonomousExecutionIntakeSummaryView,
+    AutonomousExecutionRecommendationsView,
     AutonomousLearningHandoffsView,
     AutonomousFeedbackCandidateContextsView,
     AutonomousFeedbackInfluencesView,
@@ -25,6 +33,7 @@ from apps.autonomous_trader.views import (
     AutonomousTradeExecutionsView,
     AutonomousTradeOutcomesView,
     AutonomousTradeRunCycleView,
+    AutonomousTradeRunExecutionIntakeView,
     AutonomousTradeRunOutcomeHandoffView,
     AutonomousTradeRunFeedbackReuseView,
     AutonomousTradeRunSizingView,
@@ -41,6 +50,7 @@ from apps.autonomous_trader.views import (
 app_name = 'autonomous_trader'
 
 urlpatterns = [
+    path('run-execution-intake/', AutonomousTradeRunExecutionIntakeView.as_view(), name='run-execution-intake'),
     path('run-cycle/', AutonomousTradeRunCycleView.as_view(), name='run-cycle'),
     path('run-watch-cycle/', AutonomousTradeRunWatchCycleView.as_view(), name='run-watch-cycle'),
     path('run-outcome-handoff/', AutonomousTradeRunOutcomeHandoffView.as_view(), name='run-outcome-handoff'),
@@ -61,6 +71,14 @@ urlpatterns = [
     path('watch-records/', AutonomousTradeWatchRecordsView.as_view(), name='watch-records'),
     path('outcomes/', AutonomousTradeOutcomesView.as_view(), name='outcomes'),
     path('summary/', AutonomousTradeSummaryView.as_view(), name='summary'),
+    path('execution-intake-runs/', AutonomousExecutionIntakeRunsView.as_view(), name='execution-intake-runs'),
+    path('execution-intake-candidates/', AutonomousExecutionIntakeCandidatesView.as_view(), name='execution-intake-candidates'),
+    path('execution-intake-candidates/<int:candidate_id>/', AutonomousExecutionIntakeCandidateDetailView.as_view(), name='execution-intake-candidate-detail'),
+    path('execution-decisions/', AutonomousExecutionDecisionsView.as_view(), name='execution-decisions'),
+    path('execution-decisions/<int:decision_id>/', AutonomousExecutionDecisionDetailView.as_view(), name='execution-decision-detail'),
+    path('dispatch-records/', AutonomousDispatchRecordsView.as_view(), name='dispatch-records'),
+    path('execution-intake-recommendations/', AutonomousExecutionRecommendationsView.as_view(), name='execution-intake-recommendations'),
+    path('execution-intake-summary/', AutonomousExecutionIntakeSummaryView.as_view(), name='execution-intake-summary'),
     path('outcome-handoff-runs/', AutonomousOutcomeHandoffRunsView.as_view(), name='outcome-handoff-runs'),
     path('postmortem-handoffs/', AutonomousPostmortemHandoffsView.as_view(), name='postmortem-handoffs'),
     path('learning-handoffs/', AutonomousLearningHandoffsView.as_view(), name='learning-handoffs'),

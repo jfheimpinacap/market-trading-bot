@@ -6,6 +6,11 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.autonomous_trader.models import (
+    AutonomousDispatchRecord,
+    AutonomousExecutionDecision,
+    AutonomousExecutionIntakeCandidate,
+    AutonomousExecutionIntakeRun,
+    AutonomousExecutionRecommendation,
     AutonomousFeedbackCandidateContext,
     AutonomousFeedbackInfluenceRecord,
     AutonomousFeedbackReuseRun,
@@ -22,6 +27,7 @@ from apps.autonomous_trader.models import (
     AutonomousTradeOutcome,
     AutonomousTradeWatchRecord,
 )
+from apps.risk_agent.models import AutonomousExecutionReadiness, PositionWatchPlan, RiskApprovalDecision, RiskRuntimeRun, RiskSizingPlan, RiskRuntimeCandidate
 from apps.autonomous_trader.services.candidate_intake import consolidate_candidates
 from apps.autonomous_trader.services.decisioning import decide_candidate
 from apps.autonomous_trader.services.execution import execute_candidate
@@ -58,6 +64,49 @@ class AutonomousTraderFlowTests(TestCase):
             confidence_score=Decimal('0.8000'),
             market_probability=Decimal('0.4000'),
             metadata={},
+        )
+
+    def _create_readiness(self, *, status: str = 'READY'):
+        runtime = RiskRuntimeRun.objects.create(started_at=timezone.now())
+        candidate = RiskRuntimeCandidate.objects.create(
+            runtime_run=runtime,
+            linked_market=self.market,
+            calibrated_probability=Decimal('0.6100'),
+            market_probability=Decimal('0.5300'),
+            adjusted_edge=Decimal('0.0800'),
+            intake_status='READY_FOR_RISK_RUNTIME',
+            confidence_score=Decimal('0.7800'),
+            uncertainty_score=Decimal('0.1200'),
+            evidence_quality_score=Decimal('0.7000'),
+            precedent_caution_score=Decimal('0.1000'),
+        )
+        approval = RiskApprovalDecision.objects.create(
+            linked_candidate=candidate,
+            approval_status='APPROVED_REDUCED' if status == 'READY_REDUCED' else 'APPROVED',
+            approval_confidence=Decimal('0.8100'),
+            approval_summary='ready',
+        )
+        sizing = RiskSizingPlan.objects.create(
+            linked_candidate=candidate,
+            linked_approval_decision=approval,
+            sizing_mode='bounded_kelly',
+            paper_notional_size=Decimal('120.00'),
+        )
+        watch = PositionWatchPlan.objects.create(
+            linked_candidate=candidate,
+            linked_sizing_plan=sizing,
+            watch_status='REQUIRED',
+            review_interval_hint='1h',
+        )
+        return AutonomousExecutionReadiness.objects.create(
+            linked_market=self.market,
+            linked_approval_review=approval,
+            linked_sizing_plan=sizing,
+            linked_watch_plan=watch,
+            readiness_status=status,
+            readiness_confidence=Decimal('0.8600'),
+            readiness_summary='ready to intake',
+            readiness_reason_codes=['TEST'],
         )
 
     def _create_closed_loss_outcome(self, *, watch_status='EXIT_REVIEW_REQUIRED', with_trade=True):
@@ -204,6 +253,43 @@ class AutonomousTraderFlowTests(TestCase):
         payload = response.json()
         self.assertIn('considered_candidate_count', payload)
         self.assertIn('sized_for_execution_count', payload)
+
+    def test_execution_intake_ready_maps_execute_now(self):
+        self._create_readiness(status='READY')
+        response = self.client.post('/api/autonomous-trader/run-execution-intake/', {}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(AutonomousExecutionIntakeRun.objects.exists())
+        self.assertTrue(AutonomousExecutionIntakeCandidate.objects.filter(intake_status='READY_FOR_AUTONOMOUS_EXECUTION').exists())
+        self.assertTrue(AutonomousExecutionDecision.objects.filter(decision_type='EXECUTE_NOW').exists())
+
+    def test_execution_intake_ready_reduced_and_watch_mapping(self):
+        self._create_readiness(status='READY_REDUCED')
+        self._create_readiness(status='WATCH_ONLY')
+        self.client.post('/api/autonomous-trader/run-execution-intake/', {}, format='json')
+        self.assertTrue(AutonomousExecutionDecision.objects.filter(decision_type='EXECUTE_REDUCED').exists())
+        self.assertTrue(AutonomousExecutionDecision.objects.filter(decision_type='KEEP_ON_WATCH').exists())
+
+    def test_execution_intake_deferred_and_blocked_mapping(self):
+        self._create_readiness(status='DEFERRED')
+        self._create_readiness(status='BLOCKED')
+        self.client.post('/api/autonomous-trader/run-execution-intake/', {}, format='json')
+        self.assertTrue(AutonomousExecutionDecision.objects.filter(decision_type='DEFER').exists())
+        self.assertTrue(AutonomousExecutionDecision.objects.filter(decision_type='BLOCK').exists())
+
+    def test_execution_intake_dispatch_record_created(self):
+        self._create_readiness(status='READY')
+        self.client.post('/api/autonomous-trader/run-execution-intake/', {}, format='json')
+        self.assertTrue(AutonomousDispatchRecord.objects.exists())
+        self.assertTrue(AutonomousExecutionRecommendation.objects.exists())
+
+    def test_execution_intake_summary_endpoint(self):
+        self._create_readiness(status='READY')
+        self.client.post('/api/autonomous-trader/run-execution-intake/', {}, format='json')
+        response = self.client.get('/api/autonomous-trader/execution-intake-summary/')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('considered_readiness_count', payload)
+        self.assertIn('dispatch_count', payload)
 
 
 class AutonomousFeedbackReuseTests(TestCase):

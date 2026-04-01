@@ -230,6 +230,140 @@ class AutonomousTradeExecution(TimeStampedModel):
         ordering = ['-created_at', '-id']
 
 
+class AutonomousExecutionIntakeStatus(models.TextChoices):
+    READY_FOR_AUTONOMOUS_EXECUTION = 'READY_FOR_AUTONOMOUS_EXECUTION', 'Ready for autonomous execution'
+    READY_REDUCED = 'READY_REDUCED', 'Ready reduced'
+    WATCH_ONLY = 'WATCH_ONLY', 'Watch only'
+    DEFERRED = 'DEFERRED', 'Deferred'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    INSUFFICIENT_CONTEXT = 'INSUFFICIENT_CONTEXT', 'Insufficient context'
+
+
+class AutonomousExecutionDecisionType(models.TextChoices):
+    EXECUTE_NOW = 'EXECUTE_NOW', 'Execute now'
+    EXECUTE_REDUCED = 'EXECUTE_REDUCED', 'Execute reduced'
+    KEEP_ON_WATCH = 'KEEP_ON_WATCH', 'Keep on watch'
+    DEFER = 'DEFER', 'Defer'
+    BLOCK = 'BLOCK', 'Block'
+    REQUIRE_MANUAL_REVIEW = 'REQUIRE_MANUAL_REVIEW', 'Require manual review'
+
+
+class AutonomousExecutionDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousDispatchStatus(models.TextChoices):
+    QUEUED = 'QUEUED', 'Queued'
+    DISPATCHED = 'DISPATCHED', 'Dispatched'
+    FILLED = 'FILLED', 'Filled'
+    PARTIAL = 'PARTIAL', 'Partial'
+    NO_FILL = 'NO_FILL', 'No fill'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousDispatchMode(models.TextChoices):
+    PAPER_EXECUTION = 'PAPER_EXECUTION', 'Paper execution'
+    PAPER_REDUCED_EXECUTION = 'PAPER_REDUCED_EXECUTION', 'Paper reduced execution'
+
+
+class AutonomousExecutionRecommendationType(models.TextChoices):
+    AUTO_EXECUTE_NOW = 'AUTO_EXECUTE_NOW', 'Auto execute now'
+    AUTO_EXECUTE_REDUCED = 'AUTO_EXECUTE_REDUCED', 'Auto execute reduced'
+    KEEP_ON_AUTONOMOUS_WATCH = 'KEEP_ON_AUTONOMOUS_WATCH', 'Keep on autonomous watch'
+    DEFER_FOR_WEAKER_READINESS = 'DEFER_FOR_WEAKER_READINESS', 'Defer for weaker readiness'
+    BLOCK_FOR_POLICY_OR_RUNTIME = 'BLOCK_FOR_POLICY_OR_RUNTIME', 'Block for policy or runtime'
+    REQUIRE_MANUAL_REVIEW_FOR_EXECUTION_CONFLICT = 'REQUIRE_MANUAL_REVIEW_FOR_EXECUTION_CONFLICT', 'Require manual review for execution conflict'
+
+
+class AutonomousExecutionIntakeRun(TimeStampedModel):
+    linked_cycle_run = models.ForeignKey('autonomous_trader.AutonomousTradeCycleRun', null=True, blank=True, on_delete=models.SET_NULL, related_name='execution_intake_runs')
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_readiness_count = models.PositiveIntegerField(default=0)
+    execute_now_count = models.PositiveIntegerField(default=0)
+    execute_reduced_count = models.PositiveIntegerField(default=0)
+    watch_count = models.PositiveIntegerField(default=0)
+    defer_count = models.PositiveIntegerField(default=0)
+    blocked_count = models.PositiveIntegerField(default=0)
+    manual_review_count = models.PositiveIntegerField(default=0)
+    dispatch_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class AutonomousExecutionIntakeCandidate(TimeStampedModel):
+    intake_run = models.ForeignKey(AutonomousExecutionIntakeRun, on_delete=models.CASCADE, related_name='intake_candidates')
+    linked_market = models.ForeignKey('markets.Market', on_delete=models.CASCADE, related_name='autonomous_execution_intake_candidates')
+    linked_execution_readiness = models.ForeignKey('risk_agent.AutonomousExecutionReadiness', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_intake_candidates')
+    linked_approval_review = models.ForeignKey('risk_agent.RiskApprovalDecision', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_intake_candidates')
+    linked_sizing_plan = models.ForeignKey('risk_agent.RiskSizingPlan', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_intake_candidates')
+    linked_watch_plan = models.ForeignKey('risk_agent.PositionWatchPlan', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_intake_candidates')
+    linked_prediction_context = models.JSONField(default=dict, blank=True)
+    linked_portfolio_context = models.JSONField(default=dict, blank=True)
+    intake_status = models.CharField(max_length=40, choices=AutonomousExecutionIntakeStatus.choices, default=AutonomousExecutionIntakeStatus.INSUFFICIENT_CONTEXT)
+    readiness_confidence = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    approval_status = models.CharField(max_length=24, blank=True)
+    sizing_method = models.CharField(max_length=48, blank=True)
+    execution_context_summary = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousExecutionDecision(TimeStampedModel):
+    linked_intake_candidate = models.ForeignKey(AutonomousExecutionIntakeCandidate, on_delete=models.CASCADE, related_name='execution_decisions')
+    decision_type = models.CharField(max_length=40, choices=AutonomousExecutionDecisionType.choices)
+    decision_status = models.CharField(max_length=16, choices=AutonomousExecutionDecisionStatus.choices, default=AutonomousExecutionDecisionStatus.PROPOSED)
+    decision_confidence = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    rationale = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousDispatchRecord(TimeStampedModel):
+    linked_execution_decision = models.ForeignKey(AutonomousExecutionDecision, on_delete=models.CASCADE, related_name='dispatch_records')
+    linked_trade_execution = models.ForeignKey('autonomous_trader.AutonomousTradeExecution', null=True, blank=True, on_delete=models.SET_NULL, related_name='dispatch_records')
+    linked_paper_trade = models.ForeignKey('paper_trading.PaperTrade', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_dispatch_records')
+    dispatch_status = models.CharField(max_length=16, choices=AutonomousDispatchStatus.choices, default=AutonomousDispatchStatus.QUEUED)
+    dispatch_mode = models.CharField(max_length=32, choices=AutonomousDispatchMode.choices, default=AutonomousDispatchMode.PAPER_EXECUTION)
+    dispatched_notional = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    dispatched_quantity = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    dispatch_summary = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousExecutionRecommendation(TimeStampedModel):
+    linked_intake_run = models.ForeignKey(AutonomousExecutionIntakeRun, on_delete=models.CASCADE, related_name='recommendations')
+    recommendation_type = models.CharField(max_length=72, choices=AutonomousExecutionRecommendationType.choices)
+    target_market = models.ForeignKey('markets.Market', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_execution_recommendations')
+    target_intake_candidate = models.ForeignKey(AutonomousExecutionIntakeCandidate, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    target_execution_decision = models.ForeignKey(AutonomousExecutionDecision, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    target_dispatch = models.ForeignKey(AutonomousDispatchRecord, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    rationale = models.TextField(blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
 class AutonomousTradeWatchRecord(TimeStampedModel):
     linked_execution = models.ForeignKey(AutonomousTradeExecution, on_delete=models.CASCADE, related_name='watch_records')
     linked_position_watch_plan = models.ForeignKey('risk_agent.PositionWatchPlan', null=True, blank=True, on_delete=models.SET_NULL, related_name='autonomous_trade_watch_records')

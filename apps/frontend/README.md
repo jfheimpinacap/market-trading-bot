@@ -1974,3 +1974,17 @@ La vista `/risk-agent` ahora refuerza explícitamente el paso prediction→risk�
   - intake recommendations
 
 Se mantiene el mismo límite operativo: local-first, risk-first, approval-aware, sin ejecución real ni dinero real.
+
+## Execution Readiness Intake section (/autonomous-trader)
+
+`/autonomous-trader` now includes an **Execution Readiness Intake** section that strengthens the final risk→autonomous paper dispatch bridge.
+
+It adds:
+- summary cards (considered, execute now/reduced, watch, defer, blocked, dispatched)
+- intake candidates panel
+- execution decisions panel
+- dispatch records panel
+- recommendations panel
+- manual action button: `Run execution intake`
+
+UI scope remains strictly paper-only and readiness-driven; no live execution path is introduced.

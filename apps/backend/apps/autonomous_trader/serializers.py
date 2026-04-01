@@ -1,6 +1,11 @@
 from rest_framework import serializers
 
 from apps.autonomous_trader.models import (
+    AutonomousDispatchRecord,
+    AutonomousExecutionDecision,
+    AutonomousExecutionIntakeCandidate,
+    AutonomousExecutionIntakeRun,
+    AutonomousExecutionRecommendation,
     AutonomousFeedbackCandidateContext,
     AutonomousFeedbackInfluenceRecord,
     AutonomousFeedbackRecommendation,
@@ -55,6 +60,11 @@ class RunPositionWatchSerializer(serializers.Serializer):
     limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=50)
 
 
+class RunExecutionIntakeSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui', allow_blank=True)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=25)
+
+
 class AutonomousTradeCycleRunSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousTradeCycleRun
@@ -98,6 +108,44 @@ class AutonomousTradeOutcomeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AutonomousTradeOutcome
+        fields = '__all__'
+
+
+class AutonomousExecutionIntakeRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousExecutionIntakeRun
+        fields = '__all__'
+
+
+class AutonomousExecutionIntakeCandidateSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_market.title', read_only=True)
+
+    class Meta:
+        model = AutonomousExecutionIntakeCandidate
+        fields = '__all__'
+
+
+class AutonomousExecutionDecisionSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_intake_candidate.linked_market.title', read_only=True)
+
+    class Meta:
+        model = AutonomousExecutionDecision
+        fields = '__all__'
+
+
+class AutonomousDispatchRecordSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_execution_decision.linked_intake_candidate.linked_market.title', read_only=True)
+
+    class Meta:
+        model = AutonomousDispatchRecord
+        fields = '__all__'
+
+
+class AutonomousExecutionRecommendationSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='target_market.title', read_only=True)
+
+    class Meta:
+        model = AutonomousExecutionRecommendation
         fields = '__all__'
 
 

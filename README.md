@@ -2114,3 +2114,19 @@ Boundaries remain unchanged:
 - Recommendation output is now intake/readiness-aware (`APPROVE_FOR_AUTONOMOUS_EXECUTION`, `APPROVE_WITH_REDUCED_SIZE`, `BLOCK_FOR_RISK_POSTURE`, etc.).
 
 Scope remains unchanged: local-first, single-user, paper/sandbox-only, no real money, no broker/exchange execution, and no replacement of policy/safety/runtime/autonomous governance authorities.
+
+### Autonomous execution intake hardening / readiness-driven dispatch bridge (new)
+
+`autonomous_trader` now includes a formal execution-intake bridge that consumes `risk_agent.AutonomousExecutionReadiness` before paper dispatch.
+
+Added auditable entities:
+- `AutonomousExecutionIntakeRun`
+- `AutonomousExecutionIntakeCandidate`
+- `AutonomousExecutionDecision`
+- `AutonomousDispatchRecord`
+- `AutonomousExecutionRecommendation`
+
+Bridge flow:
+`AutonomousExecutionReadiness` → intake candidate → explicit decision (`EXECUTE_NOW`, `EXECUTE_REDUCED`, `KEEP_ON_WATCH`, `DEFER`, `BLOCK`, `REQUIRE_MANUAL_REVIEW`) → paper-only dispatch record.
+
+Boundaries remain unchanged: local-first, single-user, paper/sandbox only, no real money, no live broker/exchange routing, and no bypass of risk/policy/runtime/safety/certification authorities.
