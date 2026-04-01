@@ -1910,3 +1910,9 @@ UX boundaries stay explicit:
 - sizing recommendations table (type/rationale/blockers/confidence)
 
 UI stays paper-only and local-first; no live trading controls were added.
+
+
+## Open Position Management UI (/autonomous-trader)
+- Added a dedicated section to supervise post-entry autonomous position watch in paper mode.
+- Includes summary cards, watch candidates, action decisions, action executions, recommendations, and a manual "Run position watch" action.
+- Keeps explicit guardrails: paper-only, sentiment-aware, risk-first, no live execution.

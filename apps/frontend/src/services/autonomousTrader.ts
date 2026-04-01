@@ -18,6 +18,11 @@ import type {
   AutonomousTradeOutcome,
   AutonomousTradeWatchRecord,
   AutonomousTraderSummary,
+  AutonomousPositionWatchSummary,
+  AutonomousPositionWatchCandidate,
+  AutonomousPositionActionDecision,
+  AutonomousPositionActionExecution,
+  AutonomousPositionWatchRecommendation,
 } from '../types/autonomousTrader';
 
 export function runAutonomousTraderCycle() {
@@ -73,3 +78,17 @@ export const getAutonomousSizingSummary = () => requestJson<AutonomousSizingSumm
 export const getAutonomousSizingContexts = () => requestJson<AutonomousSizingContext[]>('/api/autonomous-trader/sizing-contexts/');
 export const getAutonomousSizingDecisions = () => requestJson<AutonomousSizingDecision[]>('/api/autonomous-trader/sizing-decisions/');
 export const getAutonomousSizingRecommendations = () => requestJson<AutonomousSizingRecommendation[]>('/api/autonomous-trader/sizing-recommendations/');
+
+
+export function runAutonomousPositionWatch() {
+  return requestJson<{ run: number; considered: number }>('/api/autonomous-trader/run-position-watch/', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export const getAutonomousPositionWatchSummary = () => requestJson<AutonomousPositionWatchSummary>('/api/autonomous-trader/position-watch-summary/');
+export const getAutonomousPositionWatchCandidates = () => requestJson<AutonomousPositionWatchCandidate[]>('/api/autonomous-trader/position-watch-candidates/');
+export const getAutonomousPositionActionDecisions = () => requestJson<AutonomousPositionActionDecision[]>('/api/autonomous-trader/position-action-decisions/');
+export const getAutonomousPositionActionExecutions = () => requestJson<AutonomousPositionActionExecution[]>('/api/autonomous-trader/position-action-executions/');
+export const getAutonomousPositionWatchRecommendations = () => requestJson<AutonomousPositionWatchRecommendation[]>('/api/autonomous-trader/position-watch-recommendations/');

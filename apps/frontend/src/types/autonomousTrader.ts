@@ -173,3 +173,58 @@ export type AutonomousSizingRecommendation = {
   blockers: string[];
   confidence: string;
 };
+
+export type AutonomousPositionWatchSummary = {
+  latest_run_id: number | null;
+  considered_position_count: number;
+  hold_count: number;
+  reduce_count: number;
+  close_count: number;
+  review_required_count: number;
+  executed_reduce_count: number;
+  executed_close_count: number;
+  recommendation_summary: Record<string, number>;
+};
+
+export type AutonomousPositionWatchCandidate = {
+  id: number;
+  market_title: string;
+  candidate_status: string;
+  entry_probability: string | null;
+  current_probability: string | null;
+  entry_edge: string | null;
+  current_edge: string | null;
+  sentiment_state: string;
+  risk_state: string;
+  portfolio_pressure_state: string;
+};
+
+export type AutonomousPositionActionDecision = {
+  id: number;
+  market_title: string;
+  decision_type: string;
+  decision_status: string;
+  decision_confidence: string;
+  reduction_fraction: string | null;
+  rationale: string;
+};
+
+export type AutonomousPositionActionExecution = {
+  id: number;
+  market_title: string;
+  execution_type: string;
+  execution_status: string;
+  quantity_before: string | null;
+  quantity_after: string | null;
+  notional_before: string | null;
+  notional_after: string | null;
+  summary: string;
+};
+
+export type AutonomousPositionWatchRecommendation = {
+  id: number;
+  recommendation_type: string;
+  rationale: string;
+  blockers: string[];
+  confidence: string;
+};

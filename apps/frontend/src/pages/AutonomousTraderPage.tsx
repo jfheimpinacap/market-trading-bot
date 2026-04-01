@@ -26,6 +26,12 @@ import {
   getAutonomousSizingContexts,
   getAutonomousSizingDecisions,
   getAutonomousSizingRecommendations,
+  getAutonomousPositionWatchSummary,
+  getAutonomousPositionWatchCandidates,
+  getAutonomousPositionActionDecisions,
+  getAutonomousPositionActionExecutions,
+  getAutonomousPositionWatchRecommendations,
+  runAutonomousPositionWatch,
 } from '../services/autonomousTrader';
 import type {
   AutonomousTradeCandidate,
@@ -46,6 +52,11 @@ import type {
   AutonomousSizingContext,
   AutonomousSizingDecision,
   AutonomousSizingRecommendation,
+  AutonomousPositionWatchSummary,
+  AutonomousPositionWatchCandidate,
+  AutonomousPositionActionDecision,
+  AutonomousPositionActionExecution,
+  AutonomousPositionWatchRecommendation,
 } from '../types/autonomousTrader';
 
 export function AutonomousTraderPage() {
@@ -68,6 +79,11 @@ export function AutonomousTraderPage() {
   const [sizingContexts, setSizingContexts] = useState<AutonomousSizingContext[]>([]);
   const [sizingDecisions, setSizingDecisions] = useState<AutonomousSizingDecision[]>([]);
   const [sizingRecommendations, setSizingRecommendations] = useState<AutonomousSizingRecommendation[]>([]);
+  const [positionWatchSummary, setPositionWatchSummary] = useState<AutonomousPositionWatchSummary | null>(null);
+  const [positionWatchCandidates, setPositionWatchCandidates] = useState<AutonomousPositionWatchCandidate[]>([]);
+  const [positionActionDecisions, setPositionActionDecisions] = useState<AutonomousPositionActionDecision[]>([]);
+  const [positionActionExecutions, setPositionActionExecutions] = useState<AutonomousPositionActionExecution[]>([]);
+  const [positionWatchRecommendations, setPositionWatchRecommendations] = useState<AutonomousPositionWatchRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -76,7 +92,7 @@ export function AutonomousTraderPage() {
     setLoading(true);
     setError(null);
     try {
-      const [s, c, d, e, w, o, hs, ph, lh, recs, fs, fc, fi, fr, ss, sc, sd, sr] = await Promise.all([
+      const [s, c, d, e, w, o, hs, ph, lh, recs, fs, fc, fi, fr, ss, sc, sd, sr, pws, pwc, pad, pae, pwr] = await Promise.all([
         getAutonomousTraderSummary(),
         getAutonomousTraderCandidates(),
         getAutonomousTraderDecisions(),
@@ -95,11 +111,17 @@ export function AutonomousTraderPage() {
         getAutonomousSizingContexts(),
         getAutonomousSizingDecisions(),
         getAutonomousSizingRecommendations(),
+        getAutonomousPositionWatchSummary(),
+        getAutonomousPositionWatchCandidates(),
+        getAutonomousPositionActionDecisions(),
+        getAutonomousPositionActionExecutions(),
+        getAutonomousPositionWatchRecommendations(),
       ]);
       setSummary(s); setCandidates(c); setDecisions(d); setExecutions(e); setWatchRecords(w); setOutcomes(o);
       setHandoffSummary(hs); setPostmortemHandoffs(ph); setLearningHandoffs(lh); setHandoffRecommendations(recs);
       setFeedbackSummary(fs); setFeedbackContexts(fc); setFeedbackInfluences(fi); setFeedbackRecommendations(fr);
       setSizingSummary(ss); setSizingContexts(sc); setSizingDecisions(sd); setSizingRecommendations(sr);
+      setPositionWatchSummary(pws); setPositionWatchCandidates(pwc); setPositionActionDecisions(pad); setPositionActionExecutions(pae); setPositionWatchRecommendations(pwr);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load autonomous trader.');
     } finally {
@@ -134,6 +156,11 @@ export function AutonomousTraderPage() {
     try { await runAutonomousSizing(); await loadData(); } finally { setBusy(false); }
   }, [loadData]);
 
+  const runPositionWatch = useCallback(async () => {
+    setBusy(true);
+    try { await runAutonomousPositionWatch(); await loadData(); } finally { setBusy(false); }
+  }, [loadData]);
+
   const cards = useMemo(() => [
     ['Candidates considered', summary?.considered_candidate_count ?? 0],
     ['Watchlist', summary?.watchlist_count ?? 0],
@@ -146,7 +173,7 @@ export function AutonomousTraderPage() {
 
   return <div className="page-stack">
     <PageHeader eyebrow="Autonomous paper loop" title="/autonomous-trader" description="Paper-only, governed autonomy with minimal human intervention. No real money, no live broker routing, and explicit risk/policy/runtime authority boundaries."
-      actions={<div className="button-row"><button type="button" className="primary-button" disabled={busy} onClick={() => void runCycle()}>{busy ? 'Running...' : 'Run autonomous trade cycle'}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runWatchCycle()}>Run watch cycle</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runOutcomeHandoff()}>Run outcome handoff</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runFeedbackReuse()}>Run feedback reuse</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runSizing()}>Run sizing</button></div>} />
+      actions={<div className="button-row"><button type="button" className="primary-button" disabled={busy} onClick={() => void runCycle()}>{busy ? 'Running...' : 'Run autonomous trade cycle'}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runWatchCycle()}>Run watch cycle</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runOutcomeHandoff()}>Run outcome handoff</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runFeedbackReuse()}>Run feedback reuse</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runSizing()}>Run sizing</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void runPositionWatch()}>Run position watch</button></div>} />
 
     <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined} loadingTitle="Loading autonomous trader" errorTitle="Could not load autonomous trader" loadingDescription="Collecting cycle summary, candidates, decisions, executions, watch records, and outcomes.">
       <SectionCard eyebrow="Summary" title="Cycle metrics" description="Autonomous paper trade-cycle run metrics with auditable counts.">
@@ -156,6 +183,20 @@ export function AutonomousTraderPage() {
       <SectionCard eyebrow="Decisions" title="Autonomous decisioning" description="Transparent and explicit watch/execute/block decisions."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Decision</th><th>Rationale</th><th>Status</th></tr></thead><tbody>{decisions.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.decision_type}</td><td>{x.rationale}</td><td>{x.decision_status}</td></tr>)}</tbody></table></div></SectionCard>
       <SectionCard eyebrow="Executions" title="Paper executions" description="Paper-only execution linkage with sizing summary and linked paper trade."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Execution status</th><th>Sizing summary</th><th>Paper trade</th></tr></thead><tbody>{executions.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.execution_status}</td><td>{x.sizing_summary}</td><td>{x.linked_paper_trade ?? '-'}</td></tr>)}</tbody></table></div></SectionCard>
       <SectionCard eyebrow="Watch" title="Automated watch records" description="Post-entry watch logic for sentiment, market move, and risk change."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Watch status</th><th>Sentiment shift</th><th>Market move</th><th>Risk change</th></tr></thead><tbody>{watchRecords.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.watch_status}</td><td>{x.sentiment_shift_detected ? 'YES' : 'NO'}</td><td>{x.market_move_detected ? 'YES' : 'NO'}</td><td>{x.risk_change_detected ? 'YES' : 'NO'}</td></tr>)}</tbody></table></div></SectionCard>
+      <SectionCard eyebrow="Open Position Management" title="Post-entry autonomous watch" description="Paper-only, sentiment-aware, risk-first management of already-open paper positions. No live execution and no real money.">
+        <div className="dashboard-stat-grid">{[
+          ['Positions considered', positionWatchSummary?.considered_position_count ?? 0],
+          ['Hold', positionWatchSummary?.hold_count ?? 0],
+          ['Reduce', positionWatchSummary?.reduce_count ?? 0],
+          ['Close', positionWatchSummary?.close_count ?? 0],
+          ['Review required', positionWatchSummary?.review_required_count ?? 0],
+          ['Executed reduce/close', (positionWatchSummary?.executed_reduce_count ?? 0) + (positionWatchSummary?.executed_close_count ?? 0)],
+        ].map(([label, value]) => <article key={label} className="dashboard-stat-card"><span>{label}</span><strong>{value}</strong></article>)}</div>
+      </SectionCard>
+      <SectionCard eyebrow="Watch candidates" title="Open positions under active monitoring" description="Entry-vs-current drift, sentiment state, risk state, and portfolio pressure state."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Entry/current prob</th><th>Entry/current edge</th><th>Sentiment</th><th>Risk</th><th>Portfolio</th><th>Status</th></tr></thead><tbody>{positionWatchCandidates.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.entry_probability ?? '-'} → {x.current_probability ?? '-'}</td><td>{x.entry_edge ?? '-'} → {x.current_edge ?? '-'}</td><td>{x.sentiment_state}</td><td>{x.risk_state}</td><td>{x.portfolio_pressure_state}</td><td>{x.candidate_status}</td></tr>)}</tbody></table></div></SectionCard>
+      <SectionCard eyebrow="Action decisions" title="Hold/reduce/close/review decisions" description="Explicit post-entry decision records with confidence and rationale."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Type</th><th>Status</th><th>Confidence</th><th>Reduction</th><th>Rationale</th></tr></thead><tbody>{positionActionDecisions.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.decision_type}</td><td>{x.decision_status}</td><td>{x.decision_confidence}</td><td>{x.reduction_fraction ?? '-'}</td><td>{x.rationale}</td></tr>)}</tbody></table></div></SectionCard>
+      <SectionCard eyebrow="Action executions" title="Reduce/close paper execution" description="Governed and auditable paper-only execution path for actioned decisions."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Type</th><th>Status</th><th>Qty before/after</th><th>Notional before/after</th><th>Summary</th></tr></thead><tbody>{positionActionExecutions.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.execution_type}</td><td>{x.execution_status}</td><td>{x.quantity_before ?? '-'} → {x.quantity_after ?? '-'}</td><td>{x.notional_before ?? '-'} → {x.notional_after ?? '-'}</td><td>{x.summary}</td></tr>)}</tbody></table></div></SectionCard>
+      <SectionCard eyebrow="Recommendations" title="Conservative open-position recommendations" description="Recommendation lineage for hold/reduce/close/review outputs."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{positionWatchRecommendations.map((x) => <tr key={x.id}><td>{x.recommendation_type}</td><td>{x.rationale}</td><td>{x.blockers?.join(', ') || '-'}</td><td>{x.confidence}</td></tr>)}</tbody></table></div></SectionCard>
       <SectionCard eyebrow="Outcomes" title="Cycle outcomes" description="Outcome tracking and conservative postmortem/learning handoffs."><div className="markets-table-wrapper"><table className="markets-table"><thead><tr><th>Market</th><th>Outcome type</th><th>Status</th><th>Postmortem</th><th>Learning</th></tr></thead><tbody>{outcomes.map((x) => <tr key={x.id}><td>{x.market_title}</td><td>{x.outcome_type}</td><td>{x.outcome_status}</td><td>{x.send_to_postmortem ? 'YES' : 'NO'}</td><td>{x.send_to_learning ? 'YES' : 'NO'}</td></tr>)}</tbody></table></div></SectionCard>
 
 

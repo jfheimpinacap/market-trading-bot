@@ -3107,3 +3107,9 @@ Boundary:
   - `GET /api/autonomous-trader/sizing-summary/`
 
 Boundary remains unchanged: paper-only, no broker/exchange live execution, no auto-retune, no auto-promote.
+
+
+## Autonomous position watch bridge
+- New autonomous-trader position-watch services implement conservative open-position management (candidate assessment, action decision, paper execution, recommendation, run summary).
+- API: run-position-watch, position-watch-runs, position-watch-candidates, position-action-decisions, position-action-executions, position-watch-recommendations, position-watch-summary.
+- Strictly paper-only and traceable; no auto-retune, no auto-promote, no live trading path.

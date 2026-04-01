@@ -13,6 +13,11 @@ from apps.autonomous_trader.models import (
     AutonomousSizingDecision,
     AutonomousSizingRecommendation,
     AutonomousSizingRun,
+    AutonomousPositionActionDecision,
+    AutonomousPositionActionExecution,
+    AutonomousPositionWatchCandidate,
+    AutonomousPositionWatchRecommendation,
+    AutonomousPositionWatchRun,
     AutonomousTradeCandidate,
     AutonomousTradeCycleRun,
     AutonomousTradeDecision,
@@ -43,6 +48,11 @@ class RunSizingSerializer(serializers.Serializer):
     actor = serializers.CharField(required=False, default='operator-ui', allow_blank=True)
     cycle_run_id = serializers.IntegerField(required=False, min_value=1)
     limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=25)
+
+
+class RunPositionWatchSerializer(serializers.Serializer):
+    actor = serializers.CharField(required=False, default='operator-ui', allow_blank=True)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=200, default=50)
 
 
 class AutonomousTradeCycleRunSerializer(serializers.ModelSerializer):
@@ -172,4 +182,42 @@ class AutonomousSizingDecisionSerializer(serializers.ModelSerializer):
 class AutonomousSizingRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousSizingRecommendation
+        fields = '__all__'
+
+
+class AutonomousPositionWatchRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousPositionWatchRun
+        fields = '__all__'
+
+
+class AutonomousPositionWatchCandidateSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_market.title', read_only=True)
+
+    class Meta:
+        model = AutonomousPositionWatchCandidate
+        fields = '__all__'
+
+
+class AutonomousPositionActionDecisionSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_watch_candidate.linked_market.title', read_only=True)
+
+    class Meta:
+        model = AutonomousPositionActionDecision
+        fields = '__all__'
+
+
+class AutonomousPositionActionExecutionSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='linked_position.market.title', read_only=True)
+
+    class Meta:
+        model = AutonomousPositionActionExecution
+        fields = '__all__'
+
+
+class AutonomousPositionWatchRecommendationSerializer(serializers.ModelSerializer):
+    market_title = serializers.CharField(source='target_position.market.title', read_only=True)
+
+    class Meta:
+        model = AutonomousPositionWatchRecommendation
         fields = '__all__'
