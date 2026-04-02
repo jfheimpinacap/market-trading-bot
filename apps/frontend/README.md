@@ -42,6 +42,25 @@ Todo sigue paper-only, local-first, cadence/cooldown-aware, y sin live execution
 
 Esta capa no reemplaza runner/timing/session-control: los fortalece con monitoreo y gobernanza de salud operacional.
 
+## Mission control session recovery review UX (new)
+
+`/mission-control` ahora incluye una sección explícita de **Session Recovery Review**:
+
+- botón manual: `Run recovery review`
+- summary cards para reviewed/ready/keep paused/manual/stop/escalate
+- paneles técnicos auditables de:
+  - recovery snapshots
+  - recovery blockers
+  - resume decisions
+  - recovery recommendations
+- copy explícita de límites:
+  - local-first
+  - single-user
+  - paper/sandbox only
+  - sin dinero real
+  - sin broker/exchange execution
+  - sin auto-resume aplicado (solo evaluación y recomendación)
+
 ## Precedent-aware UX (new)
 
 La UI ahora expone señales de memoria histórica sin sobrecargar pantallas:

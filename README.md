@@ -115,6 +115,35 @@ Scope remains unchanged: local-first, single-user, paper/sandbox only, no live b
 
 Boundaries remain strict: local-first, single-user, paper/sandbox only, no real money, no live broker/exchange routing, and no replacement of runtime/safety/incident/portfolio authorities.
 
+### Autonomous session recovery review / stabilization eligibility (new)
+
+`mission_control` now adds a conservative **recovery review layer** on top of session health governance:
+
+- pipeline: paused/degraded/blocked session → recovery snapshot → blockers → resume decision → recommendation
+- auditable entities:
+  - `AutonomousSessionRecoveryRun`
+  - `AutonomousSessionRecoverySnapshot`
+  - `AutonomousRecoveryBlocker`
+  - `AutonomousResumeDecision`
+  - `AutonomousSessionRecoveryRecommendation`
+- decisions are explicit and non-opaque:
+  - `KEEP_PAUSED`
+  - `READY_TO_RESUME`
+  - `RESUME_IN_MONITOR_ONLY_MODE`
+  - `REQUIRE_MANUAL_RECOVERY_REVIEW`
+  - `STOP_SESSION_PERMANENTLY`
+  - `ESCALATE_TO_INCIDENT_REVIEW`
+- API:
+  - `POST /api/mission-control/run-session-recovery-review/`
+  - `GET /api/mission-control/session-recovery-runs/`
+  - `GET /api/mission-control/session-recovery-snapshots/`
+  - `GET /api/mission-control/session-recovery-blockers/`
+  - `GET /api/mission-control/session-resume-decisions/`
+  - `GET /api/mission-control/session-recovery-recommendations/`
+  - `GET /api/mission-control/session-recovery-summary/`
+
+Important boundary: this layer **does not auto-apply resume yet**; it only evaluates and recommends.
+
 ### Evaluation harness (new)
 
 The platform now includes an explicit **benchmark/evaluation harness** for autonomous paper/demo operation:

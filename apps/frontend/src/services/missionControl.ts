@@ -24,6 +24,11 @@ import type {
   AutonomousSessionHealthRun,
   AutonomousSessionHealthSnapshot,
   AutonomousSessionInterventionDecision,
+  AutonomousSessionRecoveryRecommendation,
+  AutonomousSessionRecoveryRun,
+  AutonomousSessionRecoverySnapshot,
+  AutonomousRecoveryBlocker,
+  AutonomousResumeDecision,
   AutonomousSessionTimingSnapshot,
   AutonomousStopConditionEvaluation,
   AutonomousTimingDecision,
@@ -33,6 +38,7 @@ import type {
   SessionTimingSummary,
   ProfileSelectionSummary,
   SessionHealthSummary,
+  SessionRecoverySummary,
   AutonomousSessionSummary,
   AutonomousTickDispatchAttempt,
   MissionControlCycle,
@@ -294,4 +300,35 @@ export function getSessionHealthRecommendations() {
 
 export function getSessionHealthSummary() {
   return requestJson<SessionHealthSummary>('/api/mission-control/session-health-summary/');
+}
+
+export function runSessionRecoveryReview(sessionIds?: number[]) {
+  return requestJson<AutonomousSessionRecoveryRun>('/api/mission-control/run-session-recovery-review/', {
+    method: 'POST',
+    body: JSON.stringify(sessionIds?.length ? { session_ids: sessionIds } : {}),
+  });
+}
+
+export function getSessionRecoveryRuns() {
+  return requestJson<AutonomousSessionRecoveryRun[]>('/api/mission-control/session-recovery-runs/');
+}
+
+export function getSessionRecoverySnapshots() {
+  return requestJson<AutonomousSessionRecoverySnapshot[]>('/api/mission-control/session-recovery-snapshots/');
+}
+
+export function getSessionRecoveryBlockers() {
+  return requestJson<AutonomousRecoveryBlocker[]>('/api/mission-control/session-recovery-blockers/');
+}
+
+export function getSessionResumeDecisions() {
+  return requestJson<AutonomousResumeDecision[]>('/api/mission-control/session-resume-decisions/');
+}
+
+export function getSessionRecoveryRecommendations() {
+  return requestJson<AutonomousSessionRecoveryRecommendation[]>('/api/mission-control/session-recovery-recommendations/');
+}
+
+export function getSessionRecoverySummary() {
+  return requestJson<SessionRecoverySummary>('/api/mission-control/session-recovery-summary/');
 }
