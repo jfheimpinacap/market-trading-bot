@@ -7,6 +7,7 @@ from django.utils import timezone
 from apps.readiness_lab.models import ReadinessAssessmentRun, ReadinessStatus
 from apps.runtime_governor.models import RuntimeMode, RuntimeSetBy, RuntimeStateStatus
 from apps.runtime_governor.services.capabilities import get_effective_capabilities
+from apps.runtime_governor.services.operating_mode.mode_switch import build_downstream_influence, get_active_global_operating_mode
 from apps.runtime_governor.services.state import get_mode_profile, get_runtime_state, list_mode_profiles
 from apps.runtime_governor.services.transitions import log_transition
 from apps.safety_guard.services.evaluation import get_safety_status
@@ -120,12 +121,15 @@ def get_runtime_status() -> dict:
     readiness = _latest_readiness_status()
     safety = get_safety_status()
     decision = evaluate_mode_constraints(requested_mode=state.current_mode)
+    global_mode = get_active_global_operating_mode()
     return {
         'state': state,
         'profile': profile,
         'readiness_status': readiness,
         'safety_status': safety,
         'constraints': {'allowed': decision.allowed, 'reasons': decision.reasons},
+        'global_operating_mode': global_mode,
+        'global_mode_influence': build_downstream_influence(mode=global_mode),
     }
 
 

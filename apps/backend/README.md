@@ -3475,3 +3475,24 @@ Boundary guarantees remain strict: local-first, single-user, paper-only, no brok
 Conservative enforcement scope: admission throttling, pending dispatch defer, runtime session park/pause, and explicit manual-review fallback for ambiguous decisions.
 
 Hard limits remain unchanged: paper-only, local-first, no real broker/exchange routing, no real money, no aggressive position closures.
+
+## Runtime governor global operating mode layer (new)
+
+`apps.runtime_governor` now includes a conservative, auditable global posture/mode control layer:
+
+- models:
+  - `GlobalRuntimePostureRun`
+  - `GlobalRuntimePostureSnapshot`
+  - `GlobalOperatingModeDecision`
+  - `GlobalOperatingModeSwitchRecord`
+  - `GlobalOperatingModeRecommendation`
+- services:
+  - `services/operating_mode/posture.py`
+  - `services/operating_mode/mode_switch.py`
+  - `services/operating_mode/recommendation.py`
+  - `services/operating_mode/run.py`
+- integration:
+  - influences runtime capability surface through explicit `global_operating_mode` constraints
+  - emits downstream influence hints for cadence/admission/exposure/heartbeat behavior
+
+Strict boundaries remain unchanged: local-first, paper/sandbox only, no real-money execution, and no replacement of mission-control/portfolio/safety/risk authorities.

@@ -6,13 +6,29 @@ import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { navigate } from '../../lib/router';
 import { getIncidentSummary } from '../../services/incidents';
 import {
+  getOperatingModeDecisions,
+  getOperatingModeRecommendations,
+  getOperatingModeSummary,
+  getOperatingModeSwitchRecords,
   getRuntimeCapabilities,
   getRuntimeModes,
+  getRuntimePostureSnapshots,
   getRuntimeStatus,
   getRuntimeTransitions,
+  runOperatingModeReview,
   setRuntimeMode,
 } from '../../services/runtime';
-import type { RuntimeCapabilities, RuntimeModeOption, RuntimeStatusResponse, RuntimeTransition } from '../../types/runtime';
+import type {
+  OperatingModeDecision,
+  OperatingModeRecommendation,
+  OperatingModeSummary,
+  OperatingModeSwitchRecord,
+  RuntimeCapabilities,
+  RuntimeModeOption,
+  RuntimePostureSnapshot,
+  RuntimeStatusResponse,
+  RuntimeTransition,
+} from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
 function tone(value: string) {
@@ -27,27 +43,43 @@ export function RuntimePage() {
   const [modes, setModes] = useState<RuntimeModeOption[]>([]);
   const [transitions, setTransitions] = useState<RuntimeTransition[]>([]);
   const [caps, setCaps] = useState<RuntimeCapabilities | null>(null);
+  const [operatingSummary, setOperatingSummary] = useState<OperatingModeSummary | null>(null);
+  const [postureSnapshots, setPostureSnapshots] = useState<RuntimePostureSnapshot[]>([]);
+  const [modeDecisions, setModeDecisions] = useState<OperatingModeDecision[]>([]);
+  const [switchRecords, setSwitchRecords] = useState<OperatingModeSwitchRecord[]>([]);
+  const [recommendations, setRecommendations] = useState<OperatingModeRecommendation[]>([]);
   const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [runningReview, setRunningReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
         getRuntimeCapabilities(),
         getIncidentSummary(),
+        getRuntimePostureSnapshots(),
+        getOperatingModeDecisions(),
+        getOperatingModeSwitchRecords(),
+        getOperatingModeRecommendations(),
+        getOperatingModeSummary(),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
       setTransitions(transitionsRes);
       setCaps(capsRes);
       setIncidentSummary(incidentSummaryRes);
+      setPostureSnapshots(postureRes);
+      setModeDecisions(decisionRes);
+      setSwitchRecords(switchRes);
+      setRecommendations(recommendationRes);
+      setOperatingSummary(summaryRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load runtime governance.');
     } finally {
@@ -72,6 +104,19 @@ export function RuntimePage() {
     }
   }
 
+  async function onRunOperatingModeReview() {
+    setRunningReview(true);
+    setError(null);
+    try {
+      await runOperatingModeReview({ triggered_by: 'runtime-page', auto_apply: true });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not run operating mode review.');
+    } finally {
+      setRunningReview(false);
+    }
+  }
+
   return (
     <div className="page-stack">
       <PageHeader
@@ -90,6 +135,8 @@ export function RuntimePage() {
             <div><strong>Rationale:</strong> {status?.state.rationale ?? '—'}</div>
             <div><strong>Readiness:</strong> {status?.readiness_status ?? 'No runs yet'}</div>
             <div><strong>Safety:</strong> {status?.safety_status.status ?? 'Unknown'} · {status?.safety_status.status_message ?? '—'}</div>
+            <div><strong>Global mode:</strong> <StatusBadge tone={tone(status?.global_operating_mode ?? 'UNKNOWN')}>{status?.global_operating_mode ?? 'UNKNOWN'}</StatusBadge></div>
+            <div><strong>Global influence:</strong> {Object.entries(status?.global_mode_influence ?? {}).map(([k, v]) => `${k}:${v}`).join(' · ') || '—'}</div>
             <div><strong>Active incidents:</strong> {incidentSummary?.active_incidents ?? 0}</div>
             <div><strong>Critical incidents:</strong> {incidentSummary?.critical_active ?? 0}</div>
           </div>
@@ -149,6 +196,36 @@ export function RuntimePage() {
               </table>
             </div>
           )}
+        </SectionCard>
+
+        <SectionCard
+          eyebrow="Global operating mode"
+          title="Regime-aware runtime posture"
+          description="Paper-only local-first operating posture controller. This layer coordinates timing/admission/exposure behavior without enabling live execution."
+          aside={<button type="button" className="secondary-button" disabled={runningReview} onClick={() => void onRunOperatingModeReview()}>{runningReview ? 'Running…' : 'Run operating mode review'}</button>}
+        >
+          <div className="system-metadata-grid">
+            <div><strong>Posture reviews:</strong> {operatingSummary?.posture_reviews ?? 0}</div>
+            <div><strong>Mode kept:</strong> {operatingSummary?.mode_kept ?? 0}</div>
+            <div><strong>Caution:</strong> {operatingSummary?.caution_count ?? 0}</div>
+            <div><strong>Monitor-only:</strong> {operatingSummary?.monitor_only_count ?? 0}</div>
+            <div><strong>Recovery mode:</strong> {operatingSummary?.recovery_mode_count ?? 0}</div>
+            <div><strong>Throttled:</strong> {operatingSummary?.throttled_count ?? 0}</div>
+            <div><strong>Blocked:</strong> {operatingSummary?.blocked_count ?? 0}</div>
+          </div>
+          <p><strong>Active mode:</strong> {operatingSummary?.active_mode ?? 'BALANCED'}</p>
+
+          <h4>Posture snapshots</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Exposure</th><th>Admission</th><th>Health</th><th>Loss</th><th>Signal</th><th>Runtime/Safety/Incident</th><th>Summary</th></tr></thead><tbody>{postureSnapshots.slice(0, 10).map((row) => <tr key={row.id}><td>{row.exposure_pressure_state}</td><td>{row.admission_pressure_state}</td><td>{row.session_health_state}</td><td>{row.recent_loss_state}</td><td>{row.signal_quality_state}</td><td>{row.runtime_posture} / {row.safety_posture} / {row.incident_pressure_state}</td><td>{row.snapshot_summary}</td></tr>)}</tbody></table></div>
+
+          <h4>Mode decisions</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Current</th><th>Target</th><th>Type</th><th>Status</th><th>Summary</th></tr></thead><tbody>{modeDecisions.slice(0, 10).map((row) => <tr key={row.id}><td>{row.current_mode ?? '—'}</td><td>{row.target_mode}</td><td>{row.decision_type}</td><td>{row.decision_status}</td><td>{row.decision_summary}</td></tr>)}</tbody></table></div>
+
+          <h4>Switch records</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Previous</th><th>Applied</th><th>Status</th><th>Summary</th></tr></thead><tbody>{switchRecords.slice(0, 10).map((row) => <tr key={row.id}><td>{row.previous_mode ?? '—'}</td><td>{row.applied_mode}</td><td>{row.switch_status}</td><td>{row.switch_summary}</td></tr>)}</tbody></table></div>
+
+          <h4>Recommendations</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{recommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>
         </SectionCard>
       </DataStateWrapper>
     </div>

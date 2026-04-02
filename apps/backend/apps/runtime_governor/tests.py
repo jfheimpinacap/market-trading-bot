@@ -3,8 +3,15 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.readiness_lab.models import ReadinessAssessmentRun, ReadinessProfile, ReadinessStatus
-from apps.runtime_governor.models import RuntimeMode, RuntimeSetBy, RuntimeTransitionLog
+from apps.runtime_governor.models import GlobalOperatingModeDecision, RuntimeMode, RuntimeSetBy, RuntimeTransitionLog
 from apps.runtime_governor.services import get_capabilities_for_current_mode, get_runtime_state, set_runtime_mode
+from apps.mission_control.models import AutonomousRuntimeSession, AutonomousRuntimeSessionStatus, AutonomousSessionHealthSnapshot, AutonomousSessionHealthStatus
+from apps.portfolio_governor.models import (
+    PortfolioExposureClusterSnapshot,
+    PortfolioExposureCoordinationRun,
+    PortfolioExposureDecision,
+    PortfolioExposureDecisionType,
+)
 from apps.safety_guard.services.kill_switch import enable_kill_switch
 
 
@@ -57,3 +64,60 @@ class RuntimeGovernorTests(TestCase):
     def test_transition_log_created(self):
         set_runtime_mode(requested_mode=RuntimeMode.PAPER_ASSIST, set_by=RuntimeSetBy.OPERATOR, rationale='assist mode')
         self.assertGreaterEqual(RuntimeTransitionLog.objects.count(), 1)
+
+    def _seed_exposure_decision(self, decision_type: str):
+        run = PortfolioExposureCoordinationRun.objects.create()
+        cluster = PortfolioExposureClusterSnapshot.objects.create(linked_run=run, cluster_label='cluster')
+        return PortfolioExposureDecision.objects.create(linked_cluster_snapshot=cluster, decision_type=decision_type, decision_summary='test')
+
+    def test_operating_mode_review_normal_context_keeps_balanced(self):
+        response = self.client.post(reverse('runtime_governor_v2:run_operating_mode_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        self.assertEqual(response.status_code, 200)
+        latest = GlobalOperatingModeDecision.objects.order_by('-created_at_decision', '-id').first()
+        self.assertIsNotNone(latest)
+        self.assertEqual(latest.target_mode, 'BALANCED')
+
+    def test_operating_mode_review_quiet_market_switches_monitor_only(self):
+        session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
+        from apps.mission_control.models import AutonomousSessionTimingSnapshot, AutonomousTimingDecision, AutonomousTimingDecisionType
+
+        timing_snapshot = AutonomousSessionTimingSnapshot.objects.create(linked_session=session, timing_status='MONITOR_ONLY_WINDOW')
+        AutonomousTimingDecision.objects.create(
+            linked_session=session,
+            linked_timing_snapshot=timing_snapshot,
+            decision_type=AutonomousTimingDecisionType.MONITOR_ONLY_NEXT,
+            decision_summary='quiet',
+        )
+        response = self.client.post(reverse('runtime_governor_v2:run_operating_mode_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        self.assertEqual(response.status_code, 200)
+        latest = GlobalOperatingModeDecision.objects.order_by('-created_at_decision', '-id').first()
+        self.assertEqual(latest.target_mode, 'MONITOR_ONLY')
+
+    def test_operating_mode_review_repeated_losses_switches_recovery(self):
+        session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
+        AutonomousSessionHealthSnapshot.objects.create(linked_session=session, session_health_status=AutonomousSessionHealthStatus.CAUTION, recent_loss_count=3)
+        response = self.client.post(reverse('runtime_governor_v2:run_operating_mode_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        self.assertEqual(response.status_code, 200)
+        latest = GlobalOperatingModeDecision.objects.order_by('-created_at_decision', '-id').first()
+        self.assertEqual(latest.target_mode, 'RECOVERY_MODE')
+
+    def test_operating_mode_review_pressure_switches_throttled(self):
+        self._seed_exposure_decision(PortfolioExposureDecisionType.THROTTLE_NEW_ENTRIES)
+        response = self.client.post(reverse('runtime_governor_v2:run_operating_mode_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        self.assertEqual(response.status_code, 200)
+        latest = GlobalOperatingModeDecision.objects.order_by('-created_at_decision', '-id').first()
+        self.assertEqual(latest.target_mode, 'THROTTLED')
+
+    def test_operating_mode_review_hard_block_switches_blocked(self):
+        enable_kill_switch()
+        response = self.client.post(reverse('runtime_governor_v2:run_operating_mode_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        self.assertEqual(response.status_code, 200)
+        latest = GlobalOperatingModeDecision.objects.order_by('-created_at_decision', '-id').first()
+        self.assertEqual(latest.target_mode, 'BLOCKED')
+
+    def test_operating_mode_summary_endpoint(self):
+        self.client.post(reverse('runtime_governor_v2:run_operating_mode_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        response = self.client.get(reverse('runtime_governor_v2:operating_mode_summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('active_mode', payload)

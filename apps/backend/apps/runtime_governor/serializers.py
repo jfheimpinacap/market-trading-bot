@@ -1,6 +1,16 @@
 from rest_framework import serializers
 
-from apps.runtime_governor.models import RuntimeMode, RuntimeModeProfile, RuntimeModeState, RuntimeTransitionLog
+from apps.runtime_governor.models import (
+    GlobalOperatingModeDecision,
+    GlobalOperatingModeRecommendation,
+    GlobalOperatingModeSwitchRecord,
+    GlobalRuntimePostureRun,
+    GlobalRuntimePostureSnapshot,
+    RuntimeMode,
+    RuntimeModeProfile,
+    RuntimeModeState,
+    RuntimeTransitionLog,
+)
 
 
 class RuntimeModeProfileSerializer(serializers.ModelSerializer):
@@ -26,3 +36,38 @@ class RuntimeSetModeSerializer(serializers.Serializer):
     rationale = serializers.CharField(required=False, allow_blank=True, max_length=255)
     set_by = serializers.CharField(required=False, allow_blank=True, default='operator')
     metadata = serializers.JSONField(required=False)
+
+
+class RunOperatingModeReviewSerializer(serializers.Serializer):
+    triggered_by = serializers.CharField(required=False, allow_blank=True, default='operator-ui')
+    auto_apply = serializers.BooleanField(required=False, default=True)
+
+
+class GlobalRuntimePostureRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlobalRuntimePostureRun
+        fields = '__all__'
+
+
+class GlobalRuntimePostureSnapshotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlobalRuntimePostureSnapshot
+        fields = '__all__'
+
+
+class GlobalOperatingModeDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlobalOperatingModeDecision
+        fields = '__all__'
+
+
+class GlobalOperatingModeSwitchRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlobalOperatingModeSwitchRecord
+        fields = '__all__'
+
+
+class GlobalOperatingModeRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlobalOperatingModeRecommendation
+        fields = '__all__'

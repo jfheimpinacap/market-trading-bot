@@ -2306,3 +2306,23 @@ This layer extends existing portfolio/risk/runtime/safety authorities and does *
   - `PortfolioExposureApplyRecommendation`
 
 Boundary guarantees remain strict: local-first, single-user, paper/sandbox only, no live broker/exchange execution, no real money, and no aggressive auto-closing of open positions.
+
+### Global runtime posture controller / operating mode (new)
+
+`runtime_governor` now includes an explicit, auditable **global operating mode** layer for paper runtime coordination:
+
+- posture pipeline: `global context -> posture snapshot -> mode decision -> switch record -> recommendation`
+- conservative modes: `BALANCED`, `CAUTION`, `MONITOR_ONLY`, `RECOVERY_MODE`, `THROTTLED`, `BLOCKED`
+- transparent (non-LLM, non-black-box) switching with simple hysteresis to reduce oscillation
+- local-first, single-user, paper-only boundaries remain strict
+- no live broker execution, no real money, no replacement of runtime/safety/portfolio/mission-control authorities
+
+API:
+- `POST /api/runtime-governor/run-operating-mode-review/`
+- `GET /api/runtime-governor/runtime-posture-runs/`
+- `GET /api/runtime-governor/runtime-posture-snapshots/`
+- `GET /api/runtime-governor/operating-mode-decisions/`
+- `GET /api/runtime-governor/operating-mode-switch-records/`
+- `GET /api/runtime-governor/operating-mode-recommendations/`
+- `GET /api/runtime-governor/operating-mode-summary/`
+- `POST /api/runtime-governor/apply-operating-mode/<decision_id>/`
