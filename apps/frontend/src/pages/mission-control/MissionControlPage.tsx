@@ -1,61 +1,57 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../../components/PageHeader';
 import { SectionCard } from '../../components/SectionCard';
 import { StatusBadge } from '../../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../../components/markets/DataStateWrapper';
 import {
-  getAutonomousCycleExecutions,
-  getAutonomousCycleOutcomes,
-  getAutonomousCyclePlans,
-  getAutonomousRuntimeRecommendations,
-  getAutonomousRuntimeRuns,
-  getAutonomousRuntimeSummary,
-  getMissionControlStatus,
-  runAutonomousRuntime,
+  getAutonomousCadenceDecisions,
+  getAutonomousSessionRecommendations,
+  getAutonomousSessionSummary,
+  getAutonomousSessions,
+  getAutonomousTicks,
+  pauseAutonomousSession,
+  resumeAutonomousSession,
+  runAutonomousTick,
+  startAutonomousSession,
+  stopAutonomousSession,
 } from '../../services/missionControl';
 import type {
-  AutonomousCycleExecution,
-  AutonomousCycleOutcome,
-  AutonomousCyclePlan,
-  AutonomousRuntimeRecommendation,
-  AutonomousRuntimeRun,
-  AutonomousRuntimeSummary,
-  MissionControlStatusResponse,
+  AutonomousCadenceDecision,
+  AutonomousRuntimeSession,
+  AutonomousRuntimeTick,
+  AutonomousSessionRecommendation,
+  AutonomousSessionSummary,
 } from '../../types/missionControl';
 
 export function MissionControlPage() {
-  const [status, setStatus] = useState<MissionControlStatusResponse | null>(null);
-  const [runs, setRuns] = useState<AutonomousRuntimeRun[]>([]);
-  const [plans, setPlans] = useState<AutonomousCyclePlan[]>([]);
-  const [executions, setExecutions] = useState<AutonomousCycleExecution[]>([]);
-  const [outcomes, setOutcomes] = useState<AutonomousCycleOutcome[]>([]);
-  const [recommendations, setRecommendations] = useState<AutonomousRuntimeRecommendation[]>([]);
-  const [summary, setSummary] = useState<AutonomousRuntimeSummary | null>(null);
+  const [sessions, setSessions] = useState<AutonomousRuntimeSession[]>([]);
+  const [ticks, setTicks] = useState<AutonomousRuntimeTick[]>([]);
+  const [decisions, setDecisions] = useState<AutonomousCadenceDecision[]>([]);
+  const [recommendations, setRecommendations] = useState<AutonomousSessionRecommendation[]>([]);
+  const [summary, setSummary] = useState<AutonomousSessionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const activeSession = useMemo(() => sessions.find((session) => session.session_status === 'RUNNING') ?? sessions[0] ?? null, [sessions]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [s, r, p, e, o, rec, sum] = await Promise.all([
-        getMissionControlStatus(),
-        getAutonomousRuntimeRuns(),
-        getAutonomousCyclePlans(),
-        getAutonomousCycleExecutions(),
-        getAutonomousCycleOutcomes(),
-        getAutonomousRuntimeRecommendations(),
-        getAutonomousRuntimeSummary(),
+      const [loadedSessions, loadedTicks, loadedDecisions, loadedRecommendations, loadedSummary] = await Promise.all([
+        getAutonomousSessions(),
+        getAutonomousTicks(),
+        getAutonomousCadenceDecisions(),
+        getAutonomousSessionRecommendations(),
+        getAutonomousSessionSummary(),
       ]);
-      setStatus(s);
-      setRuns(r);
-      setPlans(p);
-      setExecutions(e);
-      setOutcomes(o);
-      setRecommendations(rec);
-      setSummary(sum);
+      setSessions(loadedSessions);
+      setTicks(loadedTicks);
+      setDecisions(loadedDecisions);
+      setRecommendations(loadedRecommendations);
+      setSummary(loadedSummary);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load autonomous runtime loop.');
+      setError(err instanceof Error ? err.message : 'Unable to load autonomous session runtime state.');
     } finally {
       setLoading(false);
     }
@@ -69,40 +65,39 @@ export function MissionControlPage() {
     <div className="page-stack">
       <PageHeader
         eyebrow="Mission control"
-        title="Autonomous Runtime Loop"
-        description="Continuous closed-cycle orchestration layer for paper-only operation: minimal human intervention, runtime-governed, no live execution."
-        actions={<button type="button" className="primary-button" onClick={async () => { await runAutonomousRuntime({ cycle_count: 1 }); await load(); }}>Run autonomous runtime</button>}
+        title="Autonomous Session Control"
+        description="Persistent paper-only autonomous session layer with cadence-aware tick governance, pause/resume/stop controls, and transparent cooldown-aware traceability. No live execution."
+        actions={<div className="button-row"><button type="button" className="primary-button" onClick={async () => { await startAutonomousSession({}); await load(); }}>Start session</button><button type="button" className="secondary-button" disabled={!activeSession} onClick={async () => { if (activeSession) { await runAutonomousTick(activeSession.id); await load(); } }}>Run tick</button><button type="button" className="secondary-button" disabled={!activeSession} onClick={async () => { if (activeSession) { await pauseAutonomousSession(activeSession.id); await load(); } }}>Pause</button><button type="button" className="secondary-button" disabled={!activeSession} onClick={async () => { if (activeSession) { await resumeAutonomousSession(activeSession.id); await load(); } }}>Resume</button><button type="button" className="secondary-button" disabled={!activeSession} onClick={async () => { if (activeSession) { await stopAutonomousSession(activeSession.id); await load(); } }}>Stop</button></div>}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
-        <SectionCard eyebrow="Summary" title="Runtime loop counters" description="Auditable aggregate counters per autonomous runtime run.">
+        <SectionCard eyebrow="Summary" title="Session governance counters" description="Continuous governed paper runtime summary for persistent autonomous sessions.">
           <div className="system-metadata-grid">
-            <div><strong>Cycles planned:</strong> {summary?.cycle_plan_count ?? 0}</div>
-            <div><strong>Cycles executed:</strong> {summary?.cycle_execution_count ?? 0}</div>
-            <div><strong>Blocked cycles:</strong> {runs[0]?.blocked_cycle_count ?? 0}</div>
-            <div><strong>Dispatches:</strong> {summary?.totals.dispatch_count ?? 0}</div>
-            <div><strong>Closed outcomes:</strong> {summary?.totals.closed_outcome_count ?? 0}</div>
-            <div><strong>Postmortem handoffs:</strong> {summary?.totals.postmortem_handoff_count ?? 0}</div>
-            <div><strong>Learning/reuse updates:</strong> {(summary?.totals.learning_handoff_count ?? 0) + (summary?.totals.reuse_applied_count ?? 0)}</div>
-            <div><strong>Runtime mode:</strong> {status?.runtime.current_mode ?? 'unknown'}</div>
-            <div><strong>Safety:</strong> {status?.safety.status ?? 'unknown'}</div>
+            <div><strong>Active sessions:</strong> {summary?.active_sessions ?? 0}</div>
+            <div><strong>Paused sessions:</strong> {summary?.paused_sessions ?? 0}</div>
+            <div><strong>Stopped sessions:</strong> {summary?.stopped_sessions ?? 0}</div>
+            <div><strong>Total sessions:</strong> {summary?.session_count ?? 0}</div>
+            <div><strong>Ticks executed:</strong> {summary?.ticks_executed ?? 0}</div>
+            <div><strong>Ticks skipped:</strong> {summary?.ticks_skipped ?? 0}</div>
+            <div><strong>Dispatches:</strong> {summary?.dispatch_count ?? 0}</div>
+            <div><strong>Closed outcomes:</strong> {summary?.closed_outcome_count ?? 0}</div>
           </div>
         </SectionCard>
 
-        <SectionCard eyebrow="Cycle plans" title="Autonomous cycle plans" description="Per-cycle gating posture and planned steps.">
-          <ul>{plans.slice(0, 6).map((p) => <li key={p.id}><StatusBadge tone="pending">{p.plan_status}</StatusBadge> mode={p.runtime_mode} portfolio={p.portfolio_posture} safety={p.safety_posture} steps={Object.keys(p.planned_step_flags).filter((k) => p.planned_step_flags[k]).join(', ')}</li>)}</ul>
+        <SectionCard eyebrow="Sessions" title="Autonomous runtime sessions" description="Lifecycle and posture of each persistent autonomous session.">
+          <ul>{sessions.slice(0, 8).map((session) => <li key={session.id}><StatusBadge tone="ready">{session.session_status}</StatusBadge> session={session.id} mode={session.runtime_mode || 'unknown'} profile={session.profile_slug || 'default'} ticks={session.tick_count} dispatch={session.dispatch_count} updated={session.updated_at}</li>)}</ul>
         </SectionCard>
 
-        <SectionCard eyebrow="Cycle execution" title="Execution trace" description="Executed/skipped/blocked steps with linkage to upstream/downstream runs.">
-          <ul>{executions.slice(0, 6).map((e) => <li key={e.id}><StatusBadge tone="ready">{e.execution_status}</StatusBadge> executed=[{e.executed_steps.join(', ')}] skipped=[{e.skipped_steps.join(', ')}] blocked=[{e.blocked_steps.join(', ')}]</li>)}</ul>
+        <SectionCard eyebrow="Ticks" title="Autonomous runtime ticks" description="Cadence-aware tick executions linked to runtime and cycle outcomes.">
+          <ul>{ticks.slice(0, 10).map((tick) => <li key={tick.id}><StatusBadge tone="pending">{tick.tick_status}</StatusBadge> session={tick.linked_session} tick#{tick.tick_index} mode={tick.planned_tick_mode} runtime={tick.linked_runtime_run ?? 'n/a'} outcome={tick.linked_cycle_outcome ?? 'n/a'} summary={tick.tick_summary || 'n/a'}</li>)}</ul>
         </SectionCard>
 
-        <SectionCard eyebrow="Cycle outcomes" title="Outcome consolidation" description="Dispatch/watch/close/postmortem/learning counters per cycle.">
-          <ul>{outcomes.slice(0, 6).map((o) => <li key={o.id}><StatusBadge tone="ready">{o.outcome_status}</StatusBadge> dispatch={o.dispatch_count} watch={o.watch_update_count} close={o.close_action_count} postmortem={o.postmortem_count} learning={o.learning_count} reuse={o.reuse_count}</li>)}</ul>
+        <SectionCard eyebrow="Cadence" title="Cadence decisions" description="Transparent cadence decisions based on portfolio/runtime/safety posture and signal pressure.">
+          <ul>{decisions.slice(0, 10).map((decision) => <li key={decision.id}><strong>{decision.cadence_mode}</strong> — portfolio={decision.portfolio_posture || 'n/a'} runtime={decision.runtime_posture || 'n/a'} safety={decision.safety_posture || 'n/a'} signal={decision.signal_pressure_state} summary={decision.decision_summary}</li>)}</ul>
         </SectionCard>
 
-        <SectionCard eyebrow="Recommendations" title="Runtime recommendations" description="Conservative explicit recommendation stream for each cycle run.">
-          <ul>{recommendations.slice(0, 6).map((r) => <li key={r.id}><strong>{r.recommendation_type}</strong> — {r.rationale} blockers=[{r.blockers.join(', ')}] confidence={r.confidence}</li>)}</ul>
+        <SectionCard eyebrow="Recommendations" title="Session recommendations" description="Conservative next actions for pause/stop/reduced cadence under pressure or hard blocks.">
+          <ul>{recommendations.slice(0, 10).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — {recommendation.rationale} blockers=[{recommendation.blockers.join(', ')}] confidence={recommendation.confidence}</li>)}</ul>
         </SectionCard>
       </DataStateWrapper>
     </div>

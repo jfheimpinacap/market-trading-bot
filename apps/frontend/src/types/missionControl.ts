@@ -145,3 +145,72 @@ export type AutonomousRuntimeSummary = {
     reuse_applied_count: number;
   };
 };
+
+export type AutonomousRuntimeSession = {
+  id: number;
+  started_at: string;
+  stopped_at: string | null;
+  session_status: 'RUNNING' | 'PAUSED' | 'STOPPED' | 'DEGRADED' | 'BLOCKED' | 'COMPLETED';
+  runtime_mode: string;
+  profile_slug: string;
+  tick_count: number;
+  executed_tick_count: number;
+  skipped_tick_count: number;
+  dispatch_count: number;
+  closed_outcome_count: number;
+  pause_reason_codes: string[];
+  stop_reason_codes: string[];
+  metadata: Record<string, unknown>;
+  updated_at: string;
+};
+
+export type AutonomousRuntimeTick = {
+  id: number;
+  linked_session: number;
+  tick_index: number;
+  planned_tick_mode: string;
+  tick_status: string;
+  linked_runtime_run: number | null;
+  linked_cycle_plan: number | null;
+  linked_cycle_execution: number | null;
+  linked_cycle_outcome: number | null;
+  tick_summary: string;
+  reason_codes: string[];
+};
+
+export type AutonomousCadenceDecision = {
+  id: number;
+  linked_session: number;
+  linked_previous_tick: number | null;
+  cadence_mode: string;
+  cadence_reason_codes: string[];
+  portfolio_posture: string;
+  runtime_posture: string;
+  safety_posture: string;
+  signal_pressure_state: string;
+  decision_summary: string;
+};
+
+export type AutonomousSessionRecommendation = {
+  id: number;
+  recommendation_type: string;
+  target_session: number | null;
+  target_tick: number | null;
+  target_cadence_decision: number | null;
+  rationale: string;
+  reason_codes: string[];
+  confidence: number;
+  blockers: string[];
+};
+
+export type AutonomousSessionSummary = {
+  active_sessions: number;
+  paused_sessions: number;
+  stopped_sessions: number;
+  session_count: number;
+  ticks_executed: number;
+  ticks_skipped: number;
+  dispatch_count: number;
+  closed_outcome_count: number;
+  latest_session_id: number | null;
+};

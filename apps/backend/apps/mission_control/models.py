@@ -216,3 +216,152 @@ class AutonomousMissionRuntimeRecommendation(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at', '-id']
+
+
+class AutonomousRuntimeSessionStatus(models.TextChoices):
+    RUNNING = 'RUNNING', 'Running'
+    PAUSED = 'PAUSED', 'Paused'
+    STOPPED = 'STOPPED', 'Stopped'
+    DEGRADED = 'DEGRADED', 'Degraded'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    COMPLETED = 'COMPLETED', 'Completed'
+
+
+class AutonomousRuntimeTickMode(models.TextChoices):
+    FULL_CYCLE = 'FULL_CYCLE', 'Full cycle'
+    REDUCED_CYCLE = 'REDUCED_CYCLE', 'Reduced cycle'
+    MONITOR_ONLY = 'MONITOR_ONLY', 'Monitor only'
+    SKIP = 'SKIP', 'Skip'
+
+
+class AutonomousRuntimeTickStatus(models.TextChoices):
+    PLANNED = 'PLANNED', 'Planned'
+    STARTED = 'STARTED', 'Started'
+    COMPLETED = 'COMPLETED', 'Completed'
+    PARTIAL = 'PARTIAL', 'Partial'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    FAILED = 'FAILED', 'Failed'
+
+
+class AutonomousCadenceMode(models.TextChoices):
+    RUN_NOW = 'RUN_NOW', 'Run now'
+    WAIT_SHORT = 'WAIT_SHORT', 'Wait short'
+    WAIT_LONG = 'WAIT_LONG', 'Wait long'
+    MONITOR_ONLY_NEXT = 'MONITOR_ONLY_NEXT', 'Monitor only next'
+    PAUSE_SESSION = 'PAUSE_SESSION', 'Pause session'
+    STOP_SESSION = 'STOP_SESSION', 'Stop session'
+
+
+class AutonomousSignalPressureState(models.TextChoices):
+    HIGH = 'HIGH', 'High'
+    NORMAL = 'NORMAL', 'Normal'
+    LOW = 'LOW', 'Low'
+    QUIET = 'QUIET', 'Quiet'
+
+
+class AutonomousCooldownType(models.TextChoices):
+    POST_DISPATCH_COOLDOWN = 'POST_DISPATCH_COOLDOWN', 'Post dispatch cooldown'
+    POST_LOSS_COOLDOWN = 'POST_LOSS_COOLDOWN', 'Post loss cooldown'
+    PORTFOLIO_PRESSURE_COOLDOWN = 'PORTFOLIO_PRESSURE_COOLDOWN', 'Portfolio pressure cooldown'
+    RUNTIME_CAUTION_COOLDOWN = 'RUNTIME_CAUTION_COOLDOWN', 'Runtime caution cooldown'
+    QUIET_MARKET_COOLDOWN = 'QUIET_MARKET_COOLDOWN', 'Quiet market cooldown'
+
+
+class AutonomousCooldownStatus(models.TextChoices):
+    ACTIVE = 'ACTIVE', 'Active'
+    EXPIRED = 'EXPIRED', 'Expired'
+    CANCELLED = 'CANCELLED', 'Cancelled'
+
+
+class AutonomousSessionRecommendationType(models.TextChoices):
+    CONTINUE_RUNNING = 'CONTINUE_RUNNING', 'Continue running'
+    RUN_REDUCED_NEXT_TICK = 'RUN_REDUCED_NEXT_TICK', 'Run reduced next tick'
+    PAUSE_FOR_PORTFOLIO_PRESSURE = 'PAUSE_FOR_PORTFOLIO_PRESSURE', 'Pause for portfolio pressure'
+    PAUSE_FOR_SAFETY_BLOCK = 'PAUSE_FOR_SAFETY_BLOCK', 'Pause for safety block'
+    STOP_FOR_RUNTIME_HARD_BLOCK = 'STOP_FOR_RUNTIME_HARD_BLOCK', 'Stop for runtime hard block'
+    WAIT_FOR_SIGNAL_REFRESH = 'WAIT_FOR_SIGNAL_REFRESH', 'Wait for signal refresh'
+    REQUIRE_MANUAL_SESSION_REVIEW = 'REQUIRE_MANUAL_SESSION_REVIEW', 'Require manual session review'
+
+
+class AutonomousRuntimeSession(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    stopped_at = models.DateTimeField(null=True, blank=True)
+    session_status = models.CharField(max_length=12, choices=AutonomousRuntimeSessionStatus.choices, default=AutonomousRuntimeSessionStatus.RUNNING)
+    runtime_mode = models.CharField(max_length=32, blank=True)
+    profile_slug = models.CharField(max_length=40, blank=True)
+    tick_count = models.PositiveIntegerField(default=0)
+    executed_tick_count = models.PositiveIntegerField(default=0)
+    skipped_tick_count = models.PositiveIntegerField(default=0)
+    dispatch_count = models.PositiveIntegerField(default=0)
+    closed_outcome_count = models.PositiveIntegerField(default=0)
+    pause_reason_codes = models.JSONField(default=list, blank=True)
+    stop_reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class AutonomousRuntimeTick(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='ticks')
+    tick_index = models.PositiveIntegerField()
+    planned_tick_mode = models.CharField(max_length=20, choices=AutonomousRuntimeTickMode.choices, default=AutonomousRuntimeTickMode.FULL_CYCLE)
+    tick_status = models.CharField(max_length=12, choices=AutonomousRuntimeTickStatus.choices, default=AutonomousRuntimeTickStatus.PLANNED)
+    linked_runtime_run = models.ForeignKey(AutonomousMissionRuntimeRun, null=True, blank=True, on_delete=models.SET_NULL, related_name='runtime_ticks')
+    linked_cycle_plan = models.ForeignKey(AutonomousMissionCyclePlan, null=True, blank=True, on_delete=models.SET_NULL, related_name='runtime_ticks')
+    linked_cycle_execution = models.ForeignKey(AutonomousMissionCycleExecution, null=True, blank=True, on_delete=models.SET_NULL, related_name='runtime_ticks')
+    linked_cycle_outcome = models.ForeignKey(AutonomousMissionCycleOutcome, null=True, blank=True, on_delete=models.SET_NULL, related_name='runtime_ticks')
+    tick_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        constraints = [
+            models.UniqueConstraint(fields=['linked_session', 'tick_index'], name='autonomous_runtime_session_tick_unique'),
+        ]
+
+
+class AutonomousCadenceDecision(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='cadence_decisions')
+    linked_previous_tick = models.ForeignKey(AutonomousRuntimeTick, null=True, blank=True, on_delete=models.SET_NULL, related_name='next_cadence_decisions')
+    cadence_mode = models.CharField(max_length=20, choices=AutonomousCadenceMode.choices, default=AutonomousCadenceMode.RUN_NOW)
+    cadence_reason_codes = models.JSONField(default=list, blank=True)
+    portfolio_posture = models.CharField(max_length=32, blank=True)
+    runtime_posture = models.CharField(max_length=32, blank=True)
+    safety_posture = models.CharField(max_length=32, blank=True)
+    signal_pressure_state = models.CharField(max_length=12, choices=AutonomousSignalPressureState.choices, default=AutonomousSignalPressureState.NORMAL)
+    decision_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousCooldownState(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='cooldowns')
+    cooldown_type = models.CharField(max_length=36, choices=AutonomousCooldownType.choices)
+    cooldown_status = models.CharField(max_length=12, choices=AutonomousCooldownStatus.choices, default=AutonomousCooldownStatus.ACTIVE)
+    started_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    cooldown_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class AutonomousSessionRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=40, choices=AutonomousSessionRecommendationType.choices)
+    target_session = models.ForeignKey(AutonomousRuntimeSession, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    target_tick = models.ForeignKey(AutonomousRuntimeTick, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    target_cadence_decision = models.ForeignKey(AutonomousCadenceDecision, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']

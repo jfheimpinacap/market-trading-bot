@@ -56,6 +56,18 @@ Still out of scope: real trading, exchange auth, autonomous schedulers/workers, 
 
 ### Autonomous continuous demo loop (new)
 
+### Autonomous session controller / cadence-aware mission runtime (new)
+
+`mission_control` now includes a persistent autonomous session layer on top of existing autonomous runtime cycles:
+
+- explicit session lifecycle (`RUNNING`, `PAUSED`, `STOPPED`, `DEGRADED`, `BLOCKED`, `COMPLETED`)
+- cadence-aware tick orchestration with transparent decisions (`RUN_NOW`, `WAIT_SHORT/LONG`, `MONITOR_ONLY_NEXT`, `PAUSE_SESSION`, `STOP_SESSION`)
+- auditable tick records linking session -> cadence decision -> runtime run -> cycle plan/execution/outcome
+- explicit conservative recommendations for next-step governance
+- manual controls to start, pause, resume, stop session, and run tick on demand
+
+Boundaries remain strict: local-first, single-user, paper/sandbox only, no broker/exchange live execution, no real money, and no black-box scheduler authority.
+
 ### Evaluation harness (new)
 
 The platform now includes an explicit **benchmark/evaluation harness** for autonomous paper/demo operation:

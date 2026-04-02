@@ -3,27 +3,44 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.mission_control.models import (
+    AutonomousCadenceDecision,
     AutonomousMissionCycleExecution,
     AutonomousMissionCycleOutcome,
     AutonomousMissionCyclePlan,
     AutonomousMissionRuntimeRecommendation,
     AutonomousMissionRuntimeRun,
+    AutonomousRuntimeSession,
+    AutonomousRuntimeTick,
+    AutonomousSessionRecommendation,
     MissionControlCycle,
     MissionControlSession,
 )
 from apps.mission_control.serializers import (
+    AutonomousCadenceDecisionSerializer,
     AutonomousCycleExecutionSerializer,
     AutonomousCycleOutcomeSerializer,
     AutonomousCyclePlanSerializer,
+    AutonomousRuntimeSessionSerializer,
+    AutonomousRuntimeTickSerializer,
     AutonomousRuntimeRecommendationSerializer,
     AutonomousRuntimeRunRequestSerializer,
     AutonomousRuntimeRunSerializer,
+    AutonomousSessionRecommendationSerializer,
+    AutonomousSessionStartRequestSerializer,
     MissionControlCycleSerializer,
     MissionControlSessionSerializer,
     MissionControlStartSerializer,
 )
 from apps.mission_control.services import pause_session, resume_session, run_cycle_now, start_session, status_snapshot, stop_session
 from apps.mission_control.services.autonomous_runtime import build_autonomous_runtime_summary, run_autonomous_runtime
+from apps.mission_control.services.session_runtime import (
+    build_session_summary,
+    pause_session as pause_autonomous_session,
+    resume_session as resume_autonomous_session,
+    run_tick,
+    start_session as start_autonomous_session,
+    stop_session as stop_autonomous_session,
+)
 
 
 class MissionControlStatusView(APIView):
@@ -137,3 +154,81 @@ class AutonomousRuntimeRecommendationListView(generics.ListAPIView):
 class AutonomousRuntimeSummaryView(APIView):
     def get(self, request, *args, **kwargs):
         return Response(build_autonomous_runtime_summary(), status=status.HTTP_200_OK)
+
+
+class StartAutonomousSessionView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = AutonomousSessionStartRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        session = start_autonomous_session(profile_slug=payload.get('profile_slug'), runtime_mode=payload.get('runtime_mode'))
+        return Response(AutonomousRuntimeSessionSerializer(session).data, status=status.HTTP_200_OK)
+
+
+class PauseAutonomousSessionView(APIView):
+    def post(self, request, session_id: int, *args, **kwargs):
+        session = pause_autonomous_session(session_id=session_id)
+        return Response(AutonomousRuntimeSessionSerializer(session).data, status=status.HTTP_200_OK)
+
+
+class ResumeAutonomousSessionView(APIView):
+    def post(self, request, session_id: int, *args, **kwargs):
+        session = resume_autonomous_session(session_id=session_id)
+        return Response(AutonomousRuntimeSessionSerializer(session).data, status=status.HTTP_200_OK)
+
+
+class StopAutonomousSessionView(APIView):
+    def post(self, request, session_id: int, *args, **kwargs):
+        session = stop_autonomous_session(session_id=session_id)
+        return Response(AutonomousRuntimeSessionSerializer(session).data, status=status.HTTP_200_OK)
+
+
+class RunAutonomousTickView(APIView):
+    def post(self, request, session_id: int, *args, **kwargs):
+        tick, cadence, recommendation = run_tick(session_id=session_id)
+        return Response({
+            'tick': AutonomousRuntimeTickSerializer(tick).data,
+            'cadence_decision': AutonomousCadenceDecisionSerializer(cadence).data,
+            'recommendation': AutonomousSessionRecommendationSerializer(recommendation).data,
+        }, status=status.HTTP_200_OK)
+
+
+class AutonomousSessionListView(generics.ListAPIView):
+    serializer_class = AutonomousRuntimeSessionSerializer
+    queryset = AutonomousRuntimeSession.objects.order_by('-started_at', '-id')[:100]
+
+
+class AutonomousSessionDetailView(generics.RetrieveAPIView):
+    serializer_class = AutonomousRuntimeSessionSerializer
+    queryset = AutonomousRuntimeSession.objects.order_by('-started_at', '-id')
+
+
+class AutonomousTickListView(generics.ListAPIView):
+    serializer_class = AutonomousRuntimeTickSerializer
+    queryset = AutonomousRuntimeTick.objects.select_related(
+        'linked_session', 'linked_runtime_run', 'linked_cycle_plan', 'linked_cycle_execution', 'linked_cycle_outcome'
+    ).order_by('-created_at', '-id')[:200]
+
+
+class AutonomousTickDetailView(generics.RetrieveAPIView):
+    serializer_class = AutonomousRuntimeTickSerializer
+    queryset = AutonomousRuntimeTick.objects.select_related(
+        'linked_session', 'linked_runtime_run', 'linked_cycle_plan', 'linked_cycle_execution', 'linked_cycle_outcome'
+    ).order_by('-created_at', '-id')
+
+
+class AutonomousCadenceDecisionListView(generics.ListAPIView):
+    serializer_class = AutonomousCadenceDecisionSerializer
+    queryset = AutonomousCadenceDecision.objects.select_related('linked_session', 'linked_previous_tick').order_by('-created_at', '-id')[:200]
+
+
+class AutonomousSessionRecommendationListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionRecommendationSerializer
+    queryset = AutonomousSessionRecommendation.objects.select_related(
+        'target_session', 'target_tick', 'target_cadence_decision'
+    ).order_by('-created_at', '-id')[:200]
+
+
+class AutonomousSessionSummaryView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(build_session_summary(), status=status.HTTP_200_OK)

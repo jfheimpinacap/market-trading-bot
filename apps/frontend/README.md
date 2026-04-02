@@ -2,6 +2,17 @@
 
 Frontend local-first para `market-trading-bot`, construido con React + Vite + TypeScript.
 
+## Mission control autonomous session UX (new)
+
+La vista `/mission-control` ahora incluye una sección explícita de **Autonomous Session Control** para operación persistente gobernada:
+
+- acciones manuales: `Start session`, `Run tick`, `Pause`, `Resume`, `Stop`
+- summary cards de sesiones activas/pausadas/stopped, ticks, dispatches y outcomes
+- paneles auditables de sesiones, ticks, cadence decisions y recomendaciones
+- contexto explícito de límites: paper-only, cadence-aware, cooldown-aware, sin ejecución real
+
+La UI extiende capacidades existentes de mission control/autonomous runtime sin crear un scheduler opaco ni un flujo de live trading.
+
 ## Precedent-aware UX (new)
 
 La UI ahora expone señales de memoria histórica sin sobrecargar pantallas:
