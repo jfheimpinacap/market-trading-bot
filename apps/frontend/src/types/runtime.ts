@@ -26,6 +26,8 @@ export type RuntimeStatusResponse = {
     allowed: boolean;
     reasons: string[];
   };
+  global_operating_mode: GlobalOperatingMode;
+  global_mode_influence: Record<string, string>;
 };
 
 export type RuntimeModeOption = {
@@ -72,4 +74,88 @@ export type SetRuntimeModePayload = {
   rationale?: string;
   set_by?: string;
   metadata?: Record<string, unknown>;
+};
+
+export type GlobalOperatingMode = 'BALANCED' | 'CAUTION' | 'MONITOR_ONLY' | 'RECOVERY_MODE' | 'THROTTLED' | 'BLOCKED';
+
+export type RuntimePostureRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_signal_count: number;
+  mode_kept_count: number;
+  mode_switch_count: number;
+  caution_count: number;
+  monitor_only_count: number;
+  recovery_mode_count: number;
+  throttled_count: number;
+  blocked_count: number;
+  recommendation_summary: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+};
+
+export type RuntimePostureSnapshot = {
+  id: number;
+  exposure_pressure_state: string;
+  admission_pressure_state: string;
+  session_health_state: string;
+  recent_loss_state: string;
+  signal_quality_state: string;
+  runtime_posture: string;
+  safety_posture: string;
+  incident_pressure_state: string;
+  portfolio_pressure_state: string;
+  snapshot_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at_snapshot: string;
+};
+
+export type OperatingModeDecision = {
+  id: number;
+  current_mode: GlobalOperatingMode | null;
+  target_mode: GlobalOperatingMode;
+  decision_type: string;
+  decision_status: string;
+  auto_applicable: boolean;
+  decision_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at_decision: string;
+};
+
+export type OperatingModeSwitchRecord = {
+  id: number;
+  previous_mode: GlobalOperatingMode | null;
+  applied_mode: GlobalOperatingMode;
+  switch_status: string;
+  switch_summary: string;
+  metadata: Record<string, unknown>;
+  created_at_switch: string;
+};
+
+export type OperatingModeRecommendation = {
+  id: number;
+  recommendation_type: string;
+  rationale: string;
+  reason_codes: string[];
+  confidence: number;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type OperatingModeSummary = {
+  latest_run_id: number | null;
+  latest_decision_id: number | null;
+  active_mode: GlobalOperatingMode;
+  posture_reviews: number;
+  mode_kept: number;
+  mode_switched: number;
+  caution_count: number;
+  monitor_only_count: number;
+  recovery_mode_count: number;
+  throttled_count: number;
+  blocked_count: number;
+  recommendation_summary: Record<string, unknown>;
 };

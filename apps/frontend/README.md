@@ -2136,3 +2136,18 @@ This UX extends existing governance screens and does not introduce live trading 
   - paused clusters
 
 This UI extends existing portfolio governor + mission-control visibility without replacing runtime/safety/risk authorities.
+
+## Runtime governor global operating mode UX (new)
+
+La vista `/runtime` ahora incluye una sección técnica de **Global Operating Mode** con:
+
+- header de alcance (paper-only, local-first, regime-aware, sin live execution)
+- summary cards de posture reviews y distribución de modos
+- paneles auditables de:
+  - posture snapshots
+  - mode decisions
+  - switch records
+  - recommendations
+- acción manual: `Run operating mode review`
+
+Esta capa coordina la postura operativa global del runtime sin reemplazar timing/admission/exposure governance existente y sin habilitar dinero real.

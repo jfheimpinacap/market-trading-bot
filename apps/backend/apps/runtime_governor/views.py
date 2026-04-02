@@ -2,12 +2,33 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.runtime_governor.models import RuntimeTransitionLog
-from apps.runtime_governor.serializers import RuntimeSetModeSerializer, RuntimeTransitionLogSerializer
+from django.shortcuts import get_object_or_404
+
+from apps.runtime_governor.models import (
+    GlobalOperatingModeDecision,
+    GlobalOperatingModeRecommendation,
+    GlobalOperatingModeSwitchRecord,
+    GlobalRuntimePostureRun,
+    GlobalRuntimePostureSnapshot,
+    RuntimeTransitionLog,
+)
+from apps.runtime_governor.serializers import (
+    GlobalOperatingModeDecisionSerializer,
+    GlobalOperatingModeRecommendationSerializer,
+    GlobalOperatingModeSwitchRecordSerializer,
+    GlobalRuntimePostureRunSerializer,
+    GlobalRuntimePostureSnapshotSerializer,
+    RunOperatingModeReviewSerializer,
+    RuntimeSetModeSerializer,
+    RuntimeTransitionLogSerializer,
+)
 from apps.runtime_governor.services import (
+    apply_operating_mode_decision,
     get_capabilities_for_current_mode,
+    get_operating_mode_summary,
     get_runtime_status,
     list_modes_with_constraints,
+    run_operating_mode_review,
     set_runtime_mode,
 )
 
@@ -33,6 +54,8 @@ class RuntimeStatusView(APIView):
             'readiness_status': snapshot['readiness_status'],
             'safety_status': snapshot['safety_status'],
             'constraints': snapshot['constraints'],
+            'global_operating_mode': snapshot['global_operating_mode'],
+            'global_mode_influence': snapshot['global_mode_influence'],
         }
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -104,3 +127,100 @@ class RuntimeCapabilitiesView(APIView):
 
     def get(self, request, *args, **kwargs):
         return Response(get_capabilities_for_current_mode(), status=status.HTTP_200_OK)
+
+
+class RunOperatingModeReviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunOperatingModeReviewSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_operating_mode_review(
+            triggered_by=serializer.validated_data.get('triggered_by') or 'operator-ui',
+            auto_apply=serializer.validated_data.get('auto_apply', True),
+        )
+        return Response(
+            {
+                'run_id': result['run'].id,
+                'posture_snapshot_id': result['snapshot'].id,
+                'mode_decision_id': result['decision'].id,
+                'switch_record_id': result['switch_record'].id,
+                'recommendation_id': result['recommendation'].id,
+                'target_mode': result['decision'].target_mode,
+                'decision_status': result['decision'].decision_status,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class RuntimePostureRunListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = GlobalRuntimePostureRunSerializer
+
+    def get_queryset(self):
+        return GlobalRuntimePostureRun.objects.order_by('-started_at', '-id')[:200]
+
+
+class RuntimePostureSnapshotListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = GlobalRuntimePostureSnapshotSerializer
+
+    def get_queryset(self):
+        return GlobalRuntimePostureSnapshot.objects.order_by('-created_at_snapshot', '-id')[:300]
+
+
+class OperatingModeDecisionListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = GlobalOperatingModeDecisionSerializer
+
+    def get_queryset(self):
+        return GlobalOperatingModeDecision.objects.select_related('linked_posture_snapshot').order_by('-created_at_decision', '-id')[:300]
+
+
+class OperatingModeDecisionDetailView(generics.RetrieveAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = GlobalOperatingModeDecisionSerializer
+    queryset = GlobalOperatingModeDecision.objects.select_related('linked_posture_snapshot').all()
+    lookup_field = 'id'
+    lookup_url_kwarg = 'decision_id'
+
+
+class OperatingModeSwitchRecordListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = GlobalOperatingModeSwitchRecordSerializer
+
+    def get_queryset(self):
+        return GlobalOperatingModeSwitchRecord.objects.select_related('linked_mode_decision').order_by('-created_at_switch', '-id')[:300]
+
+
+class OperatingModeRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = GlobalOperatingModeRecommendationSerializer
+
+    def get_queryset(self):
+        return GlobalOperatingModeRecommendation.objects.select_related('target_posture_snapshot', 'target_mode_decision').order_by('-created_at', '-id')[:300]
+
+
+class OperatingModeSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(get_operating_mode_summary(), status=status.HTTP_200_OK)
+
+
+class ApplyOperatingModeDecisionView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, decision_id: int, *args, **kwargs):
+        decision = get_object_or_404(GlobalOperatingModeDecision, pk=decision_id)
+        record = apply_operating_mode_decision(decision=decision)
+        return Response(GlobalOperatingModeSwitchRecordSerializer(record).data, status=status.HTTP_200_OK)

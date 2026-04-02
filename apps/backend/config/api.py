@@ -30,6 +30,7 @@ urlpatterns = [
     path('experiments/', include(('apps.experiment_lab.urls', 'experiment_lab'), namespace='experiment_lab')),
     path('readiness/', include(('apps.readiness_lab.urls', 'readiness_lab'), namespace='readiness_lab')),
     path('runtime/', include(('apps.runtime_governor.urls', 'runtime_governor'), namespace='runtime_governor')),
+    path('runtime-governor/', include(('apps.runtime_governor.urls', 'runtime_governor_v2'), namespace='runtime_governor_v2')),
     path('alerts/', include(('apps.operator_alerts.urls', 'operator_alerts'), namespace='operator_alerts')),
     path('notifications/', include(('apps.notification_center.urls', 'notification_center'), namespace='notification_center')),
     path('llm/', include(('apps.llm_local.urls', 'llm_local'), namespace='llm_local')),
