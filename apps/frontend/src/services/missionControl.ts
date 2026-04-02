@@ -6,6 +6,11 @@ import type {
   AutonomousRuntimeRecommendation,
   AutonomousRuntimeRun,
   AutonomousRuntimeSummary,
+  AutonomousRuntimeSession,
+  AutonomousRuntimeTick,
+  AutonomousCadenceDecision,
+  AutonomousSessionRecommendation,
+  AutonomousSessionSummary,
   MissionControlCycle,
   MissionControlSession,
   MissionControlStatusResponse,
@@ -82,4 +87,48 @@ export function getAutonomousRuntimeRecommendations() {
 
 export function getAutonomousRuntimeSummary() {
   return requestJson<AutonomousRuntimeSummary>('/api/mission-control/autonomous-runtime-summary/');
+}
+
+export function startAutonomousSession(payload: Record<string, unknown> = {}) {
+  return requestJson<AutonomousRuntimeSession>('/api/mission-control/start-autonomous-session/', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function pauseAutonomousSession(sessionId: number) {
+  return requestJson<AutonomousRuntimeSession>(`/api/mission-control/pause-autonomous-session/${sessionId}/`, { method: 'POST', body: '{}' });
+}
+
+export function resumeAutonomousSession(sessionId: number) {
+  return requestJson<AutonomousRuntimeSession>(`/api/mission-control/resume-autonomous-session/${sessionId}/`, { method: 'POST', body: '{}' });
+}
+
+export function stopAutonomousSession(sessionId: number) {
+  return requestJson<AutonomousRuntimeSession>(`/api/mission-control/stop-autonomous-session/${sessionId}/`, { method: 'POST', body: '{}' });
+}
+
+export function runAutonomousTick(sessionId: number) {
+  return requestJson<{
+    tick: AutonomousRuntimeTick;
+    cadence_decision: AutonomousCadenceDecision;
+    recommendation: AutonomousSessionRecommendation;
+  }>(`/api/mission-control/run-autonomous-tick/${sessionId}/`, { method: 'POST', body: '{}' });
+}
+
+export function getAutonomousSessions() {
+  return requestJson<AutonomousRuntimeSession[]>('/api/mission-control/autonomous-sessions/');
+}
+
+export function getAutonomousTicks() {
+  return requestJson<AutonomousRuntimeTick[]>('/api/mission-control/autonomous-ticks/');
+}
+
+export function getAutonomousCadenceDecisions() {
+  return requestJson<AutonomousCadenceDecision[]>('/api/mission-control/autonomous-cadence-decisions/');
+}
+
+export function getAutonomousSessionRecommendations() {
+  return requestJson<AutonomousSessionRecommendation[]>('/api/mission-control/autonomous-session-recommendations/');
+}
+
+export function getAutonomousSessionSummary() {
+  return requestJson<AutonomousSessionSummary>('/api/mission-control/autonomous-session-summary/');
 }

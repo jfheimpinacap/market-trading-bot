@@ -1,11 +1,15 @@
 from rest_framework import serializers
 
 from apps.mission_control.models import (
+    AutonomousCadenceDecision,
     AutonomousMissionCycleExecution,
     AutonomousMissionCycleOutcome,
     AutonomousMissionCyclePlan,
     AutonomousMissionRuntimeRecommendation,
     AutonomousMissionRuntimeRun,
+    AutonomousRuntimeSession,
+    AutonomousRuntimeTick,
+    AutonomousSessionRecommendation,
     MissionControlCycle,
     MissionControlSession,
     MissionControlState,
@@ -85,3 +89,32 @@ class AutonomousRuntimeRecommendationSerializer(serializers.ModelSerializer):
 class AutonomousRuntimeRunRequestSerializer(serializers.Serializer):
     cycle_count = serializers.IntegerField(required=False, min_value=1, max_value=20, default=1)
     profile_slug = serializers.CharField(required=False, allow_blank=True)
+
+
+class AutonomousRuntimeSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousRuntimeSession
+        fields = '__all__'
+
+
+class AutonomousRuntimeTickSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousRuntimeTick
+        fields = '__all__'
+
+
+class AutonomousCadenceDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousCadenceDecision
+        fields = '__all__'
+
+
+class AutonomousSessionRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionRecommendation
+        fields = '__all__'
+
+
+class AutonomousSessionStartRequestSerializer(serializers.Serializer):
+    profile_slug = serializers.CharField(required=False, allow_blank=True)
+    runtime_mode = serializers.CharField(required=False, allow_blank=True)

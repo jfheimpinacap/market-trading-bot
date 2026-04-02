@@ -5,11 +5,18 @@ from apps.mission_control.models import (
     AutonomousMissionCycleExecutionStatus,
     AutonomousMissionCyclePlan,
     MissionControlSession,
+    MissionControlSessionStatus,
 )
 from apps.mission_control.services.cycle_runner import run_mission_control_cycle
+from django.utils import timezone
 
 
-def execute_cycle_plan(*, cycle_plan: AutonomousMissionCyclePlan, mission_session: MissionControlSession, mission_settings: dict) -> AutonomousMissionCycleExecution:
+def execute_cycle_plan(
+    *,
+    cycle_plan: AutonomousMissionCyclePlan,
+    mission_session: MissionControlSession | None,
+    mission_settings: dict,
+) -> AutonomousMissionCycleExecution:
     execution = AutonomousMissionCycleExecution.objects.create(
         linked_cycle_plan=cycle_plan,
         execution_status=AutonomousMissionCycleExecutionStatus.STARTED,
@@ -26,6 +33,14 @@ def execute_cycle_plan(*, cycle_plan: AutonomousMissionCyclePlan, mission_sessio
     step_flags = cycle_plan.planned_step_flags or {}
     executed_steps = [k for k, v in step_flags.items() if v]
     skipped_steps = [k for k, v in step_flags.items() if not v]
+
+    if mission_session is None:
+        mission_session = MissionControlSession.objects.create(
+            status=MissionControlSessionStatus.RUNNING,
+            started_at=timezone.now(),
+            summary='Session created by autonomous runtime tick executor.',
+            metadata={'source': 'autonomous_runtime_tick'},
+        )
 
     mission_cycle = run_mission_control_cycle(session=mission_session, settings=mission_settings)
     execution.linked_scan_run = str(mission_cycle.id)

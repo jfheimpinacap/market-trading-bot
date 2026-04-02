@@ -11,6 +11,36 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 - Make the demo dataset feel alive locally without real provider integrations, trading, or websockets.
 - Provide precedent-aware agent support via `memory_retrieval` with conservative and auditable influence on research/prediction/risk/signals/postmortem.
 
+## Mission control autonomous session runtime (new)
+
+`apps.mission_control` now has an explicit persistent session runtime layer (paper-only):
+
+- entities:
+  - `AutonomousRuntimeSession`
+  - `AutonomousRuntimeTick`
+  - `AutonomousCadenceDecision`
+  - `AutonomousCooldownState`
+  - `AutonomousSessionRecommendation`
+- service split:
+  - `services/session_runtime/session.py`
+  - `services/session_runtime/cadence.py`
+  - `services/session_runtime/tick.py`
+  - `services/session_runtime/recommendation.py`
+  - `services/session_runtime/run.py`
+- API:
+  - `POST /api/mission-control/start-autonomous-session/`
+  - `POST /api/mission-control/pause-autonomous-session/<session_id>/`
+  - `POST /api/mission-control/resume-autonomous-session/<session_id>/`
+  - `POST /api/mission-control/stop-autonomous-session/<session_id>/`
+  - `POST /api/mission-control/run-autonomous-tick/<session_id>/`
+  - `GET /api/mission-control/autonomous-sessions/`
+  - `GET /api/mission-control/autonomous-ticks/`
+  - `GET /api/mission-control/autonomous-cadence-decisions/`
+  - `GET /api/mission-control/autonomous-session-recommendations/`
+  - `GET /api/mission-control/autonomous-session-summary/`
+
+This layer extends existing mission control and autonomous trader orchestration; it does not replace runtime/policy/safety/portfolio authorities.
+
 ## Precedent-aware backend layer (new)
 
 - Added `AgentPrecedentUse` for auditable agent-memory usage records.
