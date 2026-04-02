@@ -14,6 +14,7 @@ from apps.mission_control.models import (
     AutonomousResumeDecision,
     AutonomousResumeRecord,
     AutonomousSessionRecoveryRecommendation,
+    AutonomousSessionRecoverySnapshot,
     AutonomousRuntimeSession,
     AutonomousRuntimeTick,
     AutonomousScheduleProfile,
@@ -584,3 +585,46 @@ class SessionRecoveryReviewTests(TestCase):
         record = AutonomousResumeRecord.objects.filter(linked_resume_decision=decision).order_by('-created_at', '-id').first()
         self.assertIsNotNone(record)
         self.assertEqual(record.resume_status, 'BLOCKED')
+
+
+class SessionAdmissionControlTests(TestCase):
+    def test_available_capacity_admits_ready_sessions(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER', dispatch_count=6)
+        response = self.client.post(reverse('mission_control:run-session-admission-review'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        reviews = self.client.get(reverse('mission_control:session-admission-reviews')).json()
+        self.assertTrue(any(r['linked_session'] == session.id and r['admission_status'] in {'ADMIT', 'DEFER'} for r in reviews))
+
+    def test_capacity_pressure_defers_or_parks_sessions(self):
+        for _ in range(5):
+            AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER', dispatch_count=1, metadata={'no_signal_streak': 6})
+        self.client.post(reverse('mission_control:run-session-admission-review'), data='{}', content_type='application/json')
+        decisions = self.client.get(reverse('mission_control:session-admission-decisions')).json()
+        self.assertTrue(any(d['decision_type'] in {'DEFER_SESSION', 'PAUSE_SESSION', 'PARK_SESSION', 'RETIRE_SESSION'} for d in decisions))
+
+    def test_repeated_low_signal_parks_or_retires(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER', metadata={'no_signal_streak': 12})
+        self.client.post(reverse('mission_control:run-session-admission-review'), data='{}', content_type='application/json')
+        decisions = self.client.get(reverse('mission_control:session-admission-decisions')).json()
+        target = next(d for d in decisions if d['linked_session'] == session.id)
+        self.assertIn(target['decision_type'], {'PARK_SESSION', 'RETIRE_SESSION'})
+
+    def test_resume_allowed_requires_recovery_and_capacity(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        AutonomousResumeDecision.objects.create(
+            linked_session=session,
+            linked_recovery_snapshot=AutonomousSessionRecoverySnapshot.objects.create(linked_session=session, recovery_status='RECOVERED'),
+            decision_type='READY_TO_RESUME',
+            decision_status='PROPOSED',
+        )
+        self.client.post(reverse('mission_control:run-session-admission-review'), data='{}', content_type='application/json')
+        reviews = self.client.get(reverse('mission_control:session-admission-reviews')).json()
+        target = next(r for r in reviews if r['linked_session'] == session.id)
+        self.assertIn(target['admission_status'], {'RESUME_ALLOWED', 'DEFER', 'MANUAL_REVIEW'})
+
+    def test_summary_endpoint(self):
+        AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-session-admission-review'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:session-admission-summary'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('summary', response.json())

@@ -41,6 +41,11 @@ from apps.mission_control.models import (
     AutonomousTimingDecision,
     AutonomousTimingRecommendation,
     AutonomousTickDispatchAttempt,
+    AutonomousSessionAdmissionRun,
+    AutonomousGlobalCapacitySnapshot,
+    AutonomousSessionAdmissionReview,
+    AutonomousSessionAdmissionDecision,
+    AutonomousSessionAdmissionRecommendation,
     MissionControlCycle,
     MissionControlSession,
 )
@@ -91,6 +96,12 @@ from apps.mission_control.serializers import (
     MissionControlCycleSerializer,
     MissionControlSessionSerializer,
     MissionControlStartSerializer,
+    SessionAdmissionReviewRequestSerializer,
+    AutonomousSessionAdmissionRunSerializer,
+    AutonomousGlobalCapacitySnapshotSerializer,
+    AutonomousSessionAdmissionReviewSerializer,
+    AutonomousSessionAdmissionDecisionSerializer,
+    AutonomousSessionAdmissionRecommendationSerializer,
 )
 from apps.mission_control.services.session_timing import (
     apply_schedule_profile,
@@ -127,6 +138,7 @@ from apps.mission_control.services.session_health import (
     run_session_health_review,
 )
 from apps.mission_control.services.session_recovery import apply_session_resume, build_session_recovery_summary, run_session_recovery_review
+from apps.mission_control.services.session_admission import apply_admission_decision, build_session_admission_summary, run_session_admission_review
 from apps.mission_control.services.session_profile_control.profile_switch import apply_profile_switch_decision
 
 
@@ -634,3 +646,56 @@ class SessionRecoveryRecommendationListView(generics.ListAPIView):
 class SessionRecoverySummaryView(APIView):
     def get(self, request, *args, **kwargs):
         return Response(build_session_recovery_summary(), status=status.HTTP_200_OK)
+
+
+class RunSessionAdmissionReviewView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = SessionAdmissionReviewRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_session_admission_review(
+            session_ids=serializer.validated_data.get('session_ids'),
+            auto_apply_safe=serializer.validated_data.get('auto_apply_safe', True),
+        )
+        return Response(AutonomousSessionAdmissionRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class GlobalCapacitySnapshotListView(generics.ListAPIView):
+    serializer_class = AutonomousGlobalCapacitySnapshotSerializer
+    queryset = AutonomousGlobalCapacitySnapshot.objects.select_related('linked_admission_run').order_by('-created_at', '-id')[:300]
+
+
+class SessionAdmissionReviewListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionAdmissionReviewSerializer
+    queryset = AutonomousSessionAdmissionReview.objects.select_related(
+        'linked_admission_run', 'linked_session', 'linked_capacity_snapshot',
+        'linked_latest_health_snapshot', 'linked_latest_recovery_snapshot', 'linked_latest_context_review', 'linked_current_profile'
+    ).order_by('-created_at', '-id')[:300]
+
+
+class SessionAdmissionDecisionListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionAdmissionDecisionSerializer
+    queryset = AutonomousSessionAdmissionDecision.objects.select_related('linked_session', 'linked_admission_review').order_by('-created_at', '-id')[:300]
+
+
+class SessionAdmissionDecisionDetailView(generics.RetrieveAPIView):
+    serializer_class = AutonomousSessionAdmissionDecisionSerializer
+    queryset = AutonomousSessionAdmissionDecision.objects.select_related('linked_session', 'linked_admission_review').order_by('-created_at', '-id')
+
+
+class SessionAdmissionRecommendationListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionAdmissionRecommendationSerializer
+    queryset = AutonomousSessionAdmissionRecommendation.objects.select_related(
+        'target_session', 'target_admission_review', 'target_admission_decision'
+    ).order_by('-created_at', '-id')[:300]
+
+
+class SessionAdmissionSummaryView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(build_session_admission_summary(), status=status.HTTP_200_OK)
+
+
+class ApplySessionAdmissionDecisionView(APIView):
+    def post(self, request, decision_id: int, *args, **kwargs):
+        decision = get_object_or_404(AutonomousSessionAdmissionDecision, pk=decision_id)
+        applied = apply_admission_decision(decision=decision, automatic=False)
+        return Response(AutonomousSessionAdmissionDecisionSerializer(applied).data, status=status.HTTP_200_OK)

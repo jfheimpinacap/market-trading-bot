@@ -685,3 +685,106 @@ export type SessionRecoverySummary = {
   };
   decision_breakdown: Record<string, number>;
 };
+
+export type AutonomousSessionAdmissionRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_session_count: number;
+  admitted_count: number;
+  resume_allowed_count: number;
+  parked_count: number;
+  deferred_count: number;
+  paused_count: number;
+  retired_count: number;
+  manual_review_count: number;
+  recommendation_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousGlobalCapacitySnapshot = {
+  id: number;
+  linked_admission_run: number | null;
+  max_active_sessions: number;
+  current_running_sessions: number;
+  current_paused_sessions: number;
+  current_degraded_sessions: number;
+  current_blocked_sessions: number;
+  active_dispatch_load: number;
+  open_position_pressure_state: 'NORMAL' | 'CAUTION' | 'THROTTLED' | 'BLOCK_NEW_ACTIVITY';
+  runtime_posture: 'NORMAL' | 'CAUTION' | 'BLOCKED';
+  safety_posture: 'NORMAL' | 'CAUTION' | 'HARD_BLOCK';
+  incident_pressure_state: 'NONE' | 'CAUTION' | 'HIGH';
+  capacity_status: 'AVAILABLE' | 'LIMITED' | 'THROTTLED' | 'BLOCKED';
+  snapshot_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousSessionAdmissionReview = {
+  id: number;
+  linked_admission_run: number | null;
+  linked_session: number;
+  linked_capacity_snapshot: number;
+  linked_latest_health_snapshot: number | null;
+  linked_latest_recovery_snapshot: number | null;
+  linked_latest_context_review: number | null;
+  linked_current_profile: number | null;
+  session_priority_state: 'HIGH_VALUE' | 'MEDIUM_VALUE' | 'LOW_VALUE' | 'NO_VALUE';
+  session_operability_state: 'READY' | 'RECOVERABLE' | 'CAUTION' | 'BLOCKED' | 'RETIRE_CANDIDATE';
+  admission_status: 'ADMIT' | 'RESUME_ALLOWED' | 'PARK' | 'DEFER' | 'PAUSE' | 'RETIRE' | 'MANUAL_REVIEW';
+  review_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousSessionAdmissionDecision = {
+  id: number;
+  linked_session: number;
+  linked_admission_review: number;
+  decision_type: 'ADMIT_SESSION' | 'ALLOW_RESUME' | 'PARK_SESSION' | 'DEFER_SESSION' | 'PAUSE_SESSION' | 'RETIRE_SESSION' | 'REQUIRE_MANUAL_ADMISSION_REVIEW';
+  decision_status: 'PROPOSED' | 'APPLIED' | 'SKIPPED' | 'BLOCKED';
+  auto_applicable: boolean;
+  decision_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousSessionAdmissionRecommendation = {
+  id: number;
+  recommendation_type: string;
+  target_session: number | null;
+  target_admission_review: number | null;
+  target_admission_decision: number | null;
+  rationale: string;
+  reason_codes: string[];
+  confidence: number;
+  blockers: string[];
+  created_at: string;
+};
+
+export type SessionAdmissionSummary = {
+  latest_run_id: number | null;
+  summary: {
+    sessions_considered: number;
+    admitted: number;
+    resume_allowed: number;
+    parked: number;
+    deferred: number;
+    paused: number;
+    retired: number;
+    manual_review: number;
+  };
+  latest_capacity_snapshot_id: number | null;
+  totals: {
+    runs: number;
+    capacity_snapshots: number;
+    reviews: number;
+    decisions: number;
+    recommendations: number;
+  };
+};

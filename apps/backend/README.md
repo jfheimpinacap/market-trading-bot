@@ -3408,3 +3408,16 @@ This extends the existing local heartbeat runner and keeps all execution paper-o
 - `POST /api/mission-control/apply-profile-switch/<decision_id>/` (manual opcional)
 
 Esta capa alimenta mejor la timing policy; no reemplaza runtime/policy/safety/portfolio authorities.
+
+## Mission control global session admission
+
+Backend mission_control now exposes a global session admission control flow:
+
+- `run-session-admission-review`
+- `global-capacity-snapshots`
+- `session-admission-reviews`
+- `session-admission-decisions`
+- `session-admission-recommendations`
+- `session-admission-summary`
+
+This layer is conservative and auditable, coordinates cross-session capacity, and consumes portfolio/runtime/safety/health/recovery signals without replacing those authorities.

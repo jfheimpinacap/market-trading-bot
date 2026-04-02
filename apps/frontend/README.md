@@ -2083,3 +2083,15 @@ La vista `/mission-control` ahora incluye una sección **Adaptive Session Profil
   - profile recommendations
 
 La UI mantiene límites explícitos: local-first, paper-only, conservative switching, no live execution.
+
+## Mission Control: Global Session Admission
+
+`/mission-control` now includes a **Global Session Admission** section with:
+
+- Capacity snapshots
+- Session admission reviews
+- Admission decisions
+- Admission recommendations
+- Manual action: `Run admission review`
+
+The UI remains local-first and paper-only, and does not introduce live execution.
