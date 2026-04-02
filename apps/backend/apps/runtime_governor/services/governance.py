@@ -130,6 +130,8 @@ def get_runtime_status() -> dict:
         'constraints': {'allowed': decision.allowed, 'reasons': decision.reasons},
         'global_operating_mode': global_mode,
         'global_mode_influence': build_downstream_influence(mode=global_mode),
+        'global_mode_enforcement': (state.metadata or {}).get('global_mode_enforcement', {}),
+        'global_mode_enforcement_run_id': (state.metadata or {}).get('global_mode_enforcement_run_id'),
     }
 
 

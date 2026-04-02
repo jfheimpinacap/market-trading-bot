@@ -2151,3 +2151,8 @@ La vista `/runtime` ahora incluye una sección técnica de **Global Operating Mo
 - acción manual: `Run operating mode review`
 
 Esta capa coordina la postura operativa global del runtime sin reemplazar timing/admission/exposure governance existente y sin habilitar dinero real.
+
+## Runtime UI: Mode Enforcement
+- `/runtime` now includes a **Mode Enforcement** section with module impacts, decisions, recommendations, and summary cards.
+- Includes `Run mode enforcement review` action to trigger auditable downstream enforcement propagation.
+- UI and backend remain paper-only/local-first; no live execution enablement.

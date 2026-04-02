@@ -11,6 +11,11 @@ import type {
   RuntimeStatusResponse,
   RuntimeTransition,
   SetRuntimeModePayload,
+  ModeEnforcementRun,
+  ModeModuleImpact,
+  ModeEnforcementDecision,
+  ModeEnforcementRecommendation,
+  ModeEnforcementSummary,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -65,4 +70,32 @@ export function getOperatingModeRecommendations() {
 
 export function getOperatingModeSummary() {
   return requestJson<OperatingModeSummary>('/api/runtime-governor/operating-mode-summary/');
+}
+
+
+export function runModeEnforcementReview(payload: { triggered_by?: string } = {}) {
+  return requestJson<{ run_id: number }>('/api/runtime-governor/run-mode-enforcement-review/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getModeEnforcementRuns() {
+  return requestJson<ModeEnforcementRun[]>('/api/runtime-governor/mode-enforcement-runs/');
+}
+
+export function getModeModuleImpacts() {
+  return requestJson<ModeModuleImpact[]>('/api/runtime-governor/mode-module-impacts/');
+}
+
+export function getModeEnforcementDecisions() {
+  return requestJson<ModeEnforcementDecision[]>('/api/runtime-governor/mode-enforcement-decisions/');
+}
+
+export function getModeEnforcementRecommendations() {
+  return requestJson<ModeEnforcementRecommendation[]>('/api/runtime-governor/mode-enforcement-recommendations/');
+}
+
+export function getModeEnforcementSummary() {
+  return requestJson<ModeEnforcementSummary>('/api/runtime-governor/mode-enforcement-summary/');
 }

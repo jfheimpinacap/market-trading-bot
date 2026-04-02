@@ -3496,3 +3496,8 @@ Hard limits remain unchanged: paper-only, local-first, no real broker/exchange r
   - emits downstream influence hints for cadence/admission/exposure/heartbeat behavior
 
 Strict boundaries remain unchanged: local-first, paper/sandbox only, no real-money execution, and no replacement of mission-control/portfolio/safety/risk authorities.
+
+## Global mode enforcement bridge
+- Added mode-enforcement services (`rules`, `module_impacts`, `enforcement`, `recommendation`, `run`) under `runtime_governor`.
+- New endpoints expose mode enforcement runs, impacts, decisions, recommendations, and summary.
+- This layer propagates global operating mode into conservative downstream runtime restrictions without replacing timing/admission/exposure/safety authorities.

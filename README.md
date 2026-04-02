@@ -2326,3 +2326,8 @@ API:
 - `GET /api/runtime-governor/operating-mode-recommendations/`
 - `GET /api/runtime-governor/operating-mode-summary/`
 - `POST /api/runtime-governor/apply-operating-mode/<decision_id>/`
+
+## Global mode enforcement bridge (Prompt 155)
+- Runtime governor now runs an explicit downstream mode-enforcement review to make global mode operational (not only descriptive).
+- Enforcement remains local-first, single-user, paper/sandbox only (no real money, no live broker routing).
+- The bridge adds auditable run/module impact/decision/recommendation records and summary endpoints for runtime/mission-control visibility.

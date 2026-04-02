@@ -280,3 +280,127 @@ class GlobalOperatingModeRecommendation(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at', '-id']
+
+
+class GlobalModeEnforcementEffectType(models.TextChoices):
+    NO_CHANGE = 'NO_CHANGE', 'No change'
+    SOFT_REDUCTION = 'SOFT_REDUCTION', 'Soft reduction'
+    THROTTLE = 'THROTTLE', 'Throttle'
+    MONITOR_ONLY = 'MONITOR_ONLY', 'Monitor only'
+    BLOCK_NEW_ACTIVITY = 'BLOCK_NEW_ACTIVITY', 'Block new activity'
+    MANUAL_REVIEW_BIAS = 'MANUAL_REVIEW_BIAS', 'Manual review bias'
+
+
+class GlobalModeImpactStatus(models.TextChoices):
+    UNCHANGED = 'UNCHANGED', 'Unchanged'
+    REDUCED = 'REDUCED', 'Reduced'
+    THROTTLED = 'THROTTLED', 'Throttled'
+    MONITOR_ONLY = 'MONITOR_ONLY', 'Monitor only'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class GlobalModeEnforcementDecisionType(models.TextChoices):
+    KEEP_DEFAULT_BEHAVIOR = 'KEEP_DEFAULT_BEHAVIOR', 'Keep default behavior'
+    REDUCE_CADENCE = 'REDUCE_CADENCE', 'Reduce cadence'
+    REDUCE_ADMISSION_CAPACITY = 'REDUCE_ADMISSION_CAPACITY', 'Reduce admission capacity'
+    THROTTLE_EXPOSURE = 'THROTTLE_EXPOSURE', 'Throttle exposure'
+    BLOCK_NEW_EXECUTION = 'BLOCK_NEW_EXECUTION', 'Block new execution'
+    FORCE_MONITOR_ONLY = 'FORCE_MONITOR_ONLY', 'Force monitor only'
+    REQUIRE_MANUAL_REVIEW_BIAS = 'REQUIRE_MANUAL_REVIEW_BIAS', 'Require manual review bias'
+
+
+class GlobalModeEnforcementDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class GlobalModeEnforcementRecommendationType(models.TextChoices):
+    KEEP_BALANCED_ENFORCEMENT = 'KEEP_BALANCED_ENFORCEMENT', 'Keep balanced enforcement'
+    REDUCE_RUNTIME_INTENSITY = 'REDUCE_RUNTIME_INTENSITY', 'Reduce runtime intensity'
+    ENTER_MONITOR_ONLY_BEHAVIOR = 'ENTER_MONITOR_ONLY_BEHAVIOR', 'Enter monitor only behavior'
+    THROTTLE_GLOBAL_NEW_ACTIVITY = 'THROTTLE_GLOBAL_NEW_ACTIVITY', 'Throttle global new activity'
+    BLOCK_NEW_EXECUTION_PATHS = 'BLOCK_NEW_EXECUTION_PATHS', 'Block new execution paths'
+    BIAS_TOWARD_MANUAL_REVIEW = 'BIAS_TOWARD_MANUAL_REVIEW', 'Bias toward manual review'
+    REQUIRE_MANUAL_MODE_ENFORCEMENT_REVIEW = 'REQUIRE_MANUAL_MODE_ENFORCEMENT_REVIEW', 'Require manual mode enforcement review'
+
+
+class GlobalModeEnforcementRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    current_mode = models.CharField(max_length=24, choices=GlobalOperatingMode.choices, default=GlobalOperatingMode.BALANCED)
+    considered_module_count = models.PositiveIntegerField(default=0)
+    affected_module_count = models.PositiveIntegerField(default=0)
+    restricted_module_count = models.PositiveIntegerField(default=0)
+    throttled_module_count = models.PositiveIntegerField(default=0)
+    blocked_module_count = models.PositiveIntegerField(default=0)
+    monitor_only_module_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class GlobalModeModuleImpact(TimeStampedModel):
+    linked_enforcement_run = models.ForeignKey(GlobalModeEnforcementRun, on_delete=models.CASCADE, related_name='module_impacts')
+    current_mode = models.CharField(max_length=24, choices=GlobalOperatingMode.choices)
+    module_name = models.CharField(max_length=64)
+    impact_status = models.CharField(max_length=24, choices=GlobalModeImpactStatus.choices, default=GlobalModeImpactStatus.UNCHANGED)
+    effective_behavior_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class GlobalModeEnforcementDecision(TimeStampedModel):
+    linked_enforcement_run = models.ForeignKey(GlobalModeEnforcementRun, on_delete=models.CASCADE, related_name='enforcement_decisions')
+    module_name = models.CharField(max_length=64)
+    decision_type = models.CharField(max_length=48, choices=GlobalModeEnforcementDecisionType.choices)
+    decision_status = models.CharField(max_length=12, choices=GlobalModeEnforcementDecisionStatus.choices, default=GlobalModeEnforcementDecisionStatus.PROPOSED)
+    auto_applicable = models.BooleanField(default=True)
+    decision_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class GlobalModeEnforcementRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=56, choices=GlobalModeEnforcementRecommendationType.choices)
+    target_enforcement_run = models.ForeignKey(
+        GlobalModeEnforcementRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    target_module_impact = models.ForeignKey(
+        GlobalModeModuleImpact,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    target_enforcement_decision = models.ForeignKey(
+        GlobalModeEnforcementDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
