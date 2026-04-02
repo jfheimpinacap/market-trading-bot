@@ -47,11 +47,14 @@ Esta capa no reemplaza runner/timing/session-control: los fortalece con monitore
 `/mission-control` ahora incluye una sección explícita de **Session Recovery Review**:
 
 - botón manual: `Run recovery review`
+- opción conservadora: `Run recovery review (safe auto apply)`
+- acción manual por decisión: `Apply resume` (y `Apply monitor-only` cuando corresponde)
 - summary cards para reviewed/ready/keep paused/manual/stop/escalate
 - paneles técnicos auditables de:
   - recovery snapshots
   - recovery blockers
   - resume decisions
+  - resume records (MANUAL_RESUME / AUTO_SAFE_RESUME / MONITOR_ONLY_RESUME)
   - recovery recommendations
 - copy explícita de límites:
   - local-first
@@ -59,7 +62,7 @@ Esta capa no reemplaza runner/timing/session-control: los fortalece con monitore
   - paper/sandbox only
   - sin dinero real
   - sin broker/exchange execution
-  - sin auto-resume aplicado (solo evaluación y recomendación)
+  - auto-resume solo en modo safe para `READY_TO_RESUME` elegible
 
 ## Precedent-aware UX (new)
 

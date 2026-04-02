@@ -28,7 +28,9 @@ from apps.mission_control.models import (
     AutonomousSessionRecoveryRun,
     AutonomousSessionRecoverySnapshot,
     AutonomousRecoveryBlocker,
+    AutonomousResumeApplyMode,
     AutonomousResumeDecision,
+    AutonomousResumeRecord,
     AutonomousSessionContextReview,
     AutonomousSessionTimingSnapshot,
     AutonomousStopConditionEvaluation,
@@ -238,6 +240,15 @@ class SessionRecoveryReviewRequestSerializer(serializers.Serializer):
         required=False,
         allow_empty=True,
     )
+    auto_apply_safe = serializers.BooleanField(required=False, default=False)
+
+
+class ApplySessionResumeRequestSerializer(serializers.Serializer):
+    applied_mode = serializers.ChoiceField(
+        choices=AutonomousResumeApplyMode.choices,
+        required=False,
+        default=AutonomousResumeApplyMode.MANUAL_RESUME,
+    )
 
 
 class AutonomousProfileSelectionRunSerializer(serializers.ModelSerializer):
@@ -327,6 +338,12 @@ class AutonomousRecoveryBlockerSerializer(serializers.ModelSerializer):
 class AutonomousResumeDecisionSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousResumeDecision
+        fields = '__all__'
+
+
+class AutonomousResumeRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousResumeRecord
         fields = '__all__'
 
 

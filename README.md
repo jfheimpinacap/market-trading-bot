@@ -139,10 +139,13 @@ Boundaries remain strict: local-first, single-user, paper/sandbox only, no real 
   - `GET /api/mission-control/session-recovery-snapshots/`
   - `GET /api/mission-control/session-recovery-blockers/`
   - `GET /api/mission-control/session-resume-decisions/`
+  - `GET /api/mission-control/session-resume-records/`
+  - `POST /api/mission-control/apply-session-resume/<decision_id>/`
   - `GET /api/mission-control/session-recovery-recommendations/`
   - `GET /api/mission-control/session-recovery-summary/`
+  - `run-session-recovery-review` now accepts optional `auto_apply_safe` (default `false`) and only auto-applies `READY_TO_RESUME` + `auto_applicable=true`.
 
-Important boundary: this layer **does not auto-apply resume yet**; it only evaluates and recommends.
+Resume apply remains conservative: blockers block apply, monitor-only decisions can be applied in `MONITOR_ONLY_RESUME`, and resume reintegration uses existing timing policy + heartbeat runner (no replacement).
 
 ### Evaluation harness (new)
 

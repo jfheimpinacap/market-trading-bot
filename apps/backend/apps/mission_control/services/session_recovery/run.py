@@ -5,6 +5,7 @@ from django.utils import timezone
 from apps.mission_control.models import (
     AutonomousResumeDecision,
     AutonomousResumeDecisionType,
+    AutonomousResumeRecord,
     AutonomousRuntimeSession,
     AutonomousRuntimeSessionStatus,
     AutonomousSessionRecoveryRecommendation,
@@ -12,13 +13,14 @@ from apps.mission_control.models import (
     AutonomousSessionRecoverySnapshot,
     AutonomousRecoveryBlocker,
 )
+from apps.mission_control.services.session_recovery.apply_resume import apply_session_resume
 from apps.mission_control.services.session_recovery.recommendation import emit_recovery_recommendation
 from apps.mission_control.services.session_recovery.recovery_blockers import detect_recovery_blockers
 from apps.mission_control.services.session_recovery.recovery_snapshot import build_recovery_snapshot
 from apps.mission_control.services.session_recovery.resume import derive_resume_decision
 
 
-def run_session_recovery_review(*, session_ids: list[int] | None = None) -> AutonomousSessionRecoveryRun:
+def run_session_recovery_review(*, session_ids: list[int] | None = None, auto_apply_safe: bool = False) -> AutonomousSessionRecoveryRun:
     run = AutonomousSessionRecoveryRun.objects.create()
     sessions = AutonomousRuntimeSession.objects.filter(
         session_status__in=[
@@ -37,12 +39,17 @@ def run_session_recovery_review(*, session_ids: list[int] | None = None) -> Auto
     stop = 0
     escalate = 0
 
+    auto_applied = 0
     for session in sessions[:80]:
         considered += 1
         snapshot = build_recovery_snapshot(session=session, recovery_run=run).snapshot
         blockers = detect_recovery_blockers(snapshot=snapshot)
         decision = derive_resume_decision(snapshot=snapshot, blockers=blockers)
         emit_recovery_recommendation(decision=decision)
+        if auto_apply_safe:
+            result = apply_session_resume(decision=decision, automatic=True)
+            if result.record.resume_status == 'APPLIED':
+                auto_applied += 1
 
         if decision.decision_type == AutonomousResumeDecisionType.READY_TO_RESUME:
             ready += 1
@@ -63,10 +70,10 @@ def run_session_recovery_review(*, session_ids: list[int] | None = None) -> Auto
     run.incident_escalation_count = escalate
     run.recommendation_summary = (
         f'recovery-reviewed={considered} ready={ready} keep_paused={keep_paused} '
-        f'manual={manual} stop={stop} escalate={escalate}'
+        f'manual={manual} stop={stop} escalate={escalate} auto_applied={auto_applied}'
     )
     run.completed_at = timezone.now()
-    run.metadata = {}
+    run.metadata = {'auto_apply_safe': auto_apply_safe, 'auto_applied_count': auto_applied}
     run.save(
         update_fields=[
             'considered_session_count',
@@ -102,6 +109,7 @@ def build_session_recovery_summary() -> dict:
             'snapshots': AutonomousSessionRecoverySnapshot.objects.count(),
             'blockers': AutonomousRecoveryBlocker.objects.count(),
             'decisions': AutonomousResumeDecision.objects.count(),
+            'records': AutonomousResumeRecord.objects.count(),
             'recommendations': AutonomousSessionRecoveryRecommendation.objects.count(),
         },
         'decision_breakdown': {

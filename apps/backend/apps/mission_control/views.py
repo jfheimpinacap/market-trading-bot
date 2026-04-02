@@ -33,7 +33,9 @@ from apps.mission_control.models import (
     AutonomousSessionRecoveryRun,
     AutonomousSessionRecoverySnapshot,
     AutonomousRecoveryBlocker,
+    AutonomousResumeApplyMode,
     AutonomousResumeDecision,
+    AutonomousResumeRecord,
     AutonomousStopConditionEvaluation,
     AutonomousSessionRecommendation,
     AutonomousTimingDecision,
@@ -70,6 +72,7 @@ from apps.mission_control.serializers import (
     AutonomousSessionRecoveryRunSerializer,
     AutonomousSessionRecoverySnapshotSerializer,
     AutonomousRecoveryBlockerSerializer,
+    AutonomousResumeRecordSerializer,
     AutonomousResumeDecisionSerializer,
     AutonomousStopConditionEvaluationSerializer,
     AutonomousRuntimeRecommendationSerializer,
@@ -81,6 +84,7 @@ from apps.mission_control.serializers import (
     ProfileSelectionReviewRequestSerializer,
     SessionHealthReviewRequestSerializer,
     SessionRecoveryReviewRequestSerializer,
+    ApplySessionResumeRequestSerializer,
     AutonomousSessionRecommendationSerializer,
     AutonomousSessionStartRequestSerializer,
     AutonomousTickDispatchAttemptSerializer,
@@ -122,7 +126,7 @@ from apps.mission_control.services.session_health import (
     build_session_health_summary,
     run_session_health_review,
 )
-from apps.mission_control.services.session_recovery import build_session_recovery_summary, run_session_recovery_review
+from apps.mission_control.services.session_recovery import apply_session_resume, build_session_recovery_summary, run_session_recovery_review
 from apps.mission_control.services.session_profile_control.profile_switch import apply_profile_switch_decision
 
 
@@ -564,7 +568,10 @@ class RunSessionRecoveryReviewView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = SessionRecoveryReviewRequestSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        run = run_session_recovery_review(session_ids=serializer.validated_data.get('session_ids'))
+        run = run_session_recovery_review(
+            session_ids=serializer.validated_data.get('session_ids'),
+            auto_apply_safe=serializer.validated_data.get('auto_apply_safe', False),
+        )
         return Response(AutonomousSessionRecoveryRunSerializer(run).data, status=status.HTTP_200_OK)
 
 
@@ -593,6 +600,26 @@ class SessionRecoveryBlockerListView(generics.ListAPIView):
 class SessionResumeDecisionListView(generics.ListAPIView):
     serializer_class = AutonomousResumeDecisionSerializer
     queryset = AutonomousResumeDecision.objects.select_related('linked_session', 'linked_recovery_snapshot').order_by('-created_at', '-id')[:300]
+
+
+class SessionResumeRecordListView(generics.ListAPIView):
+    serializer_class = AutonomousResumeRecordSerializer
+    queryset = AutonomousResumeRecord.objects.select_related('linked_session', 'linked_resume_decision').order_by('-created_at', '-id')[:300]
+
+
+class ApplySessionResumeView(APIView):
+    def post(self, request, decision_id: int, *args, **kwargs):
+        decision = get_object_or_404(AutonomousResumeDecision, pk=decision_id)
+        serializer = ApplySessionResumeRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        applied_mode = serializer.validated_data.get('applied_mode', AutonomousResumeApplyMode.MANUAL_RESUME)
+        automatic = applied_mode == AutonomousResumeApplyMode.AUTO_SAFE_RESUME
+        result = apply_session_resume(decision=decision, automatic=automatic)
+        payload = {
+            'decision': AutonomousResumeDecisionSerializer(result.decision).data,
+            'record': AutonomousResumeRecordSerializer(result.record).data,
+        }
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class SessionRecoveryRecommendationListView(generics.ListAPIView):

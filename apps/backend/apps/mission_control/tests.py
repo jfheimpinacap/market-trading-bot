@@ -12,6 +12,7 @@ from apps.mission_control.models import (
     AutonomousCooldownState,
     AutonomousSessionInterventionDecision,
     AutonomousResumeDecision,
+    AutonomousResumeRecord,
     AutonomousSessionRecoveryRecommendation,
     AutonomousRuntimeSession,
     AutonomousRuntimeTick,
@@ -497,3 +498,89 @@ class SessionRecoveryReviewTests(TestCase):
         response = self.client.get(reverse('mission_control:session-recovery-summary'))
         self.assertEqual(response.status_code, 200)
         self.assertIn('summary', response.json())
+
+    def test_manual_resume_apply_creates_record_and_resumes_session(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        for index in range(1, 3):
+            AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index, tick_status='COMPLETED')
+        self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
+        self.client.post(reverse('mission_control:run-session-recovery-review'), data='{}', content_type='application/json')
+        decision = AutonomousResumeDecision.objects.filter(linked_session=session, decision_type='READY_TO_RESUME').order_by('-created_at', '-id').first()
+        self.assertIsNotNone(decision)
+        response = self.client.post(
+            reverse('mission_control:apply-session-resume', kwargs={'decision_id': decision.id}),
+            data=json.dumps({'applied_mode': 'MANUAL_RESUME'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        session.refresh_from_db()
+        self.assertEqual(session.session_status, 'RUNNING')
+        record = AutonomousResumeRecord.objects.filter(linked_resume_decision=decision).order_by('-created_at', '-id').first()
+        self.assertIsNotNone(record)
+        self.assertEqual(record.resume_status, 'APPLIED')
+        self.assertEqual(record.applied_mode, 'MANUAL_RESUME')
+
+    def test_auto_safe_resume_only_applies_for_ready_and_auto_applicable(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        for index in range(1, 3):
+            AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index, tick_status='FAILED')
+        self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
+        self.client.post(
+            reverse('mission_control:run-session-recovery-review'),
+            data=json.dumps({'auto_apply_safe': True}),
+            content_type='application/json',
+        )
+        decision = AutonomousResumeDecision.objects.filter(linked_session=session).order_by('-created_at', '-id').first()
+        self.assertIsNotNone(decision)
+        self.assertEqual(decision.decision_type, 'RESUME_IN_MONITOR_ONLY_MODE')
+        record = AutonomousResumeRecord.objects.filter(linked_resume_decision=decision).order_by('-created_at', '-id').first()
+        self.assertIsNotNone(record)
+        self.assertEqual(record.resume_status, 'SKIPPED')
+        self.assertEqual(record.applied_mode, 'AUTO_SAFE_RESUME')
+        session.refresh_from_db()
+        self.assertEqual(session.session_status, 'PAUSED')
+
+    def test_monitor_only_resume_apply_uses_monitor_mode_and_record(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        for index in range(1, 3):
+            AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index, tick_status='FAILED')
+        self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
+        self.client.post(reverse('mission_control:run-session-recovery-review'), data='{}', content_type='application/json')
+        decision = AutonomousResumeDecision.objects.filter(linked_session=session, decision_type='RESUME_IN_MONITOR_ONLY_MODE').order_by('-created_at', '-id').first()
+        self.assertIsNotNone(decision)
+        response = self.client.post(
+            reverse('mission_control:apply-session-resume', kwargs={'decision_id': decision.id}),
+            data=json.dumps({'applied_mode': 'MONITOR_ONLY_RESUME'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        session.refresh_from_db()
+        self.assertEqual(session.session_status, 'RUNNING')
+        self.assertEqual((session.metadata or {}).get('resume_apply_mode'), 'MONITOR_ONLY_RESUME')
+        record = AutonomousResumeRecord.objects.filter(linked_resume_decision=decision).order_by('-created_at', '-id').first()
+        self.assertIsNotNone(record)
+        self.assertEqual(record.applied_mode, 'MONITOR_ONLY_RESUME')
+        self.assertEqual(record.resume_status, 'APPLIED')
+
+    @patch('apps.mission_control.services.session_recovery.apply_resume.detect_recovery_blockers')
+    def test_active_blockers_prevent_resume_apply(self, mock_detect_blockers):
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        for index in range(1, 3):
+            AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index, tick_status='COMPLETED')
+        self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
+        self.client.post(reverse('mission_control:run-session-recovery-review'), data='{}', content_type='application/json')
+        decision = AutonomousResumeDecision.objects.filter(linked_session=session, decision_type='READY_TO_RESUME').order_by('-created_at', '-id').first()
+        self.assertIsNotNone(decision)
+        blocker = type('Blocker', (), {'id': 999, 'blocker_type': 'MANUAL_REVIEW_REQUIRED'})()
+        mock_detect_blockers.return_value = [blocker]
+        response = self.client.post(
+            reverse('mission_control:apply-session-resume', kwargs={'decision_id': decision.id}),
+            data='{}',
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        decision.refresh_from_db()
+        self.assertEqual(decision.decision_status, 'BLOCKED')
+        record = AutonomousResumeRecord.objects.filter(linked_resume_decision=decision).order_by('-created_at', '-id').first()
+        self.assertIsNotNone(record)
+        self.assertEqual(record.resume_status, 'BLOCKED')

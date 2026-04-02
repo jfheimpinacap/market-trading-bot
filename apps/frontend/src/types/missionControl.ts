@@ -641,6 +641,17 @@ export type AutonomousResumeDecision = {
   created_at: string;
 };
 
+export type AutonomousResumeRecord = {
+  id: number;
+  linked_session: number;
+  linked_resume_decision: number;
+  resume_status: 'APPLIED' | 'SKIPPED' | 'BLOCKED' | 'FAILED';
+  applied_mode: 'MANUAL_RESUME' | 'AUTO_SAFE_RESUME' | 'MONITOR_ONLY_RESUME';
+  resume_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
 export type AutonomousSessionRecoveryRecommendation = {
   id: number;
   recommendation_type: string;
@@ -669,6 +680,7 @@ export type SessionRecoverySummary = {
     snapshots: number;
     blockers: number;
     decisions: number;
+    records: number;
     recommendations: number;
   };
   decision_breakdown: Record<string, number>;

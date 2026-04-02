@@ -1026,6 +1026,19 @@ class AutonomousSessionRecoveryRecommendationType(models.TextChoices):
     ESCALATE_RECOVERY_TO_INCIDENT_LAYER = 'ESCALATE_RECOVERY_TO_INCIDENT_LAYER', 'Escalate recovery to incident layer'
 
 
+class AutonomousResumeStatus(models.TextChoices):
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    FAILED = 'FAILED', 'Failed'
+
+
+class AutonomousResumeApplyMode(models.TextChoices):
+    MANUAL_RESUME = 'MANUAL_RESUME', 'Manual resume'
+    AUTO_SAFE_RESUME = 'AUTO_SAFE_RESUME', 'Auto safe resume'
+    MONITOR_ONLY_RESUME = 'MONITOR_ONLY_RESUME', 'Monitor only resume'
+
+
 class AutonomousSessionHealthRun(TimeStampedModel):
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -1337,6 +1350,22 @@ class AutonomousSessionRecoveryRecommendation(TimeStampedModel):
     reason_codes = models.JSONField(default=list, blank=True)
     confidence = models.FloatField(default=0.5)
     blockers = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousResumeRecord(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='resume_records')
+    linked_resume_decision = models.ForeignKey(
+        AutonomousResumeDecision,
+        on_delete=models.CASCADE,
+        related_name='records',
+    )
+    resume_status = models.CharField(max_length=12, choices=AutonomousResumeStatus.choices)
+    applied_mode = models.CharField(max_length=24, choices=AutonomousResumeApplyMode.choices)
+    resume_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ['-created_at', '-id']
