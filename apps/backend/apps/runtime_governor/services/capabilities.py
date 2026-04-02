@@ -66,6 +66,26 @@ def apply_safety_overrides(caps: RuntimeCapabilities) -> RuntimeCapabilities:
     return caps
 
 
+
+
+def apply_mode_enforcement_overrides(caps: RuntimeCapabilities) -> RuntimeCapabilities:
+    from apps.runtime_governor.services.state import get_runtime_state
+
+    state = get_runtime_state()
+    enforcement = (state.metadata or {}).get('global_mode_enforcement', {})
+    decisions = enforcement.get('enforcement_decisions', []) if isinstance(enforcement, dict) else []
+    blocked_modules = {d.get('module_name') for d in decisions if d.get('decision_status') == 'BLOCKED'}
+
+    if 'execution_intake' in blocked_modules:
+        caps.allow_auto_execution = False
+        caps.blocked_reasons.append('Mode enforcement blocked execution intake.')
+    if 'exposure_coordination' in blocked_modules or 'exposure_apply' in blocked_modules:
+        caps.allow_allocation = False
+        caps.blocked_reasons.append('Mode enforcement blocked new exposure activity.')
+    if 'heartbeat_runner' in blocked_modules:
+        caps.allow_continuous_loop = False
+        caps.blocked_reasons.append('Mode enforcement blocked heartbeat runner cadence.')
+    return caps
 def get_effective_capabilities(profile: RuntimeModeProfile) -> dict:
     caps = apply_safety_overrides(profile_to_capabilities(profile))
     global_mode = get_active_global_operating_mode()
@@ -76,4 +96,5 @@ def get_effective_capabilities(profile: RuntimeModeProfile) -> dict:
     if global_mode in {'THROTTLED', 'BLOCKED'}:
         caps.allow_allocation = False
         caps.blocked_reasons.append(f'Global operating mode {global_mode} reduces allocation privileges.')
+    caps = apply_mode_enforcement_overrides(caps)
     return asdict(caps)

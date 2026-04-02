@@ -3,7 +3,15 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.readiness_lab.models import ReadinessAssessmentRun, ReadinessProfile, ReadinessStatus
-from apps.runtime_governor.models import GlobalOperatingModeDecision, RuntimeMode, RuntimeSetBy, RuntimeTransitionLog
+from apps.runtime_governor.models import (
+    GlobalModeEnforcementDecision,
+    GlobalModeEnforcementRun,
+    GlobalModeModuleImpact,
+    GlobalOperatingModeDecision,
+    RuntimeMode,
+    RuntimeSetBy,
+    RuntimeTransitionLog,
+)
 from apps.runtime_governor.services import get_capabilities_for_current_mode, get_runtime_state, set_runtime_mode
 from apps.mission_control.models import AutonomousRuntimeSession, AutonomousRuntimeSessionStatus, AutonomousSessionHealthSnapshot, AutonomousSessionHealthStatus
 from apps.portfolio_governor.models import (
@@ -121,3 +129,69 @@ class RuntimeGovernorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn('active_mode', payload)
+
+
+    def test_mode_enforcement_balanced_keeps_modules_unchanged(self):
+        response = self.client.post(reverse('runtime_governor_v2:run_mode_enforcement_review'), {'triggered_by': 'test'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        latest_run = GlobalModeEnforcementRun.objects.order_by('-started_at', '-id').first()
+        self.assertIsNotNone(latest_run)
+        self.assertEqual(latest_run.current_mode, 'BALANCED')
+        self.assertEqual(latest_run.affected_module_count, 0)
+
+    def test_mode_enforcement_caution_reduces_cadence_and_admission(self):
+        session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
+        from apps.mission_control.models import AutonomousSessionTimingSnapshot, AutonomousTimingDecision, AutonomousTimingDecisionType
+
+        timing_snapshot = AutonomousSessionTimingSnapshot.objects.create(linked_session=session, timing_status='WAIT_WINDOW')
+        AutonomousTimingDecision.objects.create(
+            linked_session=session,
+            linked_timing_snapshot=timing_snapshot,
+            decision_type=AutonomousTimingDecisionType.WAIT_SHORT,
+            decision_summary='caution signal',
+        )
+        self._seed_exposure_decision(PortfolioExposureDecisionType.PARK_WEAKER_SESSION)
+        response = self.client.post(reverse('runtime_governor_v2:run_operating_mode_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        self.assertEqual(response.status_code, 200)
+        response2 = self.client.post(reverse('runtime_governor_v2:run_mode_enforcement_review'), {'triggered_by': 'test'}, format='json')
+        self.assertEqual(response2.status_code, 200)
+        decisions = GlobalModeEnforcementDecision.objects.filter(linked_enforcement_run__current_mode='CAUTION')
+        self.assertTrue(decisions.filter(module_name='timing_policy', decision_type='REDUCE_CADENCE').exists())
+        self.assertTrue(decisions.filter(module_name='session_admission', decision_type='REDUCE_ADMISSION_CAPACITY').exists())
+
+    def test_mode_enforcement_monitor_only_blocks_execution(self):
+        session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
+        from apps.mission_control.models import AutonomousSessionTimingSnapshot, AutonomousTimingDecision, AutonomousTimingDecisionType
+
+        timing_snapshot = AutonomousSessionTimingSnapshot.objects.create(linked_session=session, timing_status='MONITOR_ONLY_WINDOW')
+        AutonomousTimingDecision.objects.create(
+            linked_session=session,
+            linked_timing_snapshot=timing_snapshot,
+            decision_type=AutonomousTimingDecisionType.MONITOR_ONLY_NEXT,
+            decision_summary='quiet',
+        )
+        self.client.post(reverse('runtime_governor_v2:run_operating_mode_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        self.client.post(reverse('runtime_governor_v2:run_mode_enforcement_review'), {'triggered_by': 'test'}, format='json')
+        self.assertTrue(GlobalModeModuleImpact.objects.filter(module_name='execution_intake', impact_status='BLOCKED').exists())
+
+    def test_mode_enforcement_recovery_and_throttled_harden_exposure(self):
+        session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
+        AutonomousSessionHealthSnapshot.objects.create(linked_session=session, session_health_status=AutonomousSessionHealthStatus.CAUTION, recent_loss_count=3)
+        self.client.post(reverse('runtime_governor_v2:run_operating_mode_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        self.client.post(reverse('runtime_governor_v2:run_mode_enforcement_review'), {'triggered_by': 'test'}, format='json')
+        self.assertTrue(GlobalModeEnforcementDecision.objects.filter(module_name='exposure_coordination', decision_type='THROTTLE_EXPOSURE').exists())
+
+    def test_mode_enforcement_blocked_blocks_new_activity(self):
+        enable_kill_switch()
+        self.client.post(reverse('runtime_governor_v2:run_operating_mode_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        self.client.post(reverse('runtime_governor_v2:run_mode_enforcement_review'), {'triggered_by': 'test'}, format='json')
+        latest = GlobalModeEnforcementRun.objects.order_by('-started_at', '-id').first()
+        self.assertEqual(latest.current_mode, 'BLOCKED')
+        self.assertGreaterEqual(latest.blocked_module_count, 1)
+
+    def test_mode_enforcement_summary_endpoint(self):
+        self.client.post(reverse('runtime_governor_v2:run_mode_enforcement_review'), {'triggered_by': 'test'}, format='json')
+        response = self.client.get(reverse('runtime_governor_v2:mode_enforcement_summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('current_mode', payload)

@@ -6,6 +6,10 @@ from apps.runtime_governor.models import (
     GlobalOperatingModeSwitchRecord,
     GlobalRuntimePostureRun,
     GlobalRuntimePostureSnapshot,
+    GlobalModeEnforcementRun,
+    GlobalModeModuleImpact,
+    GlobalModeEnforcementDecision,
+    GlobalModeEnforcementRecommendation,
     RuntimeMode,
     RuntimeModeProfile,
     RuntimeModeState,
@@ -70,4 +74,32 @@ class GlobalOperatingModeSwitchRecordSerializer(serializers.ModelSerializer):
 class GlobalOperatingModeRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = GlobalOperatingModeRecommendation
+        fields = '__all__'
+
+
+class RunModeEnforcementReviewSerializer(serializers.Serializer):
+    triggered_by = serializers.CharField(required=False, allow_blank=True, default='operator-ui')
+
+
+class GlobalModeEnforcementRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlobalModeEnforcementRun
+        fields = '__all__'
+
+
+class GlobalModeModuleImpactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlobalModeModuleImpact
+        fields = '__all__'
+
+
+class GlobalModeEnforcementDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlobalModeEnforcementDecision
+        fields = '__all__'
+
+
+class GlobalModeEnforcementRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlobalModeEnforcementRecommendation
         fields = '__all__'

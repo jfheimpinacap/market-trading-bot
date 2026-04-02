@@ -84,17 +84,19 @@ def build_downstream_influence(*, mode: str) -> dict:
         'admission': 'default',
         'exposure': 'default',
         'heartbeat': 'default',
+        'execution_intake': 'default',
+        'session_recovery': 'default',
     }
     if mode == GlobalOperatingMode.CAUTION:
-        influence.update({'cadence': 'wait_short_bias', 'admission': 'conservative_resume', 'exposure': 'soft_throttle', 'heartbeat': 'reduced_cycle_bias'})
+        influence.update({'cadence': 'wait_short_bias', 'admission': 'conservative_resume', 'exposure': 'soft_throttle', 'heartbeat': 'reduced_cycle_bias', 'execution_intake': 'soft_reduction', 'session_recovery': 'manual_review_bias'})
     elif mode == GlobalOperatingMode.MONITOR_ONLY:
-        influence.update({'cadence': 'monitor_only_windows', 'admission': 'admit_minimal', 'exposure': 'avoid_new_entries', 'heartbeat': 'monitor_only'})
+        influence.update({'cadence': 'monitor_only_windows', 'admission': 'admit_minimal', 'exposure': 'avoid_new_entries', 'heartbeat': 'monitor_only', 'execution_intake': 'blocked', 'session_recovery': 'monitor_only'})
     elif mode == GlobalOperatingMode.RECOVERY_MODE:
-        influence.update({'cadence': 'wait_long_bias', 'admission': 'resume_only_recovered', 'exposure': 'throttle_until_stable', 'heartbeat': 'cooldown_favoring'})
+        influence.update({'cadence': 'wait_long_bias', 'admission': 'resume_only_recovered', 'exposure': 'throttle_until_stable', 'heartbeat': 'cooldown_favoring', 'execution_intake': 'blocked', 'session_recovery': 'recovery_priority'})
     elif mode == GlobalOperatingMode.THROTTLED:
-        influence.update({'cadence': 'wait_long_bias', 'admission': 'defer_low_priority', 'exposure': 'throttle_global', 'heartbeat': 'conservative'})
+        influence.update({'cadence': 'wait_long_bias', 'admission': 'defer_low_priority', 'exposure': 'throttle_global', 'heartbeat': 'conservative', 'execution_intake': 'blocked', 'session_recovery': 'manual_review_bias'})
     elif mode == GlobalOperatingMode.BLOCKED:
-        influence.update({'cadence': 'stop', 'admission': 'block_new', 'exposure': 'block_new_entries', 'heartbeat': 'blocked'})
+        influence.update({'cadence': 'stop', 'admission': 'block_new', 'exposure': 'block_new_entries', 'heartbeat': 'blocked', 'execution_intake': 'blocked', 'session_recovery': 'controlled_only'})
     return influence
 
 

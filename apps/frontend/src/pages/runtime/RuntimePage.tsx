@@ -17,6 +17,11 @@ import {
   getRuntimeTransitions,
   runOperatingModeReview,
   setRuntimeMode,
+  runModeEnforcementReview,
+  getModeModuleImpacts,
+  getModeEnforcementDecisions,
+  getModeEnforcementRecommendations,
+  getModeEnforcementSummary,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -28,6 +33,10 @@ import type {
   RuntimePostureSnapshot,
   RuntimeStatusResponse,
   RuntimeTransition,
+  ModeModuleImpact,
+  ModeEnforcementDecision,
+  ModeEnforcementRecommendation,
+  ModeEnforcementSummary,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -48,6 +57,11 @@ export function RuntimePage() {
   const [modeDecisions, setModeDecisions] = useState<OperatingModeDecision[]>([]);
   const [switchRecords, setSwitchRecords] = useState<OperatingModeSwitchRecord[]>([]);
   const [recommendations, setRecommendations] = useState<OperatingModeRecommendation[]>([]);
+  const [modeImpacts, setModeImpacts] = useState<ModeModuleImpact[]>([]);
+  const [modeEnforcementDecisions, setModeEnforcementDecisions] = useState<ModeEnforcementDecision[]>([]);
+  const [modeEnforcementRecommendations, setModeEnforcementRecommendations] = useState<ModeEnforcementRecommendation[]>([]);
+  const [modeEnforcementSummary, setModeEnforcementSummary] = useState<ModeEnforcementSummary | null>(null);
+
   const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
@@ -58,7 +72,7 @@ export function RuntimePage() {
     setLoading(true);
     setError(null);
     try {
-      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
@@ -69,6 +83,10 @@ export function RuntimePage() {
         getOperatingModeSwitchRecords(),
         getOperatingModeRecommendations(),
         getOperatingModeSummary(),
+        getModeModuleImpacts(),
+        getModeEnforcementDecisions(),
+        getModeEnforcementRecommendations(),
+        getModeEnforcementSummary(),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
@@ -80,6 +98,10 @@ export function RuntimePage() {
       setSwitchRecords(switchRes);
       setRecommendations(recommendationRes);
       setOperatingSummary(summaryRes);
+      setModeImpacts(impactsRes);
+      setModeEnforcementDecisions(enforcementDecisionRes);
+      setModeEnforcementRecommendations(enforcementRecommendationRes);
+      setModeEnforcementSummary(enforcementSummaryRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load runtime governance.');
     } finally {
@@ -116,6 +138,20 @@ export function RuntimePage() {
       setRunningReview(false);
     }
   }
+
+  async function onRunModeEnforcementReview() {
+    setRunningReview(true);
+    setError(null);
+    try {
+      await runModeEnforcementReview({ triggered_by: 'runtime-page' });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not run mode enforcement review.');
+    } finally {
+      setRunningReview(false);
+    }
+  }
+
 
   return (
     <div className="page-stack">
@@ -227,6 +263,33 @@ export function RuntimePage() {
           <h4>Recommendations</h4>
           <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{recommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>
         </SectionCard>
+
+
+        <SectionCard
+          eyebrow="Mode enforcement"
+          title="Downstream mode enforcement bridge"
+          description="Converts global operating mode into explicit module-level restrictions for paper-only, local-first runtime behavior."
+          aside={<button type="button" className="secondary-button" disabled={runningReview} onClick={() => void onRunModeEnforcementReview()}>{runningReview ? 'Running…' : 'Run mode enforcement review'}</button>}
+        >
+          <div className="system-metadata-grid">
+            <div><strong>Current mode:</strong> {modeEnforcementSummary?.current_mode ?? 'BALANCED'}</div>
+            <div><strong>Modules affected:</strong> {modeEnforcementSummary?.modules_affected ?? 0}</div>
+            <div><strong>Reduced:</strong> {modeEnforcementSummary?.reduced_count ?? 0}</div>
+            <div><strong>Throttled:</strong> {modeEnforcementSummary?.throttled_count ?? 0}</div>
+            <div><strong>Monitor-only:</strong> {modeEnforcementSummary?.monitor_only_count ?? 0}</div>
+            <div><strong>Blocked:</strong> {modeEnforcementSummary?.blocked_count ?? 0}</div>
+          </div>
+
+          <h4>Module impacts</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Module</th><th>Impact</th><th>Summary</th></tr></thead><tbody>{modeImpacts.slice(0, 10).map((row) => <tr key={row.id}><td>{row.module_name}</td><td>{row.impact_status}</td><td>{row.effective_behavior_summary}</td></tr>)}</tbody></table></div>
+
+          <h4>Enforcement decisions</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Module</th><th>Decision type</th><th>Status</th><th>Summary</th></tr></thead><tbody>{modeEnforcementDecisions.slice(0, 10).map((row) => <tr key={row.id}><td>{row.module_name}</td><td>{row.decision_type}</td><td>{row.decision_status}</td><td>{row.decision_summary}</td></tr>)}</tbody></table></div>
+
+          <h4>Recommendations</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{modeEnforcementRecommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>
+        </SectionCard>
+
       </DataStateWrapper>
     </div>
   );

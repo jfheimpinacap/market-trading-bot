@@ -28,6 +28,8 @@ export type RuntimeStatusResponse = {
   };
   global_operating_mode: GlobalOperatingMode;
   global_mode_influence: Record<string, string>;
+  global_mode_enforcement: Record<string, unknown>;
+  global_mode_enforcement_run_id: number | null;
 };
 
 export type RuntimeModeOption = {
@@ -156,6 +158,69 @@ export type OperatingModeSummary = {
   monitor_only_count: number;
   recovery_mode_count: number;
   throttled_count: number;
+  blocked_count: number;
+  recommendation_summary: Record<string, unknown>;
+};
+
+
+export type ModeEnforcementRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  current_mode: GlobalOperatingMode;
+  considered_module_count: number;
+  affected_module_count: number;
+  restricted_module_count: number;
+  throttled_module_count: number;
+  blocked_module_count: number;
+  monitor_only_module_count: number;
+  recommendation_summary: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+};
+
+export type ModeModuleImpact = {
+  id: number;
+  linked_enforcement_run: number;
+  current_mode: GlobalOperatingMode;
+  module_name: string;
+  impact_status: string;
+  effective_behavior_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ModeEnforcementDecision = {
+  id: number;
+  linked_enforcement_run: number;
+  module_name: string;
+  decision_type: string;
+  decision_status: string;
+  auto_applicable: boolean;
+  decision_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ModeEnforcementRecommendation = {
+  id: number;
+  recommendation_type: string;
+  rationale: string;
+  reason_codes: string[];
+  confidence: number;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ModeEnforcementSummary = {
+  latest_run_id: number | null;
+  current_mode: GlobalOperatingMode;
+  modules_affected: number;
+  reduced_count: number;
+  throttled_count: number;
+  monitor_only_count: number;
   blocked_count: number;
   recommendation_summary: Record<string, unknown>;
 };

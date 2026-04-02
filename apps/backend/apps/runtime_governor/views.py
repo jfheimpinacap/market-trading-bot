@@ -11,6 +11,10 @@ from apps.runtime_governor.models import (
     GlobalRuntimePostureRun,
     GlobalRuntimePostureSnapshot,
     RuntimeTransitionLog,
+    GlobalModeEnforcementRun,
+    GlobalModeModuleImpact,
+    GlobalModeEnforcementDecision,
+    GlobalModeEnforcementRecommendation,
 )
 from apps.runtime_governor.serializers import (
     GlobalOperatingModeDecisionSerializer,
@@ -21,6 +25,11 @@ from apps.runtime_governor.serializers import (
     RunOperatingModeReviewSerializer,
     RuntimeSetModeSerializer,
     RuntimeTransitionLogSerializer,
+    RunModeEnforcementReviewSerializer,
+    GlobalModeEnforcementRunSerializer,
+    GlobalModeModuleImpactSerializer,
+    GlobalModeEnforcementDecisionSerializer,
+    GlobalModeEnforcementRecommendationSerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -31,6 +40,7 @@ from apps.runtime_governor.services import (
     run_operating_mode_review,
     set_runtime_mode,
 )
+from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 
 
 class RuntimeStatusView(APIView):
@@ -224,3 +234,75 @@ class ApplyOperatingModeDecisionView(APIView):
         decision = get_object_or_404(GlobalOperatingModeDecision, pk=decision_id)
         record = apply_operating_mode_decision(decision=decision)
         return Response(GlobalOperatingModeSwitchRecordSerializer(record).data, status=status.HTTP_200_OK)
+
+
+class RunModeEnforcementReviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunModeEnforcementReviewSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_mode_enforcement_review(triggered_by=serializer.validated_data.get('triggered_by') or 'operator-ui')
+        return Response(
+            {
+                'run_id': result['run'].id,
+                'impact_count': len(result['impacts']),
+                'decision_count': len(result['decisions']),
+                'recommendation_count': len(result['recommendations']),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ModeEnforcementRunListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = GlobalModeEnforcementRunSerializer
+
+    def get_queryset(self):
+        return GlobalModeEnforcementRun.objects.order_by('-started_at', '-id')[:200]
+
+
+class ModeModuleImpactListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = GlobalModeModuleImpactSerializer
+
+    def get_queryset(self):
+        return GlobalModeModuleImpact.objects.select_related('linked_enforcement_run').order_by('-created_at', '-id')[:400]
+
+
+class ModeEnforcementDecisionListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = GlobalModeEnforcementDecisionSerializer
+
+    def get_queryset(self):
+        return GlobalModeEnforcementDecision.objects.select_related('linked_enforcement_run').order_by('-created_at', '-id')[:400]
+
+
+class ModeEnforcementDecisionDetailView(generics.RetrieveAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = GlobalModeEnforcementDecisionSerializer
+    queryset = GlobalModeEnforcementDecision.objects.select_related('linked_enforcement_run').all()
+    lookup_field = 'id'
+    lookup_url_kwarg = 'enforcement_decision_id'
+
+
+class ModeEnforcementRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = GlobalModeEnforcementRecommendationSerializer
+
+    def get_queryset(self):
+        return GlobalModeEnforcementRecommendation.objects.select_related('target_enforcement_run').order_by('-created_at', '-id')[:400]
+
+
+class ModeEnforcementSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(get_mode_enforcement_summary(), status=status.HTTP_200_OK)
