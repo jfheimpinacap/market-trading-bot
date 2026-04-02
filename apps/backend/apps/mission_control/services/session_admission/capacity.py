@@ -17,6 +17,7 @@ from apps.mission_control.models import (
     AutonomousSessionAdmissionRun,
 )
 from apps.portfolio_governor.models import PortfolioThrottleDecision
+from apps.runtime_governor.mode_enforcement.services.enforcement import get_module_enforcement_state
 from apps.runtime_governor.services import get_runtime_state
 from apps.safety_guard.services import get_safety_status
 
@@ -81,7 +82,20 @@ def build_global_capacity_snapshot(*, admission_run: AutonomousSessionAdmissionR
     if safety_posture == AutonomousGlobalSafetyPosture.HARD_BLOCK:
         max_active_sessions = 0
 
-    reason_codes: list[str] = []
+    admission_enforcement = get_module_enforcement_state(module_name='session_admission')
+    admission_impact = (admission_enforcement.get('impact') or {}).get('impact_status')
+    if admission_impact == 'REDUCED':
+        max_active_sessions = max(1, max_active_sessions - 1)
+        reason_codes = ['global_mode_enforcement_reduce_admission']
+    elif admission_impact == 'THROTTLED':
+        max_active_sessions = min(max_active_sessions, 1)
+        reason_codes = ['global_mode_enforcement_throttle_admission']
+    elif admission_impact in {'MONITOR_ONLY', 'BLOCKED'}:
+        max_active_sessions = 0
+        reason_codes = ['global_mode_enforcement_block_new_admission']
+    else:
+        reason_codes: list[str] = []
+
     if max_active_sessions == 0:
         capacity_status = AutonomousCapacityStatus.BLOCKED
         reason_codes.append('global_hard_block')

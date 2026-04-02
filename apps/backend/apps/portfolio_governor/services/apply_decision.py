@@ -9,6 +9,7 @@ from apps.portfolio_governor.models import (
     PortfolioExposureDecision,
     PortfolioExposureDecisionType,
 )
+from apps.runtime_governor.mode_enforcement.services.enforcement import get_module_enforcement_state
 
 APPLY_TYPE_BY_DECISION = {
     PortfolioExposureDecisionType.THROTTLE_NEW_ENTRIES: PortfolioExposureApplyType.APPLY_THROTTLE_NEW_ENTRIES,
@@ -52,6 +53,26 @@ def derive_apply_decision(
         reason_codes.append('missing_session_targets')
         summary = 'No runtime sessions were found for conservative park/pause apply.'
 
+    apply_enforcement = get_module_enforcement_state(module_name='exposure_apply')
+    apply_impact = (apply_enforcement.get('impact') or {}).get('impact_status')
+    if apply_impact == 'REDUCED':
+        auto_applicable = False
+        reason_codes.append('global_mode_enforcement_manual_review_bias')
+        if status == PortfolioExposureApplyDecisionStatus.PROPOSED:
+            status = PortfolioExposureApplyDecisionStatus.BLOCKED
+        summary = 'Global mode enforcement requires manual review bias before applying new exposure.'
+    elif apply_impact == 'THROTTLED':
+        if apply_type in [PortfolioExposureApplyType.APPLY_THROTTLE_NEW_ENTRIES, PortfolioExposureApplyType.APPLY_DEFER_PENDING_DISPATCH]:
+            reason_codes.append('global_mode_enforcement_throttle_apply')
+        else:
+            auto_applicable = False
+            reason_codes.append('global_mode_enforcement_apply_throttled')
+    elif apply_impact in {'MONITOR_ONLY', 'BLOCKED'}:
+        auto_applicable = False
+        status = PortfolioExposureApplyDecisionStatus.BLOCKED
+        reason_codes.append('global_mode_enforcement_block_apply')
+        summary = 'Global mode enforcement blocked autonomous exposure apply.'
+
     return PortfolioExposureApplyDecision.objects.create(
         linked_apply_run=apply_run,
         linked_exposure_decision=decision,
@@ -65,5 +86,6 @@ def derive_apply_decision(
             'local_first': True,
             'no_live_execution': True,
             'no_aggressive_position_closing': True,
+            'mode_enforcement': apply_enforcement,
         },
     )

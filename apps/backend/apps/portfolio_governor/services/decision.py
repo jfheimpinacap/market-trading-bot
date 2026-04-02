@@ -6,6 +6,7 @@ from apps.portfolio_governor.models import (
     PortfolioExposureDecisionStatus,
     PortfolioExposureDecisionType,
 )
+from apps.runtime_governor.mode_enforcement.services.enforcement import get_module_enforcement_state
 
 
 def derive_exposure_decision(*, review: PortfolioExposureConflictReview) -> PortfolioExposureDecision:
@@ -34,6 +35,19 @@ def derive_exposure_decision(*, review: PortfolioExposureConflictReview) -> Port
         decision_type = PortfolioExposureDecisionType.PAUSE_CLUSTER_ACTIVITY
         summary = 'Critical cluster severity requires pausing new cluster activity.'
 
+    exposure_enforcement = get_module_enforcement_state(module_name='exposure_coordination')
+    exposure_impact = (exposure_enforcement.get('impact') or {}).get('impact_status')
+    if exposure_impact == 'REDUCED' and decision_type == PortfolioExposureDecisionType.KEEP_EXPOSURE_AS_IS:
+        decision_type = PortfolioExposureDecisionType.PARK_WEAKER_SESSION
+        summary = 'Global mode enforcement reduced exposure coordination; park weaker session activity.'
+    elif exposure_impact == 'THROTTLED':
+        decision_type = PortfolioExposureDecisionType.THROTTLE_NEW_ENTRIES
+        summary = 'Global mode enforcement throttled exposure coordination; throttle new entries.'
+    elif exposure_impact in {'MONITOR_ONLY', 'BLOCKED'}:
+        decision_type = PortfolioExposureDecisionType.PAUSE_CLUSTER_ACTIVITY
+        auto_applicable = True
+        summary = 'Global mode enforcement blocks new exposure expansion; pause cluster activity.'
+
     return PortfolioExposureDecision.objects.create(
         linked_cluster_snapshot=review.linked_cluster_snapshot,
         linked_conflict_review=review,
@@ -41,6 +55,10 @@ def derive_exposure_decision(*, review: PortfolioExposureConflictReview) -> Port
         decision_status=PortfolioExposureDecisionStatus.PROPOSED,
         auto_applicable=auto_applicable,
         decision_summary=summary,
-        reason_codes=[review.review_type.lower(), review.review_severity.lower()],
-        metadata={'paper_only': True, 'no_forced_position_closure': True},
+        reason_codes=[review.review_type.lower(), review.review_severity.lower(), f'enforcement:{(exposure_impact or "none").lower()}'],
+        metadata={
+            'paper_only': True,
+            'no_forced_position_closure': True,
+            'mode_enforcement': exposure_enforcement,
+        },
     )

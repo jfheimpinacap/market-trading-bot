@@ -11,6 +11,31 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 - Make the demo dataset feel alive locally without real provider integrations, trading, or websockets.
 - Provide precedent-aware agent support via `memory_retrieval` with conservative and auditable influence on research/prediction/risk/signals/postmortem.
 
+## Runtime governor downstream mode enforcement (new)
+
+`apps.runtime_governor` now includes `mode_enforcement/` services to make global operating mode operational across downstream modules (instead of descriptive-only):
+
+- service split:
+  - `mode_enforcement/services/rules.py`
+  - `mode_enforcement/services/module_impacts.py`
+  - `mode_enforcement/services/enforcement.py`
+  - `mode_enforcement/services/recommendation.py`
+  - `mode_enforcement/services/run.py`
+- auditable entities:
+  - `GlobalModeEnforcementRun`
+  - `GlobalModeModuleImpact`
+  - `GlobalModeEnforcementDecision`
+  - `GlobalModeEnforcementRecommendation`
+- enforced integration points:
+  - mission timing cadence
+  - session admission capacity
+  - portfolio exposure decision/apply path
+  - autonomous trader execution intake
+  - heartbeat runner cadence interval
+  - recovery resume conservatism
+
+Design guardrails remain unchanged: local-first, single-user, paper-only, no live broker/exchange order routing, no real-money execution, and no replacement of existing runtime/safety/portfolio authorities.
+
 ## Mission control autonomous session runtime (new)
 
 `apps.mission_control` now has an explicit persistent session runtime layer (paper-only):

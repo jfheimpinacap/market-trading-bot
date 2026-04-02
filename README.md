@@ -12,6 +12,28 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
 - **Precedent-aware decision support (new):** research, prediction, risk, signal-fusion, and postmortem now consume semantic precedents automatically in internal flows with conservative influence and explicit audit trails (`AgentPrecedentUse`).
 
+### Global operating mode downstream enforcement bridge (new)
+
+`runtime_governor` now includes an explicit and auditable **downstream mode enforcement bridge**:
+
+- `global operating mode -> enforcement rules -> module impacts -> enforcement decisions -> recommendations`
+- coverage across:
+  - session timing policy
+  - session admission capacity
+  - portfolio exposure coordination/apply
+  - autonomous execution intake
+  - heartbeat runner cadence
+  - session recovery/resume conservatism
+- API:
+  - `POST /api/runtime-governor/run-mode-enforcement-review/`
+  - `GET /api/runtime-governor/mode-enforcement-runs/`
+  - `GET /api/runtime-governor/mode-module-impacts/`
+  - `GET /api/runtime-governor/mode-enforcement-decisions/`
+  - `GET /api/runtime-governor/mode-enforcement-recommendations/`
+  - `GET /api/runtime-governor/mode-enforcement-summary/`
+
+This bridge does not replace runtime/safety/portfolio/mission authorities; it adds a coherent global-mode bias layer above them. Scope remains local-first, single-user, paper/sandbox only, no real-money/live execution.
+
 ### Precedent-aware agents (new)
 
 - Memory is now used as **decision support**, not as an opaque planner.

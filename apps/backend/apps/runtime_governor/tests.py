@@ -14,12 +14,16 @@ from apps.runtime_governor.models import (
 )
 from apps.runtime_governor.services import get_capabilities_for_current_mode, get_runtime_state, set_runtime_mode
 from apps.mission_control.models import AutonomousRuntimeSession, AutonomousRuntimeSessionStatus, AutonomousSessionHealthSnapshot, AutonomousSessionHealthStatus
+from apps.mission_control.services.session_timing.timing import evaluate_session_timing
 from apps.portfolio_governor.models import (
     PortfolioExposureClusterSnapshot,
     PortfolioExposureCoordinationRun,
     PortfolioExposureDecision,
     PortfolioExposureDecisionType,
 )
+from apps.autonomous_trader.models import AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionDecisionType
+from apps.autonomous_trader.services.execution_intake.decision import decide_intake_candidate
+from apps.markets.models import Market, Provider
 from apps.safety_guard.services.kill_switch import enable_kill_switch
 
 
@@ -27,6 +31,7 @@ class RuntimeGovernorTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.profile = ReadinessProfile.objects.create(name='Balanced', slug='balanced', profile_type='balanced')
+        self.provider = Provider.objects.create(name='Test Provider', slug='test-provider')
 
     def _set_readiness(self, status: str):
         ReadinessAssessmentRun.objects.create(readiness_profile=self.profile, status=status, summary='test run')
@@ -195,3 +200,45 @@ class RuntimeGovernorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn('current_mode', payload)
+
+    def test_mode_enforcement_propagates_to_timing_policy(self):
+        session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
+        self._seed_exposure_decision(PortfolioExposureDecisionType.PARK_WEAKER_SESSION)
+        self.client.post(reverse('runtime_governor_v2:run_operating_mode_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        self.client.post(reverse('runtime_governor_v2:run_mode_enforcement_review'), {'triggered_by': 'test'}, format='json')
+
+        timing_review = evaluate_session_timing(session=session)
+        self.assertEqual(timing_review.decision.decision_type, 'WAIT_SHORT')
+        self.assertIn('global_mode_enforcement_reduce_cadence', timing_review.decision.reason_codes)
+
+    def test_mode_enforcement_propagates_to_execution_intake(self):
+        session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
+        from apps.mission_control.models import AutonomousSessionTimingSnapshot, AutonomousTimingDecision, AutonomousTimingDecisionType
+
+        timing_snapshot = AutonomousSessionTimingSnapshot.objects.create(linked_session=session, timing_status='MONITOR_ONLY_WINDOW')
+        AutonomousTimingDecision.objects.create(
+            linked_session=session,
+            linked_timing_snapshot=timing_snapshot,
+            decision_type=AutonomousTimingDecisionType.MONITOR_ONLY_NEXT,
+            decision_summary='quiet',
+        )
+        self.client.post(reverse('runtime_governor_v2:run_operating_mode_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        self.client.post(reverse('runtime_governor_v2:run_mode_enforcement_review'), {'triggered_by': 'test'}, format='json')
+
+        market = Market.objects.create(
+            provider=self.provider,
+            provider_market_id='mode-enforcement-test',
+            title='Mode enforcement intake test',
+            status='open',
+        )
+        intake_run = AutonomousExecutionIntakeRun.objects.create()
+        candidate = AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            intake_status='READY_FOR_AUTONOMOUS_EXECUTION',
+            approval_status='AUTO_APPROVED',
+            readiness_confidence='0.9000',
+        )
+        decision = decide_intake_candidate(candidate=candidate)
+        self.assertEqual(decision.decision_type, AutonomousExecutionDecisionType.BLOCK)
+        self.assertIn('GLOBAL_MODE_ENFORCEMENT_BLOCKED', decision.reason_codes)

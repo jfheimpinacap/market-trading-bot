@@ -152,6 +152,12 @@ export function RuntimePage() {
     }
   }
 
+  const latestEnforcementRunId = modeEnforcementSummary?.latest_run_id ?? null;
+  const scopedImpacts = latestEnforcementRunId ? modeImpacts.filter((row) => row.linked_enforcement_run === latestEnforcementRunId) : modeImpacts;
+  const scopedDecisions = latestEnforcementRunId ? modeEnforcementDecisions.filter((row) => row.linked_enforcement_run === latestEnforcementRunId) : modeEnforcementDecisions;
+  const scopedRecommendations = latestEnforcementRunId
+    ? modeEnforcementRecommendations.filter((row) => row.target_enforcement_run === latestEnforcementRunId)
+    : modeEnforcementRecommendations;
 
   return (
     <div className="page-stack">
@@ -268,7 +274,7 @@ export function RuntimePage() {
         <SectionCard
           eyebrow="Mode enforcement"
           title="Downstream mode enforcement bridge"
-          description="Converts global operating mode into explicit module-level restrictions for paper-only, local-first runtime behavior."
+          description="Converts global operating mode into explicit module-level restrictions for cadence, admission, exposure, execution intake, heartbeat, and recovery. Paper-only, local-first, no live routing."
           aside={<button type="button" className="secondary-button" disabled={runningReview} onClick={() => void onRunModeEnforcementReview()}>{runningReview ? 'Running…' : 'Run mode enforcement review'}</button>}
         >
           <div className="system-metadata-grid">
@@ -281,13 +287,13 @@ export function RuntimePage() {
           </div>
 
           <h4>Module impacts</h4>
-          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Module</th><th>Impact</th><th>Summary</th></tr></thead><tbody>{modeImpacts.slice(0, 10).map((row) => <tr key={row.id}><td>{row.module_name}</td><td>{row.impact_status}</td><td>{row.effective_behavior_summary}</td></tr>)}</tbody></table></div>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Module</th><th>Impact</th><th>Summary</th></tr></thead><tbody>{scopedImpacts.slice(0, 10).map((row) => <tr key={row.id}><td>{row.module_name}</td><td>{row.impact_status}</td><td>{row.effective_behavior_summary}</td></tr>)}</tbody></table></div>
 
           <h4>Enforcement decisions</h4>
-          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Module</th><th>Decision type</th><th>Status</th><th>Summary</th></tr></thead><tbody>{modeEnforcementDecisions.slice(0, 10).map((row) => <tr key={row.id}><td>{row.module_name}</td><td>{row.decision_type}</td><td>{row.decision_status}</td><td>{row.decision_summary}</td></tr>)}</tbody></table></div>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Module</th><th>Decision type</th><th>Status</th><th>Summary</th></tr></thead><tbody>{scopedDecisions.slice(0, 10).map((row) => <tr key={row.id}><td>{row.module_name}</td><td>{row.decision_type}</td><td>{row.decision_status}</td><td>{row.decision_summary}</td></tr>)}</tbody></table></div>
 
           <h4>Recommendations</h4>
-          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{modeEnforcementRecommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{scopedRecommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>
         </SectionCard>
 
       </DataStateWrapper>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from apps.runtime_governor.services.state import get_runtime_state
 from apps.runtime_governor.models import (
     GlobalModeEnforcementDecision,
     GlobalModeEnforcementDecisionStatus,
@@ -63,4 +64,23 @@ def build_downstream_enforcement_summary(*, current_mode: str, decisions: list[G
             }
             for d in decisions
         ],
+    }
+
+
+def get_current_enforcement_summary() -> dict:
+    state = get_runtime_state()
+    summary = (state.metadata or {}).get('global_mode_enforcement', {})
+    return summary if isinstance(summary, dict) else {}
+
+
+def get_module_enforcement_state(*, module_name: str) -> dict:
+    summary = get_current_enforcement_summary()
+    decisions = summary.get('enforcement_decisions', []) if isinstance(summary, dict) else []
+    impacts = summary.get('module_impacts', []) if isinstance(summary, dict) else []
+    module_decision = next((row for row in decisions if row.get('module_name') == module_name), None)
+    module_impact = next((row for row in impacts if row.get('module_name') == module_name), None)
+    return {
+        'current_mode': summary.get('current_mode'),
+        'decision': module_decision or {},
+        'impact': module_impact or {},
     }
