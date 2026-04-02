@@ -24,6 +24,12 @@ from apps.mission_control.models import (
     AutonomousScheduleProfile,
     AutonomousSessionAnomaly,
     AutonomousSessionTimingSnapshot,
+    AutonomousSessionRecoveryRecommendation,
+    AutonomousSessionRecoveryRun,
+    AutonomousSessionRecoverySnapshot,
+    AutonomousRecoveryBlocker,
+    AutonomousResumeDecision,
+    AutonomousResumeRecord,
     AutonomousSessionHealthRecommendation,
     AutonomousSessionHealthRun,
     AutonomousSessionHealthSnapshot,
@@ -70,6 +76,14 @@ from apps.mission_control.serializers import (
     SessionTimingReviewRequestSerializer,
     ProfileSelectionReviewRequestSerializer,
     SessionHealthReviewRequestSerializer,
+    ApplySessionResumeRequestSerializer,
+    SessionRecoveryReviewRequestSerializer,
+    AutonomousSessionRecoveryRunSerializer,
+    AutonomousSessionRecoverySnapshotSerializer,
+    AutonomousRecoveryBlockerSerializer,
+    AutonomousResumeDecisionSerializer,
+    AutonomousResumeRecordSerializer,
+    AutonomousSessionRecoveryRecommendationSerializer,
     AutonomousSessionRecommendationSerializer,
     AutonomousSessionStartRequestSerializer,
     AutonomousTickDispatchAttemptSerializer,
@@ -110,6 +124,11 @@ from apps.mission_control.services.session_health import (
     apply_intervention,
     build_session_health_summary,
     run_session_health_review,
+)
+from apps.mission_control.services.session_recovery import (
+    apply_resume_decision,
+    build_session_recovery_summary,
+    run_session_recovery_review,
 )
 from apps.mission_control.services.session_profile_control.profile_switch import apply_profile_switch_decision
 
@@ -544,5 +563,71 @@ class ApplySessionInterventionView(APIView):
         payload = {
             'decision': AutonomousSessionInterventionDecisionSerializer(decision).data,
             'record': AutonomousSessionInterventionRecordSerializer(record).data if record else None,
+        }
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class RunSessionRecoveryReviewView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = SessionRecoveryReviewRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        run = run_session_recovery_review(
+            session_ids=payload.get('session_ids'),
+            auto_apply_safe=payload.get('auto_apply_safe', False),
+        )
+        return Response(AutonomousSessionRecoveryRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class SessionRecoveryRunListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionRecoveryRunSerializer
+    queryset = AutonomousSessionRecoveryRun.objects.order_by('-started_at', '-id')[:200]
+
+
+class SessionRecoverySnapshotListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionRecoverySnapshotSerializer
+    queryset = AutonomousSessionRecoverySnapshot.objects.select_related(
+        'linked_recovery_run', 'linked_session', 'linked_health_snapshot', 'linked_timing_snapshot'
+    ).order_by('-created_at', '-id')[:300]
+
+
+class RecoveryBlockerListView(generics.ListAPIView):
+    serializer_class = AutonomousRecoveryBlockerSerializer
+    queryset = AutonomousRecoveryBlocker.objects.select_related('linked_session', 'linked_recovery_snapshot').order_by('-created_at', '-id')[:300]
+
+
+class ResumeDecisionListView(generics.ListAPIView):
+    serializer_class = AutonomousResumeDecisionSerializer
+    queryset = AutonomousResumeDecision.objects.select_related('linked_session', 'linked_recovery_run', 'linked_recovery_snapshot').order_by('-created_at', '-id')[:300]
+
+
+class ResumeRecordListView(generics.ListAPIView):
+    serializer_class = AutonomousResumeRecordSerializer
+    queryset = AutonomousResumeRecord.objects.select_related('linked_session', 'linked_resume_decision').order_by('-created_at', '-id')[:300]
+
+
+class SessionRecoveryRecommendationListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionRecoveryRecommendationSerializer
+    queryset = AutonomousSessionRecoveryRecommendation.objects.select_related(
+        'target_session', 'target_recovery_snapshot', 'target_resume_decision'
+    ).order_by('-created_at', '-id')[:300]
+
+
+class SessionRecoverySummaryView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(build_session_recovery_summary(), status=status.HTTP_200_OK)
+
+
+class ApplySessionResumeView(APIView):
+    def post(self, request, decision_id: int, *args, **kwargs):
+        serializer = ApplySessionResumeRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        decision = get_object_or_404(AutonomousResumeDecision, pk=decision_id)
+        automatic = serializer.validated_data.get('auto_apply_safe', False)
+        mode = 'AUTO_SAFE_RESUME' if automatic else 'MANUAL_RESUME'
+        result = apply_resume_decision(decision=decision, applied_mode=mode, automatic=automatic)
+        payload = {
+            'decision': AutonomousResumeDecisionSerializer(decision).data,
+            'record': AutonomousResumeRecordSerializer(result.record).data,
         }
         return Response(payload, status=status.HTTP_200_OK)

@@ -71,4 +71,14 @@ urlpatterns = [
     path('session-health-recommendations/', views.SessionHealthRecommendationListView.as_view(), name='session-health-recommendations'),
     path('session-health-summary/', views.SessionHealthSummaryView.as_view(), name='session-health-summary'),
     path('apply-session-intervention/<int:decision_id>/', views.ApplySessionInterventionView.as_view(), name='apply-session-intervention'),
+
+    path('run-session-recovery-review/', views.RunSessionRecoveryReviewView.as_view(), name='run-session-recovery-review'),
+    path('session-recovery-runs/', views.SessionRecoveryRunListView.as_view(), name='session-recovery-runs'),
+    path('session-recovery-snapshots/', views.SessionRecoverySnapshotListView.as_view(), name='session-recovery-snapshots'),
+    path('recovery-blockers/', views.RecoveryBlockerListView.as_view(), name='recovery-blockers'),
+    path('resume-decisions/', views.ResumeDecisionListView.as_view(), name='resume-decisions'),
+    path('resume-records/', views.ResumeRecordListView.as_view(), name='resume-records'),
+    path('session-recovery-recommendations/', views.SessionRecoveryRecommendationListView.as_view(), name='session-recovery-recommendations'),
+    path('session-recovery-summary/', views.SessionRecoverySummaryView.as_view(), name='session-recovery-summary'),
+    path('apply-session-resume/<int:decision_id>/', views.ApplySessionResumeView.as_view(), name='apply-session-resume'),
 ]

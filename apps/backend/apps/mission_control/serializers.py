@@ -26,6 +26,12 @@ from apps.mission_control.models import (
     AutonomousSessionInterventionRecord,
     AutonomousSessionContextReview,
     AutonomousSessionTimingSnapshot,
+    AutonomousSessionRecoveryRecommendation,
+    AutonomousSessionRecoveryRun,
+    AutonomousSessionRecoverySnapshot,
+    AutonomousRecoveryBlocker,
+    AutonomousResumeDecision,
+    AutonomousResumeRecord,
     AutonomousStopConditionEvaluation,
     AutonomousSessionRecommendation,
     AutonomousTimingDecision,
@@ -290,4 +296,53 @@ class AutonomousSessionInterventionRecordSerializer(serializers.ModelSerializer)
 class AutonomousSessionHealthRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousSessionHealthRecommendation
+        fields = '__all__'
+
+
+class SessionRecoveryReviewRequestSerializer(serializers.Serializer):
+    session_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=True,
+    )
+    auto_apply_safe = serializers.BooleanField(required=False, default=False)
+
+
+class ApplySessionResumeRequestSerializer(serializers.Serializer):
+    auto_apply_safe = serializers.BooleanField(required=False, default=False)
+
+
+class AutonomousSessionRecoveryRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionRecoveryRun
+        fields = '__all__'
+
+
+class AutonomousSessionRecoverySnapshotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionRecoverySnapshot
+        fields = '__all__'
+
+
+class AutonomousRecoveryBlockerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousRecoveryBlocker
+        fields = '__all__'
+
+
+class AutonomousResumeDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousResumeDecision
+        fields = '__all__'
+
+
+class AutonomousResumeRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousResumeRecord
+        fields = '__all__'
+
+
+class AutonomousSessionRecoveryRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionRecoveryRecommendation
         fields = '__all__'

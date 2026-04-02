@@ -2061,3 +2061,12 @@ La vista `/mission-control` ahora incluye una sección **Adaptive Session Profil
   - profile recommendations
 
 La UI mantiene límites explícitos: local-first, paper-only, conservative switching, no live execution.
+
+## `/mission-control`: session recovery resume apply (Prompt 150B)
+
+The Mission Control page now includes recovery apply instrumentation in-place (no new page):
+- manual `Apply resume` action over recovery resume decisions
+- visible resume records/audit trail with manual vs auto-safe vs monitor-only modes
+- recovery review controls including optional conservative safe auto-apply
+
+This is still local-first, paper-only governance UX and does not bypass heartbeat/timing/health layers.

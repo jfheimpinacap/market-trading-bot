@@ -577,3 +577,91 @@ export type SessionHealthSummary = {
   latest_session_id: number | null;
   decision_breakdown: Record<string, number>;
 };
+
+export type AutonomousSessionRecoveryRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_session_count: number;
+  blocked_count: number;
+  ready_to_resume_count: number;
+  monitor_only_resume_count: number;
+  manual_review_count: number;
+  applied_resume_count: number;
+  recommendation_summary: string;
+  metadata: Record<string, unknown>;
+};
+
+export type AutonomousSessionRecoverySnapshot = {
+  id: number;
+  linked_recovery_run: number | null;
+  linked_session: number;
+  linked_health_snapshot: number | null;
+  linked_timing_snapshot: number | null;
+  recovery_status: 'STABLE' | 'DEGRADED' | 'BLOCKED' | 'AMBIGUOUS';
+  recovery_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousRecoveryBlocker = {
+  id: number;
+  linked_session: number;
+  linked_recovery_snapshot: number | null;
+  blocker_type: string;
+  blocker_status: 'ACTIVE' | 'RESOLVED';
+  blocker_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousResumeDecision = {
+  id: number;
+  linked_session: number;
+  linked_recovery_run: number | null;
+  linked_recovery_snapshot: number;
+  decision_type: 'READY_TO_RESUME' | 'RESUME_IN_MONITOR_ONLY_MODE' | 'KEEP_PAUSED' | 'REQUIRE_MANUAL_REVIEW';
+  decision_status: 'PROPOSED' | 'APPLIED' | 'SKIPPED' | 'BLOCKED';
+  auto_applicable: boolean;
+  decision_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousResumeRecord = {
+  id: number;
+  linked_session: number;
+  linked_resume_decision: number;
+  resume_status: 'APPLIED' | 'SKIPPED' | 'BLOCKED' | 'FAILED';
+  applied_mode: 'MANUAL_RESUME' | 'AUTO_SAFE_RESUME' | 'MONITOR_ONLY_RESUME';
+  resume_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousSessionRecoveryRecommendation = {
+  id: number;
+  recommendation_type: string;
+  target_session: number | null;
+  target_recovery_snapshot: number | null;
+  target_resume_decision: number | null;
+  rationale: string;
+  reason_codes: string[];
+  confidence: number;
+  blockers: string[];
+  created_at: string;
+};
+
+export type SessionRecoverySummary = {
+  latest_run_id: number | null;
+  summary: {
+    sessions_reviewed: number;
+    ready_to_resume: number;
+    monitor_only_resume: number;
+    blocked: number;
+    manual_review: number;
+    applied_resume: number;
+  };
+};

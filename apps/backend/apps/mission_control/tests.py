@@ -437,3 +437,61 @@ class SessionHealthGovernanceTests(TestCase):
         response = self.client.get(reverse('mission_control:session-health-summary'))
         self.assertEqual(response.status_code, 200)
         self.assertIn('summary', response.json())
+
+class SessionRecoveryResumeApplyTests(TestCase):
+    def test_apply_manual_resume_works(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-session-recovery-review'), data='{}', content_type='application/json')
+        decision = self.client.get(reverse('mission_control:resume-decisions')).json()[0]
+
+        response = self.client.post(reverse('mission_control:apply-session-resume', args=[decision['id']]), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        session.refresh_from_db()
+        self.assertEqual(session.session_status, 'RUNNING')
+        self.assertEqual(response.json()['record']['applied_mode'], 'MANUAL_RESUME')
+
+    def test_auto_safe_resume_only_applies_when_allowed(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-session-recovery-review'), data=json.dumps({'auto_apply_safe': True}), content_type='application/json')
+        records = self.client.get(reverse('mission_control:resume-records')).json()
+        self.assertTrue(any(item['linked_session'] == session.id and item['applied_mode'] == 'AUTO_SAFE_RESUME' for item in records))
+
+    def test_monitor_only_resume_sets_conservative_mode(self):
+        from apps.mission_control.models import AutonomousSessionTimingSnapshot
+
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        AutonomousSessionTimingSnapshot.objects.create(
+            linked_session=session,
+            timing_status='MONITOR_ONLY_WINDOW',
+            timing_summary='force monitor-only recovery test',
+        )
+        self.client.post(reverse('mission_control:run-session-recovery-review'), data='{}', content_type='application/json')
+        decision = session.resume_decisions.filter(decision_type='RESUME_IN_MONITOR_ONLY_MODE').order_by('-id').first()
+        self.assertIsNotNone(decision)
+        response = self.client.post(reverse('mission_control:apply-session-resume', args=[decision.id]), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        session.refresh_from_db()
+        self.assertEqual(session.runtime_mode, 'MONITOR_ONLY')
+
+    def test_active_blockers_prevent_resume(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-session-recovery-review'), data='{}', content_type='application/json')
+        decision = session.resume_decisions.order_by('-id').first()
+        from apps.mission_control.models import AutonomousRecoveryBlocker
+        AutonomousRecoveryBlocker.objects.create(
+            linked_session=session,
+            blocker_type='manual_hold',
+            blocker_status='ACTIVE',
+            blocker_summary='Operator hold',
+        )
+        response = self.client.post(reverse('mission_control:apply-session-resume', args=[decision.id]), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['record']['resume_status'], 'BLOCKED')
+
+    def test_resume_record_created(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-session-recovery-review'), data='{}', content_type='application/json')
+        decision_id = session.resume_decisions.order_by('-id').values_list('id', flat=True).first()
+        self.client.post(reverse('mission_control:apply-session-resume', args=[decision_id]), data='{}', content_type='application/json')
+        records = self.client.get(reverse('mission_control:resume-records')).json()
+        self.assertTrue(any(item['linked_session'] == session.id for item in records))

@@ -3377,3 +3377,13 @@ This extends the existing local heartbeat runner and keeps all execution paper-o
 - `POST /api/mission-control/apply-profile-switch/<decision_id>/` (manual opcional)
 
 Esta capa alimenta mejor la timing policy; no reemplaza runtime/policy/safety/portfolio authorities.
+
+## Mission control: recovery resume apply (Prompt 150B)
+
+Added conservative recovery-apply flow for paused/degraded autonomous runtime sessions:
+- `AutonomousResumeRecord` audit model for `APPLIED/SKIPPED/BLOCKED/FAILED`
+- apply endpoint: `POST /api/mission-control/apply-session-resume/<decision_id>/`
+- recovery review supports optional `auto_apply_safe=true` (limited to `READY_TO_RESUME` + `auto_applicable=true`)
+- post-apply reintegration updates runtime session and invokes existing timing policy/heartbeat services without duplicating those engines
+
+Scope remains paper-only and governance-first; this does not replace runner logic, timing policy, or health governance.

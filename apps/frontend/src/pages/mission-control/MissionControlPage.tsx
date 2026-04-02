@@ -17,9 +17,17 @@ import {
   getProfileSwitchDecisions,
   getProfileSwitchRecords,
   getScheduleProfiles,
+  applySessionResume,
+  getRecoveryBlockers,
+  getResumeDecisions,
+  getResumeRecords,
   getSessionAnomalies,
   getSessionContextReviews,
   getSessionHealthRecommendations,
+  getSessionRecoveryRecommendations,
+  getSessionRecoveryRuns,
+  getSessionRecoverySnapshots,
+  getSessionRecoverySummary,
   getSessionHealthSnapshots,
   getSessionHealthSummary,
   getSessionInterventionDecisions,
@@ -30,6 +38,7 @@ import {
   getStopConditionEvaluations,
   pauseAutonomousRunner,
   resumeAutonomousRunner,
+  runSessionRecoveryReview,
   runSessionTimingReview,
   runSessionHealthReview,
   runProfileSelectionReview,
@@ -61,6 +70,13 @@ import type {
   SessionTimingSummary,
   ProfileSelectionSummary,
   SessionHealthSummary,
+  AutonomousRecoveryBlocker,
+  AutonomousResumeDecision,
+  AutonomousResumeRecord,
+  AutonomousSessionRecoveryRecommendation,
+  AutonomousSessionRecoveryRun,
+  AutonomousSessionRecoverySnapshot,
+  SessionRecoverySummary,
   AutonomousTickDispatchAttempt,
 } from '../../types/missionControl';
 
@@ -89,6 +105,13 @@ export function MissionControlPage() {
   const [healthDecisions, setHealthDecisions] = useState<AutonomousSessionInterventionDecision[]>([]);
   const [healthRecommendations, setHealthRecommendations] = useState<AutonomousSessionHealthRecommendation[]>([]);
   const [healthSummary, setHealthSummary] = useState<SessionHealthSummary | null>(null);
+  const [recoveryRuns, setRecoveryRuns] = useState<AutonomousSessionRecoveryRun[]>([]);
+  const [recoverySnapshots, setRecoverySnapshots] = useState<AutonomousSessionRecoverySnapshot[]>([]);
+  const [recoveryBlockers, setRecoveryBlockers] = useState<AutonomousRecoveryBlocker[]>([]);
+  const [resumeDecisions, setResumeDecisions] = useState<AutonomousResumeDecision[]>([]);
+  const [resumeRecords, setResumeRecords] = useState<AutonomousResumeRecord[]>([]);
+  const [recoveryRecommendations, setRecoveryRecommendations] = useState<AutonomousSessionRecoveryRecommendation[]>([]);
+  const [recoverySummary, setRecoverySummary] = useState<SessionRecoverySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,7 +121,7 @@ export function MissionControlPage() {
     setLoading(true);
     setError(null);
     try {
-      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary] = await Promise.all([
+      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary, loadedRecoveryRuns, loadedRecoverySnapshots, loadedRecoveryBlockers, loadedResumeDecisions, loadedResumeRecords, loadedRecoveryRecommendations, loadedRecoverySummary] = await Promise.all([
         getAutonomousSessions(),
         getAutonomousSessionSummary(),
         getAutonomousRunnerState(),
@@ -123,6 +146,13 @@ export function MissionControlPage() {
         getSessionInterventionDecisions(),
         getSessionHealthRecommendations(),
         getSessionHealthSummary(),
+        getSessionRecoveryRuns(),
+        getSessionRecoverySnapshots(),
+        getRecoveryBlockers(),
+        getResumeDecisions(),
+        getResumeRecords(),
+        getSessionRecoveryRecommendations(),
+        getSessionRecoverySummary(),
       ]);
       setSessions(loadedSessions);
       setSummary(loadedSummary);
@@ -148,6 +178,13 @@ export function MissionControlPage() {
       setHealthDecisions(loadedHealthDecisions);
       setHealthRecommendations(loadedHealthRecommendations);
       setHealthSummary(loadedHealthSummary);
+      setRecoveryRuns(loadedRecoveryRuns);
+      setRecoverySnapshots(loadedRecoverySnapshots);
+      setRecoveryBlockers(loadedRecoveryBlockers);
+      setResumeDecisions(loadedResumeDecisions);
+      setResumeRecords(loadedResumeRecords);
+      setRecoveryRecommendations(loadedRecoveryRecommendations);
+      setRecoverySummary(loadedRecoverySummary);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load autonomous heartbeat runner state.');
     } finally {
@@ -225,6 +262,31 @@ export function MissionControlPage() {
 
         <SectionCard eyebrow="Adaptive session profiles" title="Profile recommendations" description="Conservative rationale, blockers, and confidence for profile selection outcomes.">
           <ul>{profileRecommendations.slice(0, 10).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — {recommendation.rationale} blockers=[{recommendation.blockers.join(', ')}] confidence={recommendation.confidence}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session recovery" title="Recovery review + safe resume apply" description="Resume decision -> conservative apply -> reintegration with timing/heartbeat. Auto apply is intentionally limited to READY_TO_RESUME + auto_applicable.">
+          <div className="button-row">
+            <button type="button" className="primary-button" onClick={async () => { await runSessionRecoveryReview(undefined, false); await load(); }}>Run recovery review</button>
+            <button type="button" className="secondary-button" onClick={async () => { await runSessionRecoveryReview(undefined, true); await load(); }}>Run recovery review + auto safe apply</button>
+          </div>
+          <div className="system-metadata-grid">
+            <div><strong>Sessions reviewed:</strong> {recoverySummary?.summary.sessions_reviewed ?? 0}</div>
+            <div><strong>Ready:</strong> {recoverySummary?.summary.ready_to_resume ?? 0}</div>
+            <div><strong>Monitor-only:</strong> {recoverySummary?.summary.monitor_only_resume ?? 0}</div>
+            <div><strong>Blocked:</strong> {recoverySummary?.summary.blocked ?? 0}</div>
+            <div><strong>Manual review:</strong> {recoverySummary?.summary.manual_review ?? 0}</div>
+            <div><strong>Applied resume:</strong> {recoverySummary?.summary.applied_resume ?? 0}</div>
+          </div>
+          <p><strong>Recovery runs:</strong> {recoveryRuns.length} · <strong>Snapshots:</strong> {recoverySnapshots.length} · <strong>Blockers:</strong> {recoveryBlockers.length}</p>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session recovery" title="Resume decisions" description="Manual apply action is available for resume decisions; records distinguish manual vs auto-safe vs monitor-only apply mode.">
+          <ul>{resumeDecisions.slice(0, 12).map((decision) => <li key={decision.id}><strong>{decision.decision_type}</strong> — session={decision.linked_session} status={decision.decision_status} auto={String(decision.auto_applicable)} <button type="button" className="link-button" disabled={!['READY_TO_RESUME', 'RESUME_IN_MONITOR_ONLY_MODE'].includes(decision.decision_type)} onClick={async () => { await applySessionResume(decision.id); await load(); }}>Apply resume</button> summary={decision.decision_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session recovery" title="Resume records" description="Audit trail for applied/skipped/blocked/failed resume attempts.">
+          <ul>{resumeRecords.slice(0, 12).map((record) => <li key={record.id}><strong>{record.resume_status}</strong> — session={record.linked_session} mode={record.applied_mode} summary={record.resume_summary}</li>)}</ul>
+          <ul>{recoveryRecommendations.slice(0, 8).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — {recommendation.rationale} blockers=[{recommendation.blockers.join(', ')}]</li>)}</ul>
         </SectionCard>
 
         <SectionCard eyebrow="Session health & interventions" title="Operational health governance" description="Health monitor for local-first paper sessions. Conservative self-healing only, with explicit guardrails and no live execution.">

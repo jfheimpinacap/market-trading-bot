@@ -35,6 +35,13 @@ import type {
   SessionHealthSummary,
   AutonomousSessionSummary,
   AutonomousTickDispatchAttempt,
+  AutonomousRecoveryBlocker,
+  AutonomousResumeDecision,
+  AutonomousResumeRecord,
+  AutonomousSessionRecoveryRecommendation,
+  AutonomousSessionRecoveryRun,
+  AutonomousSessionRecoverySnapshot,
+  SessionRecoverySummary,
   MissionControlCycle,
   MissionControlSession,
   MissionControlStatusResponse,
@@ -294,4 +301,50 @@ export function getSessionHealthRecommendations() {
 
 export function getSessionHealthSummary() {
   return requestJson<SessionHealthSummary>('/api/mission-control/session-health-summary/');
+}
+
+
+export function runSessionRecoveryReview(sessionIds?: number[], autoApplySafe = false) {
+  return requestJson<AutonomousSessionRecoveryRun>('/api/mission-control/run-session-recovery-review/', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...(sessionIds?.length ? { session_ids: sessionIds } : {}),
+      auto_apply_safe: autoApplySafe,
+    }),
+  });
+}
+
+export function getSessionRecoveryRuns() {
+  return requestJson<AutonomousSessionRecoveryRun[]>('/api/mission-control/session-recovery-runs/');
+}
+
+export function getSessionRecoverySnapshots() {
+  return requestJson<AutonomousSessionRecoverySnapshot[]>('/api/mission-control/session-recovery-snapshots/');
+}
+
+export function getRecoveryBlockers() {
+  return requestJson<AutonomousRecoveryBlocker[]>('/api/mission-control/recovery-blockers/');
+}
+
+export function getResumeDecisions() {
+  return requestJson<AutonomousResumeDecision[]>('/api/mission-control/resume-decisions/');
+}
+
+export function getResumeRecords() {
+  return requestJson<AutonomousResumeRecord[]>('/api/mission-control/resume-records/');
+}
+
+export function getSessionRecoveryRecommendations() {
+  return requestJson<AutonomousSessionRecoveryRecommendation[]>('/api/mission-control/session-recovery-recommendations/');
+}
+
+export function getSessionRecoverySummary() {
+  return requestJson<SessionRecoverySummary>('/api/mission-control/session-recovery-summary/');
+}
+
+export function applySessionResume(decisionId: number, autoApplySafe = false) {
+  return requestJson<{ decision: AutonomousResumeDecision; record: AutonomousResumeRecord }>(`/api/mission-control/apply-session-resume/${decisionId}/`, {
+    method: 'POST',
+    body: JSON.stringify({ auto_apply_safe: autoApplySafe }),
+  });
 }

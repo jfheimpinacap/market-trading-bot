@@ -2220,3 +2220,13 @@ The project now includes a configurable **session timing policy** layer under mi
 - integración directa con heartbeat local y timing policy existente (no reemplazo).
 
 Boundaries se mantienen: local-first, single-user, paper/sandbox only, sin broker/exchange real, sin live execution, sin dinero real, sin planner black-box.
+
+## Session recovery resume apply (Prompt 150B)
+
+The repository now includes the final conservative session recovery apply stage for mission-control autonomous sessions:
+- resume decisions can be applied manually via `POST /api/mission-control/apply-session-resume/<decision_id>/`
+- optional safe auto-apply is available in `POST /api/mission-control/run-session-recovery-review/` with `auto_apply_safe=true`
+- each apply attempt creates an explicit `AutonomousResumeRecord` audit trail (manual / auto-safe / monitor-only)
+- reintegration after resume is still paper-only and routes through existing timing policy + heartbeat governance (not a replacement)
+
+This remains local-first and paper/demo-only: no live trading, no real-money execution.
