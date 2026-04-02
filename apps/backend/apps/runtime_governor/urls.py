@@ -11,6 +11,7 @@ from apps.runtime_governor.views import (
     ModeEnforcementDecisionDetailView,
     ModeEnforcementRecommendationListView,
     ModeEnforcementSummaryView,
+    ApplyRuntimeFeedbackDecisionView,
     OperatingModeRecommendationListView,
     OperatingModeSummaryView,
     OperatingModeSwitchRecordListView,
@@ -21,7 +22,15 @@ from apps.runtime_governor.views import (
     RuntimePostureSnapshotListView,
     RuntimeSetModeView,
     RuntimeStatusView,
+    RuntimeFeedbackDecisionDetailView,
+    RuntimeFeedbackDecisionListView,
+    RuntimeFeedbackRecommendationListView,
+    RuntimeFeedbackRunListView,
+    RuntimeDiagnosticReviewListView,
+    RuntimeFeedbackSummaryView,
+    RuntimePerformanceSnapshotListView,
     RuntimeTransitionListView,
+    RunRuntimeFeedbackReviewView,
 )
 
 urlpatterns = [
@@ -46,4 +55,13 @@ urlpatterns = [
     path('mode-enforcement-decisions/<int:enforcement_decision_id>/', ModeEnforcementDecisionDetailView.as_view(), name='mode_enforcement_decision_detail'),
     path('mode-enforcement-recommendations/', ModeEnforcementRecommendationListView.as_view(), name='mode_enforcement_recommendations'),
     path('mode-enforcement-summary/', ModeEnforcementSummaryView.as_view(), name='mode_enforcement_summary'),
+    path('run-runtime-feedback-review/', RunRuntimeFeedbackReviewView.as_view(), name='run_runtime_feedback_review'),
+    path('runtime-feedback-runs/', RuntimeFeedbackRunListView.as_view(), name='runtime_feedback_runs'),
+    path('runtime-performance-snapshots/', RuntimePerformanceSnapshotListView.as_view(), name='runtime_performance_snapshots'),
+    path('runtime-diagnostic-reviews/', RuntimeDiagnosticReviewListView.as_view(), name='runtime_diagnostic_reviews'),
+    path('runtime-feedback-decisions/', RuntimeFeedbackDecisionListView.as_view(), name='runtime_feedback_decisions'),
+    path('runtime-feedback-decisions/<int:feedback_decision_id>/', RuntimeFeedbackDecisionDetailView.as_view(), name='runtime_feedback_decision_detail'),
+    path('runtime-feedback-recommendations/', RuntimeFeedbackRecommendationListView.as_view(), name='runtime_feedback_recommendations'),
+    path('runtime-feedback-summary/', RuntimeFeedbackSummaryView.as_view(), name='runtime_feedback_summary'),
+    path('apply-runtime-feedback-decision/<int:decision_id>/', ApplyRuntimeFeedbackDecisionView.as_view(), name='apply_runtime_feedback_decision'),
 ]

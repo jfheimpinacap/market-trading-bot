@@ -12,6 +12,11 @@ from apps.runtime_governor.services.operating_mode import (
     run_operating_mode_review,
 )
 from apps.runtime_governor.services.state import get_runtime_state, list_mode_profiles, seed_mode_profiles
+from apps.runtime_governor.runtime_feedback.services import (
+    apply_runtime_feedback_decision,
+    get_runtime_feedback_summary,
+    run_runtime_feedback_review,
+)
 
 __all__ = [
     'get_capabilities_for_current_mode',
@@ -23,7 +28,10 @@ __all__ = [
     'list_mode_profiles',
     'reconcile_runtime_state',
     'run_operating_mode_review',
+    'run_runtime_feedback_review',
     'seed_mode_profiles',
     'set_runtime_mode',
     'apply_operating_mode_decision',
+    'apply_runtime_feedback_decision',
+    'get_runtime_feedback_summary',
 ]
