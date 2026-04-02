@@ -68,6 +68,23 @@ Still out of scope: real trading, exchange auth, autonomous schedulers/workers, 
 
 Boundaries remain strict: local-first, single-user, paper/sandbox only, no broker/exchange live execution, no real money, and no black-box scheduler authority.
 
+### Local autonomous heartbeat runner / due-tick executor (new)
+
+`mission_control` now includes a local self-advancing heartbeat runner layer for autonomous sessions:
+
+- runner lifecycle endpoints (`start/pause/resume/stop-autonomous-runner`)
+- heartbeat pass endpoint (`run-autonomous-heartbeat`) for explicit/manual trigger and local loop reuse
+- auditable entities:
+  - `AutonomousRunnerState`
+  - `AutonomousHeartbeatRun`
+  - `AutonomousHeartbeatDecision`
+  - `AutonomousTickDispatchAttempt`
+  - `AutonomousHeartbeatRecommendation`
+- due-tick execution reuses existing `run-autonomous-tick` logic (no duplicate runtime authority)
+- cooldown-aware, safety/runtime capability aware, and reentrancy-safe dispatch gating
+
+Scope remains unchanged: local-first, single-user, paper/sandbox only, no live broker/exchange execution, and no real money.
+
 ### Evaluation harness (new)
 
 The platform now includes an explicit **benchmark/evaluation harness** for autonomous paper/demo operation:

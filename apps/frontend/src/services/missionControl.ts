@@ -1,8 +1,13 @@
 import { requestJson } from './api/client';
 import type {
   AutonomousCycleExecution,
+  AutonomousHeartbeatDecision,
+  AutonomousHeartbeatRecommendation,
+  AutonomousHeartbeatRun,
+  AutonomousHeartbeatSummary,
   AutonomousCycleOutcome,
   AutonomousCyclePlan,
+  AutonomousRunnerState,
   AutonomousRuntimeRecommendation,
   AutonomousRuntimeRun,
   AutonomousRuntimeSummary,
@@ -11,6 +16,7 @@ import type {
   AutonomousCadenceDecision,
   AutonomousSessionRecommendation,
   AutonomousSessionSummary,
+  AutonomousTickDispatchAttempt,
   MissionControlCycle,
   MissionControlSession,
   MissionControlStatusResponse,
@@ -131,4 +137,48 @@ export function getAutonomousSessionRecommendations() {
 
 export function getAutonomousSessionSummary() {
   return requestJson<AutonomousSessionSummary>('/api/mission-control/autonomous-session-summary/');
+}
+
+export function startAutonomousRunner() {
+  return requestJson<AutonomousRunnerState>('/api/mission-control/start-autonomous-runner/', { method: 'POST', body: '{}' });
+}
+
+export function pauseAutonomousRunner() {
+  return requestJson<AutonomousRunnerState>('/api/mission-control/pause-autonomous-runner/', { method: 'POST', body: '{}' });
+}
+
+export function resumeAutonomousRunner() {
+  return requestJson<AutonomousRunnerState>('/api/mission-control/resume-autonomous-runner/', { method: 'POST', body: '{}' });
+}
+
+export function stopAutonomousRunner() {
+  return requestJson<AutonomousRunnerState>('/api/mission-control/stop-autonomous-runner/', { method: 'POST', body: '{}' });
+}
+
+export function runAutonomousHeartbeat() {
+  return requestJson<AutonomousHeartbeatRun>('/api/mission-control/run-autonomous-heartbeat/', { method: 'POST', body: '{}' });
+}
+
+export function getAutonomousRunnerState() {
+  return requestJson<AutonomousRunnerState>('/api/mission-control/autonomous-runner-state/');
+}
+
+export function getAutonomousHeartbeatRuns() {
+  return requestJson<AutonomousHeartbeatRun[]>('/api/mission-control/autonomous-heartbeat-runs/');
+}
+
+export function getAutonomousHeartbeatDecisions() {
+  return requestJson<AutonomousHeartbeatDecision[]>('/api/mission-control/autonomous-heartbeat-decisions/');
+}
+
+export function getAutonomousTickDispatchAttempts() {
+  return requestJson<AutonomousTickDispatchAttempt[]>('/api/mission-control/autonomous-tick-dispatch-attempts/');
+}
+
+export function getAutonomousHeartbeatRecommendations() {
+  return requestJson<AutonomousHeartbeatRecommendation[]>('/api/mission-control/autonomous-heartbeat-recommendations/');
+}
+
+export function getAutonomousHeartbeatSummary() {
+  return requestJson<AutonomousHeartbeatSummary>('/api/mission-control/autonomous-heartbeat-summary/');
 }

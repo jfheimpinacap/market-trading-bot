@@ -365,3 +365,127 @@ class AutonomousSessionRecommendation(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at', '-id']
+
+
+class AutonomousRunnerStatus(models.TextChoices):
+    STOPPED = 'STOPPED', 'Stopped'
+    RUNNING = 'RUNNING', 'Running'
+    PAUSED = 'PAUSED', 'Paused'
+    ERROR = 'ERROR', 'Error'
+
+
+class AutonomousHeartbeatRunnerStatus(models.TextChoices):
+    RUNNING = 'RUNNING', 'Running'
+    IDLE = 'IDLE', 'Idle'
+    PAUSED = 'PAUSED', 'Paused'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    FAILED = 'FAILED', 'Failed'
+    COMPLETED = 'COMPLETED', 'Completed'
+
+
+class AutonomousHeartbeatDecisionType(models.TextChoices):
+    RUN_DUE_TICK = 'RUN_DUE_TICK', 'Run due tick'
+    WAIT_FOR_NEXT_WINDOW = 'WAIT_FOR_NEXT_WINDOW', 'Wait for next window'
+    SKIP_FOR_COOLDOWN = 'SKIP_FOR_COOLDOWN', 'Skip for cooldown'
+    PAUSE_SESSION = 'PAUSE_SESSION', 'Pause session'
+    STOP_SESSION = 'STOP_SESSION', 'Stop session'
+    BLOCK_SESSION = 'BLOCK_SESSION', 'Block session'
+
+
+class AutonomousHeartbeatDecisionStatus(models.TextChoices):
+    READY = 'READY', 'Ready'
+    EXECUTED = 'EXECUTED', 'Executed'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousTickDispatchStatus(models.TextChoices):
+    QUEUED = 'QUEUED', 'Queued'
+    STARTED = 'STARTED', 'Started'
+    COMPLETED = 'COMPLETED', 'Completed'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    FAILED = 'FAILED', 'Failed'
+
+
+class AutonomousHeartbeatRecommendationType(models.TextChoices):
+    RUN_DUE_TICK_NOW = 'RUN_DUE_TICK_NOW', 'Run due tick now'
+    WAIT_UNTIL_NEXT_DUE_WINDOW = 'WAIT_UNTIL_NEXT_DUE_WINDOW', 'Wait until next due window'
+    SKIP_FOR_ACTIVE_COOLDOWN = 'SKIP_FOR_ACTIVE_COOLDOWN', 'Skip for active cooldown'
+    PAUSE_FOR_RUNTIME_OR_SAFETY = 'PAUSE_FOR_RUNTIME_OR_SAFETY', 'Pause for runtime or safety'
+    STOP_FOR_KILL_SWITCH = 'STOP_FOR_KILL_SWITCH', 'Stop for kill switch'
+    REQUIRE_MANUAL_RUNNER_REVIEW = 'REQUIRE_MANUAL_RUNNER_REVIEW', 'Require manual runner review'
+
+
+class AutonomousRunnerState(TimeStampedModel):
+    runner_name = models.CharField(max_length=64, unique=True)
+    runner_status = models.CharField(max_length=12, choices=AutonomousRunnerStatus.choices, default=AutonomousRunnerStatus.STOPPED)
+    last_heartbeat_at = models.DateTimeField(null=True, blank=True)
+    last_successful_run_at = models.DateTimeField(null=True, blank=True)
+    last_error_at = models.DateTimeField(null=True, blank=True)
+    active_session_count = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-updated_at', '-id']
+
+
+class AutonomousHeartbeatRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    runner_status = models.CharField(max_length=12, choices=AutonomousHeartbeatRunnerStatus.choices, default=AutonomousHeartbeatRunnerStatus.RUNNING)
+    considered_session_count = models.PositiveIntegerField(default=0)
+    due_tick_count = models.PositiveIntegerField(default=0)
+    executed_tick_count = models.PositiveIntegerField(default=0)
+    wait_count = models.PositiveIntegerField(default=0)
+    cooldown_skip_count = models.PositiveIntegerField(default=0)
+    blocked_count = models.PositiveIntegerField(default=0)
+    paused_count = models.PositiveIntegerField(default=0)
+    stopped_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class AutonomousHeartbeatDecision(TimeStampedModel):
+    linked_heartbeat_run = models.ForeignKey(AutonomousHeartbeatRun, on_delete=models.CASCADE, related_name='decisions')
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='heartbeat_decisions')
+    linked_latest_tick = models.ForeignKey(AutonomousRuntimeTick, null=True, blank=True, on_delete=models.SET_NULL, related_name='heartbeat_decisions')
+    decision_type = models.CharField(max_length=24, choices=AutonomousHeartbeatDecisionType.choices)
+    decision_status = models.CharField(max_length=12, choices=AutonomousHeartbeatDecisionStatus.choices, default=AutonomousHeartbeatDecisionStatus.READY)
+    due_now = models.BooleanField(default=False)
+    next_due_at = models.DateTimeField(null=True, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    decision_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousTickDispatchAttempt(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='tick_dispatch_attempts')
+    linked_heartbeat_decision = models.ForeignKey(AutonomousHeartbeatDecision, on_delete=models.CASCADE, related_name='dispatch_attempts')
+    linked_tick = models.ForeignKey(AutonomousRuntimeTick, null=True, blank=True, on_delete=models.SET_NULL, related_name='dispatch_attempts')
+    dispatch_status = models.CharField(max_length=12, choices=AutonomousTickDispatchStatus.choices, default=AutonomousTickDispatchStatus.QUEUED)
+    automatic = models.BooleanField(default=True)
+    summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousHeartbeatRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=36, choices=AutonomousHeartbeatRecommendationType.choices)
+    target_session = models.ForeignKey(AutonomousRuntimeSession, null=True, blank=True, on_delete=models.SET_NULL, related_name='heartbeat_recommendations')
+    target_heartbeat_decision = models.ForeignKey(AutonomousHeartbeatDecision, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']

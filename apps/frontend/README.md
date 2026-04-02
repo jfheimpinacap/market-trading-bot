@@ -13,6 +13,20 @@ La vista `/mission-control` ahora incluye una sección explícita de **Autonomou
 
 La UI extiende capacidades existentes de mission control/autonomous runtime sin crear un scheduler opaco ni un flujo de live trading.
 
+## Mission control autonomous runner UX (new)
+
+`/mission-control` ahora también expone una sección de **Autonomous Runner** para autoavance local de sesiones activas:
+
+- controles manuales: `Start runner`, `Pause runner`, `Resume runner`, `Stop runner`, `Run heartbeat now`
+- panel de estado del runner (`runner_status`, `last_heartbeat`, `last_successful_run`, sesiones activas)
+- summary cards de heartbeat (`considered`, `due`, `executed`, `cooldown skips`, `blocked/paused/stopped`)
+- trazabilidad técnica en tablas de:
+  - heartbeat decisions
+  - tick dispatch attempts
+  - heartbeat recommendations
+
+Todo sigue paper-only, local-first, cadence/cooldown-aware, y sin live execution.
+
 ## Precedent-aware UX (new)
 
 La UI ahora expone señales de memoria histórica sin sobrecargar pantallas:
