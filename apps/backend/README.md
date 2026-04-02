@@ -41,6 +41,31 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 
 This layer extends existing mission control and autonomous trader orchestration; it does not replace runtime/policy/safety/portfolio authorities.
 
+## Mission control local heartbeat runner (new)
+
+`apps.mission_control` now also includes a local autonomous heartbeat runner sublayer:
+
+- service split:
+  - `services/session_heartbeat/runner.py`
+  - `services/session_heartbeat/due_tick.py`
+  - `services/session_heartbeat/dispatch.py`
+  - `services/session_heartbeat/recommendation.py`
+  - `services/session_heartbeat/run.py`
+- API:
+  - `POST /api/mission-control/start-autonomous-runner/`
+  - `POST /api/mission-control/pause-autonomous-runner/`
+  - `POST /api/mission-control/resume-autonomous-runner/`
+  - `POST /api/mission-control/stop-autonomous-runner/`
+  - `POST /api/mission-control/run-autonomous-heartbeat/`
+  - `GET /api/mission-control/autonomous-runner-state/`
+  - `GET /api/mission-control/autonomous-heartbeat-runs/`
+  - `GET /api/mission-control/autonomous-heartbeat-decisions/`
+  - `GET /api/mission-control/autonomous-tick-dispatch-attempts/`
+  - `GET /api/mission-control/autonomous-heartbeat-recommendations/`
+  - `GET /api/mission-control/autonomous-heartbeat-summary/`
+
+This layer only automates due-tick progression of existing autonomous sessions and preserves paper-only, local-first boundaries.
+
 ## Precedent-aware backend layer (new)
 
 - Added `AgentPrecedentUse` for auditable agent-memory usage records.

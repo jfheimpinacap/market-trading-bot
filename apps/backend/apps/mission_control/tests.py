@@ -1,11 +1,19 @@
 from unittest.mock import patch
 import json
+from datetime import timedelta
 
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.mission_control.models import MissionControlCycle, MissionControlSession, MissionControlState
-from apps.mission_control.models import AutonomousRuntimeSession
+from django.utils import timezone
+
+from apps.mission_control.models import (
+    AutonomousCooldownState,
+    AutonomousRuntimeSession,
+    MissionControlCycle,
+    MissionControlSession,
+    MissionControlState,
+)
 
 
 class MissionControlApiTests(TestCase):
@@ -170,3 +178,69 @@ class AutonomousSessionRuntimeTests(TestCase):
         response = self.client.get(reverse('mission_control:autonomous-session-summary'))
         self.assertEqual(response.status_code, 200)
         self.assertIn('active_sessions', response.json())
+
+
+class AutonomousHeartbeatRunnerTests(TestCase):
+    def test_runner_start_pause_resume_stop(self):
+        start = self.client.post(reverse('mission_control:start-autonomous-runner'), data='{}', content_type='application/json')
+        self.assertEqual(start.status_code, 200)
+        self.assertEqual(start.json()['runner_status'], 'RUNNING')
+
+        pause = self.client.post(reverse('mission_control:pause-autonomous-runner'), data='{}', content_type='application/json')
+        self.assertEqual(pause.status_code, 200)
+        self.assertEqual(pause.json()['runner_status'], 'PAUSED')
+
+        resume = self.client.post(reverse('mission_control:resume-autonomous-runner'), data='{}', content_type='application/json')
+        self.assertEqual(resume.status_code, 200)
+        self.assertEqual(resume.json()['runner_status'], 'RUNNING')
+
+        stop = self.client.post(reverse('mission_control:stop-autonomous-runner'), data='{}', content_type='application/json')
+        self.assertEqual(stop.status_code, 200)
+        self.assertEqual(stop.json()['runner_status'], 'STOPPED')
+
+    @patch('apps.mission_control.services.cycle_runner.run_position_watch', return_value={'ok': True})
+    @patch('apps.mission_control.services.cycle_runner.run_opportunity_cycle')
+    def test_due_tick_executes_automatically(self, mock_opp, _mock_watch):
+        class Result:
+            id = 100
+            status = 'COMPLETED'
+            summary = 'ok'
+            opportunities_built = 1
+            proposals_generated = 1
+            queued_count = 0
+            auto_executed_count = 0
+            blocked_count = 0
+
+        mock_opp.return_value = Result()
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        response = self.client.post(reverse('mission_control:run-autonomous-heartbeat'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        session.refresh_from_db()
+        self.assertGreaterEqual(session.tick_count, 1)
+
+    def test_cooldown_skips_dispatch(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        AutonomousCooldownState.objects.create(
+            linked_session=session,
+            cooldown_type='RUNTIME_CAUTION_COOLDOWN',
+            cooldown_status='ACTIVE',
+            expires_at=timezone.now() + timedelta(minutes=20),
+        )
+        self.client.post(reverse('mission_control:run-autonomous-heartbeat'), data='{}', content_type='application/json')
+        decisions = self.client.get(reverse('mission_control:autonomous-heartbeat-decisions')).json()
+        self.assertTrue(any(d['linked_session'] == session.id and d['decision_type'] == 'SKIP_FOR_COOLDOWN' for d in decisions))
+
+    @patch('apps.mission_control.services.session_heartbeat.due_tick.get_safety_status')
+    def test_blocking_prevents_automatic_dispatch(self, mock_safety):
+        mock_safety.return_value = {'kill_switch_enabled': True, 'hard_stop_active': True}
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-autonomous-heartbeat'), data='{}', content_type='application/json')
+        attempts = self.client.get(reverse('mission_control:autonomous-tick-dispatch-attempts')).json()
+        self.assertFalse(any(attempt['linked_session'] == session.id for attempt in attempts))
+
+    def test_summary_endpoint(self):
+        AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-autonomous-heartbeat'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:autonomous-heartbeat-summary'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('totals', response.json())

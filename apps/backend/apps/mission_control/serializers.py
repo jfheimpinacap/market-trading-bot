@@ -2,14 +2,19 @@ from rest_framework import serializers
 
 from apps.mission_control.models import (
     AutonomousCadenceDecision,
+    AutonomousHeartbeatDecision,
+    AutonomousHeartbeatRecommendation,
+    AutonomousHeartbeatRun,
     AutonomousMissionCycleExecution,
     AutonomousMissionCycleOutcome,
     AutonomousMissionCyclePlan,
     AutonomousMissionRuntimeRecommendation,
     AutonomousMissionRuntimeRun,
+    AutonomousRunnerState,
     AutonomousRuntimeSession,
     AutonomousRuntimeTick,
     AutonomousSessionRecommendation,
+    AutonomousTickDispatchAttempt,
     MissionControlCycle,
     MissionControlSession,
     MissionControlState,
@@ -118,3 +123,33 @@ class AutonomousSessionRecommendationSerializer(serializers.ModelSerializer):
 class AutonomousSessionStartRequestSerializer(serializers.Serializer):
     profile_slug = serializers.CharField(required=False, allow_blank=True)
     runtime_mode = serializers.CharField(required=False, allow_blank=True)
+
+
+class AutonomousRunnerStateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousRunnerState
+        fields = '__all__'
+
+
+class AutonomousHeartbeatRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousHeartbeatRun
+        fields = '__all__'
+
+
+class AutonomousHeartbeatDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousHeartbeatDecision
+        fields = '__all__'
+
+
+class AutonomousTickDispatchAttemptSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousTickDispatchAttempt
+        fields = '__all__'
+
+
+class AutonomousHeartbeatRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousHeartbeatRecommendation
+        fields = '__all__'

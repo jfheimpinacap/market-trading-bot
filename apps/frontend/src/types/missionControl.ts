@@ -214,3 +214,81 @@ export type AutonomousSessionSummary = {
   closed_outcome_count: number;
   latest_session_id: number | null;
 };
+
+export type AutonomousRunnerState = {
+  id: number;
+  runner_name: string;
+  runner_status: 'STOPPED' | 'RUNNING' | 'PAUSED' | 'ERROR';
+  last_heartbeat_at: string | null;
+  last_successful_run_at: string | null;
+  last_error_at: string | null;
+  active_session_count: number;
+  metadata: Record<string, unknown>;
+  updated_at: string;
+};
+
+export type AutonomousHeartbeatRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  runner_status: string;
+  considered_session_count: number;
+  due_tick_count: number;
+  executed_tick_count: number;
+  wait_count: number;
+  cooldown_skip_count: number;
+  blocked_count: number;
+  paused_count: number;
+  stopped_count: number;
+  recommendation_summary: string;
+  metadata: Record<string, unknown>;
+};
+
+export type AutonomousHeartbeatDecision = {
+  id: number;
+  linked_heartbeat_run: number;
+  linked_session: number;
+  linked_latest_tick: number | null;
+  decision_type: string;
+  decision_status: string;
+  due_now: boolean;
+  next_due_at: string | null;
+  reason_codes: string[];
+  decision_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousTickDispatchAttempt = {
+  id: number;
+  linked_session: number;
+  linked_heartbeat_decision: number;
+  linked_tick: number | null;
+  dispatch_status: string;
+  automatic: boolean;
+  summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousHeartbeatRecommendation = {
+  id: number;
+  recommendation_type: string;
+  target_session: number | null;
+  target_heartbeat_decision: number | null;
+  rationale: string;
+  reason_codes: string[];
+  confidence: number;
+  blockers: string[];
+  created_at: string;
+};
+
+export type AutonomousHeartbeatSummary = {
+  runner_state: AutonomousRunnerState;
+  latest_run: number | null;
+  totals: {
+    heartbeat_runs: number;
+    decisions: number;
+    dispatch_attempts: number;
+  };
+};

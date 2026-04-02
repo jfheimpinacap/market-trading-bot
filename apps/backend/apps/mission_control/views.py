@@ -4,14 +4,19 @@ from rest_framework.views import APIView
 
 from apps.mission_control.models import (
     AutonomousCadenceDecision,
+    AutonomousHeartbeatDecision,
+    AutonomousHeartbeatRecommendation,
+    AutonomousHeartbeatRun,
     AutonomousMissionCycleExecution,
     AutonomousMissionCycleOutcome,
     AutonomousMissionCyclePlan,
     AutonomousMissionRuntimeRecommendation,
     AutonomousMissionRuntimeRun,
+    AutonomousRunnerState,
     AutonomousRuntimeSession,
     AutonomousRuntimeTick,
     AutonomousSessionRecommendation,
+    AutonomousTickDispatchAttempt,
     MissionControlCycle,
     MissionControlSession,
 )
@@ -20,6 +25,10 @@ from apps.mission_control.serializers import (
     AutonomousCycleExecutionSerializer,
     AutonomousCycleOutcomeSerializer,
     AutonomousCyclePlanSerializer,
+    AutonomousHeartbeatDecisionSerializer,
+    AutonomousHeartbeatRecommendationSerializer,
+    AutonomousHeartbeatRunSerializer,
+    AutonomousRunnerStateSerializer,
     AutonomousRuntimeSessionSerializer,
     AutonomousRuntimeTickSerializer,
     AutonomousRuntimeRecommendationSerializer,
@@ -27,6 +36,7 @@ from apps.mission_control.serializers import (
     AutonomousRuntimeRunSerializer,
     AutonomousSessionRecommendationSerializer,
     AutonomousSessionStartRequestSerializer,
+    AutonomousTickDispatchAttemptSerializer,
     MissionControlCycleSerializer,
     MissionControlSessionSerializer,
     MissionControlStartSerializer,
@@ -40,6 +50,15 @@ from apps.mission_control.services.session_runtime import (
     run_tick,
     start_session as start_autonomous_session,
     stop_session as stop_autonomous_session,
+)
+from apps.mission_control.services.session_heartbeat import (
+    build_heartbeat_summary,
+    get_runner_state,
+    pause_runner,
+    resume_runner,
+    run_heartbeat_pass,
+    start_runner,
+    stop_runner,
 )
 
 
@@ -232,3 +251,63 @@ class AutonomousSessionRecommendationListView(generics.ListAPIView):
 class AutonomousSessionSummaryView(APIView):
     def get(self, request, *args, **kwargs):
         return Response(build_session_summary(), status=status.HTTP_200_OK)
+
+
+class StartAutonomousRunnerView(APIView):
+    def post(self, request, *args, **kwargs):
+        runner = start_runner()
+        return Response(AutonomousRunnerStateSerializer(runner).data, status=status.HTTP_200_OK)
+
+
+class PauseAutonomousRunnerView(APIView):
+    def post(self, request, *args, **kwargs):
+        runner = pause_runner()
+        return Response(AutonomousRunnerStateSerializer(runner).data, status=status.HTTP_200_OK)
+
+
+class ResumeAutonomousRunnerView(APIView):
+    def post(self, request, *args, **kwargs):
+        runner = resume_runner()
+        return Response(AutonomousRunnerStateSerializer(runner).data, status=status.HTTP_200_OK)
+
+
+class StopAutonomousRunnerView(APIView):
+    def post(self, request, *args, **kwargs):
+        runner = stop_runner()
+        return Response(AutonomousRunnerStateSerializer(runner).data, status=status.HTTP_200_OK)
+
+
+class RunAutonomousHeartbeatView(APIView):
+    def post(self, request, *args, **kwargs):
+        heartbeat = run_heartbeat_pass()
+        return Response(AutonomousHeartbeatRunSerializer(heartbeat).data, status=status.HTTP_200_OK)
+
+
+class AutonomousRunnerStateView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(AutonomousRunnerStateSerializer(get_runner_state()).data, status=status.HTTP_200_OK)
+
+
+class AutonomousHeartbeatRunListView(generics.ListAPIView):
+    serializer_class = AutonomousHeartbeatRunSerializer
+    queryset = AutonomousHeartbeatRun.objects.order_by('-started_at', '-id')[:100]
+
+
+class AutonomousHeartbeatDecisionListView(generics.ListAPIView):
+    serializer_class = AutonomousHeartbeatDecisionSerializer
+    queryset = AutonomousHeartbeatDecision.objects.select_related('linked_heartbeat_run', 'linked_session').order_by('-created_at', '-id')[:200]
+
+
+class AutonomousTickDispatchAttemptListView(generics.ListAPIView):
+    serializer_class = AutonomousTickDispatchAttemptSerializer
+    queryset = AutonomousTickDispatchAttempt.objects.select_related('linked_session', 'linked_heartbeat_decision', 'linked_tick').order_by('-created_at', '-id')[:200]
+
+
+class AutonomousHeartbeatRecommendationListView(generics.ListAPIView):
+    serializer_class = AutonomousHeartbeatRecommendationSerializer
+    queryset = AutonomousHeartbeatRecommendation.objects.select_related('target_session', 'target_heartbeat_decision').order_by('-created_at', '-id')[:200]
+
+
+class AutonomousHeartbeatSummaryView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(build_heartbeat_summary(), status=status.HTTP_200_OK)
