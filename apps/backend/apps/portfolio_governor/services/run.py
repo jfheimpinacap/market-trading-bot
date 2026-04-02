@@ -4,16 +4,23 @@ from django.db import models
 from django.utils import timezone
 
 from apps.portfolio_governor.models import (
+    PortfolioExposureApplyDecision,
+    PortfolioExposureApplyRecommendation,
+    PortfolioExposureApplyRecord,
+    PortfolioExposureApplyRun,
+    PortfolioExposureDecision,
     PortfolioExposureConflictReview,
     PortfolioExposureCoordinationRun,
-    PortfolioExposureDecision,
     PortfolioExposureRecommendation,
 )
+from apps.portfolio_governor.services.apply_decision import derive_apply_decision
+from apps.portfolio_governor.services.apply_record import execute_apply_decision
+from apps.portfolio_governor.services.apply_targets import resolve_apply_targets
 from apps.portfolio_governor.services.clusters import build_cluster_snapshots
 from apps.portfolio_governor.services.conflict_review import review_cluster_conflicts
 from apps.portfolio_governor.services.decision import derive_exposure_decision
 from apps.portfolio_governor.services.governance import get_latest_throttle_decision
-from apps.portfolio_governor.services.recommendation import create_exposure_recommendation
+from apps.portfolio_governor.services.recommendation import create_apply_recommendation, create_exposure_recommendation
 
 
 def run_exposure_coordination_review(*, triggered_by: str = 'manual_api') -> PortfolioExposureCoordinationRun:
@@ -70,6 +77,79 @@ def run_exposure_coordination_review(*, triggered_by: str = 'manual_api') -> Por
     return run
 
 
+def apply_exposure_decision(*, decision: PortfolioExposureDecision, force_apply: bool = False, triggered_by: str = 'manual_api') -> PortfolioExposureApplyRun:
+    apply_run = PortfolioExposureApplyRun.objects.create(
+        started_at=timezone.now(),
+        metadata={'triggered_by': triggered_by, 'single_decision_id': decision.id, 'paper_only': True},
+    )
+    _process_decisions(apply_run=apply_run, decisions=[decision], force_apply=force_apply)
+    _finalize_apply_run(apply_run)
+    return apply_run
+
+
+def run_exposure_apply_review(*, force_apply: bool = False, triggered_by: str = 'manual_api') -> PortfolioExposureApplyRun:
+    decisions = list(
+        PortfolioExposureDecision.objects.select_related('linked_cluster_snapshot')
+        .filter(decision_status='PROPOSED')
+        .order_by('-created_at_decision', '-id')[:50]
+    )
+    apply_run = PortfolioExposureApplyRun.objects.create(
+        started_at=timezone.now(),
+        metadata={'triggered_by': triggered_by, 'paper_only': True, 'decision_batch': len(decisions)},
+    )
+    _process_decisions(apply_run=apply_run, decisions=decisions, force_apply=force_apply)
+    _finalize_apply_run(apply_run)
+    return apply_run
+
+
+def _process_decisions(*, apply_run: PortfolioExposureApplyRun, decisions: list[PortfolioExposureDecision], force_apply: bool):
+    for decision in decisions:
+        target_resolution = resolve_apply_targets(apply_run=apply_run, decision=decision)
+        apply_decision = derive_apply_decision(
+            apply_run=apply_run,
+            decision=decision,
+            targets=target_resolution.targets,
+            resolver_reason_codes=target_resolution.reason_codes,
+        )
+        create_apply_recommendation(exposure_decision=decision, apply_decision=apply_decision)
+        execute_apply_decision(apply_decision=apply_decision, force_apply=force_apply)
+
+
+def _finalize_apply_run(apply_run: PortfolioExposureApplyRun):
+    decisions = PortfolioExposureApplyDecision.objects.filter(linked_apply_run=apply_run)
+    records = PortfolioExposureApplyRecord.objects.filter(linked_apply_decision__linked_apply_run=apply_run)
+
+    apply_run.considered_decision_count = decisions.count()
+    apply_run.applied_count = decisions.filter(apply_status='APPLIED').count()
+    apply_run.skipped_count = decisions.filter(apply_status='SKIPPED').count()
+    apply_run.blocked_count = decisions.filter(apply_status='BLOCKED').count()
+    apply_run.deferred_dispatch_apply_count = records.filter(effect_type='DISPATCH_DEFERRED', record_status='APPLIED').count()
+    apply_run.parked_session_apply_count = records.filter(effect_type='SESSION_PARKED', record_status='APPLIED').count()
+    apply_run.paused_cluster_apply_count = records.filter(effect_type='CLUSTER_ACTIVITY_PAUSED', record_status='APPLIED').count()
+    apply_run.recommendation_summary = {
+        item['recommendation_type']: item['count']
+        for item in PortfolioExposureApplyRecommendation.objects.filter(target_apply_decision__linked_apply_run=apply_run)
+        .values('recommendation_type')
+        .annotate(count=models.Count('id'))
+        .order_by('recommendation_type')
+    }
+    apply_run.completed_at = timezone.now()
+    apply_run.save(
+        update_fields=[
+            'considered_decision_count',
+            'applied_count',
+            'skipped_count',
+            'blocked_count',
+            'deferred_dispatch_apply_count',
+            'parked_session_apply_count',
+            'paused_cluster_apply_count',
+            'recommendation_summary',
+            'completed_at',
+            'updated_at',
+        ]
+    )
+
+
 def build_exposure_coordination_summary() -> dict:
     latest_run = PortfolioExposureCoordinationRun.objects.order_by('-started_at', '-id').first()
     if latest_run is None:
@@ -95,6 +175,36 @@ def build_exposure_coordination_summary() -> dict:
         'defers': latest_run.defer_count,
         'parks': latest_run.park_count,
         'manual_reviews': latest_run.manual_review_count,
+        'recommendation_summary': latest_run.recommendation_summary,
+        'paper_demo_only': True,
+        'real_execution_enabled': False,
+    }
+
+
+def build_exposure_apply_summary() -> dict:
+    latest_run = PortfolioExposureApplyRun.objects.order_by('-started_at', '-id').first()
+    if latest_run is None:
+        return {
+            'latest_run_id': None,
+            'decisions_considered': 0,
+            'applied': 0,
+            'skipped': 0,
+            'blocked': 0,
+            'deferred_dispatches': 0,
+            'parked_sessions': 0,
+            'paused_clusters': 0,
+            'paper_demo_only': True,
+            'real_execution_enabled': False,
+        }
+    return {
+        'latest_run_id': latest_run.id,
+        'decisions_considered': latest_run.considered_decision_count,
+        'applied': latest_run.applied_count,
+        'skipped': latest_run.skipped_count,
+        'blocked': latest_run.blocked_count,
+        'deferred_dispatches': latest_run.deferred_dispatch_apply_count,
+        'parked_sessions': latest_run.parked_session_apply_count,
+        'paused_clusters': latest_run.paused_cluster_apply_count,
         'recommendation_summary': latest_run.recommendation_summary,
         'paper_demo_only': True,
         'real_execution_enabled': False,

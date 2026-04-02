@@ -1,5 +1,11 @@
 import { requestJson } from './api/client';
 import type {
+  PortfolioExposureApplyDecision,
+  PortfolioExposureApplyRecommendation,
+  PortfolioExposureApplyRecord,
+  PortfolioExposureApplyRun,
+  PortfolioExposureApplySummary,
+  PortfolioExposureApplyTarget,
   PortfolioExposureClusterSnapshot,
   PortfolioExposureConflictReview,
   PortfolioExposureCoordinationRun,
@@ -41,8 +47,20 @@ export function runExposureCoordinationReview() {
   return requestJson<PortfolioExposureCoordinationRun>('/api/portfolio-governor/run-exposure-coordination-review/', { method: 'POST' });
 }
 
+export function applyExposureDecision(decisionId: number, payload: Record<string, unknown> = {}) {
+  return requestJson<PortfolioExposureApplyRun>(`/api/portfolio-governor/apply-exposure-decision/${decisionId}/`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function runExposureApplyReview(payload: Record<string, unknown> = {}) {
+  return requestJson<PortfolioExposureApplyRun>('/api/portfolio-governor/run-exposure-apply-review/', { method: 'POST', body: JSON.stringify(payload) });
+}
+
 export function getExposureCoordinationRuns() {
   return requestJson<PortfolioExposureCoordinationRun[]>('/api/portfolio-governor/exposure-coordination-runs/');
+}
+
+export function getExposureApplyRuns() {
+  return requestJson<PortfolioExposureApplyRun[]>('/api/portfolio-governor/exposure-apply-runs/');
 }
 
 export function getExposureClusterSnapshots() {
@@ -65,6 +83,26 @@ export function getExposureRecommendations() {
   return requestJson<PortfolioExposureRecommendation[]>('/api/portfolio-governor/exposure-recommendations/');
 }
 
+export function getExposureApplyTargets() {
+  return requestJson<PortfolioExposureApplyTarget[]>('/api/portfolio-governor/exposure-apply-targets/');
+}
+
+export function getExposureApplyDecisions() {
+  return requestJson<PortfolioExposureApplyDecision[]>('/api/portfolio-governor/exposure-apply-decisions/');
+}
+
+export function getExposureApplyRecords() {
+  return requestJson<PortfolioExposureApplyRecord[]>('/api/portfolio-governor/exposure-apply-records/');
+}
+
+export function getExposureApplyRecommendations() {
+  return requestJson<PortfolioExposureApplyRecommendation[]>('/api/portfolio-governor/exposure-apply-recommendations/');
+}
+
 export function getExposureCoordinationSummary() {
   return requestJson<PortfolioExposureCoordinationSummary>('/api/portfolio-governor/exposure-coordination-summary/');
+}
+
+export function getExposureApplySummary() {
+  return requestJson<PortfolioExposureApplySummary>('/api/portfolio-governor/exposure-apply-summary/');
 }

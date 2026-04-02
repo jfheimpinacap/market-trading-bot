@@ -3451,3 +3451,27 @@ This layer is conservative and auditable, coordinates cross-session capacity, an
   - `GET /api/portfolio-governor/exposure-coordination-summary/`
 
 Boundary guarantees remain strict: local-first, single-user, paper-only, no broker/exchange live routing, no real money, and no LLM as final throttling authority.
+
+## Portfolio governor exposure apply & enforcement (new)
+
+`apps.portfolio_governor` now extends exposure coordination with a conservative **apply bridge**:
+
+- service split:
+  - `services/apply_targets.py`
+  - `services/apply_decision.py`
+  - `services/apply_record.py`
+  - `services/recommendation.py`
+  - `services/run.py`
+- new API:
+  - `POST /api/portfolio-governor/apply-exposure-decision/<decision_id>/`
+  - `POST /api/portfolio-governor/run-exposure-apply-review/`
+  - `GET /api/portfolio-governor/exposure-apply-runs/`
+  - `GET /api/portfolio-governor/exposure-apply-targets/`
+  - `GET /api/portfolio-governor/exposure-apply-decisions/`
+  - `GET /api/portfolio-governor/exposure-apply-records/`
+  - `GET /api/portfolio-governor/exposure-apply-recommendations/`
+  - `GET /api/portfolio-governor/exposure-apply-summary/`
+
+Conservative enforcement scope: admission throttling, pending dispatch defer, runtime session park/pause, and explicit manual-review fallback for ambiguous decisions.
+
+Hard limits remain unchanged: paper-only, local-first, no real broker/exchange routing, no real money, no aggressive position closures.

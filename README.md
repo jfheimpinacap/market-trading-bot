@@ -2286,3 +2286,23 @@ Mission control now includes an explicit **global session admission** layer that
   - `GET /api/portfolio-governor/exposure-coordination-summary/`
 
 This layer extends existing portfolio/risk/runtime/safety authorities and does **not** replace admission control, timing policy, or mission control governance.
+
+### Portfolio exposure apply bridge / runtime enforcement (new)
+
+`portfolio_governor` now includes an explicit **exposure decision apply bridge**:
+
+- pipeline: `exposure decision -> apply targets -> apply decision -> apply record -> runtime effect`
+- conservative runtime effects only (paper-only):
+  - throttle new entries at cluster/admission gate level
+  - defer pending dispatches safely
+  - park weaker runtime sessions
+  - pause cluster activity conservatively
+  - manual-review-only fallback for ambiguous cases
+- full audit entities:
+  - `PortfolioExposureApplyRun`
+  - `PortfolioExposureApplyTarget`
+  - `PortfolioExposureApplyDecision`
+  - `PortfolioExposureApplyRecord`
+  - `PortfolioExposureApplyRecommendation`
+
+Boundary guarantees remain strict: local-first, single-user, paper/sandbox only, no live broker/exchange execution, no real money, and no aggressive auto-closing of open positions.

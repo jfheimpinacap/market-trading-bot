@@ -2111,3 +2111,28 @@ The UI remains local-first and paper-only, and does not introduce live execution
 - explicit safety copy: local-first, paper-only, portfolio-aware, and no live execution.
 
 This UX extends existing governance screens and does not introduce live trading or real-money paths.
+
+## Portfolio governor exposure apply UI (new)
+
+`/portfolio-governor` now includes an **Exposure Apply & Enforcement** section:
+
+- conservative boundary copy:
+  - paper-only
+  - local-first
+  - no live execution
+  - no aggressive position closing
+- action controls:
+  - `Run exposure apply review`
+  - `Apply exposure decision`
+- technical panels:
+  - apply targets
+  - apply decisions
+  - apply records
+  - apply recommendations
+- summary cards:
+  - decisions considered/applied/skipped/blocked
+  - deferred dispatches
+  - parked sessions
+  - paused clusters
+
+This UI extends existing portfolio governor + mission-control visibility without replacing runtime/safety/risk authorities.
