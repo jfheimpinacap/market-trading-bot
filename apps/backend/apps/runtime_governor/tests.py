@@ -8,6 +8,8 @@ from apps.runtime_governor.models import (
     GlobalModeEnforcementRun,
     GlobalModeModuleImpact,
     GlobalOperatingModeDecision,
+    RuntimeFeedbackDecision,
+    RuntimeFeedbackRecommendation,
     RuntimeMode,
     RuntimeSetBy,
     RuntimeTransitionLog,
@@ -242,3 +244,61 @@ class RuntimeGovernorTests(TestCase):
         decision = decide_intake_candidate(candidate=candidate)
         self.assertEqual(decision.decision_type, AutonomousExecutionDecisionType.BLOCK)
         self.assertIn('GLOBAL_MODE_ENFORCEMENT_BLOCKED', decision.reason_codes)
+
+    def _create_ticks(self, *, count: int, status: str):
+        session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
+        for index in range(count):
+            from apps.mission_control.models import AutonomousRuntimeTick
+
+            AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index + 1, tick_status=status)
+
+    def test_runtime_feedback_losses_trigger_recovery_recommendation(self):
+        session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
+        AutonomousSessionHealthSnapshot.objects.create(
+            linked_session=session,
+            session_health_status=AutonomousSessionHealthStatus.CAUTION,
+            recent_loss_count=3,
+        )
+        response = self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        recommendation = RuntimeFeedbackRecommendation.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(decision.decision_type, 'ENTER_RECOVERY_MODE')
+        self.assertEqual(recommendation.recommendation_type, 'ENTER_RECOVERY_MODE_FOR_LOSS_PRESSURE')
+
+    def test_runtime_feedback_quiet_runtime_shifts_monitor_only(self):
+        self._create_ticks(count=3, status='SKIPPED')
+        response = self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(decision.decision_type, 'SHIFT_TO_MONITOR_ONLY')
+
+    def test_runtime_feedback_overtrading_pressure_shifts_conservative(self):
+        for _ in range(8):
+            self._seed_exposure_decision(PortfolioExposureDecisionType.THROTTLE_NEW_ENTRIES)
+        session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
+        from apps.autonomous_trader.models import AutonomousExecutionDecision, AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousDispatchRecord
+        market = Market.objects.create(provider=self.provider, provider_market_id='feedback-overtrading', title='Feedback overtrading', status='open')
+        intake_run = AutonomousExecutionIntakeRun.objects.create()
+        for _ in range(8):
+            candidate = AutonomousExecutionIntakeCandidate.objects.create(intake_run=intake_run, linked_market=market)
+            execution_decision = AutonomousExecutionDecision.objects.create(linked_intake_candidate=candidate, decision_type='EXECUTE_NOW')
+            AutonomousDispatchRecord.objects.create(linked_execution_decision=execution_decision, dispatch_status='DISPATCHED')
+        self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(decision.decision_type, 'SHIFT_TO_MORE_CONSERVATIVE_MODE')
+
+    def test_runtime_feedback_relaxes_recovery_to_caution_after_improvement(self):
+        state = get_runtime_state()
+        state.metadata = {**(state.metadata or {}), 'global_operating_mode': 'RECOVERY_MODE'}
+        state.save(update_fields=['metadata', 'updated_at'])
+        response = self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(decision.decision_type, 'RELAX_TO_CAUTION')
+
+    def test_runtime_feedback_summary_endpoint(self):
+        self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        response = self.client.get(reverse('runtime_governor_v2:runtime_feedback_summary'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('feedback_runs', response.json())

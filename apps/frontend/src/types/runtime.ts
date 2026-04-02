@@ -225,3 +225,93 @@ export type ModeEnforcementSummary = {
   blocked_count: number;
   recommendation_summary: Record<string, unknown>;
 };
+
+export type RuntimeFeedbackRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_metric_count: number;
+  healthy_runtime_count: number;
+  overtrading_alert_count: number;
+  quiet_runtime_alert_count: number;
+  loss_pressure_alert_count: number;
+  blocked_runtime_alert_count: number;
+  feedback_decision_count: number;
+  recommendation_summary: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+};
+
+export type RuntimePerformanceSnapshot = {
+  id: number;
+  linked_feedback_run: number | null;
+  current_global_mode: GlobalOperatingMode;
+  recent_dispatch_count: number;
+  recent_closed_outcome_count: number;
+  recent_loss_count: number;
+  recent_no_action_tick_count: number;
+  recent_blocked_tick_count: number;
+  recent_deferred_dispatch_count: number;
+  recent_parked_session_count: number;
+  recent_exposure_throttle_count: number;
+  recent_recovery_resume_count: number;
+  signal_quality_state: 'STRONG' | 'NORMAL' | 'WEAK' | 'QUIET';
+  runtime_pressure_state: 'NORMAL' | 'CAUTION' | 'HIGH' | 'CRITICAL';
+  snapshot_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RuntimeDiagnosticReview = {
+  id: number;
+  linked_performance_snapshot: number;
+  diagnostic_type: string;
+  diagnostic_severity: 'INFO' | 'CAUTION' | 'HIGH' | 'CRITICAL';
+  diagnostic_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RuntimeFeedbackDecision = {
+  id: number;
+  linked_performance_snapshot: number;
+  linked_diagnostic_review: number;
+  decision_type: string;
+  decision_status: 'PROPOSED' | 'APPLIED' | 'SKIPPED' | 'BLOCKED';
+  auto_applicable: boolean;
+  decision_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RuntimeFeedbackRecommendation = {
+  id: number;
+  recommendation_type: string;
+  target_feedback_run: number | null;
+  target_diagnostic_review: number | null;
+  target_feedback_decision: number | null;
+  rationale: string;
+  reason_codes: string[];
+  confidence: number;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RuntimeFeedbackSummary = {
+  latest_run_id: number | null;
+  latest_snapshot_id: number | null;
+  latest_decision_id: number | null;
+  current_mode: GlobalOperatingMode;
+  recent_dispatches: number;
+  recent_losses: number;
+  no_action_pressure: number;
+  blocked_pressure: number;
+  feedback_runs: number;
+  feedback_decisions: number;
+  applied_decisions: number;
+  manual_review_required: number;
+  recommendation_summary: Record<string, unknown>;
+};

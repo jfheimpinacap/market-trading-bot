@@ -31,6 +31,31 @@ La vista `/runtime` ahora incluye una sección técnica de **Mode Enforcement** 
 
 Esta sección refleja la capa backend de downstream enforcement sin reemplazar las autoridades existentes de runtime, mission control, portfolio governor, risk, safety e incidentes.
 
+## Runtime feedback UX (new)
+
+La vista `/runtime` ahora incluye una sección técnica de **Runtime Feedback** para self-assessment global conservador:
+
+- acción manual: `Run runtime feedback review`
+- summary cards:
+  - current mode
+  - recent dispatches
+  - recent losses
+  - no-action pressure
+  - blocked pressure
+  - feedback decisions
+- paneles auditables:
+  - performance snapshots
+  - diagnostic reviews
+  - feedback decisions
+  - recommendations
+- copy explícita de límites:
+  - local-first
+  - single-user
+  - paper-only / no live execution
+  - conservative and auditable self-assessment
+
+Esta capa visualiza performance agregada y recomendaciones de endurecer/relajar postura global sin reemplazar runtime_governor, mission_control ni portfolio/risk/safety/incident authorities.
+
 ## Mission control autonomous runner UX (new)
 
 `/mission-control` ahora también expone una sección de **Autonomous Runner** para autoavance local de sesiones activas:

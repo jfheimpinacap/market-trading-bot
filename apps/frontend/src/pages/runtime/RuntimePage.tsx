@@ -22,6 +22,12 @@ import {
   getModeEnforcementDecisions,
   getModeEnforcementRecommendations,
   getModeEnforcementSummary,
+  getRuntimeDiagnosticReviews,
+  getRuntimeFeedbackDecisions,
+  getRuntimeFeedbackRecommendations,
+  getRuntimeFeedbackSummary,
+  getRuntimePerformanceSnapshots,
+  runRuntimeFeedbackReview,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -37,6 +43,11 @@ import type {
   ModeEnforcementDecision,
   ModeEnforcementRecommendation,
   ModeEnforcementSummary,
+  RuntimeDiagnosticReview,
+  RuntimeFeedbackDecision,
+  RuntimeFeedbackRecommendation,
+  RuntimeFeedbackSummary,
+  RuntimePerformanceSnapshot,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -61,6 +72,11 @@ export function RuntimePage() {
   const [modeEnforcementDecisions, setModeEnforcementDecisions] = useState<ModeEnforcementDecision[]>([]);
   const [modeEnforcementRecommendations, setModeEnforcementRecommendations] = useState<ModeEnforcementRecommendation[]>([]);
   const [modeEnforcementSummary, setModeEnforcementSummary] = useState<ModeEnforcementSummary | null>(null);
+  const [runtimePerformanceSnapshots, setRuntimePerformanceSnapshots] = useState<RuntimePerformanceSnapshot[]>([]);
+  const [runtimeDiagnosticReviews, setRuntimeDiagnosticReviews] = useState<RuntimeDiagnosticReview[]>([]);
+  const [runtimeFeedbackDecisions, setRuntimeFeedbackDecisions] = useState<RuntimeFeedbackDecision[]>([]);
+  const [runtimeFeedbackRecommendations, setRuntimeFeedbackRecommendations] = useState<RuntimeFeedbackRecommendation[]>([]);
+  const [runtimeFeedbackSummary, setRuntimeFeedbackSummary] = useState<RuntimeFeedbackSummary | null>(null);
 
   const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,7 +88,7 @@ export function RuntimePage() {
     setLoading(true);
     setError(null);
     try {
-      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
@@ -87,6 +103,11 @@ export function RuntimePage() {
         getModeEnforcementDecisions(),
         getModeEnforcementRecommendations(),
         getModeEnforcementSummary(),
+        getRuntimePerformanceSnapshots(),
+        getRuntimeDiagnosticReviews(),
+        getRuntimeFeedbackDecisions(),
+        getRuntimeFeedbackRecommendations(),
+        getRuntimeFeedbackSummary(),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
@@ -102,6 +123,11 @@ export function RuntimePage() {
       setModeEnforcementDecisions(enforcementDecisionRes);
       setModeEnforcementRecommendations(enforcementRecommendationRes);
       setModeEnforcementSummary(enforcementSummaryRes);
+      setRuntimePerformanceSnapshots(feedbackSnapshotsRes);
+      setRuntimeDiagnosticReviews(diagnosticReviewsRes);
+      setRuntimeFeedbackDecisions(feedbackDecisionRes);
+      setRuntimeFeedbackRecommendations(feedbackRecommendationRes);
+      setRuntimeFeedbackSummary(feedbackSummaryRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load runtime governance.');
     } finally {
@@ -147,6 +173,19 @@ export function RuntimePage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not run mode enforcement review.');
+    } finally {
+      setRunningReview(false);
+    }
+  }
+
+  async function onRunRuntimeFeedbackReview() {
+    setRunningReview(true);
+    setError(null);
+    try {
+      await runRuntimeFeedbackReview({ triggered_by: 'runtime-page', auto_apply: false });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not run runtime feedback review.');
     } finally {
       setRunningReview(false);
     }
@@ -270,6 +309,35 @@ export function RuntimePage() {
           <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{recommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>
         </SectionCard>
 
+
+        <SectionCard
+          eyebrow="Runtime feedback"
+          title="Runtime performance self-assessment"
+          description="Conservative paper-only self-assessment layer: evaluates aggregated runtime behavior, derives diagnostics, and emits auditable tuning inputs for global mode governance."
+          aside={<button type="button" className="secondary-button" disabled={runningReview} onClick={() => void onRunRuntimeFeedbackReview()}>{runningReview ? 'Running…' : 'Run runtime feedback review'}</button>}
+        >
+          <p><strong>Boundary:</strong> local-first, single-user, paper-only, no live execution, no real money, conservative and auditable recommendations.</p>
+          <div className="system-metadata-grid">
+            <div><strong>Current mode:</strong> {runtimeFeedbackSummary?.current_mode ?? 'BALANCED'}</div>
+            <div><strong>Recent dispatches:</strong> {runtimeFeedbackSummary?.recent_dispatches ?? 0}</div>
+            <div><strong>Recent losses:</strong> {runtimeFeedbackSummary?.recent_losses ?? 0}</div>
+            <div><strong>No-action pressure:</strong> {runtimeFeedbackSummary?.no_action_pressure ?? 0}</div>
+            <div><strong>Blocked pressure:</strong> {runtimeFeedbackSummary?.blocked_pressure ?? 0}</div>
+            <div><strong>Feedback decisions:</strong> {runtimeFeedbackSummary?.feedback_decisions ?? 0}</div>
+          </div>
+
+          <h4>Performance snapshots</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Mode</th><th>Dispatch / Outcomes / Losses</th><th>No-action / Blocked / Deferred / Parked</th><th>Signal quality</th><th>Runtime pressure</th><th>Summary</th></tr></thead><tbody>{runtimePerformanceSnapshots.slice(0, 10).map((row) => <tr key={row.id}><td>{row.current_global_mode}</td><td>{row.recent_dispatch_count} / {row.recent_closed_outcome_count} / {row.recent_loss_count}</td><td>{row.recent_no_action_tick_count} / {row.recent_blocked_tick_count} / {row.recent_deferred_dispatch_count} / {row.recent_parked_session_count}</td><td>{row.signal_quality_state}</td><td>{row.runtime_pressure_state}</td><td>{row.snapshot_summary}</td></tr>)}</tbody></table></div>
+
+          <h4>Diagnostic reviews</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Severity</th><th>Summary</th></tr></thead><tbody>{runtimeDiagnosticReviews.slice(0, 10).map((row) => <tr key={row.id}><td>{row.diagnostic_type}</td><td>{row.diagnostic_severity}</td><td>{row.diagnostic_summary}</td></tr>)}</tbody></table></div>
+
+          <h4>Feedback decisions</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Status</th><th>Summary</th></tr></thead><tbody>{runtimeFeedbackDecisions.slice(0, 10).map((row) => <tr key={row.id}><td>{row.decision_type}</td><td>{row.decision_status}</td><td>{row.decision_summary}</td></tr>)}</tbody></table></div>
+
+          <h4>Recommendations</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{runtimeFeedbackRecommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>
+        </SectionCard>
 
         <SectionCard
           eyebrow="Mode enforcement"

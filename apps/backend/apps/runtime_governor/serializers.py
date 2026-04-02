@@ -10,6 +10,11 @@ from apps.runtime_governor.models import (
     GlobalModeModuleImpact,
     GlobalModeEnforcementDecision,
     GlobalModeEnforcementRecommendation,
+    RuntimeFeedbackDecision,
+    RuntimeFeedbackRecommendation,
+    RuntimeFeedbackRun,
+    RuntimePerformanceSnapshot,
+    RuntimeDiagnosticReview,
     RuntimeMode,
     RuntimeModeProfile,
     RuntimeModeState,
@@ -102,4 +107,39 @@ class GlobalModeEnforcementDecisionSerializer(serializers.ModelSerializer):
 class GlobalModeEnforcementRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = GlobalModeEnforcementRecommendation
+        fields = '__all__'
+
+
+class RunRuntimeFeedbackReviewSerializer(serializers.Serializer):
+    triggered_by = serializers.CharField(required=False, allow_blank=True, default='operator-ui')
+    auto_apply = serializers.BooleanField(required=False, default=False)
+
+
+class RuntimeFeedbackRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RuntimeFeedbackRun
+        fields = '__all__'
+
+
+class RuntimePerformanceSnapshotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RuntimePerformanceSnapshot
+        fields = '__all__'
+
+
+class RuntimeDiagnosticReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RuntimeDiagnosticReview
+        fields = '__all__'
+
+
+class RuntimeFeedbackDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RuntimeFeedbackDecision
+        fields = '__all__'
+
+
+class RuntimeFeedbackRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RuntimeFeedbackRecommendation
         fields = '__all__'

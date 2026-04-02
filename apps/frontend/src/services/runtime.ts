@@ -16,6 +16,12 @@ import type {
   ModeEnforcementDecision,
   ModeEnforcementRecommendation,
   ModeEnforcementSummary,
+  RuntimeDiagnosticReview,
+  RuntimeFeedbackDecision,
+  RuntimeFeedbackRecommendation,
+  RuntimeFeedbackRun,
+  RuntimeFeedbackSummary,
+  RuntimePerformanceSnapshot,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -98,4 +104,35 @@ export function getModeEnforcementRecommendations() {
 
 export function getModeEnforcementSummary() {
   return requestJson<ModeEnforcementSummary>('/api/runtime-governor/mode-enforcement-summary/');
+}
+
+export function runRuntimeFeedbackReview(payload: { triggered_by?: string; auto_apply?: boolean } = {}) {
+  return requestJson<{ run_id: number }>('/api/runtime-governor/run-runtime-feedback-review/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getRuntimeFeedbackRuns() {
+  return requestJson<RuntimeFeedbackRun[]>('/api/runtime-governor/runtime-feedback-runs/');
+}
+
+export function getRuntimePerformanceSnapshots() {
+  return requestJson<RuntimePerformanceSnapshot[]>('/api/runtime-governor/runtime-performance-snapshots/');
+}
+
+export function getRuntimeDiagnosticReviews() {
+  return requestJson<RuntimeDiagnosticReview[]>('/api/runtime-governor/runtime-diagnostic-reviews/');
+}
+
+export function getRuntimeFeedbackDecisions() {
+  return requestJson<RuntimeFeedbackDecision[]>('/api/runtime-governor/runtime-feedback-decisions/');
+}
+
+export function getRuntimeFeedbackRecommendations() {
+  return requestJson<RuntimeFeedbackRecommendation[]>('/api/runtime-governor/runtime-feedback-recommendations/');
+}
+
+export function getRuntimeFeedbackSummary() {
+  return requestJson<RuntimeFeedbackSummary>('/api/runtime-governor/runtime-feedback-summary/');
 }

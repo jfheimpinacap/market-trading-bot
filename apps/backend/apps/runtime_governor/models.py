@@ -326,6 +326,175 @@ class GlobalModeEnforcementRecommendationType(models.TextChoices):
     REQUIRE_MANUAL_MODE_ENFORCEMENT_REVIEW = 'REQUIRE_MANUAL_MODE_ENFORCEMENT_REVIEW', 'Require manual mode enforcement review'
 
 
+class RuntimeFeedbackDiagnosticType(models.TextChoices):
+    HEALTHY_RUNTIME = 'HEALTHY_RUNTIME', 'Healthy runtime'
+    OVERTRADING_PRESSURE = 'OVERTRADING_PRESSURE', 'Overtrading pressure'
+    QUIET_RUNTIME = 'QUIET_RUNTIME', 'Quiet runtime'
+    LOSS_RECOVERY_PRESSURE = 'LOSS_RECOVERY_PRESSURE', 'Loss recovery pressure'
+    BLOCKED_RUNTIME_SATURATION = 'BLOCKED_RUNTIME_SATURATION', 'Blocked runtime saturation'
+    LOW_QUALITY_OPPORTUNITY_FLOW = 'LOW_QUALITY_OPPORTUNITY_FLOW', 'Low quality opportunity flow'
+
+
+class RuntimeFeedbackDiagnosticSeverity(models.TextChoices):
+    INFO = 'INFO', 'Info'
+    CAUTION = 'CAUTION', 'Caution'
+    HIGH = 'HIGH', 'High'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class RuntimeFeedbackDecisionType(models.TextChoices):
+    KEEP_CURRENT_GLOBAL_MODE = 'KEEP_CURRENT_GLOBAL_MODE', 'Keep current global mode'
+    SHIFT_TO_MORE_CONSERVATIVE_MODE = 'SHIFT_TO_MORE_CONSERVATIVE_MODE', 'Shift to more conservative mode'
+    SHIFT_TO_MONITOR_ONLY = 'SHIFT_TO_MONITOR_ONLY', 'Shift to monitor only'
+    ENTER_RECOVERY_MODE = 'ENTER_RECOVERY_MODE', 'Enter recovery mode'
+    RELAX_TO_CAUTION = 'RELAX_TO_CAUTION', 'Relax to caution'
+    REDUCE_ADMISSION_AND_CADENCE = 'REDUCE_ADMISSION_AND_CADENCE', 'Reduce admission and cadence'
+    REQUIRE_MANUAL_RUNTIME_REVIEW = 'REQUIRE_MANUAL_RUNTIME_REVIEW', 'Require manual runtime review'
+
+
+class RuntimeFeedbackDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class RuntimeFeedbackRecommendationType(models.TextChoices):
+    KEEP_RUNTIME_STABLE = 'KEEP_RUNTIME_STABLE', 'Keep runtime stable'
+    SHIFT_TO_CONSERVATIVE_BEHAVIOR = 'SHIFT_TO_CONSERVATIVE_BEHAVIOR', 'Shift to conservative behavior'
+    ENTER_MONITOR_ONLY_TEMPORARILY = 'ENTER_MONITOR_ONLY_TEMPORARILY', 'Enter monitor only temporarily'
+    ENTER_RECOVERY_MODE_FOR_LOSS_PRESSURE = 'ENTER_RECOVERY_MODE_FOR_LOSS_PRESSURE', 'Enter recovery mode for loss pressure'
+    REDUCE_ADMISSION_AND_CADENCE_NOW = 'REDUCE_ADMISSION_AND_CADENCE_NOW', 'Reduce admission and cadence now'
+    REQUIRE_MANUAL_RUNTIME_REVIEW = 'REQUIRE_MANUAL_RUNTIME_REVIEW', 'Require manual runtime review'
+
+
+class RuntimePressureState(models.TextChoices):
+    NORMAL = 'NORMAL', 'Normal'
+    CAUTION = 'CAUTION', 'Caution'
+    HIGH = 'HIGH', 'High'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class RuntimeFeedbackRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_metric_count = models.PositiveIntegerField(default=0)
+    healthy_runtime_count = models.PositiveIntegerField(default=0)
+    overtrading_alert_count = models.PositiveIntegerField(default=0)
+    quiet_runtime_alert_count = models.PositiveIntegerField(default=0)
+    loss_pressure_alert_count = models.PositiveIntegerField(default=0)
+    blocked_runtime_alert_count = models.PositiveIntegerField(default=0)
+    feedback_decision_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class RuntimePerformanceSnapshot(TimeStampedModel):
+    linked_feedback_run = models.ForeignKey(
+        RuntimeFeedbackRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='performance_snapshots',
+    )
+    current_global_mode = models.CharField(max_length=24, choices=GlobalOperatingMode.choices, default=GlobalOperatingMode.BALANCED)
+    recent_dispatch_count = models.PositiveIntegerField(default=0)
+    recent_closed_outcome_count = models.PositiveIntegerField(default=0)
+    recent_loss_count = models.PositiveIntegerField(default=0)
+    recent_no_action_tick_count = models.PositiveIntegerField(default=0)
+    recent_blocked_tick_count = models.PositiveIntegerField(default=0)
+    recent_deferred_dispatch_count = models.PositiveIntegerField(default=0)
+    recent_parked_session_count = models.PositiveIntegerField(default=0)
+    recent_exposure_throttle_count = models.PositiveIntegerField(default=0)
+    recent_recovery_resume_count = models.PositiveIntegerField(default=0)
+    signal_quality_state = models.CharField(max_length=12, choices=SignalQualityState.choices, default=SignalQualityState.NORMAL)
+    runtime_pressure_state = models.CharField(max_length=12, choices=RuntimePressureState.choices, default=RuntimePressureState.NORMAL)
+    snapshot_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class RuntimeDiagnosticReview(TimeStampedModel):
+    linked_performance_snapshot = models.ForeignKey(
+        RuntimePerformanceSnapshot,
+        on_delete=models.CASCADE,
+        related_name='diagnostic_reviews',
+    )
+    diagnostic_type = models.CharField(max_length=40, choices=RuntimeFeedbackDiagnosticType.choices)
+    diagnostic_severity = models.CharField(max_length=12, choices=RuntimeFeedbackDiagnosticSeverity.choices, default=RuntimeFeedbackDiagnosticSeverity.INFO)
+    diagnostic_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class RuntimeFeedbackDecision(TimeStampedModel):
+    linked_performance_snapshot = models.ForeignKey(
+        RuntimePerformanceSnapshot,
+        on_delete=models.CASCADE,
+        related_name='feedback_decisions',
+    )
+    linked_diagnostic_review = models.ForeignKey(
+        RuntimeDiagnosticReview,
+        on_delete=models.CASCADE,
+        related_name='feedback_decisions',
+    )
+    decision_type = models.CharField(max_length=48, choices=RuntimeFeedbackDecisionType.choices)
+    decision_status = models.CharField(max_length=12, choices=RuntimeFeedbackDecisionStatus.choices, default=RuntimeFeedbackDecisionStatus.PROPOSED)
+    auto_applicable = models.BooleanField(default=False)
+    decision_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class RuntimeFeedbackRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=56, choices=RuntimeFeedbackRecommendationType.choices)
+    target_feedback_run = models.ForeignKey(
+        RuntimeFeedbackRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    target_diagnostic_review = models.ForeignKey(
+        RuntimeDiagnosticReview,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    target_feedback_decision = models.ForeignKey(
+        RuntimeFeedbackDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
 class GlobalModeEnforcementRun(TimeStampedModel):
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)

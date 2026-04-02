@@ -36,6 +36,34 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 
 Design guardrails remain unchanged: local-first, single-user, paper-only, no live broker/exchange order routing, no real-money execution, and no replacement of existing runtime/safety/portfolio authorities.
 
+## Runtime feedback self-assessment layer (new)
+
+`apps.runtime_governor` now includes a runtime feedback controller sublayer (`runtime_feedback/services/`) for conservative regime-level performance review:
+
+- service split:
+  - `runtime_feedback/services/performance.py`
+  - `runtime_feedback/services/diagnostics.py`
+  - `runtime_feedback/services/feedback.py`
+  - `runtime_feedback/services/recommendation.py`
+  - `runtime_feedback/services/run.py`
+- auditable entities:
+  - `RuntimeFeedbackRun`
+  - `RuntimePerformanceSnapshot`
+  - `RuntimeDiagnosticReview`
+  - `RuntimeFeedbackDecision`
+  - `RuntimeFeedbackRecommendation`
+- API:
+  - `POST /api/runtime-governor/run-runtime-feedback-review/`
+  - `GET /api/runtime-governor/runtime-feedback-runs/`
+  - `GET /api/runtime-governor/runtime-performance-snapshots/`
+  - `GET /api/runtime-governor/runtime-diagnostic-reviews/`
+  - `GET /api/runtime-governor/runtime-feedback-decisions/`
+  - `GET /api/runtime-governor/runtime-feedback-recommendations/`
+  - `GET /api/runtime-governor/runtime-feedback-summary/`
+  - `POST /api/runtime-governor/apply-runtime-feedback-decision/<decision_id>/`
+
+This review layer is recommendation-first and auditable. It feeds global posture tuning conservatively, does not replace operating mode / enforcement / health / recovery / admission / exposure authorities, and keeps paper-only, local-first boundaries.
+
 ## Mission control autonomous session runtime (new)
 
 `apps.mission_control` now has an explicit persistent session runtime layer (paper-only):

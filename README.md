@@ -34,6 +34,34 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 
 This bridge does not replace runtime/safety/portfolio/mission authorities; it adds a coherent global-mode bias layer above them. Scope remains local-first, single-user, paper/sandbox only, no real-money/live execution.
 
+### Runtime performance feedback controller / regime self-assessment (new)
+
+`runtime_governor` now adds an explicit, auditable, and conservative runtime self-assessment layer:
+
+- flow:
+  - recent runtime behavior
+  - aggregate `RuntimePerformanceSnapshot`
+  - `RuntimeDiagnosticReview`
+  - `RuntimeFeedbackDecision`
+  - `RuntimeFeedbackRecommendation`
+- key entities:
+  - `RuntimeFeedbackRun`
+  - `RuntimePerformanceSnapshot`
+  - `RuntimeDiagnosticReview`
+  - `RuntimeFeedbackDecision`
+  - `RuntimeFeedbackRecommendation`
+- API:
+  - `POST /api/runtime-governor/run-runtime-feedback-review/`
+  - `GET /api/runtime-governor/runtime-feedback-runs/`
+  - `GET /api/runtime-governor/runtime-performance-snapshots/`
+  - `GET /api/runtime-governor/runtime-diagnostic-reviews/`
+  - `GET /api/runtime-governor/runtime-feedback-decisions/`
+  - `GET /api/runtime-governor/runtime-feedback-recommendations/`
+  - `GET /api/runtime-governor/runtime-feedback-summary/`
+  - `POST /api/runtime-governor/apply-runtime-feedback-decision/<decision_id>/`
+
+This layer provides conservative global tuning input and traceability; it does not replace runtime_governor, mission_control, portfolio_governor, risk, safety, or incident authorities. Scope remains local-first, single-user, paper-only, and no live execution.
+
 ### Precedent-aware agents (new)
 
 - Memory is now used as **decision support**, not as an opaque planner.

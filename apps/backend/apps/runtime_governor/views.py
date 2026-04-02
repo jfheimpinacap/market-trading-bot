@@ -15,6 +15,11 @@ from apps.runtime_governor.models import (
     GlobalModeModuleImpact,
     GlobalModeEnforcementDecision,
     GlobalModeEnforcementRecommendation,
+    RuntimeDiagnosticReview,
+    RuntimeFeedbackDecision,
+    RuntimeFeedbackRecommendation,
+    RuntimeFeedbackRun,
+    RuntimePerformanceSnapshot,
 )
 from apps.runtime_governor.serializers import (
     GlobalOperatingModeDecisionSerializer,
@@ -30,6 +35,12 @@ from apps.runtime_governor.serializers import (
     GlobalModeModuleImpactSerializer,
     GlobalModeEnforcementDecisionSerializer,
     GlobalModeEnforcementRecommendationSerializer,
+    RunRuntimeFeedbackReviewSerializer,
+    RuntimeDiagnosticReviewSerializer,
+    RuntimeFeedbackDecisionSerializer,
+    RuntimeFeedbackRecommendationSerializer,
+    RuntimeFeedbackRunSerializer,
+    RuntimePerformanceSnapshotSerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -41,6 +52,11 @@ from apps.runtime_governor.services import (
     set_runtime_mode,
 )
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
+from apps.runtime_governor.runtime_feedback.services import (
+    apply_runtime_feedback_decision,
+    get_runtime_feedback_summary,
+    run_runtime_feedback_review,
+)
 
 
 class RuntimeStatusView(APIView):
@@ -306,3 +322,104 @@ class ModeEnforcementSummaryView(APIView):
 
     def get(self, request, *args, **kwargs):
         return Response(get_mode_enforcement_summary(), status=status.HTTP_200_OK)
+
+
+class RunRuntimeFeedbackReviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunRuntimeFeedbackReviewSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_runtime_feedback_review(
+            triggered_by=serializer.validated_data.get('triggered_by') or 'operator-ui',
+            auto_apply=serializer.validated_data.get('auto_apply', False),
+        )
+        return Response(
+            {
+                'run_id': result['run'].id,
+                'performance_snapshot_id': result['snapshot'].id,
+                'diagnostic_review_id': result['diagnostic'].id,
+                'feedback_decision_id': result['decision'].id,
+                'recommendation_id': result['recommendation'].id,
+                'decision_type': result['decision'].decision_type,
+                'decision_status': result['decision'].decision_status,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class RuntimeFeedbackRunListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RuntimeFeedbackRunSerializer
+
+    def get_queryset(self):
+        return RuntimeFeedbackRun.objects.order_by('-started_at', '-id')[:200]
+
+
+class RuntimePerformanceSnapshotListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RuntimePerformanceSnapshotSerializer
+
+    def get_queryset(self):
+        return RuntimePerformanceSnapshot.objects.select_related('linked_feedback_run').order_by('-created_at', '-id')[:300]
+
+
+class RuntimeDiagnosticReviewListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RuntimeDiagnosticReviewSerializer
+
+    def get_queryset(self):
+        return RuntimeDiagnosticReview.objects.select_related('linked_performance_snapshot').order_by('-created_at', '-id')[:300]
+
+
+class RuntimeFeedbackDecisionListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RuntimeFeedbackDecisionSerializer
+
+    def get_queryset(self):
+        return RuntimeFeedbackDecision.objects.select_related('linked_performance_snapshot', 'linked_diagnostic_review').order_by('-created_at', '-id')[:300]
+
+
+class RuntimeFeedbackDecisionDetailView(generics.RetrieveAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RuntimeFeedbackDecisionSerializer
+    queryset = RuntimeFeedbackDecision.objects.select_related('linked_performance_snapshot', 'linked_diagnostic_review').all()
+    lookup_field = 'id'
+    lookup_url_kwarg = 'feedback_decision_id'
+
+
+class RuntimeFeedbackRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RuntimeFeedbackRecommendationSerializer
+
+    def get_queryset(self):
+        return RuntimeFeedbackRecommendation.objects.select_related(
+            'target_feedback_run',
+            'target_diagnostic_review',
+            'target_feedback_decision',
+        ).order_by('-created_at', '-id')[:300]
+
+
+class RuntimeFeedbackSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(get_runtime_feedback_summary(), status=status.HTTP_200_OK)
+
+
+class ApplyRuntimeFeedbackDecisionView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, decision_id: int, *args, **kwargs):
+        decision = get_object_or_404(RuntimeFeedbackDecision, pk=decision_id)
+        apply_runtime_feedback_decision(decision=decision)
+        return Response(RuntimeFeedbackDecisionSerializer(decision).data, status=status.HTTP_200_OK)
