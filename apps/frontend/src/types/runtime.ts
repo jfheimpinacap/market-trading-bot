@@ -205,6 +205,7 @@ export type ModeEnforcementDecision = {
 
 export type ModeEnforcementRecommendation = {
   id: number;
+  target_enforcement_run: number | null;
   recommendation_type: string;
   rationale: string;
   reason_codes: string[];

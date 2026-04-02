@@ -13,6 +13,24 @@ La vista `/mission-control` ahora incluye una sección explícita de **Autonomou
 
 La UI extiende capacidades existentes de mission control/autonomous runtime sin crear un scheduler opaco ni un flujo de live trading.
 
+## Runtime mode enforcement UX (new)
+
+La vista `/runtime` ahora incluye una sección técnica de **Mode Enforcement** para que el modo global no sea solo informativo:
+
+- acción manual: `Run mode enforcement review`
+- summary cards: `current mode`, `modules affected`, `reduced`, `throttled`, `monitor-only`, `blocked`
+- paneles auditables de:
+  - `module impacts`
+  - `enforcement decisions`
+  - `recommendations`
+- copy explícita de límites operativos:
+  - local-first
+  - paper/sandbox only
+  - no live execution
+  - coherent cross-layer runtime behavior
+
+Esta sección refleja la capa backend de downstream enforcement sin reemplazar las autoridades existentes de runtime, mission control, portfolio governor, risk, safety e incidentes.
+
 ## Mission control autonomous runner UX (new)
 
 `/mission-control` ahora también expone una sección de **Autonomous Runner** para autoavance local de sesiones activas:

@@ -9,11 +9,25 @@ from apps.autonomous_trader.models import (
     AutonomousExecutionIntakeCandidate,
     AutonomousExecutionIntakeStatus,
 )
+from apps.runtime_governor.mode_enforcement.services.enforcement import get_module_enforcement_state
 
 
 def decide_intake_candidate(*, candidate: AutonomousExecutionIntakeCandidate) -> AutonomousExecutionDecision:
     reason_codes = list(candidate.reason_codes or [])
-    metadata = {'approval_status': candidate.approval_status}
+    enforcement = get_module_enforcement_state(module_name='execution_intake')
+    intake_impact = (enforcement.get('impact') or {}).get('impact_status')
+    metadata = {'approval_status': candidate.approval_status, 'mode_enforcement': enforcement}
+
+    if intake_impact in {'MONITOR_ONLY', 'BLOCKED'}:
+        return AutonomousExecutionDecision.objects.create(
+            linked_intake_candidate=candidate,
+            decision_type=AutonomousExecutionDecisionType.BLOCK,
+            decision_status=AutonomousExecutionDecisionStatus.BLOCKED,
+            decision_confidence=Decimal('0.9950'),
+            rationale='Global mode enforcement blocked new autonomous execution intake.',
+            reason_codes=reason_codes + ['GLOBAL_MODE_ENFORCEMENT_BLOCKED'],
+            metadata=metadata,
+        )
 
     if candidate.intake_status == AutonomousExecutionIntakeStatus.BLOCKED:
         return AutonomousExecutionDecision.objects.create(
@@ -67,6 +81,17 @@ def decide_intake_candidate(*, candidate: AutonomousExecutionIntakeCandidate) ->
             decision_confidence=candidate.readiness_confidence,
             rationale='Readiness-approved with reduced mode for conservative paper dispatch.',
             reason_codes=reason_codes + ['READY_REDUCED'],
+            metadata=metadata,
+        )
+
+    if intake_impact in {'REDUCED', 'THROTTLED'}:
+        return AutonomousExecutionDecision.objects.create(
+            linked_intake_candidate=candidate,
+            decision_type=AutonomousExecutionDecisionType.EXECUTE_REDUCED,
+            decision_status=AutonomousExecutionDecisionStatus.PROPOSED,
+            decision_confidence=candidate.readiness_confidence,
+            rationale='Global mode enforcement reduced execution intake to conservative reduced dispatch.',
+            reason_codes=reason_codes + ['GLOBAL_MODE_ENFORCEMENT_REDUCED'],
             metadata=metadata,
         )
 

@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from apps.mission_control.models import AutonomousRunnerState, AutonomousRunnerStatus, AutonomousRuntimeSession, AutonomousRuntimeSessionStatus
 from apps.mission_control.services.session_heartbeat.run import run_heartbeat_pass
+from apps.runtime_governor.mode_enforcement.services.enforcement import get_module_enforcement_state
 
 RUNNER_NAME = 'local_autonomous_heartbeat_runner'
 _DEFAULT_INTERVAL_SECONDS = 20
@@ -32,6 +33,16 @@ def _run_loop() -> None:
             continue
         run_heartbeat_pass()
         interval_seconds = int((state.metadata or {}).get('heartbeat_interval_seconds', _DEFAULT_INTERVAL_SECONDS))
+        heartbeat_enforcement = get_module_enforcement_state(module_name='heartbeat_runner')
+        heartbeat_impact = (heartbeat_enforcement.get('impact') or {}).get('impact_status')
+        if heartbeat_impact == 'REDUCED':
+            interval_seconds = max(interval_seconds, 30)
+        elif heartbeat_impact == 'THROTTLED':
+            interval_seconds = max(interval_seconds, 45)
+        elif heartbeat_impact == 'MONITOR_ONLY':
+            interval_seconds = max(interval_seconds, 60)
+        elif heartbeat_impact == 'BLOCKED':
+            interval_seconds = max(interval_seconds, 90)
         _runner_stop_event.wait(max(interval_seconds, 5))
 
 

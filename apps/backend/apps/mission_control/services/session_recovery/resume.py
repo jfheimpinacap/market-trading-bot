@@ -7,6 +7,7 @@ from apps.mission_control.models import (
     AutonomousResumeDecisionType,
     AutonomousSessionRecoverySnapshot,
 )
+from apps.runtime_governor.mode_enforcement.services.enforcement import get_module_enforcement_state
 
 
 def derive_resume_decision(*, snapshot: AutonomousSessionRecoverySnapshot, blockers: list[AutonomousRecoveryBlocker]) -> AutonomousResumeDecision:
@@ -34,6 +35,24 @@ def derive_resume_decision(*, snapshot: AutonomousSessionRecoverySnapshot, block
     else:
         decision_type = AutonomousResumeDecisionType.KEEP_PAUSED
 
+    recovery_enforcement = get_module_enforcement_state(module_name='session_recovery')
+    recovery_impact = (recovery_enforcement.get('impact') or {}).get('impact_status')
+    if recovery_impact == 'REDUCED':
+        decision_type = AutonomousResumeDecisionType.REQUIRE_MANUAL_RECOVERY_REVIEW
+        decision_status = AutonomousResumeDecisionStatus.BLOCKED
+        reason_codes.append('global_mode_enforcement_manual_recovery_review')
+    elif recovery_impact == 'THROTTLED':
+        decision_type = AutonomousResumeDecisionType.RESUME_IN_MONITOR_ONLY_MODE
+        reason_codes.append('global_mode_enforcement_throttle_recovery')
+    elif recovery_impact == 'MONITOR_ONLY':
+        decision_type = AutonomousResumeDecisionType.RESUME_IN_MONITOR_ONLY_MODE
+        decision_status = AutonomousResumeDecisionStatus.PROPOSED
+        reason_codes.append('global_mode_enforcement_monitor_only_recovery')
+    elif recovery_impact == 'BLOCKED':
+        decision_type = AutonomousResumeDecisionType.KEEP_PAUSED
+        decision_status = AutonomousResumeDecisionStatus.BLOCKED
+        reason_codes.append('global_mode_enforcement_block_recovery')
+
     summary = f'resume_decision={decision_type} blockers={len(blockers)} recovery_status={snapshot.recovery_status}'
     return AutonomousResumeDecision.objects.create(
         linked_session=snapshot.linked_session,
@@ -43,5 +62,5 @@ def derive_resume_decision(*, snapshot: AutonomousSessionRecoverySnapshot, block
         auto_applicable=False,
         decision_summary=summary,
         reason_codes=reason_codes,
-        metadata={'blocker_types': sorted(blocker_types)},
+        metadata={'blocker_types': sorted(blocker_types), 'mode_enforcement': recovery_enforcement},
     )

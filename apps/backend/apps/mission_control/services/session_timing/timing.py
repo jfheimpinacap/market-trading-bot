@@ -20,6 +20,7 @@ from apps.mission_control.models import (
     AutonomousSessionTimingSnapshot,
 )
 from apps.mission_control.services.session_timing.profile import resolve_profile_for_session
+from apps.runtime_governor.mode_enforcement.services.enforcement import get_module_enforcement_state
 
 
 @dataclass
@@ -128,6 +129,30 @@ def evaluate_session_timing(*, session: AutonomousRuntimeSession) -> TimingRevie
         decision_type = AutonomousTimingDecisionType.RUN_NOW
         reason_codes.append('healthy_due_now')
         next_due_at = now
+
+    timing_enforcement = get_module_enforcement_state(module_name='timing_policy')
+    impact_status = (timing_enforcement.get('impact') or {}).get('impact_status')
+    if impact_status == 'REDUCED':
+        reason_codes.append('global_mode_enforcement_reduce_cadence')
+        if decision_type == AutonomousTimingDecisionType.RUN_NOW:
+            decision_type = AutonomousTimingDecisionType.WAIT_SHORT
+            timing_status = AutonomousTimingStatus.WAIT_SHORT
+        next_due_at = max(next_due_at, now + timedelta(seconds=max(profile.reduced_interval_seconds, profile.base_interval_seconds)))
+    elif impact_status == 'THROTTLED':
+        reason_codes.append('global_mode_enforcement_throttle_cadence')
+        decision_type = AutonomousTimingDecisionType.WAIT_LONG
+        timing_status = AutonomousTimingStatus.WAIT_LONG
+        next_due_at = max(next_due_at, now + timedelta(seconds=max(profile.monitor_only_interval_seconds, profile.base_interval_seconds)))
+    elif impact_status == 'MONITOR_ONLY':
+        reason_codes.append('global_mode_enforcement_monitor_only_cadence')
+        decision_type = AutonomousTimingDecisionType.MONITOR_ONLY_NEXT
+        timing_status = AutonomousTimingStatus.MONITOR_ONLY_WINDOW
+        next_due_at = max(next_due_at, now + timedelta(seconds=profile.monitor_only_interval_seconds))
+    elif impact_status == 'BLOCKED':
+        reason_codes.append('global_mode_enforcement_block_timing')
+        decision_type = AutonomousTimingDecisionType.STOP_SESSION
+        timing_status = AutonomousTimingStatus.STOP_RECOMMENDED
+        next_due_at = max(next_due_at, now + timedelta(seconds=profile.monitor_only_interval_seconds))
 
     snapshot = AutonomousSessionTimingSnapshot.objects.create(
         linked_session=session,
