@@ -272,3 +272,134 @@ class PortfolioExposureRecommendation(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at', '-id']
+
+
+class PortfolioExposureApplyTargetType(models.TextChoices):
+    SESSION = 'SESSION', 'Session'
+    PENDING_DISPATCH = 'PENDING_DISPATCH', 'Pending dispatch'
+    CLUSTER_GATE = 'CLUSTER_GATE', 'Cluster gate'
+    ADMISSION_PATH = 'ADMISSION_PATH', 'Admission path'
+
+
+class PortfolioExposureApplyTargetStatus(models.TextChoices):
+    READY = 'READY', 'Ready'
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class PortfolioExposureApplyType(models.TextChoices):
+    APPLY_THROTTLE_NEW_ENTRIES = 'APPLY_THROTTLE_NEW_ENTRIES', 'Apply throttle new entries'
+    APPLY_DEFER_PENDING_DISPATCH = 'APPLY_DEFER_PENDING_DISPATCH', 'Apply defer pending dispatch'
+    APPLY_PARK_SESSION = 'APPLY_PARK_SESSION', 'Apply park session'
+    APPLY_PAUSE_CLUSTER_ACTIVITY = 'APPLY_PAUSE_CLUSTER_ACTIVITY', 'Apply pause cluster activity'
+    APPLY_MANUAL_REVIEW_ONLY = 'APPLY_MANUAL_REVIEW_ONLY', 'Apply manual review only'
+    APPLY_NO_CHANGE = 'APPLY_NO_CHANGE', 'Apply no change'
+
+
+class PortfolioExposureApplyDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    FAILED = 'FAILED', 'Failed'
+
+
+class PortfolioExposureApplyRecordStatus(models.TextChoices):
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    FAILED = 'FAILED', 'Failed'
+
+
+class PortfolioExposureApplyEffectType(models.TextChoices):
+    NEW_ENTRIES_THROTTLED = 'NEW_ENTRIES_THROTTLED', 'New entries throttled'
+    DISPATCH_DEFERRED = 'DISPATCH_DEFERRED', 'Dispatch deferred'
+    SESSION_PARKED = 'SESSION_PARKED', 'Session parked'
+    CLUSTER_ACTIVITY_PAUSED = 'CLUSTER_ACTIVITY_PAUSED', 'Cluster activity paused'
+    MANUAL_REVIEW_ONLY = 'MANUAL_REVIEW_ONLY', 'Manual review only'
+    NO_CHANGE = 'NO_CHANGE', 'No change'
+
+
+class PortfolioExposureApplyRecommendationType(models.TextChoices):
+    APPLY_CLUSTER_THROTTLE_NOW = 'APPLY_CLUSTER_THROTTLE_NOW', 'Apply cluster throttle now'
+    DEFER_PENDING_DISPATCH_SAFELY = 'DEFER_PENDING_DISPATCH_SAFELY', 'Defer pending dispatch safely'
+    PARK_REDUNDANT_SESSION_NOW = 'PARK_REDUNDANT_SESSION_NOW', 'Park redundant session now'
+    PAUSE_CLUSTER_ACTIVITY_CONSERVATIVELY = 'PAUSE_CLUSTER_ACTIVITY_CONSERVATIVELY', 'Pause cluster activity conservatively'
+    REQUIRE_MANUAL_EXPOSURE_APPLY_REVIEW = 'REQUIRE_MANUAL_EXPOSURE_APPLY_REVIEW', 'Require manual exposure apply review'
+    LEAVE_EXPOSURE_DECISION_AS_ADVISORY_ONLY = 'LEAVE_EXPOSURE_DECISION_AS_ADVISORY_ONLY', 'Leave exposure decision as advisory only'
+
+
+class PortfolioExposureApplyRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_decision_count = models.PositiveIntegerField(default=0)
+    applied_count = models.PositiveIntegerField(default=0)
+    skipped_count = models.PositiveIntegerField(default=0)
+    blocked_count = models.PositiveIntegerField(default=0)
+    deferred_dispatch_apply_count = models.PositiveIntegerField(default=0)
+    parked_session_apply_count = models.PositiveIntegerField(default=0)
+    paused_cluster_apply_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class PortfolioExposureApplyTarget(TimeStampedModel):
+    linked_apply_run = models.ForeignKey(PortfolioExposureApplyRun, on_delete=models.CASCADE, related_name='targets')
+    linked_exposure_decision = models.ForeignKey(PortfolioExposureDecision, on_delete=models.CASCADE, related_name='apply_targets')
+    target_type = models.CharField(max_length=24, choices=PortfolioExposureApplyTargetType.choices)
+    linked_session = models.ForeignKey('mission_control.AutonomousRuntimeSession', null=True, blank=True, on_delete=models.SET_NULL, related_name='portfolio_exposure_apply_targets')
+    linked_dispatch_record = models.ForeignKey('autonomous_trader.AutonomousDispatchRecord', null=True, blank=True, on_delete=models.SET_NULL, related_name='portfolio_exposure_apply_targets')
+    linked_cluster_snapshot = models.ForeignKey(PortfolioExposureClusterSnapshot, null=True, blank=True, on_delete=models.SET_NULL, related_name='apply_targets')
+    target_status = models.CharField(max_length=12, choices=PortfolioExposureApplyTargetStatus.choices, default=PortfolioExposureApplyTargetStatus.READY)
+    target_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at_target = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at_target', '-id']
+
+
+class PortfolioExposureApplyDecision(TimeStampedModel):
+    linked_apply_run = models.ForeignKey(PortfolioExposureApplyRun, on_delete=models.CASCADE, related_name='apply_decisions')
+    linked_exposure_decision = models.ForeignKey(PortfolioExposureDecision, on_delete=models.CASCADE, related_name='apply_decisions')
+    apply_type = models.CharField(max_length=40, choices=PortfolioExposureApplyType.choices)
+    apply_status = models.CharField(max_length=12, choices=PortfolioExposureApplyDecisionStatus.choices, default=PortfolioExposureApplyDecisionStatus.PROPOSED)
+    auto_applicable = models.BooleanField(default=False)
+    apply_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at_decision = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at_decision', '-id']
+
+
+class PortfolioExposureApplyRecord(TimeStampedModel):
+    linked_apply_decision = models.ForeignKey(PortfolioExposureApplyDecision, on_delete=models.CASCADE, related_name='records')
+    record_status = models.CharField(max_length=12, choices=PortfolioExposureApplyRecordStatus.choices)
+    effect_type = models.CharField(max_length=32, choices=PortfolioExposureApplyEffectType.choices)
+    record_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at_record = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at_record', '-id']
+
+
+class PortfolioExposureApplyRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=56, choices=PortfolioExposureApplyRecommendationType.choices)
+    target_exposure_decision = models.ForeignKey(PortfolioExposureDecision, null=True, blank=True, on_delete=models.SET_NULL, related_name='apply_recommendations')
+    target_apply_decision = models.ForeignKey(PortfolioExposureApplyDecision, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']

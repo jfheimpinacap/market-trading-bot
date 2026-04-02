@@ -116,6 +116,13 @@ class PortfolioGovernorTests(TestCase):
         self.assertEqual(client.get(reverse('portfolio_governor:exposure-decisions')).status_code, 200)
         self.assertEqual(client.get(reverse('portfolio_governor:exposure-recommendations')).status_code, 200)
         self.assertEqual(client.get(reverse('portfolio_governor:exposure-coordination-summary')).status_code, 200)
+        self.assertEqual(client.post(reverse('portfolio_governor:run-exposure-apply-review'), {}, format='json').status_code, 200)
+        self.assertEqual(client.get(reverse('portfolio_governor:exposure-apply-runs')).status_code, 200)
+        self.assertEqual(client.get(reverse('portfolio_governor:exposure-apply-targets')).status_code, 200)
+        self.assertEqual(client.get(reverse('portfolio_governor:exposure-apply-decisions')).status_code, 200)
+        self.assertEqual(client.get(reverse('portfolio_governor:exposure-apply-records')).status_code, 200)
+        self.assertEqual(client.get(reverse('portfolio_governor:exposure-apply-recommendations')).status_code, 200)
+        self.assertEqual(client.get(reverse('portfolio_governor:exposure-apply-summary')).status_code, 200)
 
 
 class ExposureCoordinationDecisionTests(TestCase):
@@ -190,3 +197,133 @@ class ExposureCoordinationDecisionTests(TestCase):
         payload = response.json()
         self.assertIn('clusters_reviewed', payload)
         self.assertIn('throttles', payload)
+
+from apps.autonomous_trader.models import (
+    AutonomousDispatchRecord,
+    AutonomousExecutionDecision,
+    AutonomousExecutionIntakeCandidate,
+    AutonomousExecutionIntakeRun,
+)
+from apps.mission_control.models import AutonomousRuntimeSession, AutonomousRuntimeSessionStatus
+from apps.portfolio_governor.models import (
+    PortfolioExposureApplyDecision,
+    PortfolioExposureApplyRecord,
+    PortfolioExposureApplyTarget,
+    PortfolioExposureDecision,
+    PortfolioExposureDecisionStatus,
+    PortfolioExposureDecisionType,
+    SessionExposureContribution,
+)
+from apps.portfolio_governor.services.run import apply_exposure_decision, run_exposure_apply_review
+
+
+class ExposureApplyBridgeTests(TestCase):
+    def setUp(self):
+        seed_demo_markets()
+        self.market = Market.objects.first()
+        self.run = PortfolioExposureCoordinationRun.objects.create()
+        self.cluster = PortfolioExposureClusterSnapshot.objects.create(
+            linked_run=self.run,
+            cluster_label='apply-bridge-cluster',
+            cluster_type='MIXED',
+            net_direction='LONG_BIAS',
+            session_count=2,
+            open_position_count=1,
+            pending_dispatch_count=1,
+            aggregate_notional_pressure=Decimal('2200'),
+            aggregate_risk_pressure_state='THROTTLED',
+            concentration_status=PortfolioExposureConcentrationStatus.HIGH,
+            cluster_summary='Apply bridge cluster',
+        )
+
+    def _build_dispatch_for_session(self, session: AutonomousRuntimeSession) -> AutonomousDispatchRecord:
+        intake_run = AutonomousExecutionIntakeRun.objects.create()
+        intake_candidate = AutonomousExecutionIntakeCandidate.objects.create(intake_run=intake_run, linked_market=self.market, intake_status='READY_FOR_AUTONOMOUS_EXECUTION')
+        execution_decision = AutonomousExecutionDecision.objects.create(linked_intake_candidate=intake_candidate, decision_type='EXECUTE_NOW')
+        dispatch = AutonomousDispatchRecord.objects.create(linked_execution_decision=execution_decision, dispatch_status='QUEUED')
+        SessionExposureContribution.objects.create(
+            linked_session=session,
+            linked_cluster_snapshot=self.cluster,
+            linked_dispatch_record=dispatch,
+            contribution_role='REDUNDANT',
+            contribution_strength='LOW',
+            contribution_summary='redundant dispatch',
+        )
+        return dispatch
+
+    def test_throttle_apply_sets_cluster_gate(self):
+        session = AutonomousRuntimeSession.objects.create(runtime_mode='PAPER_AUTO')
+        SessionExposureContribution.objects.create(
+            linked_session=session,
+            linked_cluster_snapshot=self.cluster,
+            contribution_role='SUPPORTING',
+            contribution_strength='MEDIUM',
+        )
+        decision = PortfolioExposureDecision.objects.create(
+            linked_cluster_snapshot=self.cluster,
+            decision_type=PortfolioExposureDecisionType.THROTTLE_NEW_ENTRIES,
+            decision_status=PortfolioExposureDecisionStatus.PROPOSED,
+            auto_applicable=True,
+            decision_summary='Throttle cluster',
+        )
+        apply_run = apply_exposure_decision(decision=decision)
+        self.cluster.refresh_from_db()
+        self.assertTrue(self.cluster.metadata.get('exposure_new_entries_throttled'))
+        self.assertEqual(apply_run.applied_count, 1)
+
+    def test_pending_dispatch_is_deferred(self):
+        session = AutonomousRuntimeSession.objects.create(runtime_mode='PAPER_AUTO')
+        dispatch = self._build_dispatch_for_session(session)
+        decision = PortfolioExposureDecision.objects.create(
+            linked_cluster_snapshot=self.cluster,
+            decision_type=PortfolioExposureDecisionType.DEFER_PENDING_DISPATCH,
+            decision_status=PortfolioExposureDecisionStatus.PROPOSED,
+            auto_applicable=True,
+            decision_summary='Defer pending dispatch',
+        )
+        apply_exposure_decision(decision=decision)
+        dispatch.refresh_from_db()
+        self.assertEqual(dispatch.dispatch_status, 'SKIPPED')
+        self.assertTrue(dispatch.metadata.get('deferred_by_exposure_apply'))
+
+    def test_redundant_session_can_be_parked(self):
+        session = AutonomousRuntimeSession.objects.create(runtime_mode='PAPER_AUTO')
+        SessionExposureContribution.objects.create(
+            linked_session=session,
+            linked_cluster_snapshot=self.cluster,
+            contribution_role='LOW_VALUE',
+            contribution_strength='LOW',
+        )
+        decision = PortfolioExposureDecision.objects.create(
+            linked_cluster_snapshot=self.cluster,
+            decision_type=PortfolioExposureDecisionType.PARK_WEAKER_SESSION,
+            decision_status=PortfolioExposureDecisionStatus.PROPOSED,
+            auto_applicable=True,
+            decision_summary='Park weaker session',
+        )
+        apply_exposure_decision(decision=decision)
+        session.refresh_from_db()
+        self.assertEqual(session.session_status, AutonomousRuntimeSessionStatus.PAUSED)
+
+    def test_ambiguous_cluster_stays_manual_review(self):
+        decision = PortfolioExposureDecision.objects.create(
+            linked_cluster_snapshot=self.cluster,
+            decision_type=PortfolioExposureDecisionType.REQUIRE_MANUAL_EXPOSURE_REVIEW,
+            decision_status=PortfolioExposureDecisionStatus.PROPOSED,
+            auto_applicable=False,
+            decision_summary='Manual review only',
+        )
+        run = apply_exposure_decision(decision=decision)
+        apply_decision = PortfolioExposureApplyDecision.objects.filter(linked_apply_run=run).first()
+        record = PortfolioExposureApplyRecord.objects.filter(linked_apply_decision=apply_decision).first()
+        self.assertEqual(apply_decision.apply_status, 'SKIPPED')
+        self.assertEqual(record.effect_type, 'MANUAL_REVIEW_ONLY')
+
+    def test_exposure_apply_summary_endpoint(self):
+        run_exposure_apply_review()
+        client = APIClient()
+        response = client.get(reverse('portfolio_governor:exposure-apply-summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('decisions_considered', payload)
+        self.assertIn('deferred_dispatches', payload)

@@ -136,3 +136,67 @@ export type PortfolioExposureCoordinationSummary = {
   paper_demo_only: boolean;
   real_execution_enabled: boolean;
 };
+
+export type PortfolioExposureApplyRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_decision_count: number;
+  applied_count: number;
+  skipped_count: number;
+  blocked_count: number;
+  deferred_dispatch_apply_count: number;
+  parked_session_apply_count: number;
+  paused_cluster_apply_count: number;
+  recommendation_summary: Record<string, number>;
+};
+
+export type PortfolioExposureApplyTarget = {
+  id: number;
+  linked_exposure_decision: number;
+  target_type: string;
+  linked_session: number | null;
+  linked_dispatch_record: number | null;
+  linked_cluster_snapshot: number | null;
+  target_status: string;
+  target_summary: string;
+};
+
+export type PortfolioExposureApplyDecision = {
+  id: number;
+  linked_exposure_decision: number;
+  apply_type: string;
+  apply_status: string;
+  auto_applicable: boolean;
+  apply_summary: string;
+};
+
+export type PortfolioExposureApplyRecord = {
+  id: number;
+  linked_apply_decision: number;
+  record_status: string;
+  effect_type: string;
+  record_summary: string;
+};
+
+export type PortfolioExposureApplyRecommendation = {
+  id: number;
+  recommendation_type: string;
+  target_exposure_decision: number | null;
+  target_apply_decision: number | null;
+  rationale: string;
+  blockers: string[];
+  confidence: number;
+};
+
+export type PortfolioExposureApplySummary = {
+  latest_run_id: number | null;
+  decisions_considered: number;
+  applied: number;
+  skipped: number;
+  blocked: number;
+  deferred_dispatches: number;
+  parked_sessions: number;
+  paused_clusters: number;
+  recommendation_summary?: Record<string, number>;
+};

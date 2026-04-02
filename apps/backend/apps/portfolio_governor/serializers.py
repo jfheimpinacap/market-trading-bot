@@ -1,6 +1,11 @@
 from rest_framework import serializers
 
 from apps.portfolio_governor.models import (
+    PortfolioExposureApplyDecision,
+    PortfolioExposureApplyRecommendation,
+    PortfolioExposureApplyRecord,
+    PortfolioExposureApplyRun,
+    PortfolioExposureApplyTarget,
     PortfolioExposureClusterSnapshot,
     PortfolioExposureConflictReview,
     PortfolioExposureCoordinationRun,
@@ -82,15 +87,14 @@ class RunPortfolioGovernanceSerializer(serializers.Serializer):
     profile_slug = serializers.CharField(required=False, allow_blank=False, max_length=64)
 
 
+class ExposureApplyRequestSerializer(serializers.Serializer):
+    force_apply = serializers.BooleanField(required=False, default=False)
+
+
 class PortfolioExposureCoordinationRunSerializer(serializers.ModelSerializer):
     class Meta:
         model = PortfolioExposureCoordinationRun
         fields = '__all__'
-        read_only_fields = (
-            'id', 'started_at', 'completed_at', 'considered_cluster_count', 'concentration_alert_count',
-            'conflict_alert_count', 'throttle_count', 'defer_count', 'park_count', 'manual_review_count',
-            'recommendation_summary', 'metadata', 'created_at', 'updated_at',
-        )
 
 
 class PortfolioExposureClusterSnapshotSerializer(serializers.ModelSerializer):
@@ -120,4 +124,34 @@ class PortfolioExposureDecisionSerializer(serializers.ModelSerializer):
 class PortfolioExposureRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = PortfolioExposureRecommendation
+        fields = '__all__'
+
+
+class PortfolioExposureApplyRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PortfolioExposureApplyRun
+        fields = '__all__'
+
+
+class PortfolioExposureApplyTargetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PortfolioExposureApplyTarget
+        fields = '__all__'
+
+
+class PortfolioExposureApplyDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PortfolioExposureApplyDecision
+        fields = '__all__'
+
+
+class PortfolioExposureApplyRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PortfolioExposureApplyRecord
+        fields = '__all__'
+
+
+class PortfolioExposureApplyRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PortfolioExposureApplyRecommendation
         fields = '__all__'
