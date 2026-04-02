@@ -10,6 +10,8 @@ from django.utils import timezone
 from apps.mission_control.models import (
     AutonomousCooldownState,
     AutonomousRuntimeSession,
+    AutonomousRuntimeTick,
+    AutonomousScheduleProfile,
     MissionControlCycle,
     MissionControlSession,
     MissionControlState,
@@ -244,3 +246,71 @@ class AutonomousHeartbeatRunnerTests(TestCase):
         response = self.client.get(reverse('mission_control:autonomous-heartbeat-summary'))
         self.assertEqual(response.status_code, 200)
         self.assertIn('totals', response.json())
+
+
+class SessionTimingPolicyTests(TestCase):
+    def test_profile_endpoint_bootstraps_defaults(self):
+        response = self.client.get(reverse('mission_control:schedule-profiles'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(any(profile['slug'] == 'balanced_local' for profile in payload))
+
+    def test_recent_dispatch_delays_next_due_at(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        AutonomousRuntimeTick.objects.create(
+            linked_session=session,
+            tick_index=1,
+            tick_status='COMPLETED',
+            tick_summary='dispatch simulated',
+        )
+        self.client.post(reverse('mission_control:run-session-timing-review'), data='{}', content_type='application/json')
+        snapshots = self.client.get(reverse('mission_control:session-timing-snapshots')).json()
+        target = next(snapshot for snapshot in snapshots if snapshot['linked_session'] == session.id)
+        self.assertIn(target['timing_status'], {'WAIT_SHORT', 'WAIT_LONG'})
+        self.assertIsNotNone(target['next_due_at'])
+
+    def test_repeated_no_action_moves_to_wait_long_or_monitor(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        profile = AutonomousScheduleProfile.objects.create(
+            slug='tiny-threshold',
+            display_name='Tiny threshold',
+            max_quiet_ticks_before_wait_long=2,
+            max_no_action_ticks_before_pause=50,
+        )
+        session.linked_schedule_profile = profile
+        session.save(update_fields=['linked_schedule_profile', 'updated_at'])
+        for index in range(1, 4):
+            AutonomousRuntimeTick.objects.create(
+                linked_session=session,
+                tick_index=index,
+                tick_status='SKIPPED',
+                reason_codes=['no_action'],
+            )
+        self.client.post(reverse('mission_control:run-session-timing-review'), data='{}', content_type='application/json')
+        decisions = self.client.get(reverse('mission_control:session-timing-decisions')).json()
+        target = next(decision for decision in decisions if decision['linked_session'] == session.id)
+        self.assertIn(target['decision_type'], {'WAIT_LONG', 'MONITOR_ONLY_NEXT'})
+
+    def test_persistent_blocks_trigger_stop_recommendation(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        profile = AutonomousScheduleProfile.objects.create(
+            slug='stop-fast',
+            display_name='Stop fast',
+            max_consecutive_blocked_ticks_before_stop=2,
+            enable_auto_stop_for_persistent_blocks=True,
+        )
+        session.linked_schedule_profile = profile
+        session.save(update_fields=['linked_schedule_profile', 'updated_at'])
+        for index in range(1, 4):
+            AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index, tick_status='BLOCKED')
+        self.client.post(reverse('mission_control:run-session-timing-review'), data='{}', content_type='application/json')
+        recommendations = self.client.get(reverse('mission_control:session-timing-recommendations')).json()
+        target = next(rec for rec in recommendations if rec['target_session'] == session.id)
+        self.assertIn(target['recommendation_type'], {'STOP_SESSION_FOR_PERSISTENT_BLOCKS', 'REQUIRE_MANUAL_TIMING_REVIEW'})
+
+    def test_timing_summary_endpoint(self):
+        AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-session-timing-review'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:session-timing-summary'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('summary', response.json())

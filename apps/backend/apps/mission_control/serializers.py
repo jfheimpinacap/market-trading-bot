@@ -13,7 +13,12 @@ from apps.mission_control.models import (
     AutonomousRunnerState,
     AutonomousRuntimeSession,
     AutonomousRuntimeTick,
+    AutonomousScheduleProfile,
+    AutonomousSessionTimingSnapshot,
+    AutonomousStopConditionEvaluation,
     AutonomousSessionRecommendation,
+    AutonomousTimingDecision,
+    AutonomousTimingRecommendation,
     AutonomousTickDispatchAttempt,
     MissionControlCycle,
     MissionControlSession,
@@ -153,3 +158,41 @@ class AutonomousHeartbeatRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousHeartbeatRecommendation
         fields = '__all__'
+
+
+class AutonomousScheduleProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousScheduleProfile
+        fields = '__all__'
+
+
+class AutonomousSessionTimingSnapshotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionTimingSnapshot
+        fields = '__all__'
+
+
+class AutonomousStopConditionEvaluationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousStopConditionEvaluation
+        fields = '__all__'
+
+
+class AutonomousTimingDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousTimingDecision
+        fields = '__all__'
+
+
+class AutonomousTimingRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousTimingRecommendation
+        fields = '__all__'
+
+
+class SessionTimingReviewRequestSerializer(serializers.Serializer):
+    session_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=True,
+    )

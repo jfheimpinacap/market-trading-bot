@@ -12,8 +12,15 @@ import {
   getAutonomousSessionSummary,
   getAutonomousSessions,
   getAutonomousTickDispatchAttempts,
+  getScheduleProfiles,
+  getSessionTimingDecisions,
+  getSessionTimingRecommendations,
+  getSessionTimingSnapshots,
+  getSessionTimingSummary,
+  getStopConditionEvaluations,
   pauseAutonomousRunner,
   resumeAutonomousRunner,
+  runSessionTimingReview,
   runAutonomousHeartbeat,
   startAutonomousRunner,
   stopAutonomousRunner,
@@ -25,7 +32,13 @@ import type {
   AutonomousHeartbeatSummary,
   AutonomousRunnerState,
   AutonomousRuntimeSession,
+  AutonomousScheduleProfile,
+  AutonomousSessionTimingSnapshot,
+  AutonomousStopConditionEvaluation,
+  AutonomousTimingDecision,
+  AutonomousTimingRecommendation,
   AutonomousSessionSummary,
+  SessionTimingSummary,
   AutonomousTickDispatchAttempt,
 } from '../../types/missionControl';
 
@@ -38,6 +51,12 @@ export function MissionControlPage() {
   const [recommendations, setRecommendations] = useState<AutonomousHeartbeatRecommendation[]>([]);
   const [summary, setSummary] = useState<AutonomousSessionSummary | null>(null);
   const [heartbeatSummary, setHeartbeatSummary] = useState<AutonomousHeartbeatSummary | null>(null);
+  const [scheduleProfiles, setScheduleProfiles] = useState<AutonomousScheduleProfile[]>([]);
+  const [timingSnapshots, setTimingSnapshots] = useState<AutonomousSessionTimingSnapshot[]>([]);
+  const [stopEvaluations, setStopEvaluations] = useState<AutonomousStopConditionEvaluation[]>([]);
+  const [timingDecisions, setTimingDecisions] = useState<AutonomousTimingDecision[]>([]);
+  const [timingRecommendations, setTimingRecommendations] = useState<AutonomousTimingRecommendation[]>([]);
+  const [timingSummary, setTimingSummary] = useState<SessionTimingSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +66,7 @@ export function MissionControlPage() {
     setLoading(true);
     setError(null);
     try {
-      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary] = await Promise.all([
+      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary] = await Promise.all([
         getAutonomousSessions(),
         getAutonomousSessionSummary(),
         getAutonomousRunnerState(),
@@ -56,6 +75,12 @@ export function MissionControlPage() {
         getAutonomousTickDispatchAttempts(),
         getAutonomousHeartbeatRecommendations(),
         getAutonomousHeartbeatSummary(),
+        getScheduleProfiles(),
+        getSessionTimingSnapshots(),
+        getStopConditionEvaluations(),
+        getSessionTimingDecisions(),
+        getSessionTimingRecommendations(),
+        getSessionTimingSummary(),
       ]);
       setSessions(loadedSessions);
       setSummary(loadedSummary);
@@ -65,6 +90,12 @@ export function MissionControlPage() {
       setDispatchAttempts(loadedDispatches);
       setRecommendations(loadedRecommendations);
       setHeartbeatSummary(loadedHeartbeatSummary);
+      setScheduleProfiles(loadedScheduleProfiles);
+      setTimingSnapshots(loadedTimingSnapshots);
+      setStopEvaluations(loadedStopEvaluations);
+      setTimingDecisions(loadedTimingDecisions);
+      setTimingRecommendations(loadedTimingRecommendations);
+      setTimingSummary(loadedTimingSummary);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load autonomous heartbeat runner state.');
     } finally {
@@ -97,6 +128,38 @@ export function MissionControlPage() {
             <div><strong>Blocked / paused / stopped:</strong> {(latestHeartbeat?.blocked_count ?? 0) + (latestHeartbeat?.paused_count ?? 0) + (latestHeartbeat?.stopped_count ?? 0)}</div>
             <div><strong>Total heartbeat runs:</strong> {heartbeatSummary?.totals.heartbeat_runs ?? 0}</div>
           </div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session timing policy" title="Cadence governance summary" description="Configurable local-first timing policy (paper-only) governing when sessions run, wait, pause, or stop.">
+          <div className="button-row">
+            <button type="button" className="primary-button" onClick={async () => { await runSessionTimingReview(); await load(); }}>Run timing review</button>
+          </div>
+          <div className="system-metadata-grid">
+            <div><strong>Sessions evaluated:</strong> {timingSummary?.summary.sessions_evaluated ?? 0}</div>
+            <div><strong>Due now:</strong> {timingSummary?.summary.due_now ?? 0}</div>
+            <div><strong>Waiting short:</strong> {timingSummary?.summary.waiting_short ?? 0}</div>
+            <div><strong>Waiting long:</strong> {timingSummary?.summary.waiting_long ?? 0}</div>
+            <div><strong>Monitor-only:</strong> {timingSummary?.summary.monitor_only ?? 0}</div>
+            <div><strong>Pause recommended:</strong> {timingSummary?.summary.pause_recommended ?? 0}</div>
+            <div><strong>Stop recommended:</strong> {timingSummary?.summary.stop_recommended ?? 0}</div>
+          </div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session timing policy" title="Schedule profiles" description="Reusable cadence profiles with explicit intervals and quiet/stop thresholds.">
+          <ul>{scheduleProfiles.slice(0, 10).map((profile) => <li key={profile.id}><strong>{profile.slug}</strong> ({profile.display_name}) — base={profile.base_interval_seconds}s reduced={profile.reduced_interval_seconds}s monitor={profile.monitor_only_interval_seconds}s quiet_pause={profile.max_no_action_ticks_before_pause} blocked_stop={profile.max_consecutive_blocked_ticks_before_stop} active={String(profile.is_active)}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session timing policy" title="Timing snapshots" description="Per-session cadence snapshot with next_due_at and pressure state.">
+          <ul>{timingSnapshots.slice(0, 10).map((snapshot) => <li key={snapshot.id}><strong>{snapshot.timing_status}</strong> — session={snapshot.linked_session} next_due={snapshot.next_due_at ?? 'n/a'} cooldowns={snapshot.active_cooldown_count} no_action={snapshot.consecutive_no_action_ticks} blocked={snapshot.consecutive_blocked_ticks} signal={snapshot.signal_pressure_state} summary={snapshot.timing_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session timing policy" title="Timing decisions" description="Explicit decisions consumed by heartbeat due-tick evaluation.">
+          <ul>{timingDecisions.slice(0, 10).map((decision) => <li key={decision.id}><strong>{decision.decision_type}</strong> — session={decision.linked_session} next_due={decision.next_due_at ?? 'n/a'} status={decision.decision_status} summary={decision.decision_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session timing policy" title="Timing recommendations" description="Conservative recommendations with rationale, blockers, and confidence.">
+          <ul>{timingRecommendations.slice(0, 10).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — {recommendation.rationale} blockers=[{recommendation.blockers.join(', ')}] confidence={recommendation.confidence}</li>)}</ul>
+          <p><strong>Stop condition evaluations:</strong> {stopEvaluations.length}</p>
         </SectionCard>
 
         <SectionCard eyebrow="Runner state" title="Local autonomous runner state" description="Single local runner state with audit timestamps.">

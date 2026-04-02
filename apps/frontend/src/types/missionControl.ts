@@ -292,3 +292,93 @@ export type AutonomousHeartbeatSummary = {
     dispatch_attempts: number;
   };
 };
+
+export type AutonomousScheduleProfile = {
+  id: number;
+  slug: string;
+  display_name: string;
+  is_active: boolean;
+  base_interval_seconds: number;
+  reduced_interval_seconds: number;
+  monitor_only_interval_seconds: number;
+  cooldown_extension_seconds: number;
+  max_no_action_ticks_before_pause: number;
+  max_quiet_ticks_before_wait_long: number;
+  max_consecutive_blocked_ticks_before_stop: number;
+  enable_auto_pause_for_quiet_markets: boolean;
+  enable_auto_stop_for_persistent_blocks: boolean;
+  metadata: Record<string, unknown>;
+};
+
+export type AutonomousSessionTimingSnapshot = {
+  id: number;
+  linked_session: number;
+  linked_schedule_profile: number | null;
+  last_tick_at: string | null;
+  next_due_at: string | null;
+  active_cooldown_count: number;
+  consecutive_no_action_ticks: number;
+  consecutive_blocked_ticks: number;
+  recent_dispatch_count: number;
+  recent_loss_count: number;
+  signal_pressure_state: 'HIGH' | 'NORMAL' | 'LOW' | 'QUIET';
+  timing_status: 'DUE_NOW' | 'WAIT_SHORT' | 'WAIT_LONG' | 'MONITOR_ONLY_WINDOW' | 'PAUSE_RECOMMENDED' | 'STOP_RECOMMENDED';
+  timing_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousStopConditionEvaluation = {
+  id: number;
+  linked_session: number;
+  evaluation_type: string;
+  evaluation_status: string;
+  evaluation_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousTimingDecision = {
+  id: number;
+  linked_session: number;
+  linked_timing_snapshot: number | null;
+  decision_type: string;
+  decision_status: string;
+  next_due_at: string | null;
+  decision_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousTimingRecommendation = {
+  id: number;
+  recommendation_type: string;
+  target_session: number | null;
+  target_timing_snapshot: number | null;
+  target_timing_decision: number | null;
+  rationale: string;
+  reason_codes: string[];
+  confidence: number;
+  blockers: string[];
+  created_at: string;
+};
+
+export type SessionTimingSummary = {
+  summary: {
+    sessions_evaluated: number;
+    due_now: number;
+    waiting_short: number;
+    waiting_long: number;
+    monitor_only: number;
+    pause_recommended: number;
+    stop_recommended: number;
+  };
+  total_profiles: number;
+  latest_snapshot_id: number | null;
+  latest_decision_id: number | null;
+  latest_recommendation_id: number | null;
+  extra?: Record<string, unknown>;
+};

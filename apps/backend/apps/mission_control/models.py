@@ -284,6 +284,76 @@ class AutonomousSessionRecommendationType(models.TextChoices):
     REQUIRE_MANUAL_SESSION_REVIEW = 'REQUIRE_MANUAL_SESSION_REVIEW', 'Require manual session review'
 
 
+class AutonomousTimingStatus(models.TextChoices):
+    DUE_NOW = 'DUE_NOW', 'Due now'
+    WAIT_SHORT = 'WAIT_SHORT', 'Wait short'
+    WAIT_LONG = 'WAIT_LONG', 'Wait long'
+    MONITOR_ONLY_WINDOW = 'MONITOR_ONLY_WINDOW', 'Monitor only window'
+    PAUSE_RECOMMENDED = 'PAUSE_RECOMMENDED', 'Pause recommended'
+    STOP_RECOMMENDED = 'STOP_RECOMMENDED', 'Stop recommended'
+
+
+class AutonomousStopEvaluationType(models.TextChoices):
+    PERSISTENT_BLOCKS = 'PERSISTENT_BLOCKS', 'Persistent blocks'
+    REPEATED_NO_ACTION = 'REPEATED_NO_ACTION', 'Repeated no action'
+    QUIET_MARKET = 'QUIET_MARKET', 'Quiet market'
+    POST_LOSS_COOLDOWN = 'POST_LOSS_COOLDOWN', 'Post-loss cooldown'
+    PORTFOLIO_PRESSURE_PERSISTENT = 'PORTFOLIO_PRESSURE_PERSISTENT', 'Portfolio pressure persistent'
+    RUNTIME_OR_SAFETY_STOP = 'RUNTIME_OR_SAFETY_STOP', 'Runtime or safety stop'
+
+
+class AutonomousStopEvaluationStatus(models.TextChoices):
+    INFO = 'INFO', 'Info'
+    CAUTION = 'CAUTION', 'Caution'
+    ACTIONABLE = 'ACTIONABLE', 'Actionable'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class AutonomousTimingDecisionType(models.TextChoices):
+    RUN_NOW = 'RUN_NOW', 'Run now'
+    WAIT_SHORT = 'WAIT_SHORT', 'Wait short'
+    WAIT_LONG = 'WAIT_LONG', 'Wait long'
+    MONITOR_ONLY_NEXT = 'MONITOR_ONLY_NEXT', 'Monitor only next'
+    PAUSE_SESSION = 'PAUSE_SESSION', 'Pause session'
+    STOP_SESSION = 'STOP_SESSION', 'Stop session'
+
+
+class AutonomousTimingDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousTimingRecommendationType(models.TextChoices):
+    RUN_NEXT_TICK_IMMEDIATELY = 'RUN_NEXT_TICK_IMMEDIATELY', 'Run next tick immediately'
+    WAIT_FOR_SHORT_INTERVAL = 'WAIT_FOR_SHORT_INTERVAL', 'Wait for short interval'
+    WAIT_FOR_LONG_INTERVAL = 'WAIT_FOR_LONG_INTERVAL', 'Wait for long interval'
+    ENTER_MONITOR_ONLY_WINDOW = 'ENTER_MONITOR_ONLY_WINDOW', 'Enter monitor-only window'
+    PAUSE_SESSION_FOR_QUIET_MARKET = 'PAUSE_SESSION_FOR_QUIET_MARKET', 'Pause session for quiet market'
+    STOP_SESSION_FOR_PERSISTENT_BLOCKS = 'STOP_SESSION_FOR_PERSISTENT_BLOCKS', 'Stop session for persistent blocks'
+    REQUIRE_MANUAL_TIMING_REVIEW = 'REQUIRE_MANUAL_TIMING_REVIEW', 'Require manual timing review'
+
+
+class AutonomousScheduleProfile(TimeStampedModel):
+    slug = models.SlugField(max_length=64, unique=True)
+    display_name = models.CharField(max_length=120)
+    is_active = models.BooleanField(default=True)
+    base_interval_seconds = models.PositiveIntegerField(default=60)
+    reduced_interval_seconds = models.PositiveIntegerField(default=30)
+    monitor_only_interval_seconds = models.PositiveIntegerField(default=180)
+    cooldown_extension_seconds = models.PositiveIntegerField(default=120)
+    max_no_action_ticks_before_pause = models.PositiveIntegerField(default=5)
+    max_quiet_ticks_before_wait_long = models.PositiveIntegerField(default=3)
+    max_consecutive_blocked_ticks_before_stop = models.PositiveIntegerField(default=4)
+    enable_auto_pause_for_quiet_markets = models.BooleanField(default=True)
+    enable_auto_stop_for_persistent_blocks = models.BooleanField(default=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['slug', '-id']
+
+
 class AutonomousRuntimeSession(TimeStampedModel):
     started_at = models.DateTimeField(default=timezone.now)
     stopped_at = models.DateTimeField(null=True, blank=True)
@@ -298,6 +368,13 @@ class AutonomousRuntimeSession(TimeStampedModel):
     pause_reason_codes = models.JSONField(default=list, blank=True)
     stop_reason_codes = models.JSONField(default=list, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
+    linked_schedule_profile = models.ForeignKey(
+        'AutonomousScheduleProfile',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='runtime_sessions',
+    )
 
     class Meta:
         ordering = ['-started_at', '-id']
@@ -482,6 +559,90 @@ class AutonomousHeartbeatRecommendation(TimeStampedModel):
     recommendation_type = models.CharField(max_length=36, choices=AutonomousHeartbeatRecommendationType.choices)
     target_session = models.ForeignKey(AutonomousRuntimeSession, null=True, blank=True, on_delete=models.SET_NULL, related_name='heartbeat_recommendations')
     target_heartbeat_decision = models.ForeignKey(AutonomousHeartbeatDecision, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousSessionTimingSnapshot(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='timing_snapshots')
+    linked_schedule_profile = models.ForeignKey(
+        AutonomousScheduleProfile,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='timing_snapshots',
+    )
+    last_tick_at = models.DateTimeField(null=True, blank=True)
+    next_due_at = models.DateTimeField(null=True, blank=True)
+    active_cooldown_count = models.PositiveIntegerField(default=0)
+    consecutive_no_action_ticks = models.PositiveIntegerField(default=0)
+    consecutive_blocked_ticks = models.PositiveIntegerField(default=0)
+    recent_dispatch_count = models.PositiveIntegerField(default=0)
+    recent_loss_count = models.PositiveIntegerField(default=0)
+    signal_pressure_state = models.CharField(max_length=12, choices=AutonomousSignalPressureState.choices, default=AutonomousSignalPressureState.NORMAL)
+    timing_status = models.CharField(max_length=24, choices=AutonomousTimingStatus.choices, default=AutonomousTimingStatus.WAIT_SHORT)
+    timing_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousStopConditionEvaluation(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='stop_condition_evaluations')
+    evaluation_type = models.CharField(max_length=40, choices=AutonomousStopEvaluationType.choices)
+    evaluation_status = models.CharField(max_length=12, choices=AutonomousStopEvaluationStatus.choices, default=AutonomousStopEvaluationStatus.INFO)
+    evaluation_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousTimingDecision(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='timing_decisions')
+    linked_timing_snapshot = models.ForeignKey(
+        AutonomousSessionTimingSnapshot,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='timing_decisions',
+    )
+    decision_type = models.CharField(max_length=24, choices=AutonomousTimingDecisionType.choices)
+    decision_status = models.CharField(max_length=12, choices=AutonomousTimingDecisionStatus.choices, default=AutonomousTimingDecisionStatus.PROPOSED)
+    next_due_at = models.DateTimeField(null=True, blank=True)
+    decision_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousTimingRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=48, choices=AutonomousTimingRecommendationType.choices)
+    target_session = models.ForeignKey(AutonomousRuntimeSession, null=True, blank=True, on_delete=models.SET_NULL, related_name='timing_recommendations')
+    target_timing_snapshot = models.ForeignKey(
+        AutonomousSessionTimingSnapshot,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    target_timing_decision = models.ForeignKey(
+        AutonomousTimingDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
     rationale = models.CharField(max_length=255)
     reason_codes = models.JSONField(default=list, blank=True)
     confidence = models.FloatField(default=0.5)

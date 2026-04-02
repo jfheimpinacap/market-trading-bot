@@ -1,4 +1,5 @@
 from rest_framework import generics, status
+from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -15,7 +16,12 @@ from apps.mission_control.models import (
     AutonomousRunnerState,
     AutonomousRuntimeSession,
     AutonomousRuntimeTick,
+    AutonomousScheduleProfile,
+    AutonomousSessionTimingSnapshot,
+    AutonomousStopConditionEvaluation,
     AutonomousSessionRecommendation,
+    AutonomousTimingDecision,
+    AutonomousTimingRecommendation,
     AutonomousTickDispatchAttempt,
     MissionControlCycle,
     MissionControlSession,
@@ -31,15 +37,27 @@ from apps.mission_control.serializers import (
     AutonomousRunnerStateSerializer,
     AutonomousRuntimeSessionSerializer,
     AutonomousRuntimeTickSerializer,
+    AutonomousScheduleProfileSerializer,
+    AutonomousSessionTimingSnapshotSerializer,
+    AutonomousStopConditionEvaluationSerializer,
     AutonomousRuntimeRecommendationSerializer,
     AutonomousRuntimeRunRequestSerializer,
     AutonomousRuntimeRunSerializer,
+    AutonomousTimingDecisionSerializer,
+    AutonomousTimingRecommendationSerializer,
+    SessionTimingReviewRequestSerializer,
     AutonomousSessionRecommendationSerializer,
     AutonomousSessionStartRequestSerializer,
     AutonomousTickDispatchAttemptSerializer,
     MissionControlCycleSerializer,
     MissionControlSessionSerializer,
     MissionControlStartSerializer,
+)
+from apps.mission_control.services.session_timing import (
+    apply_schedule_profile,
+    build_session_timing_summary,
+    ensure_default_schedule_profiles,
+    run_session_timing_review,
 )
 from apps.mission_control.services import pause_session, resume_session, run_cycle_now, start_session, status_snapshot, stop_session
 from apps.mission_control.services.autonomous_runtime import build_autonomous_runtime_summary, run_autonomous_runtime
@@ -311,3 +329,60 @@ class AutonomousHeartbeatRecommendationListView(generics.ListAPIView):
 class AutonomousHeartbeatSummaryView(APIView):
     def get(self, request, *args, **kwargs):
         return Response(build_heartbeat_summary(), status=status.HTTP_200_OK)
+
+
+class RunSessionTimingReviewView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = SessionTimingReviewRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        summary = run_session_timing_review(session_ids=payload.get('session_ids'))
+        return Response(summary, status=status.HTTP_200_OK)
+
+
+class ScheduleProfileListView(generics.ListAPIView):
+    serializer_class = AutonomousScheduleProfileSerializer
+
+    def get_queryset(self):
+        ensure_default_schedule_profiles()
+        return AutonomousScheduleProfile.objects.order_by('slug', '-id')
+
+
+class SessionTimingSnapshotListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionTimingSnapshotSerializer
+    queryset = AutonomousSessionTimingSnapshot.objects.select_related('linked_session', 'linked_schedule_profile').order_by('-created_at', '-id')[:300]
+
+
+class StopConditionEvaluationListView(generics.ListAPIView):
+    serializer_class = AutonomousStopConditionEvaluationSerializer
+    queryset = AutonomousStopConditionEvaluation.objects.select_related('linked_session').order_by('-created_at', '-id')[:300]
+
+
+class SessionTimingDecisionListView(generics.ListAPIView):
+    serializer_class = AutonomousTimingDecisionSerializer
+    queryset = AutonomousTimingDecision.objects.select_related('linked_session', 'linked_timing_snapshot').order_by('-created_at', '-id')[:300]
+
+
+class SessionTimingRecommendationListView(generics.ListAPIView):
+    serializer_class = AutonomousTimingRecommendationSerializer
+    queryset = AutonomousTimingRecommendation.objects.select_related(
+        'target_session', 'target_timing_snapshot', 'target_timing_decision'
+    ).order_by('-created_at', '-id')[:300]
+
+
+class SessionTimingSummaryView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(build_session_timing_summary(), status=status.HTTP_200_OK)
+
+
+class ApplyScheduleProfileView(APIView):
+    def post(self, request, session_id: int, *args, **kwargs):
+        profile_slug = (request.data or {}).get('profile_slug')
+        if not profile_slug:
+            return Response({'detail': 'profile_slug is required'}, status=status.HTTP_400_BAD_REQUEST)
+        session = get_object_or_404(AutonomousRuntimeSession, pk=session_id)
+        profile = AutonomousScheduleProfile.objects.filter(slug=profile_slug, is_active=True).first()
+        if not profile:
+            return Response({'detail': 'profile not found or inactive'}, status=status.HTTP_404_NOT_FOUND)
+        apply_schedule_profile(session=session, profile=profile)
+        return Response(AutonomousRuntimeSessionSerializer(session).data, status=status.HTTP_200_OK)
