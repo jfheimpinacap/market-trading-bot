@@ -12,7 +12,12 @@ import {
   getAutonomousSessionSummary,
   getAutonomousSessions,
   getAutonomousTickDispatchAttempts,
+  getProfileRecommendations,
+  getProfileSelectionSummary,
+  getProfileSwitchDecisions,
+  getProfileSwitchRecords,
   getScheduleProfiles,
+  getSessionContextReviews,
   getSessionTimingDecisions,
   getSessionTimingRecommendations,
   getSessionTimingSnapshots,
@@ -21,6 +26,7 @@ import {
   pauseAutonomousRunner,
   resumeAutonomousRunner,
   runSessionTimingReview,
+  runProfileSelectionReview,
   runAutonomousHeartbeat,
   startAutonomousRunner,
   stopAutonomousRunner,
@@ -32,13 +38,18 @@ import type {
   AutonomousHeartbeatSummary,
   AutonomousRunnerState,
   AutonomousRuntimeSession,
+  AutonomousProfileRecommendation,
+  AutonomousProfileSwitchDecision,
+  AutonomousProfileSwitchRecord,
   AutonomousScheduleProfile,
+  AutonomousSessionContextReview,
   AutonomousSessionTimingSnapshot,
   AutonomousStopConditionEvaluation,
   AutonomousTimingDecision,
   AutonomousTimingRecommendation,
   AutonomousSessionSummary,
   SessionTimingSummary,
+  ProfileSelectionSummary,
   AutonomousTickDispatchAttempt,
 } from '../../types/missionControl';
 
@@ -57,6 +68,11 @@ export function MissionControlPage() {
   const [timingDecisions, setTimingDecisions] = useState<AutonomousTimingDecision[]>([]);
   const [timingRecommendations, setTimingRecommendations] = useState<AutonomousTimingRecommendation[]>([]);
   const [timingSummary, setTimingSummary] = useState<SessionTimingSummary | null>(null);
+  const [contextReviews, setContextReviews] = useState<AutonomousSessionContextReview[]>([]);
+  const [profileSwitchDecisions, setProfileSwitchDecisions] = useState<AutonomousProfileSwitchDecision[]>([]);
+  const [profileSwitchRecords, setProfileSwitchRecords] = useState<AutonomousProfileSwitchRecord[]>([]);
+  const [profileRecommendations, setProfileRecommendations] = useState<AutonomousProfileRecommendation[]>([]);
+  const [profileSelectionSummary, setProfileSelectionSummary] = useState<ProfileSelectionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +82,7 @@ export function MissionControlPage() {
     setLoading(true);
     setError(null);
     try {
-      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary] = await Promise.all([
+      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary] = await Promise.all([
         getAutonomousSessions(),
         getAutonomousSessionSummary(),
         getAutonomousRunnerState(),
@@ -81,6 +97,11 @@ export function MissionControlPage() {
         getSessionTimingDecisions(),
         getSessionTimingRecommendations(),
         getSessionTimingSummary(),
+        getSessionContextReviews(),
+        getProfileSwitchDecisions(),
+        getProfileSwitchRecords(),
+        getProfileRecommendations(),
+        getProfileSelectionSummary(),
       ]);
       setSessions(loadedSessions);
       setSummary(loadedSummary);
@@ -96,6 +117,11 @@ export function MissionControlPage() {
       setTimingDecisions(loadedTimingDecisions);
       setTimingRecommendations(loadedTimingRecommendations);
       setTimingSummary(loadedTimingSummary);
+      setContextReviews(loadedContextReviews);
+      setProfileSwitchDecisions(loadedProfileSwitchDecisions);
+      setProfileSwitchRecords(loadedProfileSwitchRecords);
+      setProfileRecommendations(loadedProfileRecommendations);
+      setProfileSelectionSummary(loadedProfileSelectionSummary);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load autonomous heartbeat runner state.');
     } finally {
@@ -143,6 +169,36 @@ export function MissionControlPage() {
             <div><strong>Pause recommended:</strong> {timingSummary?.summary.pause_recommended ?? 0}</div>
             <div><strong>Stop recommended:</strong> {timingSummary?.summary.stop_recommended ?? 0}</div>
           </div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Adaptive session profiles" title="Context-driven profile switching" description="Conservative local-first profile selection layer. It recommends or applies schedule profile shifts without replacing timing policy or heartbeat authorities. Paper-only and no live execution.">
+          <div className="button-row">
+            <button type="button" className="primary-button" onClick={async () => { await runProfileSelectionReview(); await load(); }}>Run profile selection review</button>
+          </div>
+          <div className="system-metadata-grid">
+            <div><strong>Sessions reviewed:</strong> {profileSelectionSummary?.summary.sessions_reviewed ?? 0}</div>
+            <div><strong>Keep current:</strong> {profileSelectionSummary?.summary.keep_current ?? 0}</div>
+            <div><strong>Switch recommended:</strong> {profileSelectionSummary?.summary.switch_recommended ?? 0}</div>
+            <div><strong>Switched:</strong> {profileSelectionSummary?.summary.switched ?? 0}</div>
+            <div><strong>Blocked:</strong> {profileSelectionSummary?.summary.blocked ?? 0}</div>
+            <div><strong>Manual review:</strong> {profileSelectionSummary?.summary.manual_review ?? 0}</div>
+          </div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Adaptive session profiles" title="Context reviews" description="Per-session context posture used to decide whether to hold or switch profile.">
+          <ul>{contextReviews.slice(0, 10).map((review) => <li key={review.id}><strong>session={review.linked_session}</strong> profile={review.linked_current_profile ?? 'n/a'} portfolio={review.portfolio_pressure_state} runtime={review.runtime_posture} safety={review.safety_posture} signal={review.signal_pressure_state} activity={review.activity_state} status={review.context_status} summary={review.context_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Adaptive session profiles" title="Switch decisions" description="Transparent keep/switch/manual/block decisions with source and target profiles.">
+          <ul>{profileSwitchDecisions.slice(0, 10).map((decision) => <li key={decision.id}><strong>{decision.decision_type}</strong> — session={decision.linked_session} from={decision.from_profile ?? 'n/a'} to={decision.to_profile ?? 'n/a'} status={decision.decision_status} summary={decision.decision_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Adaptive session profiles" title="Switch records" description="Audit trail of applied profile switches.">
+          <ul>{profileSwitchRecords.slice(0, 10).map((record) => <li key={record.id}><strong>{record.switch_status}</strong> — session={record.linked_session} previous={record.previous_profile ?? 'n/a'} applied={record.applied_profile} summary={record.switch_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Adaptive session profiles" title="Profile recommendations" description="Conservative rationale, blockers, and confidence for profile selection outcomes.">
+          <ul>{profileRecommendations.slice(0, 10).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — {recommendation.rationale} blockers=[{recommendation.blockers.join(', ')}] confidence={recommendation.confidence}</li>)}</ul>
         </SectionCard>
 
         <SectionCard eyebrow="Session timing policy" title="Schedule profiles" description="Reusable cadence profiles with explicit intervals and quiet/stop thresholds.">

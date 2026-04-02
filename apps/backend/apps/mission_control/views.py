@@ -16,6 +16,11 @@ from apps.mission_control.models import (
     AutonomousRunnerState,
     AutonomousRuntimeSession,
     AutonomousRuntimeTick,
+    AutonomousProfileRecommendation,
+    AutonomousProfileSelectionRun,
+    AutonomousProfileSwitchDecision,
+    AutonomousProfileSwitchRecord,
+    AutonomousSessionContextReview,
     AutonomousScheduleProfile,
     AutonomousSessionTimingSnapshot,
     AutonomousStopConditionEvaluation,
@@ -37,6 +42,11 @@ from apps.mission_control.serializers import (
     AutonomousRunnerStateSerializer,
     AutonomousRuntimeSessionSerializer,
     AutonomousRuntimeTickSerializer,
+    AutonomousProfileRecommendationSerializer,
+    AutonomousProfileSelectionRunSerializer,
+    AutonomousProfileSwitchDecisionSerializer,
+    AutonomousProfileSwitchRecordSerializer,
+    AutonomousSessionContextReviewSerializer,
     AutonomousScheduleProfileSerializer,
     AutonomousSessionTimingSnapshotSerializer,
     AutonomousStopConditionEvaluationSerializer,
@@ -46,6 +56,7 @@ from apps.mission_control.serializers import (
     AutonomousTimingDecisionSerializer,
     AutonomousTimingRecommendationSerializer,
     SessionTimingReviewRequestSerializer,
+    ProfileSelectionReviewRequestSerializer,
     AutonomousSessionRecommendationSerializer,
     AutonomousSessionStartRequestSerializer,
     AutonomousTickDispatchAttemptSerializer,
@@ -78,6 +89,11 @@ from apps.mission_control.services.session_heartbeat import (
     start_runner,
     stop_runner,
 )
+from apps.mission_control.services.session_profile_control import (
+    build_profile_selection_summary,
+    run_profile_selection_review,
+)
+from apps.mission_control.services.session_profile_control.profile_switch import apply_profile_switch_decision
 
 
 class MissionControlStatusView(APIView):
@@ -386,3 +402,66 @@ class ApplyScheduleProfileView(APIView):
             return Response({'detail': 'profile not found or inactive'}, status=status.HTTP_404_NOT_FOUND)
         apply_schedule_profile(session=session, profile=profile)
         return Response(AutonomousRuntimeSessionSerializer(session).data, status=status.HTTP_200_OK)
+
+
+class RunProfileSelectionReviewView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = ProfileSelectionReviewRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        run = run_profile_selection_review(
+            session_ids=payload.get('session_ids'),
+            apply_switches=payload.get('apply_switches', True),
+        )
+        return Response(AutonomousProfileSelectionRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class SessionContextReviewListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionContextReviewSerializer
+    queryset = AutonomousSessionContextReview.objects.select_related(
+        'linked_selection_run', 'linked_session', 'linked_current_profile', 'linked_latest_timing_snapshot'
+    ).order_by('-created_at', '-id')[:300]
+
+
+class ProfileSwitchDecisionListView(generics.ListAPIView):
+    serializer_class = AutonomousProfileSwitchDecisionSerializer
+    queryset = AutonomousProfileSwitchDecision.objects.select_related(
+        'linked_selection_run', 'linked_session', 'linked_context_review', 'from_profile', 'to_profile'
+    ).order_by('-created_at', '-id')[:300]
+
+
+class ProfileSwitchDecisionDetailView(generics.RetrieveAPIView):
+    serializer_class = AutonomousProfileSwitchDecisionSerializer
+    queryset = AutonomousProfileSwitchDecision.objects.select_related(
+        'linked_selection_run', 'linked_session', 'linked_context_review', 'from_profile', 'to_profile'
+    ).order_by('-created_at', '-id')
+
+
+class ProfileSwitchRecordListView(generics.ListAPIView):
+    serializer_class = AutonomousProfileSwitchRecordSerializer
+    queryset = AutonomousProfileSwitchRecord.objects.select_related(
+        'linked_selection_run', 'linked_session', 'linked_switch_decision', 'previous_profile', 'applied_profile'
+    ).order_by('-created_at', '-id')[:300]
+
+
+class ProfileRecommendationListView(generics.ListAPIView):
+    serializer_class = AutonomousProfileRecommendationSerializer
+    queryset = AutonomousProfileRecommendation.objects.select_related(
+        'target_session', 'target_context_review', 'target_switch_decision'
+    ).order_by('-created_at', '-id')[:300]
+
+
+class ProfileSelectionSummaryView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(build_profile_selection_summary(), status=status.HTTP_200_OK)
+
+
+class ApplyProfileSwitchDecisionView(APIView):
+    def post(self, request, decision_id: int, *args, **kwargs):
+        decision = get_object_or_404(AutonomousProfileSwitchDecision, pk=decision_id)
+        record = apply_profile_switch_decision(decision=decision, automatic=False)
+        payload = {
+            'decision': AutonomousProfileSwitchDecisionSerializer(decision).data,
+            'record': AutonomousProfileSwitchRecordSerializer(record).data if record else None,
+        }
+        return Response(payload, status=status.HTTP_200_OK)

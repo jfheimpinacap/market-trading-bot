@@ -54,4 +54,12 @@ urlpatterns = [
     path('session-timing-recommendations/', views.SessionTimingRecommendationListView.as_view(), name='session-timing-recommendations'),
     path('session-timing-summary/', views.SessionTimingSummaryView.as_view(), name='session-timing-summary'),
     path('apply-schedule-profile/<int:session_id>/', views.ApplyScheduleProfileView.as_view(), name='apply-schedule-profile'),
+    path('run-profile-selection-review/', views.RunProfileSelectionReviewView.as_view(), name='run-profile-selection-review'),
+    path('session-context-reviews/', views.SessionContextReviewListView.as_view(), name='session-context-reviews'),
+    path('profile-switch-decisions/', views.ProfileSwitchDecisionListView.as_view(), name='profile-switch-decisions'),
+    path('profile-switch-decisions/<int:pk>/', views.ProfileSwitchDecisionDetailView.as_view(), name='profile-switch-decision-detail'),
+    path('profile-switch-records/', views.ProfileSwitchRecordListView.as_view(), name='profile-switch-records'),
+    path('profile-recommendations/', views.ProfileRecommendationListView.as_view(), name='profile-recommendations'),
+    path('profile-selection-summary/', views.ProfileSelectionSummaryView.as_view(), name='profile-selection-summary'),
+    path('apply-profile-switch/<int:decision_id>/', views.ApplyProfileSwitchDecisionView.as_view(), name='apply-profile-switch'),
 ]

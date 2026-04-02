@@ -3320,3 +3320,31 @@ Mission control now ships a dedicated session timing policy sublayer (`apps/miss
 - emits `AutonomousStopConditionEvaluation` for conservative pause/stop governance.
 
 This extends the existing local heartbeat runner and keeps all execution paper-only and guardrail-first.
+
+## Mission control adaptive session profile control (new)
+
+`apps.mission_control` ahora incluye una subcapa `services/session_profile_control/` para seleccionar y cambiar perfiles de sesión según contexto operativo real, sin duplicar timing policy ni heartbeat runner.
+
+### Entidades
+- `AutonomousProfileSelectionRun`
+- `AutonomousSessionContextReview`
+- `AutonomousProfileSwitchDecision`
+- `AutonomousProfileSwitchRecord`
+- `AutonomousProfileRecommendation`
+
+### Servicios
+- `context_review.py`: evalúa portfolio/runtime/safety/signal/loss/activity por sesión.
+- `profile_switch.py`: decide keep/switch/manual/block con reglas transparentes y aplica switch conservador.
+- `recommendation.py`: emite recomendaciones auditables con rationale/reason_codes/confidence/blockers.
+- `run.py`: ejecuta batch review y publica resumen agregado.
+
+### API
+- `POST /api/mission-control/run-profile-selection-review/`
+- `GET /api/mission-control/session-context-reviews/`
+- `GET /api/mission-control/profile-switch-decisions/`
+- `GET /api/mission-control/profile-switch-records/`
+- `GET /api/mission-control/profile-recommendations/`
+- `GET /api/mission-control/profile-selection-summary/`
+- `POST /api/mission-control/apply-profile-switch/<decision_id>/` (manual opcional)
+
+Esta capa alimenta mejor la timing policy; no reemplaza runtime/policy/safety/portfolio authorities.

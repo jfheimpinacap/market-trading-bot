@@ -335,6 +335,77 @@ class AutonomousTimingRecommendationType(models.TextChoices):
     REQUIRE_MANUAL_TIMING_REVIEW = 'REQUIRE_MANUAL_TIMING_REVIEW', 'Require manual timing review'
 
 
+class AutonomousProfilePortfolioPressureState(models.TextChoices):
+    NORMAL = 'NORMAL', 'Normal'
+    CAUTION = 'CAUTION', 'Caution'
+    THROTTLED = 'THROTTLED', 'Throttled'
+    BLOCK_NEW_ENTRIES = 'BLOCK_NEW_ENTRIES', 'Block new entries'
+
+
+class AutonomousProfileRuntimePosture(models.TextChoices):
+    NORMAL = 'NORMAL', 'Normal'
+    CAUTION = 'CAUTION', 'Caution'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousProfileSafetyPosture(models.TextChoices):
+    NORMAL = 'NORMAL', 'Normal'
+    CAUTION = 'CAUTION', 'Caution'
+    HARD_BLOCK = 'HARD_BLOCK', 'Hard block'
+
+
+class AutonomousRecentLossState(models.TextChoices):
+    NONE = 'NONE', 'None'
+    RECENT_LOSS = 'RECENT_LOSS', 'Recent loss'
+    REPEATED_LOSS = 'REPEATED_LOSS', 'Repeated loss'
+
+
+class AutonomousProfileActivityState(models.TextChoices):
+    ACTIVE = 'ACTIVE', 'Active'
+    LOW_ACTIVITY = 'LOW_ACTIVITY', 'Low activity'
+    REPEATED_NO_ACTION = 'REPEATED_NO_ACTION', 'Repeated no action'
+    REPEATED_BLOCKED = 'REPEATED_BLOCKED', 'Repeated blocked'
+
+
+class AutonomousProfileContextStatus(models.TextChoices):
+    STABLE = 'STABLE', 'Stable'
+    NEEDS_MORE_CONSERVATIVE_PROFILE = 'NEEDS_MORE_CONSERVATIVE_PROFILE', 'Needs more conservative profile'
+    NEEDS_MORE_ACTIVE_PROFILE = 'NEEDS_MORE_ACTIVE_PROFILE', 'Needs more active profile'
+    HOLD_CURRENT = 'HOLD_CURRENT', 'Hold current'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousProfileSwitchDecisionType(models.TextChoices):
+    KEEP_CURRENT_PROFILE = 'KEEP_CURRENT_PROFILE', 'Keep current profile'
+    SWITCH_TO_CONSERVATIVE_QUIET = 'SWITCH_TO_CONSERVATIVE_QUIET', 'Switch to conservative quiet'
+    SWITCH_TO_MONITOR_HEAVY = 'SWITCH_TO_MONITOR_HEAVY', 'Switch to monitor heavy'
+    SWITCH_TO_BALANCED_LOCAL = 'SWITCH_TO_BALANCED_LOCAL', 'Switch to balanced local'
+    REQUIRE_MANUAL_PROFILE_REVIEW = 'REQUIRE_MANUAL_PROFILE_REVIEW', 'Require manual profile review'
+    BLOCK_PROFILE_SWITCH = 'BLOCK_PROFILE_SWITCH', 'Block profile switch'
+
+
+class AutonomousProfileSwitchDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousProfileSwitchStatus(models.TextChoices):
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousProfileRecommendationType(models.TextChoices):
+    KEEP_BALANCED_PROFILE = 'KEEP_BALANCED_PROFILE', 'Keep balanced profile'
+    SHIFT_TO_CONSERVATIVE_QUIET_PROFILE = 'SHIFT_TO_CONSERVATIVE_QUIET_PROFILE', 'Shift to conservative quiet profile'
+    SHIFT_TO_MONITOR_HEAVY_PROFILE = 'SHIFT_TO_MONITOR_HEAVY_PROFILE', 'Shift to monitor heavy profile'
+    RESTORE_BALANCED_PROFILE = 'RESTORE_BALANCED_PROFILE', 'Restore balanced profile'
+    REQUIRE_MANUAL_PROFILE_REVIEW = 'REQUIRE_MANUAL_PROFILE_REVIEW', 'Require manual profile review'
+    BLOCK_AUTOMATIC_PROFILE_SWITCH = 'BLOCK_AUTOMATIC_PROFILE_SWITCH', 'Block automatic profile switch'
+
+
 class AutonomousScheduleProfile(TimeStampedModel):
     slug = models.SlugField(max_length=64, unique=True)
     display_name = models.CharField(max_length=120)
@@ -638,6 +709,195 @@ class AutonomousTimingRecommendation(TimeStampedModel):
     )
     target_timing_decision = models.ForeignKey(
         AutonomousTimingDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousProfileSelectionRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_session_count = models.PositiveIntegerField(default=0)
+    keep_current_profile_count = models.PositiveIntegerField(default=0)
+    switch_recommended_count = models.PositiveIntegerField(default=0)
+    switched_count = models.PositiveIntegerField(default=0)
+    blocked_switch_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class AutonomousSessionContextReview(TimeStampedModel):
+    linked_selection_run = models.ForeignKey(
+        AutonomousProfileSelectionRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='context_reviews',
+    )
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='context_reviews')
+    linked_current_profile = models.ForeignKey(
+        AutonomousScheduleProfile,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='context_reviews',
+    )
+    linked_latest_timing_snapshot = models.ForeignKey(
+        AutonomousSessionTimingSnapshot,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='context_reviews',
+    )
+    portfolio_pressure_state = models.CharField(
+        max_length=20,
+        choices=AutonomousProfilePortfolioPressureState.choices,
+        default=AutonomousProfilePortfolioPressureState.NORMAL,
+    )
+    runtime_posture = models.CharField(
+        max_length=12,
+        choices=AutonomousProfileRuntimePosture.choices,
+        default=AutonomousProfileRuntimePosture.NORMAL,
+    )
+    safety_posture = models.CharField(
+        max_length=12,
+        choices=AutonomousProfileSafetyPosture.choices,
+        default=AutonomousProfileSafetyPosture.NORMAL,
+    )
+    signal_pressure_state = models.CharField(
+        max_length=12,
+        choices=AutonomousSignalPressureState.choices,
+        default=AutonomousSignalPressureState.NORMAL,
+    )
+    recent_loss_state = models.CharField(
+        max_length=16,
+        choices=AutonomousRecentLossState.choices,
+        default=AutonomousRecentLossState.NONE,
+    )
+    activity_state = models.CharField(
+        max_length=20,
+        choices=AutonomousProfileActivityState.choices,
+        default=AutonomousProfileActivityState.ACTIVE,
+    )
+    context_status = models.CharField(
+        max_length=40,
+        choices=AutonomousProfileContextStatus.choices,
+        default=AutonomousProfileContextStatus.STABLE,
+    )
+    context_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousProfileSwitchDecision(TimeStampedModel):
+    linked_selection_run = models.ForeignKey(
+        AutonomousProfileSelectionRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='switch_decisions',
+    )
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='profile_switch_decisions')
+    linked_context_review = models.ForeignKey(
+        AutonomousSessionContextReview,
+        on_delete=models.CASCADE,
+        related_name='switch_decisions',
+    )
+    from_profile = models.ForeignKey(
+        AutonomousScheduleProfile,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='switch_decisions_from',
+    )
+    to_profile = models.ForeignKey(
+        AutonomousScheduleProfile,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='switch_decisions_to',
+    )
+    decision_type = models.CharField(max_length=40, choices=AutonomousProfileSwitchDecisionType.choices)
+    decision_status = models.CharField(
+        max_length=12,
+        choices=AutonomousProfileSwitchDecisionStatus.choices,
+        default=AutonomousProfileSwitchDecisionStatus.PROPOSED,
+    )
+    decision_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousProfileSwitchRecord(TimeStampedModel):
+    linked_selection_run = models.ForeignKey(
+        AutonomousProfileSelectionRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='switch_records',
+    )
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='profile_switch_records')
+    linked_switch_decision = models.ForeignKey(
+        AutonomousProfileSwitchDecision,
+        on_delete=models.CASCADE,
+        related_name='switch_records',
+    )
+    previous_profile = models.ForeignKey(
+        AutonomousScheduleProfile,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='switch_records_from',
+    )
+    applied_profile = models.ForeignKey(
+        AutonomousScheduleProfile,
+        on_delete=models.CASCADE,
+        related_name='switch_records_to',
+    )
+    switch_status = models.CharField(max_length=12, choices=AutonomousProfileSwitchStatus.choices)
+    switch_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousProfileRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=44, choices=AutonomousProfileRecommendationType.choices)
+    target_session = models.ForeignKey(
+        AutonomousRuntimeSession,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='profile_recommendations',
+    )
+    target_context_review = models.ForeignKey(
+        AutonomousSessionContextReview,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    target_switch_decision = models.ForeignKey(
+        AutonomousProfileSwitchDecision,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,

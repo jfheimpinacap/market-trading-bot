@@ -382,3 +382,96 @@ export type SessionTimingSummary = {
   latest_recommendation_id: number | null;
   extra?: Record<string, unknown>;
 };
+
+export type AutonomousProfileSelectionRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_session_count: number;
+  keep_current_profile_count: number;
+  switch_recommended_count: number;
+  switched_count: number;
+  blocked_switch_count: number;
+  recommendation_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousSessionContextReview = {
+  id: number;
+  linked_selection_run: number | null;
+  linked_session: number;
+  linked_current_profile: number | null;
+  linked_latest_timing_snapshot: number | null;
+  portfolio_pressure_state: 'NORMAL' | 'CAUTION' | 'THROTTLED' | 'BLOCK_NEW_ENTRIES';
+  runtime_posture: 'NORMAL' | 'CAUTION' | 'BLOCKED';
+  safety_posture: 'NORMAL' | 'CAUTION' | 'HARD_BLOCK';
+  signal_pressure_state: 'HIGH' | 'NORMAL' | 'LOW' | 'QUIET';
+  recent_loss_state: 'NONE' | 'RECENT_LOSS' | 'REPEATED_LOSS';
+  activity_state: 'ACTIVE' | 'LOW_ACTIVITY' | 'REPEATED_NO_ACTION' | 'REPEATED_BLOCKED';
+  context_status: 'STABLE' | 'NEEDS_MORE_CONSERVATIVE_PROFILE' | 'NEEDS_MORE_ACTIVE_PROFILE' | 'HOLD_CURRENT' | 'BLOCKED';
+  context_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousProfileSwitchDecision = {
+  id: number;
+  linked_selection_run: number | null;
+  linked_session: number;
+  linked_context_review: number;
+  from_profile: number | null;
+  to_profile: number | null;
+  decision_type: string;
+  decision_status: string;
+  decision_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousProfileSwitchRecord = {
+  id: number;
+  linked_selection_run: number | null;
+  linked_session: number;
+  linked_switch_decision: number;
+  previous_profile: number | null;
+  applied_profile: number;
+  switch_status: string;
+  switch_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousProfileRecommendation = {
+  id: number;
+  recommendation_type: string;
+  target_session: number | null;
+  target_context_review: number | null;
+  target_switch_decision: number | null;
+  rationale: string;
+  reason_codes: string[];
+  confidence: number;
+  blockers: string[];
+  created_at: string;
+};
+
+export type ProfileSelectionSummary = {
+  latest_run: number | null;
+  summary: {
+    sessions_reviewed: number;
+    keep_current: number;
+    switch_recommended: number;
+    switched: number;
+    blocked: number;
+    manual_review: number;
+  };
+  totals: {
+    runs: number;
+    context_reviews: number;
+    switch_decisions: number;
+    switch_records: number;
+  };
+  extra?: Record<string, unknown>;
+};
