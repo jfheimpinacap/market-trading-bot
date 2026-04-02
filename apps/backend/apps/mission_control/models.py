@@ -910,3 +910,230 @@ class AutonomousProfileRecommendation(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at', '-id']
+
+
+class AutonomousSessionHealthStatus(models.TextChoices):
+    HEALTHY = 'HEALTHY', 'Healthy'
+    CAUTION = 'CAUTION', 'Caution'
+    DEGRADED = 'DEGRADED', 'Degraded'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    STALLED = 'STALLED', 'Stalled'
+
+
+class AutonomousIncidentPressureState(models.TextChoices):
+    NONE = 'NONE', 'None'
+    CAUTION = 'CAUTION', 'Caution'
+    HIGH = 'HIGH', 'High'
+
+
+class AutonomousSessionAnomalyType(models.TextChoices):
+    REPEATED_FAILED_TICKS = 'REPEATED_FAILED_TICKS', 'Repeated failed ticks'
+    REPEATED_BLOCKED_TICKS = 'REPEATED_BLOCKED_TICKS', 'Repeated blocked ticks'
+    RUNNER_SESSION_MISMATCH = 'RUNNER_SESSION_MISMATCH', 'Runner/session mismatch'
+    STALE_SESSION_NO_PROGRESS = 'STALE_SESSION_NO_PROGRESS', 'Stale session no progress'
+    PERSISTENT_PAUSE = 'PERSISTENT_PAUSE', 'Persistent pause'
+    SAFETY_OR_RUNTIME_PRESSURE = 'SAFETY_OR_RUNTIME_PRESSURE', 'Safety or runtime pressure'
+    INCIDENT_ESCALATION_PRESSURE = 'INCIDENT_ESCALATION_PRESSURE', 'Incident escalation pressure'
+    POST_LOSS_STABILIZATION_REQUIRED = 'POST_LOSS_STABILIZATION_REQUIRED', 'Post-loss stabilization required'
+
+
+class AutonomousSessionAnomalySeverity(models.TextChoices):
+    INFO = 'INFO', 'Info'
+    CAUTION = 'CAUTION', 'Caution'
+    HIGH = 'HIGH', 'High'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class AutonomousSessionInterventionDecisionType(models.TextChoices):
+    KEEP_RUNNING = 'KEEP_RUNNING', 'Keep running'
+    PAUSE_SESSION = 'PAUSE_SESSION', 'Pause session'
+    RESUME_SESSION = 'RESUME_SESSION', 'Resume session'
+    STOP_SESSION = 'STOP_SESSION', 'Stop session'
+    REQUIRE_MANUAL_REVIEW = 'REQUIRE_MANUAL_REVIEW', 'Require manual review'
+    ESCALATE_TO_INCIDENT_REVIEW = 'ESCALATE_TO_INCIDENT_REVIEW', 'Escalate to incident review'
+
+
+class AutonomousSessionInterventionDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousSessionInterventionStatus(models.TextChoices):
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    FAILED = 'FAILED', 'Failed'
+
+
+class AutonomousSessionHealthRecommendationType(models.TextChoices):
+    KEEP_SESSION_RUNNING = 'KEEP_SESSION_RUNNING', 'Keep session running'
+    PAUSE_FOR_STABILIZATION = 'PAUSE_FOR_STABILIZATION', 'Pause for stabilization'
+    STOP_FOR_PERSISTENT_BLOCKS = 'STOP_FOR_PERSISTENT_BLOCKS', 'Stop for persistent blocks'
+    RESUME_AFTER_RECOVERY = 'RESUME_AFTER_RECOVERY', 'Resume after recovery'
+    REQUIRE_MANUAL_HEALTH_REVIEW = 'REQUIRE_MANUAL_HEALTH_REVIEW', 'Require manual health review'
+    ESCALATE_TO_INCIDENT_LAYER = 'ESCALATE_TO_INCIDENT_LAYER', 'Escalate to incident layer'
+
+
+class AutonomousSessionHealthRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_session_count = models.PositiveIntegerField(default=0)
+    healthy_count = models.PositiveIntegerField(default=0)
+    anomaly_count = models.PositiveIntegerField(default=0)
+    pause_recommended_count = models.PositiveIntegerField(default=0)
+    stop_recommended_count = models.PositiveIntegerField(default=0)
+    resume_recommended_count = models.PositiveIntegerField(default=0)
+    manual_review_count = models.PositiveIntegerField(default=0)
+    intervention_applied_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class AutonomousSessionHealthSnapshot(TimeStampedModel):
+    linked_health_run = models.ForeignKey(
+        AutonomousSessionHealthRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='snapshots',
+    )
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='health_snapshots')
+    linked_runner_state = models.ForeignKey(
+        AutonomousRunnerState,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='health_snapshots',
+    )
+    linked_latest_tick = models.ForeignKey(
+        AutonomousRuntimeTick,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='health_snapshots',
+    )
+    linked_latest_heartbeat_decision = models.ForeignKey(
+        AutonomousHeartbeatDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='health_snapshots',
+    )
+    linked_latest_timing_snapshot = models.ForeignKey(
+        AutonomousSessionTimingSnapshot,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='health_snapshots',
+    )
+    session_health_status = models.CharField(max_length=12, choices=AutonomousSessionHealthStatus.choices, default=AutonomousSessionHealthStatus.HEALTHY)
+    consecutive_failed_ticks = models.PositiveIntegerField(default=0)
+    consecutive_blocked_ticks = models.PositiveIntegerField(default=0)
+    consecutive_no_progress_ticks = models.PositiveIntegerField(default=0)
+    has_active_cooldown = models.BooleanField(default=False)
+    runner_session_mismatch = models.BooleanField(default=False)
+    recent_dispatch_count = models.PositiveIntegerField(default=0)
+    recent_outcome_close_count = models.PositiveIntegerField(default=0)
+    recent_loss_count = models.PositiveIntegerField(default=0)
+    incident_pressure_state = models.CharField(
+        max_length=12,
+        choices=AutonomousIncidentPressureState.choices,
+        default=AutonomousIncidentPressureState.NONE,
+    )
+    health_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousSessionAnomaly(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='health_anomalies')
+    linked_health_snapshot = models.ForeignKey(
+        AutonomousSessionHealthSnapshot,
+        on_delete=models.CASCADE,
+        related_name='anomalies',
+    )
+    anomaly_type = models.CharField(max_length=40, choices=AutonomousSessionAnomalyType.choices)
+    anomaly_severity = models.CharField(max_length=12, choices=AutonomousSessionAnomalySeverity.choices, default=AutonomousSessionAnomalySeverity.INFO)
+    anomaly_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousSessionInterventionDecision(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='health_intervention_decisions')
+    linked_health_snapshot = models.ForeignKey(
+        AutonomousSessionHealthSnapshot,
+        on_delete=models.CASCADE,
+        related_name='intervention_decisions',
+    )
+    decision_type = models.CharField(max_length=36, choices=AutonomousSessionInterventionDecisionType.choices)
+    decision_status = models.CharField(
+        max_length=12,
+        choices=AutonomousSessionInterventionDecisionStatus.choices,
+        default=AutonomousSessionInterventionDecisionStatus.PROPOSED,
+    )
+    auto_applicable = models.BooleanField(default=False)
+    decision_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousSessionInterventionRecord(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='health_intervention_records')
+    linked_intervention_decision = models.ForeignKey(
+        AutonomousSessionInterventionDecision,
+        on_delete=models.CASCADE,
+        related_name='records',
+    )
+    intervention_status = models.CharField(max_length=12, choices=AutonomousSessionInterventionStatus.choices)
+    intervention_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousSessionHealthRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=40, choices=AutonomousSessionHealthRecommendationType.choices)
+    target_session = models.ForeignKey(
+        AutonomousRuntimeSession,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='health_recommendations',
+    )
+    target_health_snapshot = models.ForeignKey(
+        AutonomousSessionHealthSnapshot,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    target_intervention_decision = models.ForeignKey(
+        AutonomousSessionInterventionDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']

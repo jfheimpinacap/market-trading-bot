@@ -66,6 +66,35 @@ This layer extends existing mission control and autonomous trader orchestration;
 
 This layer only automates due-tick progression of existing autonomous sessions and preserves paper-only, local-first boundaries.
 
+## Mission control session health governance (new)
+
+`apps.mission_control` now includes a conservative health/anomaly/intervention layer for autonomous sessions:
+
+- service split:
+  - `services/session_health/health_snapshot.py`
+  - `services/session_health/anomaly.py`
+  - `services/session_health/intervention.py`
+  - `services/session_health/recommendation.py`
+  - `services/session_health/run.py`
+- auditable entities:
+  - `AutonomousSessionHealthRun`
+  - `AutonomousSessionHealthSnapshot`
+  - `AutonomousSessionAnomaly`
+  - `AutonomousSessionInterventionDecision`
+  - `AutonomousSessionInterventionRecord`
+  - `AutonomousSessionHealthRecommendation`
+- API:
+  - `POST /api/mission-control/run-session-health-review/`
+  - `GET /api/mission-control/session-health-runs/`
+  - `GET /api/mission-control/session-health-snapshots/`
+  - `GET /api/mission-control/session-anomalies/`
+  - `GET /api/mission-control/session-intervention-decisions/`
+  - `GET /api/mission-control/session-health-recommendations/`
+  - `GET /api/mission-control/session-health-summary/`
+  - `POST /api/mission-control/apply-session-intervention/<decision_id>/`
+
+This layer does not replace session runtime control, heartbeat runner, timing policy, runtime governor, safety guard, or incident commander; it adds explicit health governance above them.
+
 ## Precedent-aware backend layer (new)
 
 - Added `AgentPrecedentUse` for auditable agent-memory usage records.

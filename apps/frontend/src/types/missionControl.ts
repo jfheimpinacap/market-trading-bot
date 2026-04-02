@@ -475,3 +475,105 @@ export type ProfileSelectionSummary = {
   };
   extra?: Record<string, unknown>;
 };
+
+export type AutonomousSessionHealthRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_session_count: number;
+  healthy_count: number;
+  anomaly_count: number;
+  pause_recommended_count: number;
+  stop_recommended_count: number;
+  resume_recommended_count: number;
+  manual_review_count: number;
+  intervention_applied_count: number;
+  recommendation_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousSessionHealthSnapshot = {
+  id: number;
+  linked_health_run: number | null;
+  linked_session: number;
+  linked_runner_state: number | null;
+  linked_latest_tick: number | null;
+  linked_latest_heartbeat_decision: number | null;
+  linked_latest_timing_snapshot: number | null;
+  session_health_status: 'HEALTHY' | 'CAUTION' | 'DEGRADED' | 'BLOCKED' | 'STALLED';
+  consecutive_failed_ticks: number;
+  consecutive_blocked_ticks: number;
+  consecutive_no_progress_ticks: number;
+  has_active_cooldown: boolean;
+  runner_session_mismatch: boolean;
+  recent_dispatch_count: number;
+  recent_outcome_close_count: number;
+  recent_loss_count: number;
+  incident_pressure_state: 'NONE' | 'CAUTION' | 'HIGH';
+  health_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousSessionAnomaly = {
+  id: number;
+  linked_session: number;
+  linked_health_snapshot: number;
+  anomaly_type: string;
+  anomaly_severity: 'INFO' | 'CAUTION' | 'HIGH' | 'CRITICAL';
+  anomaly_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousSessionInterventionDecision = {
+  id: number;
+  linked_session: number;
+  linked_health_snapshot: number;
+  decision_type: 'KEEP_RUNNING' | 'PAUSE_SESSION' | 'RESUME_SESSION' | 'STOP_SESSION' | 'REQUIRE_MANUAL_REVIEW' | 'ESCALATE_TO_INCIDENT_REVIEW';
+  decision_status: 'PROPOSED' | 'APPLIED' | 'SKIPPED' | 'BLOCKED';
+  auto_applicable: boolean;
+  decision_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousSessionHealthRecommendation = {
+  id: number;
+  recommendation_type: string;
+  target_session: number | null;
+  target_health_snapshot: number | null;
+  target_intervention_decision: number | null;
+  rationale: string;
+  reason_codes: string[];
+  confidence: number;
+  blockers: string[];
+  created_at: string;
+};
+
+export type SessionHealthSummary = {
+  latest_run_id: number | null;
+  summary: {
+    sessions_reviewed: number;
+    healthy: number;
+    anomalies: number;
+    pause_recommended: number;
+    stop_recommended: number;
+    resume_recommended: number;
+    manual_review_or_escalation: number;
+    interventions_applied: number;
+  };
+  totals: {
+    health_runs: number;
+    snapshots: number;
+    decisions: number;
+    records: number;
+    recommendations: number;
+  };
+  latest_session_id: number | null;
+  decision_breakdown: Record<string, number>;
+};

@@ -17,7 +17,12 @@ import {
   getProfileSwitchDecisions,
   getProfileSwitchRecords,
   getScheduleProfiles,
+  getSessionAnomalies,
   getSessionContextReviews,
+  getSessionHealthRecommendations,
+  getSessionHealthSnapshots,
+  getSessionHealthSummary,
+  getSessionInterventionDecisions,
   getSessionTimingDecisions,
   getSessionTimingRecommendations,
   getSessionTimingSnapshots,
@@ -26,6 +31,7 @@ import {
   pauseAutonomousRunner,
   resumeAutonomousRunner,
   runSessionTimingReview,
+  runSessionHealthReview,
   runProfileSelectionReview,
   runAutonomousHeartbeat,
   startAutonomousRunner,
@@ -38,11 +44,15 @@ import type {
   AutonomousHeartbeatSummary,
   AutonomousRunnerState,
   AutonomousRuntimeSession,
+  AutonomousSessionAnomaly,
   AutonomousProfileRecommendation,
   AutonomousProfileSwitchDecision,
   AutonomousProfileSwitchRecord,
   AutonomousScheduleProfile,
   AutonomousSessionContextReview,
+  AutonomousSessionHealthRecommendation,
+  AutonomousSessionHealthSnapshot,
+  AutonomousSessionInterventionDecision,
   AutonomousSessionTimingSnapshot,
   AutonomousStopConditionEvaluation,
   AutonomousTimingDecision,
@@ -50,6 +60,7 @@ import type {
   AutonomousSessionSummary,
   SessionTimingSummary,
   ProfileSelectionSummary,
+  SessionHealthSummary,
   AutonomousTickDispatchAttempt,
 } from '../../types/missionControl';
 
@@ -73,6 +84,11 @@ export function MissionControlPage() {
   const [profileSwitchRecords, setProfileSwitchRecords] = useState<AutonomousProfileSwitchRecord[]>([]);
   const [profileRecommendations, setProfileRecommendations] = useState<AutonomousProfileRecommendation[]>([]);
   const [profileSelectionSummary, setProfileSelectionSummary] = useState<ProfileSelectionSummary | null>(null);
+  const [healthSnapshots, setHealthSnapshots] = useState<AutonomousSessionHealthSnapshot[]>([]);
+  const [healthAnomalies, setHealthAnomalies] = useState<AutonomousSessionAnomaly[]>([]);
+  const [healthDecisions, setHealthDecisions] = useState<AutonomousSessionInterventionDecision[]>([]);
+  const [healthRecommendations, setHealthRecommendations] = useState<AutonomousSessionHealthRecommendation[]>([]);
+  const [healthSummary, setHealthSummary] = useState<SessionHealthSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,7 +98,7 @@ export function MissionControlPage() {
     setLoading(true);
     setError(null);
     try {
-      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary] = await Promise.all([
+      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary] = await Promise.all([
         getAutonomousSessions(),
         getAutonomousSessionSummary(),
         getAutonomousRunnerState(),
@@ -102,6 +118,11 @@ export function MissionControlPage() {
         getProfileSwitchRecords(),
         getProfileRecommendations(),
         getProfileSelectionSummary(),
+        getSessionHealthSnapshots(),
+        getSessionAnomalies(),
+        getSessionInterventionDecisions(),
+        getSessionHealthRecommendations(),
+        getSessionHealthSummary(),
       ]);
       setSessions(loadedSessions);
       setSummary(loadedSummary);
@@ -122,6 +143,11 @@ export function MissionControlPage() {
       setProfileSwitchRecords(loadedProfileSwitchRecords);
       setProfileRecommendations(loadedProfileRecommendations);
       setProfileSelectionSummary(loadedProfileSelectionSummary);
+      setHealthSnapshots(loadedHealthSnapshots);
+      setHealthAnomalies(loadedHealthAnomalies);
+      setHealthDecisions(loadedHealthDecisions);
+      setHealthRecommendations(loadedHealthRecommendations);
+      setHealthSummary(loadedHealthSummary);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load autonomous heartbeat runner state.');
     } finally {
@@ -199,6 +225,38 @@ export function MissionControlPage() {
 
         <SectionCard eyebrow="Adaptive session profiles" title="Profile recommendations" description="Conservative rationale, blockers, and confidence for profile selection outcomes.">
           <ul>{profileRecommendations.slice(0, 10).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — {recommendation.rationale} blockers=[{recommendation.blockers.join(', ')}] confidence={recommendation.confidence}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session health & interventions" title="Operational health governance" description="Health monitor for local-first paper sessions. Conservative self-healing only, with explicit guardrails and no live execution.">
+          <div className="button-row">
+            <button type="button" className="primary-button" onClick={async () => { await runSessionHealthReview(); await load(); }}>Run health review</button>
+          </div>
+          <div className="system-metadata-grid">
+            <div><strong>Sessions reviewed:</strong> {healthSummary?.summary.sessions_reviewed ?? 0}</div>
+            <div><strong>Healthy:</strong> {healthSummary?.summary.healthy ?? 0}</div>
+            <div><strong>Anomalies:</strong> {healthSummary?.summary.anomalies ?? 0}</div>
+            <div><strong>Pause recommended:</strong> {healthSummary?.summary.pause_recommended ?? 0}</div>
+            <div><strong>Stop recommended:</strong> {healthSummary?.summary.stop_recommended ?? 0}</div>
+            <div><strong>Resume recommended:</strong> {healthSummary?.summary.resume_recommended ?? 0}</div>
+            <div><strong>Manual review/escalation:</strong> {healthSummary?.summary.manual_review_or_escalation ?? 0}</div>
+            <div><strong>Interventions applied:</strong> {healthSummary?.summary.interventions_applied ?? 0}</div>
+          </div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session health & interventions" title="Health snapshots" description="Per-session operational health snapshot and reason codes.">
+          <ul>{healthSnapshots.slice(0, 12).map((snapshot) => <li key={snapshot.id}><strong>{snapshot.session_health_status}</strong> — session={snapshot.linked_session} failed={snapshot.consecutive_failed_ticks} blocked={snapshot.consecutive_blocked_ticks} no_progress={snapshot.consecutive_no_progress_ticks} cooldown={String(snapshot.has_active_cooldown)} mismatch={String(snapshot.runner_session_mismatch)} pressure={snapshot.incident_pressure_state} summary={snapshot.health_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session health & interventions" title="Anomalies" description="Explicit anomaly detection output with severity levels.">
+          <ul>{healthAnomalies.slice(0, 12).map((anomaly) => <li key={anomaly.id}><strong>{anomaly.anomaly_type}</strong> — session={anomaly.linked_session} severity={anomaly.anomaly_severity} summary={anomaly.anomaly_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session health & interventions" title="Intervention decisions" description="Conservative keep/pause/resume/stop/manual/escalate decisions.">
+          <ul>{healthDecisions.slice(0, 12).map((decision) => <li key={decision.id}><strong>{decision.decision_type}</strong> — session={decision.linked_session} status={decision.decision_status} auto={String(decision.auto_applicable)} summary={decision.decision_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session health & interventions" title="Health recommendations" description="Recommendations with rationale, blockers, and confidence.">
+          <ul>{healthRecommendations.slice(0, 12).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — {recommendation.rationale} blockers=[{recommendation.blockers.join(', ')}] confidence={recommendation.confidence}</li>)}</ul>
         </SectionCard>
 
         <SectionCard eyebrow="Session timing policy" title="Schedule profiles" description="Reusable cadence profiles with explicit intervals and quiet/stop thresholds.">

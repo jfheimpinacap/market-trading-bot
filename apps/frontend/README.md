@@ -27,6 +27,21 @@ La UI extiende capacidades existentes de mission control/autonomous runtime sin 
 
 Todo sigue paper-only, local-first, cadence/cooldown-aware, y sin live execution.
 
+## Mission control session health & interventions UX (new)
+
+`/mission-control` ahora también muestra una sección explícita de **Session Health & Interventions**:
+
+- acción manual: `Run health review`
+- summary cards: reviewed/healthy/degraded/blocked/pause/stop/manual-escalation/interventions
+- paneles técnicos auditables:
+  - health snapshots
+  - anomalies
+  - intervention decisions
+  - health recommendations
+- copy explícita de límites: local-first, paper-only, conservative self-healing, no live execution
+
+Esta capa no reemplaza runner/timing/session-control: los fortalece con monitoreo y gobernanza de salud operacional.
+
 ## Precedent-aware UX (new)
 
 La UI ahora expone señales de memoria histórica sin sobrecargar pantallas:
