@@ -577,3 +577,99 @@ export type SessionHealthSummary = {
   latest_session_id: number | null;
   decision_breakdown: Record<string, number>;
 };
+
+export type AutonomousSessionRecoveryRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_session_count: number;
+  ready_to_resume_count: number;
+  keep_paused_count: number;
+  manual_review_count: number;
+  stop_recommended_count: number;
+  incident_escalation_count: number;
+  recommendation_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousSessionRecoverySnapshot = {
+  id: number;
+  linked_recovery_run: number | null;
+  linked_session: number;
+  linked_latest_health_snapshot: number | null;
+  linked_latest_intervention_decision: number | null;
+  linked_latest_intervention_record: number | null;
+  linked_latest_timing_snapshot: number | null;
+  recovery_status: 'RECOVERED' | 'PARTIALLY_RECOVERED' | 'STILL_BLOCKED' | 'STABILIZING' | 'UNRECOVERABLE';
+  safety_block_cleared: boolean;
+  runtime_block_cleared: boolean;
+  incident_pressure_cleared: boolean;
+  portfolio_pressure_state: 'NORMAL' | 'CAUTION' | 'THROTTLED' | 'BLOCK_NEW_ENTRIES';
+  cooldown_active: boolean;
+  recent_failed_ticks: number;
+  recent_blocked_ticks: number;
+  recent_successful_ticks: number;
+  recovery_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousRecoveryBlocker = {
+  id: number;
+  linked_session: number;
+  linked_recovery_snapshot: number;
+  blocker_type: string;
+  blocker_severity: 'INFO' | 'CAUTION' | 'HIGH' | 'CRITICAL';
+  blocker_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousResumeDecision = {
+  id: number;
+  linked_session: number;
+  linked_recovery_snapshot: number;
+  decision_type: 'KEEP_PAUSED' | 'READY_TO_RESUME' | 'RESUME_IN_MONITOR_ONLY_MODE' | 'REQUIRE_MANUAL_RECOVERY_REVIEW' | 'STOP_SESSION_PERMANENTLY' | 'ESCALATE_TO_INCIDENT_REVIEW';
+  decision_status: 'PROPOSED' | 'SKIPPED' | 'BLOCKED';
+  auto_applicable: boolean;
+  decision_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AutonomousSessionRecoveryRecommendation = {
+  id: number;
+  recommendation_type: string;
+  target_session: number | null;
+  target_recovery_snapshot: number | null;
+  target_resume_decision: number | null;
+  rationale: string;
+  reason_codes: string[];
+  confidence: number;
+  blockers: string[];
+  created_at: string;
+};
+
+export type SessionRecoverySummary = {
+  latest_run_id: number | null;
+  summary: {
+    sessions_reviewed: number;
+    ready_to_resume: number;
+    keep_paused: number;
+    manual_review: number;
+    stop_recommended: number;
+    incident_escalation: number;
+  };
+  totals: {
+    recovery_runs: number;
+    snapshots: number;
+    blockers: number;
+    decisions: number;
+    recommendations: number;
+  };
+  decision_breakdown: Record<string, number>;
+};

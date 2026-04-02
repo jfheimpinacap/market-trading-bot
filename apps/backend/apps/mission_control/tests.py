@@ -11,6 +11,8 @@ from apps.mission_control.models import (
     AutonomousProfileSwitchRecord,
     AutonomousCooldownState,
     AutonomousSessionInterventionDecision,
+    AutonomousResumeDecision,
+    AutonomousSessionRecoveryRecommendation,
     AutonomousRuntimeSession,
     AutonomousRuntimeTick,
     AutonomousScheduleProfile,
@@ -435,5 +437,63 @@ class SessionHealthGovernanceTests(TestCase):
         AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
         self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
         response = self.client.get(reverse('mission_control:session-health-summary'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('summary', response.json())
+
+
+class SessionRecoveryReviewTests(TestCase):
+    def test_cleared_blocks_can_be_ready_to_resume(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        for index in range(1, 3):
+            AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index, tick_status='COMPLETED')
+        self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
+        response = self.client.post(reverse('mission_control:run-session-recovery-review'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        decision = AutonomousResumeDecision.objects.filter(linked_session=session).order_by('-created_at', '-id').first()
+        self.assertIsNotNone(decision)
+        self.assertIn(decision.decision_type, {'READY_TO_RESUME', 'RESUME_IN_MONITOR_ONLY_MODE'})
+
+    @patch('apps.mission_control.services.session_recovery.recovery_snapshot.get_safety_status')
+    def test_persistent_safety_block_keeps_session_paused(self, mock_safety):
+        mock_safety.return_value = {'kill_switch_enabled': True, 'hard_stop_active': True}
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
+        self.client.post(reverse('mission_control:run-session-recovery-review'), data='{}', content_type='application/json')
+        decision = AutonomousResumeDecision.objects.filter(linked_session=session).order_by('-created_at', '-id').first()
+        self.assertIsNotNone(decision)
+        self.assertIn(decision.decision_type, {'KEEP_PAUSED', 'STOP_SESSION_PERMANENTLY'})
+
+    def test_partial_recovery_uses_monitor_only_resume(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        for index in range(1, 3):
+            AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index, tick_status='FAILED')
+        self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
+        self.client.post(reverse('mission_control:run-session-recovery-review'), data='{}', content_type='application/json')
+        decision = AutonomousResumeDecision.objects.filter(linked_session=session).order_by('-created_at', '-id').first()
+        self.assertIsNotNone(decision)
+        self.assertEqual(decision.decision_type, 'RESUME_IN_MONITOR_ONLY_MODE')
+
+    def test_unrecoverable_state_recommends_stop_or_escalate(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='BLOCKED', runtime_mode='PAPER')
+        for index in range(1, 7):
+            AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index, tick_status='BLOCKED')
+        self.client.post(
+            reverse('mission_control:run-session-health-review'),
+            data=json.dumps({'auto_apply_safe': False}),
+            content_type='application/json',
+        )
+        self.client.post(reverse('mission_control:run-session-recovery-review'), data='{}', content_type='application/json')
+        decision = AutonomousResumeDecision.objects.filter(linked_session=session).order_by('-created_at', '-id').first()
+        recommendation = AutonomousSessionRecoveryRecommendation.objects.filter(target_session=session).order_by('-created_at', '-id').first()
+        self.assertIsNotNone(decision)
+        self.assertIsNotNone(recommendation)
+        self.assertIn(decision.decision_type, {'STOP_SESSION_PERMANENTLY', 'ESCALATE_TO_INCIDENT_REVIEW', 'REQUIRE_MANUAL_RECOVERY_REVIEW'})
+        self.assertIn(recommendation.recommendation_type, {'STOP_SESSION_FOR_UNRECOVERABLE_STATE', 'ESCALATE_RECOVERY_TO_INCIDENT_LAYER', 'REQUIRE_MANUAL_RECOVERY_REVIEW'})
+
+    def test_session_recovery_summary_endpoint(self):
+        AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
+        self.client.post(reverse('mission_control:run-session-recovery-review'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:session-recovery-summary'))
         self.assertEqual(response.status_code, 200)
         self.assertIn('summary', response.json())

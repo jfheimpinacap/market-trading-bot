@@ -95,6 +95,33 @@ This layer only automates due-tick progression of existing autonomous sessions a
 
 This layer does not replace session runtime control, heartbeat runner, timing policy, runtime governor, safety guard, or incident commander; it adds explicit health governance above them.
 
+## Mission control session recovery review governance (new)
+
+`apps.mission_control` now includes a conservative recovery/stabilization eligibility sublayer:
+
+- service split:
+  - `services/session_recovery/recovery_snapshot.py`
+  - `services/session_recovery/recovery_blockers.py`
+  - `services/session_recovery/resume.py`
+  - `services/session_recovery/recommendation.py`
+  - `services/session_recovery/run.py`
+- auditable entities:
+  - `AutonomousSessionRecoveryRun`
+  - `AutonomousSessionRecoverySnapshot`
+  - `AutonomousRecoveryBlocker`
+  - `AutonomousResumeDecision`
+  - `AutonomousSessionRecoveryRecommendation`
+- API:
+  - `POST /api/mission-control/run-session-recovery-review/`
+  - `GET /api/mission-control/session-recovery-runs/`
+  - `GET /api/mission-control/session-recovery-snapshots/`
+  - `GET /api/mission-control/session-recovery-blockers/`
+  - `GET /api/mission-control/session-resume-decisions/`
+  - `GET /api/mission-control/session-recovery-recommendations/`
+  - `GET /api/mission-control/session-recovery-summary/`
+
+This layer is review/recommendation only. It does **not** auto-apply resume yet, and it remains local-first, single-user, and paper/sandbox only.
+
 ## Precedent-aware backend layer (new)
 
 - Added `AgentPrecedentUse` for auditable agent-memory usage records.

@@ -29,6 +29,11 @@ from apps.mission_control.models import (
     AutonomousSessionHealthSnapshot,
     AutonomousSessionInterventionDecision,
     AutonomousSessionInterventionRecord,
+    AutonomousSessionRecoveryRecommendation,
+    AutonomousSessionRecoveryRun,
+    AutonomousSessionRecoverySnapshot,
+    AutonomousRecoveryBlocker,
+    AutonomousResumeDecision,
     AutonomousStopConditionEvaluation,
     AutonomousSessionRecommendation,
     AutonomousTimingDecision,
@@ -61,6 +66,11 @@ from apps.mission_control.serializers import (
     AutonomousSessionHealthSnapshotSerializer,
     AutonomousSessionInterventionDecisionSerializer,
     AutonomousSessionInterventionRecordSerializer,
+    AutonomousSessionRecoveryRecommendationSerializer,
+    AutonomousSessionRecoveryRunSerializer,
+    AutonomousSessionRecoverySnapshotSerializer,
+    AutonomousRecoveryBlockerSerializer,
+    AutonomousResumeDecisionSerializer,
     AutonomousStopConditionEvaluationSerializer,
     AutonomousRuntimeRecommendationSerializer,
     AutonomousRuntimeRunRequestSerializer,
@@ -70,6 +80,7 @@ from apps.mission_control.serializers import (
     SessionTimingReviewRequestSerializer,
     ProfileSelectionReviewRequestSerializer,
     SessionHealthReviewRequestSerializer,
+    SessionRecoveryReviewRequestSerializer,
     AutonomousSessionRecommendationSerializer,
     AutonomousSessionStartRequestSerializer,
     AutonomousTickDispatchAttemptSerializer,
@@ -111,6 +122,7 @@ from apps.mission_control.services.session_health import (
     build_session_health_summary,
     run_session_health_review,
 )
+from apps.mission_control.services.session_recovery import build_session_recovery_summary, run_session_recovery_review
 from apps.mission_control.services.session_profile_control.profile_switch import apply_profile_switch_decision
 
 
@@ -546,3 +558,52 @@ class ApplySessionInterventionView(APIView):
             'record': AutonomousSessionInterventionRecordSerializer(record).data if record else None,
         }
         return Response(payload, status=status.HTTP_200_OK)
+
+
+class RunSessionRecoveryReviewView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = SessionRecoveryReviewRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        run = run_session_recovery_review(session_ids=serializer.validated_data.get('session_ids'))
+        return Response(AutonomousSessionRecoveryRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class SessionRecoveryRunListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionRecoveryRunSerializer
+    queryset = AutonomousSessionRecoveryRun.objects.order_by('-started_at', '-id')[:200]
+
+
+class SessionRecoverySnapshotListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionRecoverySnapshotSerializer
+    queryset = AutonomousSessionRecoverySnapshot.objects.select_related(
+        'linked_recovery_run',
+        'linked_session',
+        'linked_latest_health_snapshot',
+        'linked_latest_intervention_decision',
+        'linked_latest_intervention_record',
+        'linked_latest_timing_snapshot',
+    ).order_by('-created_at', '-id')[:300]
+
+
+class SessionRecoveryBlockerListView(generics.ListAPIView):
+    serializer_class = AutonomousRecoveryBlockerSerializer
+    queryset = AutonomousRecoveryBlocker.objects.select_related('linked_session', 'linked_recovery_snapshot').order_by('-created_at', '-id')[:300]
+
+
+class SessionResumeDecisionListView(generics.ListAPIView):
+    serializer_class = AutonomousResumeDecisionSerializer
+    queryset = AutonomousResumeDecision.objects.select_related('linked_session', 'linked_recovery_snapshot').order_by('-created_at', '-id')[:300]
+
+
+class SessionRecoveryRecommendationListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionRecoveryRecommendationSerializer
+    queryset = AutonomousSessionRecoveryRecommendation.objects.select_related(
+        'target_session',
+        'target_recovery_snapshot',
+        'target_resume_decision',
+    ).order_by('-created_at', '-id')[:300]
+
+
+class SessionRecoverySummaryView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(build_session_recovery_summary(), status=status.HTTP_200_OK)

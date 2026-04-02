@@ -976,6 +976,56 @@ class AutonomousSessionHealthRecommendationType(models.TextChoices):
     ESCALATE_TO_INCIDENT_LAYER = 'ESCALATE_TO_INCIDENT_LAYER', 'Escalate to incident layer'
 
 
+class AutonomousSessionRecoveryStatus(models.TextChoices):
+    RECOVERED = 'RECOVERED', 'Recovered'
+    PARTIALLY_RECOVERED = 'PARTIALLY_RECOVERED', 'Partially recovered'
+    STILL_BLOCKED = 'STILL_BLOCKED', 'Still blocked'
+    STABILIZING = 'STABILIZING', 'Stabilizing'
+    UNRECOVERABLE = 'UNRECOVERABLE', 'Unrecoverable'
+
+
+class AutonomousRecoveryBlockerType(models.TextChoices):
+    SAFETY_BLOCK_ACTIVE = 'SAFETY_BLOCK_ACTIVE', 'Safety block active'
+    RUNTIME_BLOCK_ACTIVE = 'RUNTIME_BLOCK_ACTIVE', 'Runtime block active'
+    INCIDENT_PRESSURE_ACTIVE = 'INCIDENT_PRESSURE_ACTIVE', 'Incident pressure active'
+    PORTFOLIO_PRESSURE_ACTIVE = 'PORTFOLIO_PRESSURE_ACTIVE', 'Portfolio pressure active'
+    COOLDOWN_ACTIVE = 'COOLDOWN_ACTIVE', 'Cooldown active'
+    RECENT_FAILURE_STREAK = 'RECENT_FAILURE_STREAK', 'Recent failure streak'
+    RECENT_BLOCKED_STREAK = 'RECENT_BLOCKED_STREAK', 'Recent blocked streak'
+    MANUAL_REVIEW_REQUIRED = 'MANUAL_REVIEW_REQUIRED', 'Manual review required'
+
+
+class AutonomousRecoveryBlockerSeverity(models.TextChoices):
+    INFO = 'INFO', 'Info'
+    CAUTION = 'CAUTION', 'Caution'
+    HIGH = 'HIGH', 'High'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class AutonomousResumeDecisionType(models.TextChoices):
+    KEEP_PAUSED = 'KEEP_PAUSED', 'Keep paused'
+    READY_TO_RESUME = 'READY_TO_RESUME', 'Ready to resume'
+    RESUME_IN_MONITOR_ONLY_MODE = 'RESUME_IN_MONITOR_ONLY_MODE', 'Resume in monitor only mode'
+    REQUIRE_MANUAL_RECOVERY_REVIEW = 'REQUIRE_MANUAL_RECOVERY_REVIEW', 'Require manual recovery review'
+    STOP_SESSION_PERMANENTLY = 'STOP_SESSION_PERMANENTLY', 'Stop session permanently'
+    ESCALATE_TO_INCIDENT_REVIEW = 'ESCALATE_TO_INCIDENT_REVIEW', 'Escalate to incident review'
+
+
+class AutonomousResumeDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousSessionRecoveryRecommendationType(models.TextChoices):
+    RESUME_SESSION_SAFELY = 'RESUME_SESSION_SAFELY', 'Resume session safely'
+    RESUME_IN_MONITOR_ONLY_MODE = 'RESUME_IN_MONITOR_ONLY_MODE', 'Resume in monitor only mode'
+    KEEP_SESSION_PAUSED = 'KEEP_SESSION_PAUSED', 'Keep session paused'
+    REQUIRE_MANUAL_RECOVERY_REVIEW = 'REQUIRE_MANUAL_RECOVERY_REVIEW', 'Require manual recovery review'
+    STOP_SESSION_FOR_UNRECOVERABLE_STATE = 'STOP_SESSION_FOR_UNRECOVERABLE_STATE', 'Stop session for unrecoverable state'
+    ESCALATE_RECOVERY_TO_INCIDENT_LAYER = 'ESCALATE_RECOVERY_TO_INCIDENT_LAYER', 'Escalate recovery to incident layer'
+
+
 class AutonomousSessionHealthRun(TimeStampedModel):
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -1125,6 +1175,159 @@ class AutonomousSessionHealthRecommendation(TimeStampedModel):
     )
     target_intervention_decision = models.ForeignKey(
         AutonomousSessionInterventionDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousSessionRecoveryRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_session_count = models.PositiveIntegerField(default=0)
+    ready_to_resume_count = models.PositiveIntegerField(default=0)
+    keep_paused_count = models.PositiveIntegerField(default=0)
+    manual_review_count = models.PositiveIntegerField(default=0)
+    stop_recommended_count = models.PositiveIntegerField(default=0)
+    incident_escalation_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class AutonomousSessionRecoverySnapshot(TimeStampedModel):
+    linked_recovery_run = models.ForeignKey(
+        AutonomousSessionRecoveryRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='snapshots',
+    )
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='recovery_snapshots')
+    linked_latest_health_snapshot = models.ForeignKey(
+        AutonomousSessionHealthSnapshot,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recovery_snapshots',
+    )
+    linked_latest_intervention_decision = models.ForeignKey(
+        AutonomousSessionInterventionDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recovery_snapshots',
+    )
+    linked_latest_intervention_record = models.ForeignKey(
+        AutonomousSessionInterventionRecord,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recovery_snapshots',
+    )
+    linked_latest_timing_snapshot = models.ForeignKey(
+        AutonomousSessionTimingSnapshot,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recovery_snapshots',
+    )
+    recovery_status = models.CharField(
+        max_length=24,
+        choices=AutonomousSessionRecoveryStatus.choices,
+        default=AutonomousSessionRecoveryStatus.STABILIZING,
+    )
+    safety_block_cleared = models.BooleanField(default=True)
+    runtime_block_cleared = models.BooleanField(default=True)
+    incident_pressure_cleared = models.BooleanField(default=True)
+    portfolio_pressure_state = models.CharField(
+        max_length=20,
+        choices=AutonomousProfilePortfolioPressureState.choices,
+        default=AutonomousProfilePortfolioPressureState.NORMAL,
+    )
+    cooldown_active = models.BooleanField(default=False)
+    recent_failed_ticks = models.PositiveIntegerField(default=0)
+    recent_blocked_ticks = models.PositiveIntegerField(default=0)
+    recent_successful_ticks = models.PositiveIntegerField(default=0)
+    recovery_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousRecoveryBlocker(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='recovery_blockers')
+    linked_recovery_snapshot = models.ForeignKey(
+        AutonomousSessionRecoverySnapshot,
+        on_delete=models.CASCADE,
+        related_name='blockers',
+    )
+    blocker_type = models.CharField(max_length=36, choices=AutonomousRecoveryBlockerType.choices)
+    blocker_severity = models.CharField(
+        max_length=12,
+        choices=AutonomousRecoveryBlockerSeverity.choices,
+        default=AutonomousRecoveryBlockerSeverity.INFO,
+    )
+    blocker_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousResumeDecision(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='resume_decisions')
+    linked_recovery_snapshot = models.ForeignKey(
+        AutonomousSessionRecoverySnapshot,
+        on_delete=models.CASCADE,
+        related_name='resume_decisions',
+    )
+    decision_type = models.CharField(max_length=40, choices=AutonomousResumeDecisionType.choices)
+    decision_status = models.CharField(
+        max_length=12,
+        choices=AutonomousResumeDecisionStatus.choices,
+        default=AutonomousResumeDecisionStatus.PROPOSED,
+    )
+    auto_applicable = models.BooleanField(default=False)
+    decision_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousSessionRecoveryRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=48, choices=AutonomousSessionRecoveryRecommendationType.choices)
+    target_session = models.ForeignKey(
+        AutonomousRuntimeSession,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recovery_recommendations',
+    )
+    target_recovery_snapshot = models.ForeignKey(
+        AutonomousSessionRecoverySnapshot,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    target_resume_decision = models.ForeignKey(
+        AutonomousResumeDecision,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
