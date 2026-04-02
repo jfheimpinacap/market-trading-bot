@@ -28,6 +28,12 @@ import {
   getSessionRecoverySnapshots,
   getSessionRecoverySummary,
   getSessionResumeDecisions,
+  getGlobalCapacitySnapshots,
+  getSessionAdmissionReviews,
+  getSessionAdmissionDecisions,
+  getSessionAdmissionRecommendations,
+  getSessionAdmissionSummary,
+  runSessionAdmissionReview,
   getSessionInterventionDecisions,
   getSessionTimingDecisions,
   getSessionTimingRecommendations,
@@ -77,6 +83,11 @@ import type {
   AutonomousSessionRecoverySnapshot,
   SessionRecoverySummary,
   AutonomousTickDispatchAttempt,
+  AutonomousGlobalCapacitySnapshot,
+  AutonomousSessionAdmissionReview,
+  AutonomousSessionAdmissionDecision,
+  AutonomousSessionAdmissionRecommendation,
+  SessionAdmissionSummary,
 } from '../../types/missionControl';
 
 export function MissionControlPage() {
@@ -110,6 +121,11 @@ export function MissionControlPage() {
   const [recoveryRecommendations, setRecoveryRecommendations] = useState<AutonomousSessionRecoveryRecommendation[]>([]);
   const [resumeRecords, setResumeRecords] = useState<AutonomousResumeRecord[]>([]);
   const [recoverySummary, setRecoverySummary] = useState<SessionRecoverySummary | null>(null);
+  const [capacitySnapshots, setCapacitySnapshots] = useState<AutonomousGlobalCapacitySnapshot[]>([]);
+  const [admissionReviews, setAdmissionReviews] = useState<AutonomousSessionAdmissionReview[]>([]);
+  const [admissionDecisions, setAdmissionDecisions] = useState<AutonomousSessionAdmissionDecision[]>([]);
+  const [admissionRecommendations, setAdmissionRecommendations] = useState<AutonomousSessionAdmissionRecommendation[]>([]);
+  const [admissionSummary, setAdmissionSummary] = useState<SessionAdmissionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -119,7 +135,7 @@ export function MissionControlPage() {
     setLoading(true);
     setError(null);
     try {
-      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary, loadedRecoverySnapshots, loadedRecoveryBlockers, loadedResumeDecisions, loadedRecoveryRecommendations, loadedResumeRecords, loadedRecoverySummary] = await Promise.all([
+      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary, loadedRecoverySnapshots, loadedRecoveryBlockers, loadedResumeDecisions, loadedRecoveryRecommendations, loadedResumeRecords, loadedRecoverySummary, loadedCapacitySnapshots, loadedAdmissionReviews, loadedAdmissionDecisions, loadedAdmissionRecommendations, loadedAdmissionSummary] = await Promise.all([
         getAutonomousSessions(),
         getAutonomousSessionSummary(),
         getAutonomousRunnerState(),
@@ -150,6 +166,11 @@ export function MissionControlPage() {
         getSessionRecoveryRecommendations(),
         getSessionResumeRecords(),
         getSessionRecoverySummary(),
+        getGlobalCapacitySnapshots(),
+        getSessionAdmissionReviews(),
+        getSessionAdmissionDecisions(),
+        getSessionAdmissionRecommendations(),
+        getSessionAdmissionSummary(),
       ]);
       setSessions(loadedSessions);
       setSummary(loadedSummary);
@@ -335,6 +356,38 @@ export function MissionControlPage() {
 
         <SectionCard eyebrow="Session recovery review" title="Recovery recommendations" description="Auditable recommendations with reason codes and blocker references.">
           <ul>{recoveryRecommendations.slice(0, 12).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — {recommendation.rationale} blockers=[{recommendation.blockers.join(', ')}] confidence={recommendation.confidence}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Global Session Admission" title="Portfolio-aware runtime capacity control" description="Conservative global coordinator deciding which sessions are admitted, resumed, parked, deferred, paused, or retired. Local-first, paper-only, and no live execution.">
+          <div className="button-row">
+            <button type="button" className="primary-button" onClick={async () => { await runSessionAdmissionReview(); await load(); }}>Run admission review</button>
+          </div>
+          <div className="system-metadata-grid">
+            <div><strong>Sessions considered:</strong> {admissionSummary?.summary.sessions_considered ?? 0}</div>
+            <div><strong>Admitted:</strong> {admissionSummary?.summary.admitted ?? 0}</div>
+            <div><strong>Resume allowed:</strong> {admissionSummary?.summary.resume_allowed ?? 0}</div>
+            <div><strong>Parked:</strong> {admissionSummary?.summary.parked ?? 0}</div>
+            <div><strong>Deferred:</strong> {admissionSummary?.summary.deferred ?? 0}</div>
+            <div><strong>Paused:</strong> {admissionSummary?.summary.paused ?? 0}</div>
+            <div><strong>Retired:</strong> {admissionSummary?.summary.retired ?? 0}</div>
+            <div><strong>Manual review:</strong> {admissionSummary?.summary.manual_review ?? 0}</div>
+          </div>
+        </SectionCard>
+
+        <SectionCard eyebrow="Global Session Admission" title="Capacity snapshots" description="Global runtime posture and capacity status consumed by session admission control.">
+          <ul>{capacitySnapshots.slice(0, 6).map((snapshot) => <li key={snapshot.id}><strong>{snapshot.capacity_status}</strong> — active={snapshot.current_running_sessions}/{snapshot.max_active_sessions} dispatch={snapshot.active_dispatch_load} portfolio={snapshot.open_position_pressure_state} runtime={snapshot.runtime_posture} safety={snapshot.safety_posture} incident={snapshot.incident_pressure_state} summary={snapshot.snapshot_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Global Session Admission" title="Session admission reviews" description="Per-session priority + operability review against global capacity.">
+          <ul>{admissionReviews.slice(0, 12).map((review) => <li key={review.id}><strong>session={review.linked_session}</strong> priority={review.session_priority_state} operability={review.session_operability_state} admission={review.admission_status} summary={review.review_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Global Session Admission" title="Admission decisions" description="Final explicit admission decision per reviewed session.">
+          <ul>{admissionDecisions.slice(0, 12).map((decision) => <li key={decision.id}><strong>{decision.decision_type}</strong> — session={decision.linked_session} status={decision.decision_status} auto={String(decision.auto_applicable)} summary={decision.decision_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Global Session Admission" title="Admission recommendations" description="Conservative recommendations with rationale, blockers and confidence.">
+          <ul>{admissionRecommendations.slice(0, 12).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — {recommendation.rationale} blockers=[{recommendation.blockers.join(', ')}] confidence={recommendation.confidence}</li>)}</ul>
         </SectionCard>
 
         <SectionCard eyebrow="Session timing policy" title="Schedule profiles" description="Reusable cadence profiles with explicit intervals and quiet/stop thresholds.">

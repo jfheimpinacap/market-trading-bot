@@ -38,6 +38,11 @@ from apps.mission_control.models import (
     AutonomousTimingDecision,
     AutonomousTimingRecommendation,
     AutonomousTickDispatchAttempt,
+    AutonomousSessionAdmissionDecision,
+    AutonomousSessionAdmissionRecommendation,
+    AutonomousSessionAdmissionRun,
+    AutonomousGlobalCapacitySnapshot,
+    AutonomousSessionAdmissionReview,
     MissionControlCycle,
     MissionControlSession,
     MissionControlState,
@@ -350,4 +355,43 @@ class AutonomousResumeRecordSerializer(serializers.ModelSerializer):
 class AutonomousSessionRecoveryRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousSessionRecoveryRecommendation
+        fields = '__all__'
+
+
+class SessionAdmissionReviewRequestSerializer(serializers.Serializer):
+    session_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=True,
+    )
+    auto_apply_safe = serializers.BooleanField(required=False, default=True)
+
+
+class AutonomousSessionAdmissionRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionAdmissionRun
+        fields = '__all__'
+
+
+class AutonomousGlobalCapacitySnapshotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousGlobalCapacitySnapshot
+        fields = '__all__'
+
+
+class AutonomousSessionAdmissionReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionAdmissionReview
+        fields = '__all__'
+
+
+class AutonomousSessionAdmissionDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionAdmissionDecision
+        fields = '__all__'
+
+
+class AutonomousSessionAdmissionRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionAdmissionRecommendation
         fields = '__all__'

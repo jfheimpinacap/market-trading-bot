@@ -42,6 +42,12 @@ import type {
   SessionRecoverySummary,
   AutonomousSessionSummary,
   AutonomousTickDispatchAttempt,
+  AutonomousGlobalCapacitySnapshot,
+  AutonomousSessionAdmissionReview,
+  AutonomousSessionAdmissionDecision,
+  AutonomousSessionAdmissionRecommendation,
+  SessionAdmissionSummary,
+  AutonomousSessionAdmissionRun,
   MissionControlCycle,
   MissionControlSession,
   MissionControlStatusResponse,
@@ -356,4 +362,35 @@ export function applySessionResume(decisionId: number, appliedMode: 'MANUAL_RESU
 
 export function getSessionRecoverySummary() {
   return requestJson<SessionRecoverySummary>('/api/mission-control/session-recovery-summary/');
+}
+
+
+export function runSessionAdmissionReview(sessionIds?: number[], autoApplySafe = true) {
+  return requestJson<AutonomousSessionAdmissionRun>('/api/mission-control/run-session-admission-review/', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...(sessionIds?.length ? { session_ids: sessionIds } : {}),
+      auto_apply_safe: autoApplySafe,
+    }),
+  });
+}
+
+export function getGlobalCapacitySnapshots() {
+  return requestJson<AutonomousGlobalCapacitySnapshot[]>('/api/mission-control/global-capacity-snapshots/');
+}
+
+export function getSessionAdmissionReviews() {
+  return requestJson<AutonomousSessionAdmissionReview[]>('/api/mission-control/session-admission-reviews/');
+}
+
+export function getSessionAdmissionDecisions() {
+  return requestJson<AutonomousSessionAdmissionDecision[]>('/api/mission-control/session-admission-decisions/');
+}
+
+export function getSessionAdmissionRecommendations() {
+  return requestJson<AutonomousSessionAdmissionRecommendation[]>('/api/mission-control/session-admission-recommendations/');
+}
+
+export function getSessionAdmissionSummary() {
+  return requestJson<SessionAdmissionSummary>('/api/mission-control/session-admission-summary/');
 }

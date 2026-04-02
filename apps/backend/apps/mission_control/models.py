@@ -1369,3 +1369,167 @@ class AutonomousResumeRecord(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at', '-id']
+
+
+class AutonomousOpenPositionPressureState(models.TextChoices):
+    NORMAL = 'NORMAL', 'Normal'
+    CAUTION = 'CAUTION', 'Caution'
+    THROTTLED = 'THROTTLED', 'Throttled'
+    BLOCK_NEW_ACTIVITY = 'BLOCK_NEW_ACTIVITY', 'Block new activity'
+
+
+class AutonomousGlobalRuntimePosture(models.TextChoices):
+    NORMAL = 'NORMAL', 'Normal'
+    CAUTION = 'CAUTION', 'Caution'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousGlobalSafetyPosture(models.TextChoices):
+    NORMAL = 'NORMAL', 'Normal'
+    CAUTION = 'CAUTION', 'Caution'
+    HARD_BLOCK = 'HARD_BLOCK', 'Hard block'
+
+
+class AutonomousCapacityStatus(models.TextChoices):
+    AVAILABLE = 'AVAILABLE', 'Available'
+    LIMITED = 'LIMITED', 'Limited'
+    THROTTLED = 'THROTTLED', 'Throttled'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousSessionPriorityState(models.TextChoices):
+    HIGH_VALUE = 'HIGH_VALUE', 'High value'
+    MEDIUM_VALUE = 'MEDIUM_VALUE', 'Medium value'
+    LOW_VALUE = 'LOW_VALUE', 'Low value'
+    NO_VALUE = 'NO_VALUE', 'No value'
+
+
+class AutonomousSessionOperabilityState(models.TextChoices):
+    READY = 'READY', 'Ready'
+    RECOVERABLE = 'RECOVERABLE', 'Recoverable'
+    CAUTION = 'CAUTION', 'Caution'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    RETIRE_CANDIDATE = 'RETIRE_CANDIDATE', 'Retire candidate'
+
+
+class AutonomousSessionAdmissionStatus(models.TextChoices):
+    ADMIT = 'ADMIT', 'Admit'
+    RESUME_ALLOWED = 'RESUME_ALLOWED', 'Resume allowed'
+    PARK = 'PARK', 'Park'
+    DEFER = 'DEFER', 'Defer'
+    PAUSE = 'PAUSE', 'Pause'
+    RETIRE = 'RETIRE', 'Retire'
+    MANUAL_REVIEW = 'MANUAL_REVIEW', 'Manual review'
+
+
+class AutonomousSessionAdmissionDecisionType(models.TextChoices):
+    ADMIT_SESSION = 'ADMIT_SESSION', 'Admit session'
+    ALLOW_RESUME = 'ALLOW_RESUME', 'Allow resume'
+    PARK_SESSION = 'PARK_SESSION', 'Park session'
+    DEFER_SESSION = 'DEFER_SESSION', 'Defer session'
+    PAUSE_SESSION = 'PAUSE_SESSION', 'Pause session'
+    RETIRE_SESSION = 'RETIRE_SESSION', 'Retire session'
+    REQUIRE_MANUAL_ADMISSION_REVIEW = 'REQUIRE_MANUAL_ADMISSION_REVIEW', 'Require manual review'
+
+
+class AutonomousSessionAdmissionDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class AutonomousSessionAdmissionRecommendationType(models.TextChoices):
+    ADMIT_HIGH_PRIORITY_SESSION = 'ADMIT_HIGH_PRIORITY_SESSION', 'Admit high priority session'
+    ALLOW_SAFE_RESUME = 'ALLOW_SAFE_RESUME', 'Allow safe resume'
+    PARK_LOW_SIGNAL_SESSION = 'PARK_LOW_SIGNAL_SESSION', 'Park low signal session'
+    DEFER_FOR_CAPACITY_PRESSURE = 'DEFER_FOR_CAPACITY_PRESSURE', 'Defer for capacity pressure'
+    PAUSE_FOR_GLOBAL_THROTTLE = 'PAUSE_FOR_GLOBAL_THROTTLE', 'Pause for global throttle'
+    RETIRE_LOW_VALUE_SESSION = 'RETIRE_LOW_VALUE_SESSION', 'Retire low value session'
+    REQUIRE_MANUAL_ADMISSION_REVIEW = 'REQUIRE_MANUAL_ADMISSION_REVIEW', 'Require manual admission review'
+
+
+class AutonomousSessionAdmissionRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_session_count = models.PositiveIntegerField(default=0)
+    admitted_count = models.PositiveIntegerField(default=0)
+    resume_allowed_count = models.PositiveIntegerField(default=0)
+    parked_count = models.PositiveIntegerField(default=0)
+    deferred_count = models.PositiveIntegerField(default=0)
+    paused_count = models.PositiveIntegerField(default=0)
+    retired_count = models.PositiveIntegerField(default=0)
+    manual_review_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class AutonomousGlobalCapacitySnapshot(TimeStampedModel):
+    linked_admission_run = models.ForeignKey(AutonomousSessionAdmissionRun, null=True, blank=True, on_delete=models.SET_NULL, related_name='capacity_snapshots')
+    max_active_sessions = models.PositiveIntegerField(default=1)
+    current_running_sessions = models.PositiveIntegerField(default=0)
+    current_paused_sessions = models.PositiveIntegerField(default=0)
+    current_degraded_sessions = models.PositiveIntegerField(default=0)
+    current_blocked_sessions = models.PositiveIntegerField(default=0)
+    active_dispatch_load = models.PositiveIntegerField(default=0)
+    open_position_pressure_state = models.CharField(max_length=24, choices=AutonomousOpenPositionPressureState.choices, default=AutonomousOpenPositionPressureState.NORMAL)
+    runtime_posture = models.CharField(max_length=12, choices=AutonomousGlobalRuntimePosture.choices, default=AutonomousGlobalRuntimePosture.NORMAL)
+    safety_posture = models.CharField(max_length=12, choices=AutonomousGlobalSafetyPosture.choices, default=AutonomousGlobalSafetyPosture.NORMAL)
+    incident_pressure_state = models.CharField(max_length=12, choices=AutonomousIncidentPressureState.choices, default=AutonomousIncidentPressureState.NONE)
+    capacity_status = models.CharField(max_length=12, choices=AutonomousCapacityStatus.choices, default=AutonomousCapacityStatus.AVAILABLE)
+    snapshot_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousSessionAdmissionReview(TimeStampedModel):
+    linked_admission_run = models.ForeignKey(AutonomousSessionAdmissionRun, null=True, blank=True, on_delete=models.SET_NULL, related_name='reviews')
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='admission_reviews')
+    linked_capacity_snapshot = models.ForeignKey(AutonomousGlobalCapacitySnapshot, on_delete=models.CASCADE, related_name='session_reviews')
+    linked_latest_health_snapshot = models.ForeignKey(AutonomousSessionHealthSnapshot, null=True, blank=True, on_delete=models.SET_NULL, related_name='admission_reviews')
+    linked_latest_recovery_snapshot = models.ForeignKey(AutonomousSessionRecoverySnapshot, null=True, blank=True, on_delete=models.SET_NULL, related_name='admission_reviews')
+    linked_latest_context_review = models.ForeignKey(AutonomousSessionContextReview, null=True, blank=True, on_delete=models.SET_NULL, related_name='admission_reviews')
+    linked_current_profile = models.ForeignKey(AutonomousScheduleProfile, null=True, blank=True, on_delete=models.SET_NULL, related_name='admission_reviews')
+    session_priority_state = models.CharField(max_length=16, choices=AutonomousSessionPriorityState.choices, default=AutonomousSessionPriorityState.MEDIUM_VALUE)
+    session_operability_state = models.CharField(max_length=20, choices=AutonomousSessionOperabilityState.choices, default=AutonomousSessionOperabilityState.CAUTION)
+    admission_status = models.CharField(max_length=16, choices=AutonomousSessionAdmissionStatus.choices, default=AutonomousSessionAdmissionStatus.DEFER)
+    review_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousSessionAdmissionDecision(TimeStampedModel):
+    linked_session = models.ForeignKey(AutonomousRuntimeSession, on_delete=models.CASCADE, related_name='admission_decisions')
+    linked_admission_review = models.ForeignKey(AutonomousSessionAdmissionReview, on_delete=models.CASCADE, related_name='decisions')
+    decision_type = models.CharField(max_length=40, choices=AutonomousSessionAdmissionDecisionType.choices)
+    decision_status = models.CharField(max_length=12, choices=AutonomousSessionAdmissionDecisionStatus.choices, default=AutonomousSessionAdmissionDecisionStatus.PROPOSED)
+    auto_applicable = models.BooleanField(default=False)
+    decision_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class AutonomousSessionAdmissionRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=48, choices=AutonomousSessionAdmissionRecommendationType.choices)
+    target_session = models.ForeignKey(AutonomousRuntimeSession, null=True, blank=True, on_delete=models.SET_NULL, related_name='admission_recommendations')
+    target_admission_review = models.ForeignKey(AutonomousSessionAdmissionReview, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    target_admission_decision = models.ForeignKey(AutonomousSessionAdmissionDecision, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']

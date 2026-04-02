@@ -80,4 +80,12 @@ urlpatterns = [
     path('apply-session-resume/<int:decision_id>/', views.ApplySessionResumeView.as_view(), name='apply-session-resume'),
     path('session-recovery-recommendations/', views.SessionRecoveryRecommendationListView.as_view(), name='session-recovery-recommendations'),
     path('session-recovery-summary/', views.SessionRecoverySummaryView.as_view(), name='session-recovery-summary'),
+    path('run-session-admission-review/', views.RunSessionAdmissionReviewView.as_view(), name='run-session-admission-review'),
+    path('global-capacity-snapshots/', views.GlobalCapacitySnapshotListView.as_view(), name='global-capacity-snapshots'),
+    path('session-admission-reviews/', views.SessionAdmissionReviewListView.as_view(), name='session-admission-reviews'),
+    path('session-admission-decisions/', views.SessionAdmissionDecisionListView.as_view(), name='session-admission-decisions'),
+    path('session-admission-decisions/<int:pk>/', views.SessionAdmissionDecisionDetailView.as_view(), name='session-admission-decision-detail'),
+    path('session-admission-recommendations/', views.SessionAdmissionRecommendationListView.as_view(), name='session-admission-recommendations'),
+    path('session-admission-summary/', views.SessionAdmissionSummaryView.as_view(), name='session-admission-summary'),
+    path('apply-session-admission/<int:decision_id>/', views.ApplySessionAdmissionDecisionView.as_view(), name='apply-session-admission'),
 ]

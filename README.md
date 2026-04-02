@@ -2252,3 +2252,12 @@ The project now includes a configurable **session timing policy** layer under mi
 - integración directa con heartbeat local y timing policy existente (no reemplazo).
 
 Boundaries se mantienen: local-first, single-user, paper/sandbox only, sin broker/exchange real, sin live execution, sin dinero real, sin planner black-box.
+
+## Global Session Admission Controller (Prompt 151)
+
+Mission control now includes an explicit **global session admission** layer that coordinates how many autonomous runtime sessions can stay active at once and which sessions should be admitted, resumed, parked, deferred, paused, or retired.
+
+- Local-first and single-user oriented.
+- Paper/sandbox only (no live broker/exchange routing, no real money).
+- Conservative, auditable, and portfolio-aware.
+- Extends (does not replace) portfolio governor, runtime governor, safety guard, session timing, session health, and recovery governance.

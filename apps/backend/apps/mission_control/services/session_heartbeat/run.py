@@ -13,6 +13,8 @@ from apps.mission_control.models import (
     AutonomousRunnerStatus,
     AutonomousRuntimeSession,
     AutonomousRuntimeSessionStatus,
+    AutonomousSessionAdmissionDecision,
+    AutonomousSessionAdmissionDecisionType,
 )
 from apps.mission_control.services.session_heartbeat.dispatch import dispatch_due_tick
 from apps.mission_control.services.session_heartbeat.due_tick import evaluate_due_tick
@@ -26,6 +28,24 @@ def _runner_state() -> AutonomousRunnerState:
     state, _ = AutonomousRunnerState.objects.get_or_create(runner_name=RUNNER_NAME, defaults={'runner_status': AutonomousRunnerStatus.STOPPED})
     return state
 
+
+
+
+
+def _admission_block_reason(session: AutonomousRuntimeSession) -> str | None:
+    latest = AutonomousSessionAdmissionDecision.objects.filter(linked_session=session).order_by('-created_at', '-id').first()
+    if not latest:
+        return None
+    blocked_types = {
+        AutonomousSessionAdmissionDecisionType.PARK_SESSION,
+        AutonomousSessionAdmissionDecisionType.DEFER_SESSION,
+        AutonomousSessionAdmissionDecisionType.PAUSE_SESSION,
+        AutonomousSessionAdmissionDecisionType.RETIRE_SESSION,
+        AutonomousSessionAdmissionDecisionType.REQUIRE_MANUAL_ADMISSION_REVIEW,
+    }
+    if latest.decision_type in blocked_types:
+        return latest.decision_type
+    return None
 
 def run_heartbeat_pass() -> AutonomousHeartbeatRun:
     now = timezone.now()
@@ -57,6 +77,23 @@ def run_heartbeat_pass() -> AutonomousHeartbeatRun:
 
     for session in sessions:
         latest_tick = session.ticks.order_by('-tick_index', '-id').first()
+        admission_block = _admission_block_reason(session)
+        if admission_block:
+            decision = AutonomousHeartbeatDecision.objects.create(
+                linked_heartbeat_run=run,
+                linked_session=session,
+                linked_latest_tick=latest_tick,
+                decision_type=AutonomousHeartbeatDecisionType.BLOCK_SESSION,
+                decision_status=AutonomousHeartbeatDecisionStatus.BLOCKED,
+                due_now=False,
+                next_due_at=None,
+                reason_codes=['global_admission_block', admission_block.lower()],
+                decision_summary=f'blocked by global admission decision={admission_block}',
+                metadata={'profile_selection_run_id': profile_review_run.id},
+            )
+            emit_heartbeat_recommendation(decision=decision)
+            blocked_count += 1
+            continue
         evaluation = evaluate_due_tick(session=session)
         decision_status = AutonomousHeartbeatDecisionStatus.READY if evaluation.due_now else AutonomousHeartbeatDecisionStatus.SKIPPED
 
