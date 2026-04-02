@@ -17,6 +17,7 @@ from apps.mission_control.models import (
 from apps.mission_control.services.session_heartbeat.dispatch import dispatch_due_tick
 from apps.mission_control.services.session_heartbeat.due_tick import evaluate_due_tick
 from apps.mission_control.services.session_heartbeat.recommendation import emit_heartbeat_recommendation
+from apps.mission_control.services.session_profile_control import run_profile_selection_review
 
 
 def _runner_state() -> AutonomousRunnerState:
@@ -29,6 +30,8 @@ def _runner_state() -> AutonomousRunnerState:
 def run_heartbeat_pass() -> AutonomousHeartbeatRun:
     now = timezone.now()
     state = _runner_state()
+    profile_review_run = run_profile_selection_review(apply_switches=True)
+
     sessions = AutonomousRuntimeSession.objects.filter(
         session_status__in=[
             AutonomousRuntimeSessionStatus.RUNNING,
@@ -67,7 +70,7 @@ def run_heartbeat_pass() -> AutonomousHeartbeatRun:
             next_due_at=evaluation.next_due_at,
             reason_codes=evaluation.reason_codes,
             decision_summary=evaluation.summary,
-            metadata=evaluation.metadata,
+        metadata={**(evaluation.metadata or {}), 'profile_selection_run_id': profile_review_run.id},
         )
         emit_heartbeat_recommendation(decision=decision)
 
@@ -97,7 +100,7 @@ def run_heartbeat_pass() -> AutonomousHeartbeatRun:
     run.paused_count = paused_count
     run.stopped_count = stopped_count
     run.recommendation_summary = f'due={due_count} executed={executed_count} cooldown={cooldown_count} blocked={blocked_count}'
-    run.metadata = {'runner_state': state.runner_status}
+    run.metadata = {'runner_state': state.runner_status, 'profile_selection_run_id': profile_review_run.id}
     run.save()
 
     with transaction.atomic():

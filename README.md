@@ -2174,3 +2174,19 @@ The project now includes a configurable **session timing policy** layer under mi
 - Heartbeat runner is extended (not replaced) with explicit timing decisions and `next_due_at` traceability.
 - Timing policy supports schedule profiles, quiet-window handling, cooldown-aware waits, and conservative pause/stop recommendations.
 - No live broker/exchange execution, no real-money flows, and no enterprise distributed scheduler were added.
+
+### Adaptive session profile controller (new)
+
+`mission_control` ahora incluye una capa explícita y auditable de **adaptive session profile control**:
+
+- flujo: `session context -> context review -> switch decision -> switch record -> timing behavior`
+- entidades auditables:
+  - `AutonomousProfileSelectionRun`
+  - `AutonomousSessionContextReview`
+  - `AutonomousProfileSwitchDecision`
+  - `AutonomousProfileSwitchRecord`
+  - `AutonomousProfileRecommendation`
+- switching conservador entre perfiles (`balanced_local`, `conservative_quiet`, `monitor_heavy`) con hysteresis para evitar oscilaciones.
+- integración directa con heartbeat local y timing policy existente (no reemplazo).
+
+Boundaries se mantienen: local-first, single-user, paper/sandbox only, sin broker/exchange real, sin live execution, sin dinero real, sin planner black-box.

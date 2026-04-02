@@ -2032,3 +2032,17 @@ UI scope remains strictly paper-only and readiness-driven; no live execution pat
 - a manual `Run timing review` action.
 
 This UI remains local-first and paper-only, and complements (does not replace) the autonomous heartbeat runner.
+
+## Adaptive Session Profiles en `/mission-control` (new)
+
+La vista `/mission-control` ahora incluye una sección **Adaptive Session Profiles** con:
+
+- acción manual `Run profile selection review`
+- summary cards: reviewed / keep / switch recommended / switched / blocked / manual review
+- paneles de:
+  - context reviews
+  - switch decisions
+  - switch records
+  - profile recommendations
+
+La UI mantiene límites explícitos: local-first, paper-only, conservative switching, no live execution.

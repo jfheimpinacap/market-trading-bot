@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.mission_control.models import (
+    AutonomousProfileSwitchRecord,
     AutonomousCooldownState,
     AutonomousRuntimeSession,
     AutonomousRuntimeTick,
@@ -312,5 +313,71 @@ class SessionTimingPolicyTests(TestCase):
         AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
         self.client.post(reverse('mission_control:run-session-timing-review'), data='{}', content_type='application/json')
         response = self.client.get(reverse('mission_control:session-timing-summary'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('summary', response.json())
+
+
+class AdaptiveProfileControlTests(TestCase):
+    def test_quiet_market_moves_to_conservative_or_monitor_profile(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        profile = AutonomousScheduleProfile.objects.create(slug='balanced-test', display_name='Balanced test')
+        session.linked_schedule_profile = profile
+        session.profile_slug = profile.slug
+        session.save(update_fields=['linked_schedule_profile', 'profile_slug', 'updated_at'])
+        for index in range(1, 6):
+            AutonomousRuntimeTick.objects.create(
+                linked_session=session,
+                tick_index=index,
+                tick_status='SKIPPED',
+                reason_codes=['no_action'],
+            )
+        self.client.post(reverse('mission_control:run-session-timing-review'), data='{}', content_type='application/json')
+        response = self.client.post(reverse('mission_control:run-profile-selection-review'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        session.refresh_from_db()
+        self.assertIn(session.profile_slug, {'conservative_quiet', 'monitor_heavy'})
+
+    @patch('apps.mission_control.services.session_profile_control.context_review.get_safety_status')
+    def test_repeated_blocked_ticks_recommends_manual_or_conservative(self, mock_safety):
+        mock_safety.return_value = {'kill_switch_enabled': True, 'hard_stop_active': True}
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        for index in range(1, 4):
+            AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index, tick_status='BLOCKED')
+        self.client.post(reverse('mission_control:run-session-timing-review'), data='{}', content_type='application/json')
+        self.client.post(reverse('mission_control:run-profile-selection-review'), data='{}', content_type='application/json')
+        decisions = self.client.get(reverse('mission_control:profile-switch-decisions')).json()
+        target = next(decision for decision in decisions if decision['linked_session'] == session.id)
+        self.assertIn(target['decision_type'], {'BLOCK_PROFILE_SWITCH', 'SWITCH_TO_CONSERVATIVE_QUIET', 'REQUIRE_MANUAL_PROFILE_REVIEW'})
+
+    def test_normal_state_restores_balanced_profile(self):
+        conservative = AutonomousScheduleProfile.objects.create(slug='temp-conservative', display_name='Temp conservative')
+        session = AutonomousRuntimeSession.objects.create(
+            session_status='RUNNING',
+            runtime_mode='PAPER',
+            linked_schedule_profile=conservative,
+            profile_slug=conservative.slug,
+        )
+        self.client.post(reverse('mission_control:run-session-timing-review'), data='{}', content_type='application/json')
+        self.client.post(reverse('mission_control:run-profile-selection-review'), data='{}', content_type='application/json')
+        session.refresh_from_db()
+        self.assertEqual(session.profile_slug, 'balanced_local')
+
+    def test_switch_record_created(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        for index in range(1, 6):
+            AutonomousRuntimeTick.objects.create(
+                linked_session=session,
+                tick_index=index,
+                tick_status='SKIPPED',
+                reason_codes=['no_action'],
+            )
+        self.client.post(reverse('mission_control:run-session-timing-review'), data='{}', content_type='application/json')
+        self.client.post(reverse('mission_control:run-profile-selection-review'), data='{}', content_type='application/json')
+        self.assertTrue(AutonomousProfileSwitchRecord.objects.filter(linked_session=session).exists())
+
+    def test_profile_selection_summary_endpoint(self):
+        AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-profile-selection-review'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:profile-selection-summary'))
         self.assertEqual(response.status_code, 200)
         self.assertIn('summary', response.json())

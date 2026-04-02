@@ -13,7 +13,12 @@ import type {
   AutonomousRuntimeSummary,
   AutonomousRuntimeSession,
   AutonomousRuntimeTick,
+  AutonomousProfileRecommendation,
+  AutonomousProfileSelectionRun,
+  AutonomousProfileSwitchDecision,
+  AutonomousProfileSwitchRecord,
   AutonomousScheduleProfile,
+  AutonomousSessionContextReview,
   AutonomousSessionTimingSnapshot,
   AutonomousStopConditionEvaluation,
   AutonomousTimingDecision,
@@ -21,6 +26,7 @@ import type {
   AutonomousCadenceDecision,
   AutonomousSessionRecommendation,
   SessionTimingSummary,
+  ProfileSelectionSummary,
   AutonomousSessionSummary,
   AutonomousTickDispatchAttempt,
   MissionControlCycle,
@@ -218,4 +224,34 @@ export function getSessionTimingRecommendations() {
 
 export function getSessionTimingSummary() {
   return requestJson<SessionTimingSummary>('/api/mission-control/session-timing-summary/');
+}
+
+export function runProfileSelectionReview(sessionIds?: number[], applySwitches = true) {
+  return requestJson<AutonomousProfileSelectionRun>('/api/mission-control/run-profile-selection-review/', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...(sessionIds?.length ? { session_ids: sessionIds } : {}),
+      apply_switches: applySwitches,
+    }),
+  });
+}
+
+export function getSessionContextReviews() {
+  return requestJson<AutonomousSessionContextReview[]>('/api/mission-control/session-context-reviews/');
+}
+
+export function getProfileSwitchDecisions() {
+  return requestJson<AutonomousProfileSwitchDecision[]>('/api/mission-control/profile-switch-decisions/');
+}
+
+export function getProfileSwitchRecords() {
+  return requestJson<AutonomousProfileSwitchRecord[]>('/api/mission-control/profile-switch-records/');
+}
+
+export function getProfileRecommendations() {
+  return requestJson<AutonomousProfileRecommendation[]>('/api/mission-control/profile-recommendations/');
+}
+
+export function getProfileSelectionSummary() {
+  return requestJson<ProfileSelectionSummary>('/api/mission-control/profile-selection-summary/');
 }

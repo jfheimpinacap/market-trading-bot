@@ -14,6 +14,11 @@ from apps.mission_control.models import (
     AutonomousRuntimeSession,
     AutonomousRuntimeTick,
     AutonomousScheduleProfile,
+    AutonomousProfileRecommendation,
+    AutonomousProfileSelectionRun,
+    AutonomousProfileSwitchDecision,
+    AutonomousProfileSwitchRecord,
+    AutonomousSessionContextReview,
     AutonomousSessionTimingSnapshot,
     AutonomousStopConditionEvaluation,
     AutonomousSessionRecommendation,
@@ -196,3 +201,42 @@ class SessionTimingReviewRequestSerializer(serializers.Serializer):
         required=False,
         allow_empty=True,
     )
+
+
+class ProfileSelectionReviewRequestSerializer(serializers.Serializer):
+    session_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=True,
+    )
+    apply_switches = serializers.BooleanField(required=False, default=True)
+
+
+class AutonomousProfileSelectionRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousProfileSelectionRun
+        fields = '__all__'
+
+
+class AutonomousSessionContextReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionContextReview
+        fields = '__all__'
+
+
+class AutonomousProfileSwitchDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousProfileSwitchDecision
+        fields = '__all__'
+
+
+class AutonomousProfileSwitchRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousProfileSwitchRecord
+        fields = '__all__'
+
+
+class AutonomousProfileRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousProfileRecommendation
+        fields = '__all__'
