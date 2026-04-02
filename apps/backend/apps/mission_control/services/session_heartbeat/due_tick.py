@@ -5,13 +5,16 @@ from dataclasses import dataclass
 from django.utils import timezone
 
 from apps.mission_control.models import (
-    AutonomousCooldownState,
-    AutonomousCooldownStatus,
     AutonomousHeartbeatDecisionType,
     AutonomousRuntimeSession,
     AutonomousRuntimeSessionStatus,
     AutonomousRuntimeTickStatus,
+    AutonomousTimingDecisionStatus,
+    AutonomousTimingDecisionType,
 )
+from apps.mission_control.services.session_timing.timing import evaluate_session_timing, map_timing_decision_to_heartbeat
+from apps.mission_control.services.session_timing.stop_conditions import evaluate_stop_conditions
+from apps.mission_control.services.session_timing.recommendation import emit_timing_recommendation
 from apps.runtime_governor.services import get_capabilities_for_current_mode
 from apps.safety_guard.services import get_safety_status
 
@@ -92,26 +95,27 @@ def evaluate_due_tick(*, session: AutonomousRuntimeSession) -> DueTickEvaluation
             metadata={},
         )
 
-    cooldown = AutonomousCooldownState.objects.filter(
-        linked_session=session,
-        cooldown_status=AutonomousCooldownStatus.ACTIVE,
-        expires_at__gt=now,
-    ).order_by('expires_at').first()
-    if cooldown:
+    timing_review = evaluate_session_timing(session=session)
+    evaluate_stop_conditions(snapshot=timing_review.snapshot, decision_type=timing_review.decision.decision_type)
+    emit_timing_recommendation(snapshot=timing_review.snapshot, decision=timing_review.decision)
+    heartbeat_decision_type, due_now, timing_summary = map_timing_decision_to_heartbeat(timing_review.decision)
+    timing_review.decision.decision_status = AutonomousTimingDecisionStatus.APPLIED
+    timing_review.decision.save(update_fields=['decision_status', 'updated_at'])
+    if timing_review.decision.decision_type == AutonomousTimingDecisionType.RUN_NOW:
         return DueTickEvaluation(
-            decision_type=AutonomousHeartbeatDecisionType.SKIP_FOR_COOLDOWN,
-            due_now=False,
-            next_due_at=cooldown.expires_at,
-            reason_codes=list(cooldown.reason_codes or []) + ['active_cooldown'],
-            summary=f'Session cooldown active until {cooldown.expires_at.isoformat()}.',
-            metadata={'cooldown_id': cooldown.id, 'cooldown_type': cooldown.cooldown_type},
+            decision_type=heartbeat_decision_type,
+            due_now=due_now,
+            next_due_at=timing_review.decision.next_due_at,
+            reason_codes=list(dict.fromkeys([*(timing_review.snapshot.reason_codes or []), 'timing_policy_run_now'])),
+            summary=timing_summary,
+            metadata={'timing_snapshot_id': timing_review.snapshot.id, 'timing_decision_id': timing_review.decision.id},
         )
 
     return DueTickEvaluation(
-        decision_type=AutonomousHeartbeatDecisionType.RUN_DUE_TICK,
-        due_now=True,
-        next_due_at=now,
-        reason_codes=['session_running_due_now'],
-        summary='Session is running and due for the next cadence tick.',
-        metadata={'latest_tick_status': latest_tick.tick_status if latest_tick else None},
+        decision_type=heartbeat_decision_type,
+        due_now=due_now,
+        next_due_at=timing_review.decision.next_due_at,
+        reason_codes=list(dict.fromkeys([*(timing_review.snapshot.reason_codes or []), 'timing_policy_enforced'])),
+        summary=timing_summary,
+        metadata={'timing_snapshot_id': timing_review.snapshot.id, 'timing_decision_id': timing_review.decision.id},
     )

@@ -2019,3 +2019,16 @@ UI scope remains strictly paper-only and readiness-driven; no live execution pat
 - `/mission-control` now includes an **Autonomous Runtime Loop** section with summary cards and panels for cycle plans, executions, outcomes, and recommendations.
 - Manual action available: **Run autonomous runtime**.
 - UI messaging remains explicit: paper-only, runtime-governed, minimal-human-intervention, and no live execution.
+
+## Mission Control: Session Timing Policy
+
+`/mission-control` now includes a **Session Timing Policy** section with:
+
+- timing summary cards (due/wait/monitor/pause/stop),
+- schedule profiles,
+- session timing snapshots,
+- timing decisions,
+- timing recommendations,
+- a manual `Run timing review` action.
+
+This UI remains local-first and paper-only, and complements (does not replace) the autonomous heartbeat runner.

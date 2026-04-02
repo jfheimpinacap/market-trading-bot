@@ -2165,3 +2165,12 @@ Boundaries remain unchanged: local-first, single-user, paper/sandbox only, no re
 - New governed autonomous runtime loop orchestration is available under `/api/mission-control/run-autonomous-runtime/` and related autonomous runtime list/summary endpoints.
 - This layer is paper-only, local-first, and single-user. It orchestrates cycle plan → execution → outcome → recommendation without replacing `autonomous_trader` operational authority.
 - It reinforces runtime/safety/portfolio guardrails and supports reduced or blocked cycles rather than forcing execution.
+
+## Autonomous session timing policy (Prompt 147)
+
+The project now includes a configurable **session timing policy** layer under mission control to improve autonomous cadence governance.
+
+- Local-first, single-user, paper/sandbox-only behavior remains unchanged.
+- Heartbeat runner is extended (not replaced) with explicit timing decisions and `next_due_at` traceability.
+- Timing policy supports schedule profiles, quiet-window handling, cooldown-aware waits, and conservative pause/stop recommendations.
+- No live broker/exchange execution, no real-money flows, and no enterprise distributed scheduler were added.

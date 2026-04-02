@@ -13,8 +13,14 @@ import type {
   AutonomousRuntimeSummary,
   AutonomousRuntimeSession,
   AutonomousRuntimeTick,
+  AutonomousScheduleProfile,
+  AutonomousSessionTimingSnapshot,
+  AutonomousStopConditionEvaluation,
+  AutonomousTimingDecision,
+  AutonomousTimingRecommendation,
   AutonomousCadenceDecision,
   AutonomousSessionRecommendation,
+  SessionTimingSummary,
   AutonomousSessionSummary,
   AutonomousTickDispatchAttempt,
   MissionControlCycle,
@@ -181,4 +187,35 @@ export function getAutonomousHeartbeatRecommendations() {
 
 export function getAutonomousHeartbeatSummary() {
   return requestJson<AutonomousHeartbeatSummary>('/api/mission-control/autonomous-heartbeat-summary/');
+}
+
+export function runSessionTimingReview(sessionIds?: number[]) {
+  return requestJson<SessionTimingSummary>('/api/mission-control/run-session-timing-review/', {
+    method: 'POST',
+    body: JSON.stringify(sessionIds?.length ? { session_ids: sessionIds } : {}),
+  });
+}
+
+export function getScheduleProfiles() {
+  return requestJson<AutonomousScheduleProfile[]>('/api/mission-control/schedule-profiles/');
+}
+
+export function getSessionTimingSnapshots() {
+  return requestJson<AutonomousSessionTimingSnapshot[]>('/api/mission-control/session-timing-snapshots/');
+}
+
+export function getStopConditionEvaluations() {
+  return requestJson<AutonomousStopConditionEvaluation[]>('/api/mission-control/stop-condition-evaluations/');
+}
+
+export function getSessionTimingDecisions() {
+  return requestJson<AutonomousTimingDecision[]>('/api/mission-control/session-timing-decisions/');
+}
+
+export function getSessionTimingRecommendations() {
+  return requestJson<AutonomousTimingRecommendation[]>('/api/mission-control/session-timing-recommendations/');
+}
+
+export function getSessionTimingSummary() {
+  return requestJson<SessionTimingSummary>('/api/mission-control/session-timing-summary/');
 }

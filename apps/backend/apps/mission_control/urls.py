@@ -46,4 +46,12 @@ urlpatterns = [
     path('autonomous-tick-dispatch-attempts/', views.AutonomousTickDispatchAttemptListView.as_view(), name='autonomous-tick-dispatch-attempts'),
     path('autonomous-heartbeat-recommendations/', views.AutonomousHeartbeatRecommendationListView.as_view(), name='autonomous-heartbeat-recommendations'),
     path('autonomous-heartbeat-summary/', views.AutonomousHeartbeatSummaryView.as_view(), name='autonomous-heartbeat-summary'),
+    path('run-session-timing-review/', views.RunSessionTimingReviewView.as_view(), name='run-session-timing-review'),
+    path('schedule-profiles/', views.ScheduleProfileListView.as_view(), name='schedule-profiles'),
+    path('session-timing-snapshots/', views.SessionTimingSnapshotListView.as_view(), name='session-timing-snapshots'),
+    path('stop-condition-evaluations/', views.StopConditionEvaluationListView.as_view(), name='stop-condition-evaluations'),
+    path('session-timing-decisions/', views.SessionTimingDecisionListView.as_view(), name='session-timing-decisions'),
+    path('session-timing-recommendations/', views.SessionTimingRecommendationListView.as_view(), name='session-timing-recommendations'),
+    path('session-timing-summary/', views.SessionTimingSummaryView.as_view(), name='session-timing-summary'),
+    path('apply-schedule-profile/<int:session_id>/', views.ApplyScheduleProfileView.as_view(), name='apply-schedule-profile'),
 ]
