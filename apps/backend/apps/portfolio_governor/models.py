@@ -63,3 +63,212 @@ class PortfolioGovernanceRun(TimeStampedModel):
 
     class Meta:
         ordering = ['-started_at', '-id']
+
+
+class PortfolioExposureClusterType(models.TextChoices):
+    MARKET = 'MARKET', 'Market'
+    NARRATIVE = 'NARRATIVE', 'Narrative'
+    DIRECTIONAL = 'DIRECTIONAL', 'Directional'
+    THEMATIC = 'THEMATIC', 'Thematic'
+    MIXED = 'MIXED', 'Mixed'
+
+
+class PortfolioExposureNetDirection(models.TextChoices):
+    LONG_BIAS = 'LONG_BIAS', 'Long bias'
+    SHORT_BIAS = 'SHORT_BIAS', 'Short bias'
+    MIXED = 'MIXED', 'Mixed'
+    UNCLEAR = 'UNCLEAR', 'Unclear'
+
+
+class PortfolioExposureRiskPressureState(models.TextChoices):
+    NORMAL = 'NORMAL', 'Normal'
+    CAUTION = 'CAUTION', 'Caution'
+    THROTTLED = 'THROTTLED', 'Throttled'
+    BLOCK_NEW_EXPOSURE = 'BLOCK_NEW_EXPOSURE', 'Block new exposure'
+
+
+class PortfolioExposureConcentrationStatus(models.TextChoices):
+    NORMAL = 'NORMAL', 'Normal'
+    ELEVATED = 'ELEVATED', 'Elevated'
+    HIGH = 'HIGH', 'High'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class SessionExposureContributionRole(models.TextChoices):
+    PRIMARY_DRIVER = 'PRIMARY_DRIVER', 'Primary driver'
+    SUPPORTING = 'SUPPORTING', 'Supporting'
+    REDUNDANT = 'REDUNDANT', 'Redundant'
+    CONFLICTING = 'CONFLICTING', 'Conflicting'
+    LOW_VALUE = 'LOW_VALUE', 'Low value'
+
+
+class SessionExposureContributionDirection(models.TextChoices):
+    LONG = 'LONG', 'Long'
+    SHORT = 'SHORT', 'Short'
+    MIXED = 'MIXED', 'Mixed'
+    NEUTRAL = 'NEUTRAL', 'Neutral'
+
+
+class SessionExposureContributionStrength(models.TextChoices):
+    HIGH = 'HIGH', 'High'
+    MEDIUM = 'MEDIUM', 'Medium'
+    LOW = 'LOW', 'Low'
+
+
+class PortfolioExposureConflictReviewType(models.TextChoices):
+    CONCENTRATION_RISK = 'CONCENTRATION_RISK', 'Concentration risk'
+    REDUNDANT_SESSION_STACKING = 'REDUNDANT_SESSION_STACKING', 'Redundant session stacking'
+    DIRECTIONAL_CONFLICT = 'DIRECTIONAL_CONFLICT', 'Directional conflict'
+    PENDING_DISPATCH_OVERLOAD = 'PENDING_DISPATCH_OVERLOAD', 'Pending dispatch overload'
+    LOW_VALUE_CAPACITY_WASTE = 'LOW_VALUE_CAPACITY_WASTE', 'Low value capacity waste'
+    PORTFOLIO_PRESSURE_CONFLICT = 'PORTFOLIO_PRESSURE_CONFLICT', 'Portfolio pressure conflict'
+
+
+class PortfolioExposureConflictReviewSeverity(models.TextChoices):
+    INFO = 'INFO', 'Info'
+    CAUTION = 'CAUTION', 'Caution'
+    HIGH = 'HIGH', 'High'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class PortfolioExposureDecisionType(models.TextChoices):
+    KEEP_EXPOSURE_AS_IS = 'KEEP_EXPOSURE_AS_IS', 'Keep exposure as is'
+    THROTTLE_NEW_ENTRIES = 'THROTTLE_NEW_ENTRIES', 'Throttle new entries'
+    DEFER_PENDING_DISPATCH = 'DEFER_PENDING_DISPATCH', 'Defer pending dispatch'
+    PARK_WEAKER_SESSION = 'PARK_WEAKER_SESSION', 'Park weaker session'
+    PAUSE_CLUSTER_ACTIVITY = 'PAUSE_CLUSTER_ACTIVITY', 'Pause cluster activity'
+    REDUCE_EXPOSURE_PRIORITY = 'REDUCE_EXPOSURE_PRIORITY', 'Reduce exposure priority'
+    REQUIRE_MANUAL_EXPOSURE_REVIEW = 'REQUIRE_MANUAL_EXPOSURE_REVIEW', 'Require manual exposure review'
+
+
+class PortfolioExposureDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class PortfolioExposureRecommendationType(models.TextChoices):
+    KEEP_CURRENT_EXPOSURE = 'KEEP_CURRENT_EXPOSURE', 'Keep current exposure'
+    THROTTLE_CLUSTER_FOR_CONCENTRATION = 'THROTTLE_CLUSTER_FOR_CONCENTRATION', 'Throttle cluster for concentration'
+    DEFER_WEAKER_PENDING_DISPATCH = 'DEFER_WEAKER_PENDING_DISPATCH', 'Defer weaker pending dispatch'
+    PARK_REDUNDANT_SESSION = 'PARK_REDUNDANT_SESSION', 'Park redundant session'
+    PAUSE_CLUSTER_FOR_PORTFOLIO_PRESSURE = 'PAUSE_CLUSTER_FOR_PORTFOLIO_PRESSURE', 'Pause cluster for portfolio pressure'
+    REQUIRE_MANUAL_EXPOSURE_REVIEW = 'REQUIRE_MANUAL_EXPOSURE_REVIEW', 'Require manual exposure review'
+
+
+class PortfolioExposureCoordinationRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_cluster_count = models.PositiveIntegerField(default=0)
+    concentration_alert_count = models.PositiveIntegerField(default=0)
+    conflict_alert_count = models.PositiveIntegerField(default=0)
+    throttle_count = models.PositiveIntegerField(default=0)
+    defer_count = models.PositiveIntegerField(default=0)
+    park_count = models.PositiveIntegerField(default=0)
+    manual_review_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class PortfolioExposureClusterSnapshot(TimeStampedModel):
+    linked_run = models.ForeignKey(PortfolioExposureCoordinationRun, on_delete=models.CASCADE, related_name='cluster_snapshots')
+    cluster_label = models.CharField(max_length=140)
+    cluster_type = models.CharField(max_length=16, choices=PortfolioExposureClusterType.choices, default=PortfolioExposureClusterType.MIXED)
+    linked_market = models.ForeignKey('markets.Market', null=True, blank=True, on_delete=models.SET_NULL, related_name='portfolio_exposure_clusters')
+    net_direction = models.CharField(max_length=16, choices=PortfolioExposureNetDirection.choices, default=PortfolioExposureNetDirection.UNCLEAR)
+    session_count = models.PositiveIntegerField(default=0)
+    open_position_count = models.PositiveIntegerField(default=0)
+    pending_dispatch_count = models.PositiveIntegerField(default=0)
+    aggregate_notional_pressure = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    aggregate_risk_pressure_state = models.CharField(max_length=20, choices=PortfolioExposureRiskPressureState.choices, default=PortfolioExposureRiskPressureState.NORMAL)
+    concentration_status = models.CharField(max_length=16, choices=PortfolioExposureConcentrationStatus.choices, default=PortfolioExposureConcentrationStatus.NORMAL)
+    cluster_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at_snapshot = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at_snapshot', '-id']
+
+
+class SessionExposureContribution(TimeStampedModel):
+    linked_session = models.ForeignKey('mission_control.AutonomousRuntimeSession', on_delete=models.CASCADE, related_name='portfolio_exposure_contributions')
+    linked_cluster_snapshot = models.ForeignKey(PortfolioExposureClusterSnapshot, on_delete=models.CASCADE, related_name='session_contributions')
+    linked_admission_decision = models.ForeignKey(
+        'mission_control.AutonomousSessionAdmissionDecision',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='portfolio_exposure_contributions',
+    )
+    linked_dispatch_record = models.ForeignKey(
+        'autonomous_trader.AutonomousDispatchRecord',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='session_exposure_contributions',
+    )
+    linked_trade_execution = models.ForeignKey(
+        'autonomous_trader.AutonomousTradeExecution',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='session_exposure_contributions',
+    )
+    contribution_role = models.CharField(max_length=20, choices=SessionExposureContributionRole.choices, default=SessionExposureContributionRole.SUPPORTING)
+    contribution_direction = models.CharField(max_length=12, choices=SessionExposureContributionDirection.choices, default=SessionExposureContributionDirection.NEUTRAL)
+    contribution_strength = models.CharField(max_length=8, choices=SessionExposureContributionStrength.choices, default=SessionExposureContributionStrength.LOW)
+    contribution_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at_snapshot = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at_snapshot', '-id']
+
+
+class PortfolioExposureConflictReview(TimeStampedModel):
+    linked_cluster_snapshot = models.ForeignKey(PortfolioExposureClusterSnapshot, on_delete=models.CASCADE, related_name='conflict_reviews')
+    review_type = models.CharField(max_length=36, choices=PortfolioExposureConflictReviewType.choices)
+    review_severity = models.CharField(max_length=12, choices=PortfolioExposureConflictReviewSeverity.choices, default=PortfolioExposureConflictReviewSeverity.INFO)
+    review_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at_review = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at_review', '-id']
+
+
+class PortfolioExposureDecision(TimeStampedModel):
+    linked_cluster_snapshot = models.ForeignKey(PortfolioExposureClusterSnapshot, on_delete=models.CASCADE, related_name='decisions')
+    linked_conflict_review = models.ForeignKey(PortfolioExposureConflictReview, null=True, blank=True, on_delete=models.SET_NULL, related_name='decisions')
+    decision_type = models.CharField(max_length=36, choices=PortfolioExposureDecisionType.choices)
+    decision_status = models.CharField(max_length=12, choices=PortfolioExposureDecisionStatus.choices, default=PortfolioExposureDecisionStatus.PROPOSED)
+    auto_applicable = models.BooleanField(default=False)
+    decision_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at_decision = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at_decision', '-id']
+
+
+class PortfolioExposureRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=48, choices=PortfolioExposureRecommendationType.choices)
+    target_cluster_snapshot = models.ForeignKey(PortfolioExposureClusterSnapshot, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    target_conflict_review = models.ForeignKey(PortfolioExposureConflictReview, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    target_exposure_decision = models.ForeignKey(PortfolioExposureDecision, null=True, blank=True, on_delete=models.SET_NULL, related_name='recommendations')
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']

@@ -3421,3 +3421,33 @@ Backend mission_control now exposes a global session admission control flow:
 - `session-admission-summary`
 
 This layer is conservative and auditable, coordinates cross-session capacity, and consumes portfolio/runtime/safety/health/recovery signals without replacing those authorities.
+
+
+## Portfolio governor global exposure coordination (new)
+
+`apps.portfolio_governor` now includes a conservative paper-only exposure harmonizer:
+
+- service split:
+  - `services/clusters.py`
+  - `services/conflict_review.py`
+  - `services/decision.py`
+  - `services/recommendation.py`
+  - `services/run.py`
+- auditable entities:
+  - `PortfolioExposureCoordinationRun`
+  - `PortfolioExposureClusterSnapshot`
+  - `SessionExposureContribution`
+  - `PortfolioExposureConflictReview`
+  - `PortfolioExposureDecision`
+  - `PortfolioExposureRecommendation`
+- API:
+  - `POST /api/portfolio-governor/run-exposure-coordination-review/`
+  - `GET /api/portfolio-governor/exposure-coordination-runs/`
+  - `GET /api/portfolio-governor/exposure-cluster-snapshots/`
+  - `GET /api/portfolio-governor/session-exposure-contributions/`
+  - `GET /api/portfolio-governor/exposure-conflict-reviews/`
+  - `GET /api/portfolio-governor/exposure-decisions/`
+  - `GET /api/portfolio-governor/exposure-recommendations/`
+  - `GET /api/portfolio-governor/exposure-coordination-summary/`
+
+Boundary guarantees remain strict: local-first, single-user, paper-only, no broker/exchange live routing, no real money, and no LLM as final throttling authority.

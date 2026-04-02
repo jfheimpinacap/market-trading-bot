@@ -2095,3 +2095,19 @@ La UI mantiene límites explícitos: local-first, paper-only, conservative switc
 - Manual action: `Run admission review`
 
 The UI remains local-first and paper-only, and does not introduce live execution.
+
+
+## Portfolio governor global exposure coordination UX (new)
+
+`/portfolio-governor` now includes a dedicated **Global Exposure Coordination** section:
+
+- action: `Run exposure coordination review`
+- summary cards: clusters reviewed, concentration/conflict alerts, throttles, defers, parks, manual review
+- technical panels:
+  - cluster snapshots
+  - conflict reviews
+  - exposure decisions
+  - exposure recommendations
+- explicit safety copy: local-first, paper-only, portfolio-aware, and no live execution.
+
+This UX extends existing governance screens and does not introduce live trading or real-money paths.
