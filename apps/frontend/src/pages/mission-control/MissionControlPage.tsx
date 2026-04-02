@@ -24,6 +24,7 @@ import {
   getSessionHealthSummary,
   getSessionRecoveryBlockers,
   getSessionRecoveryRecommendations,
+  getSessionResumeRecords,
   getSessionRecoverySnapshots,
   getSessionRecoverySummary,
   getSessionResumeDecisions,
@@ -38,6 +39,8 @@ import {
   runSessionTimingReview,
   runSessionHealthReview,
   runSessionRecoveryReview,
+  runSessionRecoveryReviewSafeAutoApply,
+  applySessionResume,
   runProfileSelectionReview,
   runAutonomousHeartbeat,
   startAutonomousRunner,
@@ -70,6 +73,7 @@ import type {
   AutonomousRecoveryBlocker,
   AutonomousResumeDecision,
   AutonomousSessionRecoveryRecommendation,
+  AutonomousResumeRecord,
   AutonomousSessionRecoverySnapshot,
   SessionRecoverySummary,
   AutonomousTickDispatchAttempt,
@@ -104,6 +108,7 @@ export function MissionControlPage() {
   const [recoveryBlockers, setRecoveryBlockers] = useState<AutonomousRecoveryBlocker[]>([]);
   const [resumeDecisions, setResumeDecisions] = useState<AutonomousResumeDecision[]>([]);
   const [recoveryRecommendations, setRecoveryRecommendations] = useState<AutonomousSessionRecoveryRecommendation[]>([]);
+  const [resumeRecords, setResumeRecords] = useState<AutonomousResumeRecord[]>([]);
   const [recoverySummary, setRecoverySummary] = useState<SessionRecoverySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +119,7 @@ export function MissionControlPage() {
     setLoading(true);
     setError(null);
     try {
-      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary, loadedRecoverySnapshots, loadedRecoveryBlockers, loadedResumeDecisions, loadedRecoveryRecommendations, loadedRecoverySummary] = await Promise.all([
+      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary, loadedRecoverySnapshots, loadedRecoveryBlockers, loadedResumeDecisions, loadedRecoveryRecommendations, loadedResumeRecords, loadedRecoverySummary] = await Promise.all([
         getAutonomousSessions(),
         getAutonomousSessionSummary(),
         getAutonomousRunnerState(),
@@ -143,6 +148,7 @@ export function MissionControlPage() {
         getSessionRecoveryBlockers(),
         getSessionResumeDecisions(),
         getSessionRecoveryRecommendations(),
+        getSessionResumeRecords(),
         getSessionRecoverySummary(),
       ]);
       setSessions(loadedSessions);
@@ -173,6 +179,7 @@ export function MissionControlPage() {
       setRecoveryBlockers(loadedRecoveryBlockers);
       setResumeDecisions(loadedResumeDecisions);
       setRecoveryRecommendations(loadedRecoveryRecommendations);
+      setResumeRecords(loadedResumeRecords);
       setRecoverySummary(loadedRecoverySummary);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load autonomous heartbeat runner state.');
@@ -285,9 +292,10 @@ export function MissionControlPage() {
           <ul>{healthRecommendations.slice(0, 12).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — {recommendation.rationale} blockers=[{recommendation.blockers.join(', ')}] confidence={recommendation.confidence}</li>)}</ul>
         </SectionCard>
 
-        <SectionCard eyebrow="Session recovery review" title="Recovery eligibility and conservative resume recommendations" description="Post-pause/degraded review layer. It builds auditable recovery snapshots, blockers, and resume decisions without auto-applying any resume action.">
+        <SectionCard eyebrow="Session recovery review" title="Recovery eligibility and conservative resume recommendations" description="Post-pause/degraded review layer. It builds auditable recovery snapshots, blockers, and resume decisions and can optionally auto-apply only safe-ready resumes.">
           <div className="button-row">
             <button type="button" className="primary-button" onClick={async () => { await runSessionRecoveryReview(); await load(); }}>Run recovery review</button>
+            <button type="button" className="secondary-button" onClick={async () => { await runSessionRecoveryReviewSafeAutoApply(); await load(); }}>Run recovery review (safe auto apply)</button>
           </div>
           <div className="system-metadata-grid">
             <div><strong>Sessions reviewed:</strong> {recoverySummary?.summary.sessions_reviewed ?? 0}</div>
@@ -308,7 +316,21 @@ export function MissionControlPage() {
         </SectionCard>
 
         <SectionCard eyebrow="Session recovery review" title="Resume decisions" description="Transparent decisions: keep paused, ready, monitor-only, manual, stop, or incident escalation.">
-          <ul>{resumeDecisions.slice(0, 12).map((decision) => <li key={decision.id}><strong>{decision.decision_type}</strong> — session={decision.linked_session} status={decision.decision_status} auto={String(decision.auto_applicable)} summary={decision.decision_summary}</li>)}</ul>
+          <ul>{resumeDecisions.slice(0, 12).map((decision) => (
+            <li key={decision.id}>
+              <strong>{decision.decision_type}</strong> — session={decision.linked_session} status={decision.decision_status} auto={String(decision.auto_applicable)} summary={decision.decision_summary}
+              <div className="button-row" style={{ marginTop: 8 }}>
+                <button type="button" className="secondary-button" onClick={async () => { await applySessionResume(decision.id, 'MANUAL_RESUME'); await load(); }}>Apply resume</button>
+                {decision.decision_type === 'RESUME_IN_MONITOR_ONLY_MODE' ? (
+                  <button type="button" className="ghost-button" onClick={async () => { await applySessionResume(decision.id, 'MONITOR_ONLY_RESUME'); await load(); }}>Apply monitor-only</button>
+                ) : null}
+              </div>
+            </li>
+          ))}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Session recovery review" title="Resume records" description="Audit trail of manual, auto-safe, and monitor-only resume apply attempts.">
+          <ul>{resumeRecords.slice(0, 12).map((record) => <li key={record.id}><strong>{record.resume_status}</strong> — session={record.linked_session} mode={record.applied_mode} summary={record.resume_summary}</li>)}</ul>
         </SectionCard>
 
         <SectionCard eyebrow="Session recovery review" title="Recovery recommendations" description="Auditable recommendations with reason codes and blocker references.">

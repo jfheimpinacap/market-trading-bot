@@ -110,6 +110,7 @@ This layer does not replace session runtime control, heartbeat runner, timing po
   - `AutonomousSessionRecoverySnapshot`
   - `AutonomousRecoveryBlocker`
   - `AutonomousResumeDecision`
+  - `AutonomousResumeRecord`
   - `AutonomousSessionRecoveryRecommendation`
 - API:
   - `POST /api/mission-control/run-session-recovery-review/`
@@ -117,10 +118,13 @@ This layer does not replace session runtime control, heartbeat runner, timing po
   - `GET /api/mission-control/session-recovery-snapshots/`
   - `GET /api/mission-control/session-recovery-blockers/`
   - `GET /api/mission-control/session-resume-decisions/`
+  - `GET /api/mission-control/session-resume-records/`
+  - `POST /api/mission-control/apply-session-resume/<decision_id>/`
   - `GET /api/mission-control/session-recovery-recommendations/`
   - `GET /api/mission-control/session-recovery-summary/`
+  - `run-session-recovery-review` accepts optional `auto_apply_safe` to auto-apply only truly safe resumes.
 
-This layer is review/recommendation only. It does **not** auto-apply resume yet, and it remains local-first, single-user, and paper/sandbox only.
+Resume apply remains conservative and paper-only: active blockers always block apply, monitor-only resume is explicit, and reintegration reuses existing timing policy + heartbeat runner without replacing them.
 
 ## Precedent-aware backend layer (new)
 

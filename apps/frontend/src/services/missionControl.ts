@@ -29,6 +29,7 @@ import type {
   AutonomousSessionRecoverySnapshot,
   AutonomousRecoveryBlocker,
   AutonomousResumeDecision,
+  AutonomousResumeRecord,
   AutonomousSessionTimingSnapshot,
   AutonomousStopConditionEvaluation,
   AutonomousTimingDecision,
@@ -305,7 +306,20 @@ export function getSessionHealthSummary() {
 export function runSessionRecoveryReview(sessionIds?: number[]) {
   return requestJson<AutonomousSessionRecoveryRun>('/api/mission-control/run-session-recovery-review/', {
     method: 'POST',
-    body: JSON.stringify(sessionIds?.length ? { session_ids: sessionIds } : {}),
+    body: JSON.stringify({
+      ...(sessionIds?.length ? { session_ids: sessionIds } : {}),
+      auto_apply_safe: false,
+    }),
+  });
+}
+
+export function runSessionRecoveryReviewSafeAutoApply(sessionIds?: number[]) {
+  return requestJson<AutonomousSessionRecoveryRun>('/api/mission-control/run-session-recovery-review/', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...(sessionIds?.length ? { session_ids: sessionIds } : {}),
+      auto_apply_safe: true,
+    }),
   });
 }
 
@@ -327,6 +341,17 @@ export function getSessionResumeDecisions() {
 
 export function getSessionRecoveryRecommendations() {
   return requestJson<AutonomousSessionRecoveryRecommendation[]>('/api/mission-control/session-recovery-recommendations/');
+}
+
+export function getSessionResumeRecords() {
+  return requestJson<AutonomousResumeRecord[]>('/api/mission-control/session-resume-records/');
+}
+
+export function applySessionResume(decisionId: number, appliedMode: 'MANUAL_RESUME' | 'AUTO_SAFE_RESUME' | 'MONITOR_ONLY_RESUME' = 'MANUAL_RESUME') {
+  return requestJson<{ decision: AutonomousResumeDecision; record: AutonomousResumeRecord }>(`/api/mission-control/apply-session-resume/${decisionId}/`, {
+    method: 'POST',
+    body: JSON.stringify({ applied_mode: appliedMode }),
+  });
 }
 
 export function getSessionRecoverySummary() {

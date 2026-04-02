@@ -76,6 +76,8 @@ urlpatterns = [
     path('session-recovery-snapshots/', views.SessionRecoverySnapshotListView.as_view(), name='session-recovery-snapshots'),
     path('session-recovery-blockers/', views.SessionRecoveryBlockerListView.as_view(), name='session-recovery-blockers'),
     path('session-resume-decisions/', views.SessionResumeDecisionListView.as_view(), name='session-resume-decisions'),
+    path('session-resume-records/', views.SessionResumeRecordListView.as_view(), name='session-resume-records'),
+    path('apply-session-resume/<int:decision_id>/', views.ApplySessionResumeView.as_view(), name='apply-session-resume'),
     path('session-recovery-recommendations/', views.SessionRecoveryRecommendationListView.as_view(), name='session-recovery-recommendations'),
     path('session-recovery-summary/', views.SessionRecoverySummaryView.as_view(), name='session-recovery-summary'),
 ]
