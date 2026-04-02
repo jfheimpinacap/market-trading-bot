@@ -2261,3 +2261,28 @@ Mission control now includes an explicit **global session admission** layer that
 - Paper/sandbox only (no live broker/exchange routing, no real money).
 - Conservative, auditable, and portfolio-aware.
 - Extends (does not replace) portfolio governor, runtime governor, safety guard, session timing, session health, and recovery governance.
+
+
+### Global exposure harmonizer / cross-session conflict resolution (new)
+
+`portfolio_governor` now includes an explicit **Global Exposure Coordination** layer for paper-only operation:
+
+- pipeline: admitted sessions + open positions + pending dispatches → exposure clustering → conflict review → throttle/defer/park/pause/manual-review decisions → auditable recommendations.
+- new auditable entities:
+  - `PortfolioExposureCoordinationRun`
+  - `PortfolioExposureClusterSnapshot`
+  - `SessionExposureContribution`
+  - `PortfolioExposureConflictReview`
+  - `PortfolioExposureDecision`
+  - `PortfolioExposureRecommendation`
+- conservative API surface:
+  - `POST /api/portfolio-governor/run-exposure-coordination-review/`
+  - `GET /api/portfolio-governor/exposure-coordination-runs/`
+  - `GET /api/portfolio-governor/exposure-cluster-snapshots/`
+  - `GET /api/portfolio-governor/session-exposure-contributions/`
+  - `GET /api/portfolio-governor/exposure-conflict-reviews/`
+  - `GET /api/portfolio-governor/exposure-decisions/`
+  - `GET /api/portfolio-governor/exposure-recommendations/`
+  - `GET /api/portfolio-governor/exposure-coordination-summary/`
+
+This layer extends existing portfolio/risk/runtime/safety authorities and does **not** replace admission control, timing policy, or mission control governance.

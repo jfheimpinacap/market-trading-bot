@@ -2,18 +2,34 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.portfolio_governor.models import PortfolioGovernanceRun
+from apps.portfolio_governor.models import (
+    PortfolioExposureClusterSnapshot,
+    PortfolioExposureConflictReview,
+    PortfolioExposureCoordinationRun,
+    PortfolioExposureDecision,
+    PortfolioExposureRecommendation,
+    PortfolioGovernanceRun,
+    SessionExposureContribution,
+)
 from apps.portfolio_governor.serializers import (
+    PortfolioExposureClusterSnapshotSerializer,
+    PortfolioExposureConflictReviewSerializer,
+    PortfolioExposureCoordinationRunSerializer,
+    PortfolioExposureDecisionSerializer,
+    PortfolioExposureRecommendationSerializer,
     PortfolioExposureSnapshotSerializer,
     PortfolioGovernanceRunSerializer,
     PortfolioThrottleDecisionSerializer,
     RunPortfolioGovernanceSerializer,
+    SessionExposureContributionSerializer,
 )
 from apps.portfolio_governor.services import (
+    build_exposure_coordination_summary,
     build_governance_summary,
     get_latest_exposure_snapshot,
     get_latest_throttle_decision,
     list_profiles,
+    run_exposure_coordination_review,
     run_portfolio_governance,
 )
 
@@ -75,3 +91,76 @@ class PortfolioGovernanceSummaryView(APIView):
         summary = build_governance_summary()
         summary['profiles'] = list_profiles()
         return Response(summary, status=status.HTTP_200_OK)
+
+
+class RunExposureCoordinationReviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        run = run_exposure_coordination_review()
+        return Response(PortfolioExposureCoordinationRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class ExposureCoordinationRunListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PortfolioExposureCoordinationRunSerializer
+    queryset = PortfolioExposureCoordinationRun.objects.order_by('-started_at', '-id')[:100]
+
+
+class ExposureClusterSnapshotListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PortfolioExposureClusterSnapshotSerializer
+
+    def get_queryset(self):
+        return PortfolioExposureClusterSnapshot.objects.select_related('linked_run', 'linked_market').order_by('-created_at_snapshot', '-id')[:200]
+
+
+class SessionExposureContributionListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = SessionExposureContributionSerializer
+
+    def get_queryset(self):
+        return SessionExposureContribution.objects.select_related('linked_session', 'linked_cluster_snapshot').order_by('-created_at_snapshot', '-id')[:400]
+
+
+class ExposureConflictReviewListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PortfolioExposureConflictReviewSerializer
+
+    def get_queryset(self):
+        return PortfolioExposureConflictReview.objects.select_related('linked_cluster_snapshot').order_by('-created_at_review', '-id')[:300]
+
+
+class ExposureDecisionListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PortfolioExposureDecisionSerializer
+
+    def get_queryset(self):
+        return PortfolioExposureDecision.objects.select_related('linked_cluster_snapshot', 'linked_conflict_review').order_by('-created_at_decision', '-id')[:300]
+
+
+class ExposureRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = PortfolioExposureRecommendationSerializer
+
+    def get_queryset(self):
+        return PortfolioExposureRecommendation.objects.select_related(
+            'target_cluster_snapshot',
+            'target_conflict_review',
+            'target_exposure_decision',
+        ).order_by('-created_at', '-id')[:300]
+
+
+class ExposureCoordinationSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(build_exposure_coordination_summary(), status=status.HTTP_200_OK)

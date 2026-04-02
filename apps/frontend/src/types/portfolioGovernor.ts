@@ -49,7 +49,90 @@ export type PortfolioGovernanceSummary = {
   market_concentration: string;
   provider_concentration: string;
   drawdown_signal: string;
+  latest_exposure_coordination_run?: number | null;
+  exposure_coordination_clusters_reviewed?: number;
+  exposure_coordination_manual_reviews?: number;
   profiles: Array<{ slug: string; label: string }>;
+  paper_demo_only: boolean;
+  real_execution_enabled: boolean;
+};
+
+export type PortfolioExposureCoordinationRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_cluster_count: number;
+  concentration_alert_count: number;
+  conflict_alert_count: number;
+  throttle_count: number;
+  defer_count: number;
+  park_count: number;
+  manual_review_count: number;
+  recommendation_summary: Record<string, number>;
+  metadata: Record<string, unknown>;
+};
+
+export type PortfolioExposureClusterSnapshot = {
+  id: number;
+  cluster_label: string;
+  cluster_type: string;
+  net_direction: string;
+  session_count: number;
+  open_position_count: number;
+  pending_dispatch_count: number;
+  aggregate_notional_pressure: string;
+  aggregate_risk_pressure_state: string;
+  concentration_status: string;
+  cluster_summary: string;
+};
+
+export type SessionExposureContribution = {
+  id: number;
+  linked_session: number;
+  linked_cluster_snapshot: number;
+  contribution_role: string;
+  contribution_direction: string;
+  contribution_strength: string;
+  contribution_summary: string;
+};
+
+export type PortfolioExposureConflictReview = {
+  id: number;
+  linked_cluster_snapshot: number;
+  review_type: string;
+  review_severity: string;
+  review_summary: string;
+};
+
+export type PortfolioExposureDecision = {
+  id: number;
+  linked_cluster_snapshot: number;
+  linked_conflict_review: number | null;
+  decision_type: string;
+  decision_status: string;
+  auto_applicable: boolean;
+  decision_summary: string;
+};
+
+export type PortfolioExposureRecommendation = {
+  id: number;
+  recommendation_type: string;
+  target_cluster_snapshot: number | null;
+  rationale: string;
+  blockers: string[];
+  confidence: number;
+};
+
+export type PortfolioExposureCoordinationSummary = {
+  latest_run_id: number | null;
+  clusters_reviewed: number;
+  concentration_alerts: number;
+  conflict_alerts: number;
+  throttles: number;
+  defers: number;
+  parks: number;
+  manual_reviews: number;
+  recommendation_summary?: Record<string, number>;
   paper_demo_only: boolean;
   real_execution_enabled: boolean;
 };

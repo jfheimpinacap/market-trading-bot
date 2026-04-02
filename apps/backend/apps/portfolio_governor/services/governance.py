@@ -8,6 +8,7 @@ from apps.runtime_governor.services import get_runtime_state
 from apps.safety_guard.services import get_safety_status
 
 from apps.portfolio_governor.models import (
+    PortfolioExposureCoordinationRun,
     PortfolioExposureSnapshot,
     PortfolioGovernanceRun,
     PortfolioGovernanceRunStatus,
@@ -80,6 +81,7 @@ def build_governance_summary() -> dict:
     latest_run = PortfolioGovernanceRun.objects.order_by('-started_at', '-id').first()
     latest_snapshot = get_latest_exposure_snapshot()
     latest_decision = get_latest_throttle_decision()
+    latest_exposure_coordination = PortfolioExposureCoordinationRun.objects.order_by('-started_at', '-id').first()
     return {
         'latest_run': latest_run.id if latest_run else None,
         'latest_throttle_state': latest_decision.state if latest_decision else 'NORMAL',
@@ -88,6 +90,9 @@ def build_governance_summary() -> dict:
         'market_concentration': str(latest_snapshot.concentration_market_ratio) if latest_snapshot else '0',
         'provider_concentration': str(latest_snapshot.concentration_provider_ratio) if latest_snapshot else '0',
         'drawdown_signal': str(latest_snapshot.recent_drawdown_pct) if latest_snapshot else '0',
+        'latest_exposure_coordination_run': latest_exposure_coordination.id if latest_exposure_coordination else None,
+        'exposure_coordination_clusters_reviewed': latest_exposure_coordination.considered_cluster_count if latest_exposure_coordination else 0,
+        'exposure_coordination_manual_reviews': latest_exposure_coordination.manual_review_count if latest_exposure_coordination else 0,
         'profiles': list_profiles(),
         'paper_demo_only': True,
         'real_execution_enabled': False,
