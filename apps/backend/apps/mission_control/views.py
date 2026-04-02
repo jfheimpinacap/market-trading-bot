@@ -22,7 +22,13 @@ from apps.mission_control.models import (
     AutonomousProfileSwitchRecord,
     AutonomousSessionContextReview,
     AutonomousScheduleProfile,
+    AutonomousSessionAnomaly,
     AutonomousSessionTimingSnapshot,
+    AutonomousSessionHealthRecommendation,
+    AutonomousSessionHealthRun,
+    AutonomousSessionHealthSnapshot,
+    AutonomousSessionInterventionDecision,
+    AutonomousSessionInterventionRecord,
     AutonomousStopConditionEvaluation,
     AutonomousSessionRecommendation,
     AutonomousTimingDecision,
@@ -48,7 +54,13 @@ from apps.mission_control.serializers import (
     AutonomousProfileSwitchRecordSerializer,
     AutonomousSessionContextReviewSerializer,
     AutonomousScheduleProfileSerializer,
+    AutonomousSessionAnomalySerializer,
     AutonomousSessionTimingSnapshotSerializer,
+    AutonomousSessionHealthRecommendationSerializer,
+    AutonomousSessionHealthRunSerializer,
+    AutonomousSessionHealthSnapshotSerializer,
+    AutonomousSessionInterventionDecisionSerializer,
+    AutonomousSessionInterventionRecordSerializer,
     AutonomousStopConditionEvaluationSerializer,
     AutonomousRuntimeRecommendationSerializer,
     AutonomousRuntimeRunRequestSerializer,
@@ -57,6 +69,7 @@ from apps.mission_control.serializers import (
     AutonomousTimingRecommendationSerializer,
     SessionTimingReviewRequestSerializer,
     ProfileSelectionReviewRequestSerializer,
+    SessionHealthReviewRequestSerializer,
     AutonomousSessionRecommendationSerializer,
     AutonomousSessionStartRequestSerializer,
     AutonomousTickDispatchAttemptSerializer,
@@ -92,6 +105,11 @@ from apps.mission_control.services.session_heartbeat import (
 from apps.mission_control.services.session_profile_control import (
     build_profile_selection_summary,
     run_profile_selection_review,
+)
+from apps.mission_control.services.session_health import (
+    apply_intervention,
+    build_session_health_summary,
+    run_session_health_review,
 )
 from apps.mission_control.services.session_profile_control.profile_switch import apply_profile_switch_decision
 
@@ -463,5 +481,68 @@ class ApplyProfileSwitchDecisionView(APIView):
         payload = {
             'decision': AutonomousProfileSwitchDecisionSerializer(decision).data,
             'record': AutonomousProfileSwitchRecordSerializer(record).data if record else None,
+        }
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class RunSessionHealthReviewView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = SessionHealthReviewRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        run = run_session_health_review(
+            session_ids=payload.get('session_ids'),
+            auto_apply_safe=payload.get('auto_apply_safe', True),
+        )
+        return Response(AutonomousSessionHealthRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class SessionHealthRunListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionHealthRunSerializer
+    queryset = AutonomousSessionHealthRun.objects.order_by('-started_at', '-id')[:200]
+
+
+class SessionHealthSnapshotListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionHealthSnapshotSerializer
+    queryset = AutonomousSessionHealthSnapshot.objects.select_related(
+        'linked_health_run', 'linked_session', 'linked_runner_state', 'linked_latest_tick', 'linked_latest_heartbeat_decision',
+        'linked_latest_timing_snapshot'
+    ).order_by('-created_at', '-id')[:300]
+
+
+class SessionAnomalyListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionAnomalySerializer
+    queryset = AutonomousSessionAnomaly.objects.select_related('linked_session', 'linked_health_snapshot').order_by('-created_at', '-id')[:300]
+
+
+class SessionInterventionDecisionListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionInterventionDecisionSerializer
+    queryset = AutonomousSessionInterventionDecision.objects.select_related('linked_session', 'linked_health_snapshot').order_by('-created_at', '-id')[:300]
+
+
+class SessionInterventionRecordListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionInterventionRecordSerializer
+    queryset = AutonomousSessionInterventionRecord.objects.select_related('linked_session', 'linked_intervention_decision').order_by('-created_at', '-id')[:300]
+
+
+class SessionHealthRecommendationListView(generics.ListAPIView):
+    serializer_class = AutonomousSessionHealthRecommendationSerializer
+    queryset = AutonomousSessionHealthRecommendation.objects.select_related(
+        'target_session', 'target_health_snapshot', 'target_intervention_decision'
+    ).order_by('-created_at', '-id')[:300]
+
+
+class SessionHealthSummaryView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(build_session_health_summary(), status=status.HTTP_200_OK)
+
+
+class ApplySessionInterventionView(APIView):
+    def post(self, request, decision_id: int, *args, **kwargs):
+        decision = get_object_or_404(AutonomousSessionInterventionDecision, pk=decision_id)
+        record = apply_intervention(decision=decision, automatic=False)
+        payload = {
+            'decision': AutonomousSessionInterventionDecisionSerializer(decision).data,
+            'record': AutonomousSessionInterventionRecordSerializer(record).data if record else None,
         }
         return Response(payload, status=status.HTTP_200_OK)

@@ -10,6 +10,7 @@ from django.utils import timezone
 from apps.mission_control.models import (
     AutonomousProfileSwitchRecord,
     AutonomousCooldownState,
+    AutonomousSessionInterventionDecision,
     AutonomousRuntimeSession,
     AutonomousRuntimeTick,
     AutonomousScheduleProfile,
@@ -379,5 +380,60 @@ class AdaptiveProfileControlTests(TestCase):
         AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
         self.client.post(reverse('mission_control:run-profile-selection-review'), data='{}', content_type='application/json')
         response = self.client.get(reverse('mission_control:profile-selection-summary'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('summary', response.json())
+
+
+class SessionHealthGovernanceTests(TestCase):
+    def test_repeated_failed_ticks_generates_anomaly_and_pause_review(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        for index in range(1, 4):
+            AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index, tick_status='FAILED')
+
+        response = self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        anomalies = self.client.get(reverse('mission_control:session-anomalies')).json()
+        decisions = self.client.get(reverse('mission_control:session-intervention-decisions')).json()
+        self.assertTrue(any(item['linked_session'] == session.id and item['anomaly_type'] == 'REPEATED_FAILED_TICKS' for item in anomalies))
+        target = next(item for item in decisions if item['linked_session'] == session.id)
+        self.assertIn(target['decision_type'], {'PAUSE_SESSION', 'REQUIRE_MANUAL_REVIEW'})
+
+    def test_persistent_blocked_ticks_recommends_stop_or_manual(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        for index in range(1, 6):
+            AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index, tick_status='BLOCKED')
+
+        self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
+        decisions = self.client.get(reverse('mission_control:session-intervention-decisions')).json()
+        target = next(item for item in decisions if item['linked_session'] == session.id)
+        self.assertIn(target['decision_type'], {'STOP_SESSION', 'REQUIRE_MANUAL_REVIEW'})
+
+    @patch('apps.mission_control.services.session_health.health_snapshot.get_safety_status')
+    def test_safety_runtime_block_forces_conservative_intervention(self, mock_safety):
+        mock_safety.return_value = {'kill_switch_enabled': True, 'hard_stop_active': True, 'status': 'blocked'}
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
+        decision = AutonomousSessionInterventionDecision.objects.filter(linked_session=session).order_by('-created_at').first()
+        self.assertIsNotNone(decision)
+        self.assertEqual(decision.decision_type, 'STOP_SESSION')
+        self.assertTrue(decision.auto_applicable)
+
+    def test_recovered_paused_session_can_recommend_resume(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER', pause_reason_codes=['manual_pause'])
+        AutonomousRuntimeTick.objects.create(
+            linked_session=session,
+            tick_index=1,
+            tick_status='SKIPPED',
+            reason_codes=['watch_only'],
+        )
+        self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
+        decisions = self.client.get(reverse('mission_control:session-intervention-decisions')).json()
+        target = next(item for item in decisions if item['linked_session'] == session.id)
+        self.assertIn(target['decision_type'], {'RESUME_SESSION', 'KEEP_RUNNING', 'REQUIRE_MANUAL_REVIEW'})
+
+    def test_session_health_summary_endpoint(self):
+        AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-session-health-review'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:session-health-summary'))
         self.assertEqual(response.status_code, 200)
         self.assertIn('summary', response.json())

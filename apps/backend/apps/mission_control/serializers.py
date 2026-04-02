@@ -14,10 +14,16 @@ from apps.mission_control.models import (
     AutonomousRuntimeSession,
     AutonomousRuntimeTick,
     AutonomousScheduleProfile,
+    AutonomousSessionAnomaly,
     AutonomousProfileRecommendation,
     AutonomousProfileSelectionRun,
     AutonomousProfileSwitchDecision,
     AutonomousProfileSwitchRecord,
+    AutonomousSessionHealthRecommendation,
+    AutonomousSessionHealthRun,
+    AutonomousSessionHealthSnapshot,
+    AutonomousSessionInterventionDecision,
+    AutonomousSessionInterventionRecord,
     AutonomousSessionContextReview,
     AutonomousSessionTimingSnapshot,
     AutonomousStopConditionEvaluation,
@@ -212,6 +218,15 @@ class ProfileSelectionReviewRequestSerializer(serializers.Serializer):
     apply_switches = serializers.BooleanField(required=False, default=True)
 
 
+class SessionHealthReviewRequestSerializer(serializers.Serializer):
+    session_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=True,
+    )
+    auto_apply_safe = serializers.BooleanField(required=False, default=True)
+
+
 class AutonomousProfileSelectionRunSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousProfileSelectionRun
@@ -239,4 +254,40 @@ class AutonomousProfileSwitchRecordSerializer(serializers.ModelSerializer):
 class AutonomousProfileRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousProfileRecommendation
+        fields = '__all__'
+
+
+class AutonomousSessionHealthRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionHealthRun
+        fields = '__all__'
+
+
+class AutonomousSessionHealthSnapshotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionHealthSnapshot
+        fields = '__all__'
+
+
+class AutonomousSessionAnomalySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionAnomaly
+        fields = '__all__'
+
+
+class AutonomousSessionInterventionDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionInterventionDecision
+        fields = '__all__'
+
+
+class AutonomousSessionInterventionRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionInterventionRecord
+        fields = '__all__'
+
+
+class AutonomousSessionHealthRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutonomousSessionHealthRecommendation
         fields = '__all__'

@@ -85,6 +85,36 @@ Boundaries remain strict: local-first, single-user, paper/sandbox only, no broke
 
 Scope remains unchanged: local-first, single-user, paper/sandbox only, no live broker/exchange execution, and no real money.
 
+### Autonomous session health monitor / anomaly escalation / self-healing governance (new)
+
+`mission_control` now includes an explicit **session health governance layer** that sits on top of existing session control, timing policy, and heartbeat runner:
+
+- pipeline: `session -> health snapshot -> anomaly -> intervention decision -> recommendation -> optional conservative apply`
+- auditable entities:
+  - `AutonomousSessionHealthRun`
+  - `AutonomousSessionHealthSnapshot`
+  - `AutonomousSessionAnomaly`
+  - `AutonomousSessionInterventionDecision`
+  - `AutonomousSessionInterventionRecord`
+  - `AutonomousSessionHealthRecommendation`
+- conservative intervention outcomes:
+  - `KEEP_RUNNING`
+  - `PAUSE_SESSION`
+  - `RESUME_SESSION`
+  - `STOP_SESSION`
+  - `REQUIRE_MANUAL_REVIEW`
+  - `ESCALATE_TO_INCIDENT_REVIEW`
+- transparent API:
+  - `POST /api/mission-control/run-session-health-review/`
+  - `GET /api/mission-control/session-health-runs/`
+  - `GET /api/mission-control/session-health-snapshots/`
+  - `GET /api/mission-control/session-anomalies/`
+  - `GET /api/mission-control/session-intervention-decisions/`
+  - `GET /api/mission-control/session-health-recommendations/`
+  - `GET /api/mission-control/session-health-summary/`
+
+Boundaries remain strict: local-first, single-user, paper/sandbox only, no real money, no live broker/exchange routing, and no replacement of runtime/safety/incident/portfolio authorities.
+
 ### Evaluation harness (new)
 
 The platform now includes an explicit **benchmark/evaluation harness** for autonomous paper/demo operation:

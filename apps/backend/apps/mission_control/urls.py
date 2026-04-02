@@ -62,4 +62,13 @@ urlpatterns = [
     path('profile-recommendations/', views.ProfileRecommendationListView.as_view(), name='profile-recommendations'),
     path('profile-selection-summary/', views.ProfileSelectionSummaryView.as_view(), name='profile-selection-summary'),
     path('apply-profile-switch/<int:decision_id>/', views.ApplyProfileSwitchDecisionView.as_view(), name='apply-profile-switch'),
+    path('run-session-health-review/', views.RunSessionHealthReviewView.as_view(), name='run-session-health-review'),
+    path('session-health-runs/', views.SessionHealthRunListView.as_view(), name='session-health-runs'),
+    path('session-health-snapshots/', views.SessionHealthSnapshotListView.as_view(), name='session-health-snapshots'),
+    path('session-anomalies/', views.SessionAnomalyListView.as_view(), name='session-anomalies'),
+    path('session-intervention-decisions/', views.SessionInterventionDecisionListView.as_view(), name='session-intervention-decisions'),
+    path('session-intervention-records/', views.SessionInterventionRecordListView.as_view(), name='session-intervention-records'),
+    path('session-health-recommendations/', views.SessionHealthRecommendationListView.as_view(), name='session-health-recommendations'),
+    path('session-health-summary/', views.SessionHealthSummaryView.as_view(), name='session-health-summary'),
+    path('apply-session-intervention/<int:decision_id>/', views.ApplySessionInterventionView.as_view(), name='apply-session-intervention'),
 ]

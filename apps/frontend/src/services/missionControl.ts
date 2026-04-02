@@ -18,7 +18,12 @@ import type {
   AutonomousProfileSwitchDecision,
   AutonomousProfileSwitchRecord,
   AutonomousScheduleProfile,
+  AutonomousSessionAnomaly,
   AutonomousSessionContextReview,
+  AutonomousSessionHealthRecommendation,
+  AutonomousSessionHealthRun,
+  AutonomousSessionHealthSnapshot,
+  AutonomousSessionInterventionDecision,
   AutonomousSessionTimingSnapshot,
   AutonomousStopConditionEvaluation,
   AutonomousTimingDecision,
@@ -27,6 +32,7 @@ import type {
   AutonomousSessionRecommendation,
   SessionTimingSummary,
   ProfileSelectionSummary,
+  SessionHealthSummary,
   AutonomousSessionSummary,
   AutonomousTickDispatchAttempt,
   MissionControlCycle,
@@ -254,4 +260,38 @@ export function getProfileRecommendations() {
 
 export function getProfileSelectionSummary() {
   return requestJson<ProfileSelectionSummary>('/api/mission-control/profile-selection-summary/');
+}
+
+export function runSessionHealthReview(sessionIds?: number[], autoApplySafe = true) {
+  return requestJson<AutonomousSessionHealthRun>('/api/mission-control/run-session-health-review/', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...(sessionIds?.length ? { session_ids: sessionIds } : {}),
+      auto_apply_safe: autoApplySafe,
+    }),
+  });
+}
+
+export function getSessionHealthRuns() {
+  return requestJson<AutonomousSessionHealthRun[]>('/api/mission-control/session-health-runs/');
+}
+
+export function getSessionHealthSnapshots() {
+  return requestJson<AutonomousSessionHealthSnapshot[]>('/api/mission-control/session-health-snapshots/');
+}
+
+export function getSessionAnomalies() {
+  return requestJson<AutonomousSessionAnomaly[]>('/api/mission-control/session-anomalies/');
+}
+
+export function getSessionInterventionDecisions() {
+  return requestJson<AutonomousSessionInterventionDecision[]>('/api/mission-control/session-intervention-decisions/');
+}
+
+export function getSessionHealthRecommendations() {
+  return requestJson<AutonomousSessionHealthRecommendation[]>('/api/mission-control/session-health-recommendations/');
+}
+
+export function getSessionHealthSummary() {
+  return requestJson<SessionHealthSummary>('/api/mission-control/session-health-summary/');
 }
