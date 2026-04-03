@@ -1,6 +1,8 @@
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
+from django.utils import timezone
+from datetime import timedelta
 
 from apps.readiness_lab.models import ReadinessAssessmentRun, ReadinessProfile, ReadinessStatus
 from apps.runtime_governor.models import (
@@ -13,6 +15,7 @@ from apps.runtime_governor.models import (
     RuntimeFeedbackDecision,
     RuntimeFeedbackRecommendation,
     RuntimeModeStabilityReview,
+    RuntimeModeTransitionApplyRecord,
     RuntimeModeTransitionDecision,
     RuntimeMode,
     RuntimeSetBy,
@@ -359,7 +362,7 @@ class RuntimeGovernorTests(TestCase):
         self.assertEqual(decision.decision_type, 'RELAX_TO_CAUTION')
         self.client.post(reverse('runtime_governor_v2:apply_runtime_feedback_decision', kwargs={'decision_id': decision.id}), format='json')
         apply_record = RuntimeFeedbackApplyRecord.objects.order_by('-created_at', '-id').first()
-        self.assertEqual(apply_record.applied_mode, 'CAUTION')
+        self.assertEqual(apply_record.record_status, 'BLOCKED')
 
     def test_runtime_feedback_apply_manual_review_blocks_auto_apply(self):
         self._create_ticks(count=4, status='BLOCKED')
@@ -383,6 +386,11 @@ class RuntimeGovernorTests(TestCase):
         self.assertEqual(apply_decision.apply_type, 'APPLY_MANUAL_REVIEW_ONLY')
 
     def test_runtime_feedback_apply_refreshes_enforcement_on_mode_change(self):
+        RuntimeFeedbackApplyRecord.objects.all().delete()
+        state = get_runtime_state()
+        state.metadata = {**(state.metadata or {}), GLOBAL_MODE_METADATA_KEY: 'BALANCED'}
+        state.save(update_fields=['metadata', 'updated_at'])
+        state.__class__.objects.filter(pk=state.pk).update(updated_at=timezone.now() - timedelta(hours=1))
         self._create_ticks(count=3, status='SKIPPED')
         self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
         decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
@@ -461,3 +469,74 @@ class RuntimeGovernorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn('runs', payload)
+
+    def test_apply_stabilized_transition_allows_mode_switch(self):
+        self._create_feedback_decision('ENTER_RECOVERY_MODE')
+        self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
+        decision = RuntimeModeTransitionDecision.objects.order_by('-created_at', '-id').first()
+        response = self.client.post(
+            reverse('runtime_governor_v2:apply_stabilized_mode_transition', kwargs={'decision_id': decision.id}),
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        apply_record = RuntimeModeTransitionApplyRecord.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(apply_record.apply_status, 'APPLIED')
+        self.assertTrue(apply_record.enforcement_refreshed)
+        state = get_runtime_state()
+        self.assertEqual((state.metadata or {}).get(GLOBAL_MODE_METADATA_KEY), 'RECOVERY_MODE')
+
+    def test_apply_stabilized_transition_deferred_is_blocked(self):
+        state = get_runtime_state()
+        state.metadata = {**(state.metadata or {}), GLOBAL_MODE_METADATA_KEY: 'RECOVERY_MODE'}
+        state.save(update_fields=['metadata', 'updated_at'])
+        self._create_feedback_decision('RELAX_TO_CAUTION')
+        self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
+        decision = RuntimeModeTransitionDecision.objects.order_by('-created_at', '-id').first()
+        self.assertIn(decision.decision_type, {'DEFER_MODE_SWITCH', 'KEEP_CURRENT_MODE_FOR_DWELL'})
+        self.client.post(reverse('runtime_governor_v2:apply_stabilized_mode_transition', kwargs={'decision_id': decision.id}), format='json')
+        apply_record = RuntimeModeTransitionApplyRecord.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(apply_record.apply_status, 'BLOCKED')
+        self.assertFalse(apply_record.enforcement_refreshed)
+
+    def test_apply_stabilized_transition_manual_and_blocked_decisions_are_blocked(self):
+        self._create_feedback_decision('ENTER_RECOVERY_MODE')
+        self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
+        latest = RuntimeModeTransitionDecision.objects.order_by('-created_at', '-id').first()
+        latest.decision_type = 'REQUIRE_MANUAL_STABILITY_REVIEW'
+        latest.auto_applicable = False
+        latest.save(update_fields=['decision_type', 'auto_applicable', 'updated_at'])
+        self.client.post(reverse('runtime_governor_v2:apply_stabilized_mode_transition', kwargs={'decision_id': latest.id}), format='json')
+        manual_record = RuntimeModeTransitionApplyRecord.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(manual_record.apply_status, 'BLOCKED')
+
+        latest.decision_type = 'BLOCK_MODE_SWITCH'
+        latest.save(update_fields=['decision_type', 'updated_at'])
+        self.client.post(reverse('runtime_governor_v2:apply_stabilized_mode_transition', kwargs={'decision_id': latest.id}), format='json')
+        blocked_record = RuntimeModeTransitionApplyRecord.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(blocked_record.apply_status, 'BLOCKED')
+        self.assertEqual(blocked_record.linked_transition_decision_id, latest.id)
+
+    def test_apply_stabilized_transition_skips_without_mode_change_and_no_enforcement_refresh(self):
+        state = get_runtime_state()
+        state.metadata = {**(state.metadata or {}), GLOBAL_MODE_METADATA_KEY: 'CAUTION'}
+        state.save(update_fields=['metadata', 'updated_at'])
+        state.__class__.objects.filter(pk=state.pk).update(updated_at=timezone.now() - timedelta(hours=1))
+        self._create_feedback_decision('SHIFT_TO_MORE_CONSERVATIVE_MODE')
+        self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
+        decision = RuntimeModeTransitionDecision.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(decision.linked_transition_snapshot.target_mode, 'CAUTION')
+        self.client.post(reverse('runtime_governor_v2:apply_stabilized_mode_transition', kwargs={'decision_id': decision.id}), format='json')
+        apply_record = RuntimeModeTransitionApplyRecord.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(apply_record.apply_status, 'SKIPPED')
+        self.assertFalse(apply_record.enforcement_refreshed)
+
+    def test_runtime_feedback_apply_consults_mode_stabilization_gate(self):
+        state = get_runtime_state()
+        state.metadata = {**(state.metadata or {}), GLOBAL_MODE_METADATA_KEY: 'RECOVERY_MODE'}
+        state.save(update_fields=['metadata', 'updated_at'])
+        self._create_feedback_decision('RELAX_TO_CAUTION')
+        feedback_decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        self.client.post(reverse('runtime_governor_v2:apply_runtime_feedback_decision', kwargs={'decision_id': feedback_decision.id}), format='json')
+        apply_record = RuntimeFeedbackApplyRecord.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(apply_record.record_status, 'BLOCKED')
+        self.assertIn('stabilization_transition_decision_id', apply_record.metadata)

@@ -442,6 +442,18 @@ export type RuntimeModeTransitionDecision = {
   created_at: string;
 };
 
+export type RuntimeModeTransitionApplyRecord = {
+  id: number;
+  linked_transition_decision: number;
+  apply_status: 'APPLIED' | 'SKIPPED' | 'BLOCKED' | 'FAILED';
+  previous_mode: GlobalOperatingMode | null;
+  applied_mode: GlobalOperatingMode | null;
+  enforcement_refreshed: boolean;
+  apply_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
 export type RuntimeModeStabilizationRecommendation = {
   id: number;
   target_transition_snapshot: number | null;
@@ -461,15 +473,19 @@ export type RuntimeModeStabilizationSummary = {
   latest_snapshot_id: number | null;
   latest_review_id: number | null;
   latest_decision_id: number | null;
+  latest_apply_record_id: number | null;
   runs: number;
   snapshots: number;
   reviews: number;
   decisions: number;
   recommendations: number;
+  apply_records: number;
   allowed_count: number;
   deferred_count: number;
   dwell_hold_count: number;
   blocked_count: number;
   manual_review_count: number;
+  applied_count: number;
+  blocked_apply_count: number;
   recommendation_summary: Record<string, unknown>;
 };

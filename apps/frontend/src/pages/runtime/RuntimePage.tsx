@@ -40,6 +40,8 @@ import {
   getModeTransitionSnapshots,
   getModeStabilityReviews,
   getModeTransitionDecisions,
+  getModeTransitionApplyRecords,
+  applyStabilizedModeTransition,
   getModeStabilizationRecommendations,
   getModeStabilizationSummary,
 } from '../../services/runtime';
@@ -72,6 +74,7 @@ import type {
   RuntimeModeStabilizationSummary,
   RuntimeModeStabilityReview,
   RuntimeModeTransitionDecision,
+  RuntimeModeTransitionApplyRecord,
   RuntimeModeTransitionSnapshot,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
@@ -111,6 +114,7 @@ export function RuntimePage() {
   const [modeTransitionSnapshots, setModeTransitionSnapshots] = useState<RuntimeModeTransitionSnapshot[]>([]);
   const [modeStabilityReviews, setModeStabilityReviews] = useState<RuntimeModeStabilityReview[]>([]);
   const [modeTransitionDecisions, setModeTransitionDecisions] = useState<RuntimeModeTransitionDecision[]>([]);
+  const [modeTransitionApplyRecords, setModeTransitionApplyRecords] = useState<RuntimeModeTransitionApplyRecord[]>([]);
   const [modeStabilizationRecommendations, setModeStabilizationRecommendations] = useState<RuntimeModeStabilizationRecommendation[]>([]);
   const [modeStabilizationSummary, setModeStabilizationSummary] = useState<RuntimeModeStabilizationSummary | null>(null);
 
@@ -124,7 +128,7 @@ export function RuntimePage() {
     setLoading(true);
     setError(null);
     try {
-      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, stabilizationRecommendationsRes, stabilizationSummaryRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
@@ -153,6 +157,7 @@ export function RuntimePage() {
         getModeTransitionSnapshots(),
         getModeStabilityReviews(),
         getModeTransitionDecisions(),
+        getModeTransitionApplyRecords(),
         getModeStabilizationRecommendations(),
         getModeStabilizationSummary(),
       ]);
@@ -184,6 +189,7 @@ export function RuntimePage() {
       setModeTransitionSnapshots(transitionSnapshotsRes);
       setModeStabilityReviews(stabilityReviewsRes);
       setModeTransitionDecisions(transitionDecisionsRes);
+      setModeTransitionApplyRecords(transitionApplyRecordsRes);
       setModeStabilizationRecommendations(stabilizationRecommendationsRes);
       setModeStabilizationSummary(stabilizationSummaryRes);
     } catch (err) {
@@ -279,10 +285,23 @@ export function RuntimePage() {
     setRunningReview(true);
     setError(null);
     try {
-      await runModeStabilizationReview({ triggered_by: 'runtime-page' });
+      await runModeStabilizationReview({ triggered_by: 'runtime-page', auto_apply_safe: true });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not run mode stabilization review.');
+    } finally {
+      setRunningReview(false);
+    }
+  }
+
+  async function onApplyStabilizedTransition(decisionId: number) {
+    setRunningReview(true);
+    setError(null);
+    try {
+      await applyStabilizedModeTransition(decisionId);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not apply stabilized transition decision.');
     } finally {
       setRunningReview(false);
     }
@@ -479,11 +498,14 @@ export function RuntimePage() {
             <div><strong>Reviews:</strong> {modeStabilizationSummary?.reviews ?? 0}</div>
             <div><strong>Decisions:</strong> {modeStabilizationSummary?.decisions ?? 0}</div>
             <div><strong>Recommendations:</strong> {modeStabilizationSummary?.recommendations ?? 0}</div>
+            <div><strong>Apply records:</strong> {modeStabilizationSummary?.apply_records ?? 0}</div>
             <div><strong>Allowed:</strong> {modeStabilizationSummary?.allowed_count ?? 0}</div>
             <div><strong>Deferred:</strong> {modeStabilizationSummary?.deferred_count ?? 0}</div>
             <div><strong>Dwell hold:</strong> {modeStabilizationSummary?.dwell_hold_count ?? 0}</div>
             <div><strong>Blocked:</strong> {modeStabilizationSummary?.blocked_count ?? 0}</div>
             <div><strong>Manual review:</strong> {modeStabilizationSummary?.manual_review_count ?? 0}</div>
+            <div><strong>Applied transitions:</strong> {modeStabilizationSummary?.applied_count ?? 0}</div>
+            <div><strong>Blocked apply:</strong> {modeStabilizationSummary?.blocked_apply_count ?? 0}</div>
           </div>
 
           <h4>Transition snapshots</h4>
@@ -493,7 +515,10 @@ export function RuntimePage() {
           <div className="table-wrapper"><table className="data-table"><thead><tr><th>Review type</th><th>Severity</th><th>Summary</th></tr></thead><tbody>{modeStabilityReviews.slice(0, 10).map((row) => <tr key={row.id}><td>{row.review_type}</td><td>{row.review_severity}</td><td>{row.review_summary}</td></tr>)}</tbody></table></div>
 
           <h4>Transition decisions</h4>
-          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Decision type</th><th>Status</th><th>Auto</th><th>Summary</th></tr></thead><tbody>{modeTransitionDecisions.slice(0, 10).map((row) => <tr key={row.id}><td>{row.decision_type}</td><td>{row.decision_status}</td><td>{row.auto_applicable ? 'Yes' : 'No'}</td><td>{row.decision_summary}</td></tr>)}</tbody></table></div>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Decision type</th><th>Status</th><th>Auto</th><th>Summary</th><th>Action</th></tr></thead><tbody>{modeTransitionDecisions.slice(0, 10).map((row) => <tr key={row.id}><td>{row.decision_type}</td><td>{row.decision_status}</td><td>{row.auto_applicable ? 'Yes' : 'No'}</td><td>{row.decision_summary}</td><td><button type="button" className="secondary-button" disabled={runningReview} onClick={() => void onApplyStabilizedTransition(row.id)}>Apply stabilized transition</button></td></tr>)}</tbody></table></div>
+
+          <h4>Transition apply records</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Decision</th><th>Status</th><th>Path</th><th>Previous → Applied</th><th>Enforcement refreshed</th><th>Summary</th></tr></thead><tbody>{modeTransitionApplyRecords.slice(0, 10).map((row) => <tr key={row.id}><td>{row.linked_transition_decision}</td><td>{row.apply_status}</td><td>{Boolean(row.metadata.auto_apply_safe) ? 'Auto safe apply' : 'Manual apply'}</td><td>{row.previous_mode ?? '—'} → {row.applied_mode ?? '—'}</td><td>{row.enforcement_refreshed ? 'Yes' : 'No'}</td><td>{row.apply_summary}</td></tr>)}</tbody></table></div>
 
           <h4>Recommendations</h4>
           <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{modeStabilizationRecommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>

@@ -32,6 +32,7 @@ import type {
   RuntimeModeStabilizationSummary,
   RuntimeModeStabilityReview,
   RuntimeModeTransitionDecision,
+  RuntimeModeTransitionApplyRecord,
   RuntimeModeTransitionSnapshot,
 } from '../types/runtime';
 
@@ -182,7 +183,7 @@ export function getRuntimeFeedbackApplySummary() {
   return requestJson<RuntimeFeedbackApplySummary>('/api/runtime-governor/runtime-feedback-apply-summary/');
 }
 
-export function runModeStabilizationReview(payload: { triggered_by?: string } = {}) {
+export function runModeStabilizationReview(payload: { triggered_by?: string; auto_apply_safe?: boolean } = {}) {
   return requestJson<{ run_id: number }>('/api/runtime-governor/run-mode-stabilization-review/', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -203,6 +204,16 @@ export function getModeStabilityReviews() {
 
 export function getModeTransitionDecisions() {
   return requestJson<RuntimeModeTransitionDecision[]>('/api/runtime-governor/mode-transition-decisions/');
+}
+
+export function applyStabilizedModeTransition(decisionId: number) {
+  return requestJson<RuntimeModeTransitionApplyRecord>(`/api/runtime-governor/apply-stabilized-mode-transition/${decisionId}/`, {
+    method: 'POST',
+  });
+}
+
+export function getModeTransitionApplyRecords() {
+  return requestJson<RuntimeModeTransitionApplyRecord[]>('/api/runtime-governor/mode-transition-apply-records/');
 }
 
 export function getModeStabilizationRecommendations() {

@@ -79,15 +79,17 @@ Esta UI no habilita trading real ni reemplaza autoridades existentes; solo super
 La vista `/runtime` ahora agrega una sección **Mode Stabilization** (sin crear pantalla nueva):
 
 - acción manual: `Run mode stabilization review`
+- acción manual por decisión: `Apply stabilized transition`
 - summary cards de runs/snapshots/reviews/decisions/recommendations y conteos (allow/defer/dwell-hold/block/manual)
 - paneles técnicos:
   - transition snapshots
   - stability reviews
   - transition decisions
+  - transition apply records (manual / auto safe / blocked)
   - recommendations
   - runs
 
-En esta etapa es solo capa de review/diagnóstico/decisión/recomendación. Sigue paper-only y **no** aplica todavía la transición estabilizada real.
+La misma sección ahora integra el apply estabilizado real de forma auditable y conservadora (paper-only). El refresh de enforcement solo ocurre cuando hubo cambio real de modo y la decisión de estabilización lo permite.
 
 ## Mission control autonomous runner UX (new)
 
