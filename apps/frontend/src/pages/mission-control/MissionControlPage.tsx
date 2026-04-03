@@ -517,6 +517,8 @@ export function MissionControlPage() {
             <div><strong>Escalated:</strong> {governanceAgingSummary?.latest_counts.escalated ?? 0}</div>
             <div><strong>Follow-up due:</strong> {governanceAgingSummary?.latest_counts.followup_due ?? 0}</div>
             <div><strong>Blocked stale:</strong> {governanceAgingSummary?.latest_counts.blocked_stale ?? 0}</div>
+            <div><strong>Overdue:</strong> {governanceAgingSummary?.latest_counts.overdue ?? 0}</div>
+            <div><strong>Manual review overdue:</strong> {governanceAgingSummary?.latest_counts.manual_review_overdue ?? 0}</div>
           </div>
           <ul>{governanceAgingReviews.slice(0, 12).map((review) => <li key={review.id}><strong>{review.aging_status}</strong> — item={review.linked_review_item} bucket={review.age_bucket} reason=[{review.reason_codes.join(', ')}] summary={review.review_summary}</li>)}</ul>
           <ul>{governanceAgingRecommendations.slice(0, 12).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — item={recommendation.linked_review_item} confidence={recommendation.confidence.toFixed(2)} rationale={recommendation.rationale}</li>)}</ul>

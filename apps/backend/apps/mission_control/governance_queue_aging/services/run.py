@@ -84,6 +84,8 @@ def governance_queue_aging_summary() -> dict:
             'escalated': latest_run.escalated_count if latest_run else 0,
             'followup_due': latest_run.followup_due_count if latest_run else 0,
             'blocked_stale': latest_run.blocked_stale_count if latest_run else 0,
+            'overdue': latest_run.metadata.get('overdue_count', 0) if latest_run else 0,
+            'manual_review_overdue': latest_run.metadata.get('manual_review_overdue_count', 0) if latest_run else 0,
         },
         'totals': {
             'runs': GovernanceQueueAgingRun.objects.count(),

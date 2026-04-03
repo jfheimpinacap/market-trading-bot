@@ -97,6 +97,7 @@ Guardrails:
 - does not replace the existing governance queue or low-risk auto-resolution
 - paper-only scope (no live trading / no real money)
 - reduces risk of human-review backlog drift and hidden stale blockers
+- explicit rules cover: old `OPEN` escalation, stalled `IN_REVIEW` overdue, follow-up due now, and persistent blocked stale escalation
 
 ### Governance backlog pressure (delta-only) (new)
 

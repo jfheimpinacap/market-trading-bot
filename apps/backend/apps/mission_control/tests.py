@@ -977,7 +977,10 @@ class GovernanceQueueAgingTests(TestCase):
         self.client.post(reverse('mission_control:run-governance-queue-aging-review'), data='{}', content_type='application/json')
         response = self.client.get(reverse('mission_control:governance-queue-aging-summary'))
         self.assertEqual(response.status_code, 200)
-        self.assertIn('latest_counts', response.json())
+        payload = response.json()
+        self.assertIn('latest_counts', payload)
+        self.assertIn('overdue', payload['latest_counts'])
+        self.assertIn('manual_review_overdue', payload['latest_counts'])
 
 
 class GovernanceBacklogPressureTests(TestCase):
