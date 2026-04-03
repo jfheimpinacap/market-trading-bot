@@ -47,6 +47,10 @@ import type {
   AutonomousSessionAdmissionDecision,
   AutonomousSessionAdmissionRecommendation,
   GovernanceReviewItem,
+  GovernanceAutoResolutionDecision,
+  GovernanceAutoResolutionRecord,
+  GovernanceAutoResolutionRun,
+  GovernanceAutoResolutionSummary,
   GovernanceReviewQueueRun,
   GovernanceReviewResolution,
   GovernanceReviewRecommendation,
@@ -436,4 +440,24 @@ export function getGovernanceReviewResolutions() {
 
 export function getGovernanceReviewSummary() {
   return requestJson<GovernanceReviewSummary>('/api/mission-control/governance-review-summary/');
+}
+
+export function runGovernanceAutoResolution() {
+  return requestJson<GovernanceAutoResolutionRun>('/api/mission-control/run-governance-auto-resolution/', { method: 'POST', body: '{}' });
+}
+
+export function getGovernanceAutoResolutionRuns() {
+  return requestJson<GovernanceAutoResolutionRun[]>('/api/mission-control/governance-auto-resolution-runs/');
+}
+
+export function getGovernanceAutoResolutionDecisions() {
+  return requestJson<GovernanceAutoResolutionDecision[]>('/api/mission-control/governance-auto-resolution-decisions/');
+}
+
+export function getGovernanceAutoResolutionRecords() {
+  return requestJson<GovernanceAutoResolutionRecord[]>('/api/mission-control/governance-auto-resolution-records/');
+}
+
+export function getGovernanceAutoResolutionSummary() {
+  return requestJson<GovernanceAutoResolutionSummary>('/api/mission-control/governance-auto-resolution-summary/');
 }

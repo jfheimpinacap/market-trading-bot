@@ -850,3 +850,56 @@ export type GovernanceReviewSummary = {
   manual_review_count: number;
   by_source_module: Record<string, number>;
 };
+
+export type GovernanceAutoResolutionRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_item_count: number;
+  eligible_count: number;
+  applied_count: number;
+  skipped_count: number;
+  blocked_count: number;
+  metadata: Record<string, unknown>;
+};
+
+export type GovernanceAutoResolutionDecision = {
+  id: number;
+  linked_review_item: number;
+  linked_auto_resolution_run: number | null;
+  decision_type: 'AUTO_DISMISS' | 'AUTO_RETRY_SAFE_APPLY' | 'AUTO_REQUIRE_FOLLOWUP' | 'DO_NOT_AUTO_RESOLVE';
+  decision_status: 'PROPOSED' | 'APPLIED' | 'SKIPPED' | 'BLOCKED';
+  auto_applicable: boolean;
+  decision_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type GovernanceAutoResolutionRecord = {
+  id: number;
+  linked_review_item: number;
+  linked_auto_resolution_decision: number;
+  record_status: 'APPLIED' | 'SKIPPED' | 'BLOCKED' | 'FAILED';
+  effect_type: 'DISMISSED' | 'RETRY_SAFE_APPLY_TRIGGERED' | 'FOLLOWUP_MARKED' | 'NO_CHANGE';
+  record_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type GovernanceAutoResolutionSummary = {
+  latest_run_id: number | null;
+  totals: {
+    runs: number;
+    decisions: number;
+    records: number;
+  };
+  latest_counts: {
+    considered: number;
+    eligible: number;
+    applied: number;
+    skipped: number;
+    blocked: number;
+  };
+  decision_breakdown: Record<string, number>;
+};

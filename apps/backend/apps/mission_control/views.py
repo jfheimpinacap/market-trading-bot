@@ -48,6 +48,9 @@ from apps.mission_control.models import (
     AutonomousSessionAdmissionRecommendation,
     GovernanceReviewItem,
     GovernanceReviewQueueRun,
+    GovernanceAutoResolutionRun,
+    GovernanceAutoResolutionDecision,
+    GovernanceAutoResolutionRecord,
     GovernanceReviewResolution,
     GovernanceReviewRecommendation,
     MissionControlCycle,
@@ -108,6 +111,9 @@ from apps.mission_control.serializers import (
     AutonomousSessionAdmissionRecommendationSerializer,
     GovernanceReviewItemSerializer,
     GovernanceReviewQueueRunSerializer,
+    GovernanceAutoResolutionRunSerializer,
+    GovernanceAutoResolutionDecisionSerializer,
+    GovernanceAutoResolutionRecordSerializer,
     GovernanceReviewResolutionSerializer,
     GovernanceReviewRecommendationSerializer,
     ResolveGovernanceReviewItemRequestSerializer,
@@ -151,6 +157,11 @@ from apps.mission_control.services.session_recovery import apply_session_resume,
 from apps.mission_control.services.session_admission import apply_admission_decision, build_session_admission_summary, run_session_admission_review
 from apps.mission_control.services.session_profile_control.profile_switch import apply_profile_switch_decision
 from apps.mission_control.services.run import governance_review_summary, run_governance_review_queue
+from apps.mission_control.governance_auto_resolution.services.run import (
+    build_governance_auto_resolution_summary,
+    run_governance_auto_resolution,
+)
+from apps.mission_control.governance_auto_resolution.services.auto_resolve import apply_auto_resolution_decision
 
 
 class MissionControlStatusView(APIView):
@@ -755,3 +766,38 @@ class GovernanceReviewResolutionListView(generics.ListAPIView):
 class GovernanceReviewSummaryView(APIView):
     def get(self, request, *args, **kwargs):
         return Response(governance_review_summary(), status=status.HTTP_200_OK)
+
+
+class RunGovernanceAutoResolutionView(APIView):
+    def post(self, request, *args, **kwargs):
+        run = run_governance_auto_resolution()
+        return Response(GovernanceAutoResolutionRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class GovernanceAutoResolutionRunListView(generics.ListAPIView):
+    serializer_class = GovernanceAutoResolutionRunSerializer
+    queryset = GovernanceAutoResolutionRun.objects.order_by('-started_at', '-id')[:100]
+
+
+class GovernanceAutoResolutionDecisionListView(generics.ListAPIView):
+    serializer_class = GovernanceAutoResolutionDecisionSerializer
+    queryset = GovernanceAutoResolutionDecision.objects.select_related('linked_review_item').order_by('-created_at', '-id')[:300]
+
+
+class GovernanceAutoResolutionRecordListView(generics.ListAPIView):
+    serializer_class = GovernanceAutoResolutionRecordSerializer
+    queryset = GovernanceAutoResolutionRecord.objects.select_related(
+        'linked_review_item', 'linked_auto_resolution_decision'
+    ).order_by('-created_at', '-id')[:400]
+
+
+class GovernanceAutoResolutionSummaryView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(build_governance_auto_resolution_summary(), status=status.HTTP_200_OK)
+
+
+class ApplyGovernanceAutoResolutionDecisionView(APIView):
+    def post(self, request, decision_id: int, *args, **kwargs):
+        decision = get_object_or_404(GovernanceAutoResolutionDecision, pk=decision_id)
+        record = apply_auto_resolution_decision(decision=decision)
+        return Response(GovernanceAutoResolutionRecordSerializer(record).data, status=status.HTTP_200_OK)
