@@ -64,6 +64,30 @@ Design guardrails remain unchanged: local-first, single-user, paper-only, no liv
 
 This review layer is recommendation-first and auditable. It feeds global posture tuning conservatively, does not replace operating mode / enforcement / health / recovery / admission / exposure authorities, and keeps paper-only, local-first boundaries.
 
+## Runtime feedback apply bridge (new)
+
+`apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:
+
+- service split:
+  - `runtime_feedback_apply/services/apply.py`
+  - `runtime_feedback_apply/services/recommendation.py`
+  - `runtime_feedback_apply/services/run.py`
+- auditable entities:
+  - `RuntimeFeedbackApplyRun`
+  - `RuntimeFeedbackApplyDecision`
+  - `RuntimeFeedbackApplyRecord`
+  - `RuntimeFeedbackApplyRecommendation`
+- API:
+  - `POST /api/runtime-governor/run-runtime-feedback-apply-review/`
+  - `POST /api/runtime-governor/apply-runtime-feedback-decision/<decision_id>/`
+  - `GET /api/runtime-governor/runtime-feedback-apply-runs/`
+  - `GET /api/runtime-governor/runtime-feedback-apply-decisions/`
+  - `GET /api/runtime-governor/runtime-feedback-apply-records/`
+  - `GET /api/runtime-governor/runtime-feedback-apply-recommendations/`
+  - `GET /api/runtime-governor/runtime-feedback-apply-summary/`
+
+This layer closes feedback → mode → enforcement without replacing `runtime_governor`, `mission_control`, `portfolio_governor`, `risk_agent`, `safety_guard`, or `incident_commander`. Boundaries remain strict: local-first, single-user, paper-only, no real money, no live routing.
+
 ## Mission control autonomous session runtime (new)
 
 `apps.mission_control` now has an explicit persistent session runtime layer (paper-only):

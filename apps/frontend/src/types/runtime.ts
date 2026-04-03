@@ -315,3 +315,72 @@ export type RuntimeFeedbackSummary = {
   manual_review_required: number;
   recommendation_summary: Record<string, unknown>;
 };
+
+export type RuntimeFeedbackApplyRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_feedback_decision_count: number;
+  applied_count: number;
+  manual_review_count: number;
+  blocked_count: number;
+  mode_switch_count: number;
+  enforcement_refresh_count: number;
+  recommendation_summary: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+};
+
+export type RuntimeFeedbackApplyDecision = {
+  id: number;
+  linked_feedback_decision: number;
+  linked_apply_run: number | null;
+  current_mode: GlobalOperatingMode | null;
+  target_mode: GlobalOperatingMode | null;
+  apply_type: string;
+  apply_status: 'PROPOSED' | 'APPLIED' | 'SKIPPED' | 'BLOCKED';
+  auto_applicable: boolean;
+  apply_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RuntimeFeedbackApplyRecord = {
+  id: number;
+  linked_apply_decision: number;
+  record_status: 'APPLIED' | 'SKIPPED' | 'BLOCKED' | 'FAILED';
+  previous_mode: GlobalOperatingMode | null;
+  applied_mode: GlobalOperatingMode | null;
+  enforcement_refreshed: boolean;
+  record_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RuntimeFeedbackApplyRecommendation = {
+  id: number;
+  recommendation_type: string;
+  target_feedback_decision: number | null;
+  target_apply_decision: number | null;
+  rationale: string;
+  reason_codes: string[];
+  confidence: number;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RuntimeFeedbackApplySummary = {
+  latest_run_id: number | null;
+  latest_apply_decision_id: number | null;
+  latest_apply_record_id: number | null;
+  apply_runs: number;
+  apply_decisions: number;
+  apply_records: number;
+  recommendations: number;
+  applied_count: number;
+  manual_review_count: number;
+  blocked_count: number;
+  enforcement_refresh_count: number;
+  recommendation_summary: Record<string, unknown>;
+};

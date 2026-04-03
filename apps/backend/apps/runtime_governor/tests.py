@@ -8,6 +8,8 @@ from apps.runtime_governor.models import (
     GlobalModeEnforcementRun,
     GlobalModeModuleImpact,
     GlobalOperatingModeDecision,
+    RuntimeFeedbackApplyDecision,
+    RuntimeFeedbackApplyRecord,
     RuntimeFeedbackDecision,
     RuntimeFeedbackRecommendation,
     RuntimeMode,
@@ -302,3 +304,66 @@ class RuntimeGovernorTests(TestCase):
         response = self.client.get(reverse('runtime_governor_v2:runtime_feedback_summary'))
         self.assertEqual(response.status_code, 200)
         self.assertIn('feedback_runs', response.json())
+
+    def test_runtime_feedback_apply_recovery_recommendation_switches_mode(self):
+        session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
+        AutonomousSessionHealthSnapshot.objects.create(
+            linked_session=session,
+            session_health_status=AutonomousSessionHealthStatus.CAUTION,
+            recent_loss_count=3,
+        )
+        feedback_response = self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        self.assertEqual(feedback_response.status_code, 200)
+        decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        apply_response = self.client.post(reverse('runtime_governor_v2:apply_runtime_feedback_decision', kwargs={'decision_id': decision.id}), format='json')
+        self.assertEqual(apply_response.status_code, 200)
+        apply_record = RuntimeFeedbackApplyRecord.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(apply_record.applied_mode, 'RECOVERY_MODE')
+
+    def test_runtime_feedback_apply_relax_can_shift_to_caution(self):
+        state = get_runtime_state()
+        state.metadata = {**(state.metadata or {}), 'global_operating_mode': 'RECOVERY_MODE'}
+        state.save(update_fields=['metadata', 'updated_at'])
+        self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(decision.decision_type, 'RELAX_TO_CAUTION')
+        self.client.post(reverse('runtime_governor_v2:apply_runtime_feedback_decision', kwargs={'decision_id': decision.id}), format='json')
+        apply_record = RuntimeFeedbackApplyRecord.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(apply_record.applied_mode, 'CAUTION')
+
+    def test_runtime_feedback_apply_manual_review_blocks_auto_apply(self):
+        self._create_ticks(count=4, status='BLOCKED')
+        response = self.client.post(
+            reverse('runtime_governor_v2:run_runtime_feedback_review'),
+            {'triggered_by': 'test', 'auto_apply': False},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        decision.decision_type = 'REQUIRE_MANUAL_RUNTIME_REVIEW'
+        decision.auto_applicable = False
+        decision.save(update_fields=['decision_type', 'auto_applicable', 'updated_at'])
+        run_response = self.client.post(
+            reverse('runtime_governor_v2:run_runtime_feedback_apply_review'),
+            {'triggered_by': 'test', 'auto_apply': True},
+            format='json',
+        )
+        self.assertEqual(run_response.status_code, 200)
+        apply_decision = RuntimeFeedbackApplyDecision.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(apply_decision.apply_type, 'APPLY_MANUAL_REVIEW_ONLY')
+
+    def test_runtime_feedback_apply_refreshes_enforcement_on_mode_change(self):
+        self._create_ticks(count=3, status='SKIPPED')
+        self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        self.client.post(reverse('runtime_governor_v2:apply_runtime_feedback_decision', kwargs={'decision_id': decision.id}), format='json')
+        apply_record = RuntimeFeedbackApplyRecord.objects.order_by('-created_at', '-id').first()
+        self.assertTrue(apply_record.enforcement_refreshed)
+        self.assertTrue(GlobalModeEnforcementRun.objects.exists())
+
+    def test_runtime_feedback_apply_summary_endpoint(self):
+        self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_apply_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        response = self.client.get(reverse('runtime_governor_v2:runtime_feedback_apply_summary'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('apply_runs', response.json())

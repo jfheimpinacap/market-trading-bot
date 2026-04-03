@@ -28,6 +28,13 @@ import {
   getRuntimeFeedbackSummary,
   getRuntimePerformanceSnapshots,
   runRuntimeFeedbackReview,
+  runRuntimeFeedbackApplyReview,
+  getRuntimeFeedbackApplyRuns,
+  getRuntimeFeedbackApplyDecisions,
+  getRuntimeFeedbackApplyRecords,
+  getRuntimeFeedbackApplyRecommendations,
+  getRuntimeFeedbackApplySummary,
+  applyRuntimeFeedbackDecision,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -48,6 +55,11 @@ import type {
   RuntimeFeedbackRecommendation,
   RuntimeFeedbackSummary,
   RuntimePerformanceSnapshot,
+  RuntimeFeedbackApplyRun,
+  RuntimeFeedbackApplyDecision,
+  RuntimeFeedbackApplyRecord,
+  RuntimeFeedbackApplyRecommendation,
+  RuntimeFeedbackApplySummary,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -77,6 +89,11 @@ export function RuntimePage() {
   const [runtimeFeedbackDecisions, setRuntimeFeedbackDecisions] = useState<RuntimeFeedbackDecision[]>([]);
   const [runtimeFeedbackRecommendations, setRuntimeFeedbackRecommendations] = useState<RuntimeFeedbackRecommendation[]>([]);
   const [runtimeFeedbackSummary, setRuntimeFeedbackSummary] = useState<RuntimeFeedbackSummary | null>(null);
+  const [runtimeFeedbackApplyRuns, setRuntimeFeedbackApplyRuns] = useState<RuntimeFeedbackApplyRun[]>([]);
+  const [runtimeFeedbackApplyDecisions, setRuntimeFeedbackApplyDecisions] = useState<RuntimeFeedbackApplyDecision[]>([]);
+  const [runtimeFeedbackApplyRecords, setRuntimeFeedbackApplyRecords] = useState<RuntimeFeedbackApplyRecord[]>([]);
+  const [runtimeFeedbackApplyRecommendations, setRuntimeFeedbackApplyRecommendations] = useState<RuntimeFeedbackApplyRecommendation[]>([]);
+  const [runtimeFeedbackApplySummary, setRuntimeFeedbackApplySummary] = useState<RuntimeFeedbackApplySummary | null>(null);
 
   const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,7 +105,7 @@ export function RuntimePage() {
     setLoading(true);
     setError(null);
     try {
-      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
@@ -108,6 +125,11 @@ export function RuntimePage() {
         getRuntimeFeedbackDecisions(),
         getRuntimeFeedbackRecommendations(),
         getRuntimeFeedbackSummary(),
+        getRuntimeFeedbackApplyRuns(),
+        getRuntimeFeedbackApplyDecisions(),
+        getRuntimeFeedbackApplyRecords(),
+        getRuntimeFeedbackApplyRecommendations(),
+        getRuntimeFeedbackApplySummary(),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
@@ -128,6 +150,11 @@ export function RuntimePage() {
       setRuntimeFeedbackDecisions(feedbackDecisionRes);
       setRuntimeFeedbackRecommendations(feedbackRecommendationRes);
       setRuntimeFeedbackSummary(feedbackSummaryRes);
+      setRuntimeFeedbackApplyRuns(feedbackApplyRunsRes);
+      setRuntimeFeedbackApplyDecisions(feedbackApplyDecisionsRes);
+      setRuntimeFeedbackApplyRecords(feedbackApplyRecordsRes);
+      setRuntimeFeedbackApplyRecommendations(feedbackApplyRecommendationsRes);
+      setRuntimeFeedbackApplySummary(feedbackApplySummaryRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load runtime governance.');
     } finally {
@@ -186,6 +213,32 @@ export function RuntimePage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not run runtime feedback review.');
+    } finally {
+      setRunningReview(false);
+    }
+  }
+
+  async function onRunRuntimeFeedbackApplyReview() {
+    setRunningReview(true);
+    setError(null);
+    try {
+      await runRuntimeFeedbackApplyReview({ triggered_by: 'runtime-page', auto_apply: true });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not run runtime feedback apply review.');
+    } finally {
+      setRunningReview(false);
+    }
+  }
+
+  async function onApplyRuntimeFeedbackDecision(decisionId: number) {
+    setRunningReview(true);
+    setError(null);
+    try {
+      await applyRuntimeFeedbackDecision(decisionId);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not apply runtime feedback decision.');
     } finally {
       setRunningReview(false);
     }
@@ -337,6 +390,37 @@ export function RuntimePage() {
 
           <h4>Recommendations</h4>
           <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{runtimeFeedbackRecommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>
+        </SectionCard>
+
+        <SectionCard
+          eyebrow="Runtime feedback apply"
+          title="Runtime Feedback Apply"
+          description="Closed-loop conservative bridge from runtime feedback decisions to global mode adjustment and downstream enforcement refresh."
+          aside={<button type="button" className="secondary-button" disabled={runningReview} onClick={() => void onRunRuntimeFeedbackApplyReview()}>{runningReview ? 'Running…' : 'Run runtime feedback apply review'}</button>}
+        >
+          <p><strong>Boundary:</strong> auditable, local-first, paper-only apply layer. No real broker routing, no real money, no opaque optimizer.</p>
+          <div className="system-metadata-grid">
+            <div><strong>Apply runs:</strong> {runtimeFeedbackApplySummary?.apply_runs ?? 0}</div>
+            <div><strong>Apply decisions:</strong> {runtimeFeedbackApplySummary?.apply_decisions ?? 0}</div>
+            <div><strong>Apply records:</strong> {runtimeFeedbackApplySummary?.apply_records ?? 0}</div>
+            <div><strong>Recommendations:</strong> {runtimeFeedbackApplySummary?.recommendations ?? 0}</div>
+            <div><strong>Applied:</strong> {runtimeFeedbackApplySummary?.applied_count ?? 0}</div>
+            <div><strong>Manual review:</strong> {runtimeFeedbackApplySummary?.manual_review_count ?? 0}</div>
+            <div><strong>Blocked:</strong> {runtimeFeedbackApplySummary?.blocked_count ?? 0}</div>
+            <div><strong>Enforcement refresh:</strong> {runtimeFeedbackApplySummary?.enforcement_refresh_count ?? 0}</div>
+          </div>
+
+          <h4>Apply decisions</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Feedback decision</th><th>Current → Target</th><th>Apply type</th><th>Status</th><th>Auto</th><th>Action</th></tr></thead><tbody>{runtimeFeedbackApplyDecisions.slice(0, 10).map((row) => <tr key={row.id}><td>{row.linked_feedback_decision}</td><td>{row.current_mode ?? '—'} → {row.target_mode ?? '—'}</td><td>{row.apply_type}</td><td>{row.apply_status}</td><td>{row.auto_applicable ? 'Yes' : 'No'}</td><td><button type="button" className="secondary-button" disabled={runningReview} onClick={() => void onApplyRuntimeFeedbackDecision(row.linked_feedback_decision)}>Apply feedback decision</button></td></tr>)}</tbody></table></div>
+
+          <h4>Apply records</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Apply decision</th><th>Status</th><th>Previous → Applied</th><th>Enforcement refreshed</th><th>Summary</th></tr></thead><tbody>{runtimeFeedbackApplyRecords.slice(0, 10).map((row) => <tr key={row.id}><td>{row.linked_apply_decision}</td><td>{row.record_status}</td><td>{row.previous_mode ?? '—'} → {row.applied_mode ?? '—'}</td><td>{row.enforcement_refreshed ? 'Yes' : 'No'}</td><td>{row.record_summary}</td></tr>)}</tbody></table></div>
+
+          <h4>Apply recommendations</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{runtimeFeedbackApplyRecommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>
+
+          <h4>Apply runs</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Started</th><th>Considered</th><th>Applied</th><th>Manual/Blocked</th><th>Mode switches</th><th>Enforcement refresh</th></tr></thead><tbody>{runtimeFeedbackApplyRuns.slice(0, 10).map((row) => <tr key={row.id}><td>{new Date(row.started_at).toLocaleString()}</td><td>{row.considered_feedback_decision_count}</td><td>{row.applied_count}</td><td>{row.manual_review_count} / {row.blocked_count}</td><td>{row.mode_switch_count}</td><td>{row.enforcement_refresh_count}</td></tr>)}</tbody></table></div>
         </SectionCard>
 
         <SectionCard

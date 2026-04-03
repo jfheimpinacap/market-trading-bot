@@ -62,6 +62,32 @@ This bridge does not replace runtime/safety/portfolio/mission authorities; it ad
 
 This layer provides conservative global tuning input and traceability; it does not replace runtime_governor, mission_control, portfolio_governor, risk, safety, or incident authorities. Scope remains local-first, single-user, paper-only, and no live execution.
 
+### Runtime feedback apply bridge / closed-loop tuning (new)
+
+`runtime_governor` now closes the loop from runtime feedback into conservative global posture adjustment:
+
+- flow:
+  - `RuntimeFeedbackDecision`
+  - `RuntimeFeedbackApplyDecision`
+  - `RuntimeFeedbackApplyRecord`
+  - optional global operating mode switch
+  - optional downstream mode enforcement refresh
+- auditable entities:
+  - `RuntimeFeedbackApplyRun`
+  - `RuntimeFeedbackApplyDecision`
+  - `RuntimeFeedbackApplyRecord`
+  - `RuntimeFeedbackApplyRecommendation`
+- API:
+  - `POST /api/runtime-governor/run-runtime-feedback-apply-review/`
+  - `POST /api/runtime-governor/apply-runtime-feedback-decision/<decision_id>/`
+  - `GET /api/runtime-governor/runtime-feedback-apply-runs/`
+  - `GET /api/runtime-governor/runtime-feedback-apply-decisions/`
+  - `GET /api/runtime-governor/runtime-feedback-apply-records/`
+  - `GET /api/runtime-governor/runtime-feedback-apply-recommendations/`
+  - `GET /api/runtime-governor/runtime-feedback-apply-summary/`
+
+The bridge is conservative and transparent (manual-review blocks, safety-aware apply rules, hysteresis-friendly behavior). It does not replace existing authorities and remains local-first, single-user, paper/sandbox only, no real money, and no live broker/exchange execution.
+
 ### Precedent-aware agents (new)
 
 - Memory is now used as **decision support**, not as an opaque planner.
