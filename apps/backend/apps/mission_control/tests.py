@@ -21,6 +21,14 @@ from apps.mission_control.models import (
     MissionControlCycle,
     MissionControlSession,
     MissionControlState,
+    GovernanceReviewItem,
+)
+from apps.mission_control.services.collect import collect_governance_review_candidates
+from apps.mission_control.services.prioritize import assign_severity_and_priority
+from apps.portfolio_governor.models import (
+    PortfolioExposureClusterSnapshot,
+    PortfolioExposureCoordinationRun,
+    PortfolioExposureDecision,
 )
 
 
@@ -254,12 +262,87 @@ class AutonomousHeartbeatRunnerTests(TestCase):
         self.assertIn('totals', response.json())
 
 
-class SessionTimingPolicyTests(TestCase):
+class SessionTimingProfileTests(TestCase):
     def test_profile_endpoint_bootstraps_defaults(self):
         response = self.client.get(reverse('mission_control:schedule-profiles'))
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(any(profile['slug'] == 'balanced_local' for profile in payload))
+
+
+class GovernanceReviewQueueTests(TestCase):
+    def test_collect_items_from_multiple_modules(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        recovery_snapshot = AutonomousSessionRecoverySnapshot.objects.create(linked_session=session)
+        AutonomousResumeDecision.objects.create(
+            linked_session=session,
+            linked_recovery_snapshot=recovery_snapshot,
+            decision_type='REQUIRE_MANUAL_RECOVERY_REVIEW',
+            decision_status='PROPOSED',
+            reason_codes=['MANUAL_REVIEW_REQUIRED'],
+            decision_summary='Need operator confirmation',
+        )
+
+        coordination_run = PortfolioExposureCoordinationRun.objects.create()
+        cluster_snapshot = PortfolioExposureClusterSnapshot.objects.create(linked_run=coordination_run, cluster_label='cluster-A')
+        PortfolioExposureDecision.objects.create(
+            linked_cluster_snapshot=cluster_snapshot,
+            decision_type='DEFER_PENDING_DISPATCH',
+            decision_status='PROPOSED',
+            decision_summary='Deferred due pressure',
+            reason_codes=['PORTFOLIO_DEFERRED'],
+        )
+
+        candidates = collect_governance_review_candidates()
+        source_modules = {item.source_module for item in candidates}
+        self.assertIn('mission_control', source_modules)
+        self.assertIn('portfolio_governor', source_modules)
+
+    def test_priority_assignment_for_blocked_item(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        recovery_snapshot = AutonomousSessionRecoverySnapshot.objects.create(linked_session=session)
+        decision = AutonomousResumeDecision.objects.create(
+            linked_session=session,
+            linked_recovery_snapshot=recovery_snapshot,
+            decision_type='REQUIRE_MANUAL_RECOVERY_REVIEW',
+            decision_status='BLOCKED',
+            reason_codes=['SAFETY_BLOCK_ACTIVE'],
+        )
+
+        candidate = next(
+            item for item in collect_governance_review_candidates()
+            if item.source_object_id == decision.id and item.source_type == 'session_recovery'
+        )
+        severity, priority = assign_severity_and_priority(candidate)
+        self.assertIn(severity, {'HIGH', 'CRITICAL'})
+        self.assertEqual(priority, 'P1')
+
+    def test_run_deduplicates_equivalent_items(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        recovery_snapshot = AutonomousSessionRecoverySnapshot.objects.create(linked_session=session)
+        decision = AutonomousResumeDecision.objects.create(
+            linked_session=session,
+            linked_recovery_snapshot=recovery_snapshot,
+            decision_type='REQUIRE_MANUAL_RECOVERY_REVIEW',
+            decision_status='PROPOSED',
+            reason_codes=['MANUAL_REVIEW_REQUIRED'],
+        )
+
+        self.client.post(reverse('mission_control:run-governance-review-queue'), data='{}', content_type='application/json')
+        self.client.post(reverse('mission_control:run-governance-review-queue'), data='{}', content_type='application/json')
+        items = GovernanceReviewItem.objects.filter(source_type='session_recovery', source_object_id=decision.id)
+        self.assertEqual(items.count(), 1)
+
+    def test_summary_endpoint(self):
+        self.client.post(reverse('mission_control:run-governance-review-queue'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:governance-review-summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('open_count', payload)
+        self.assertIn('high_priority_count', payload)
+
+
+class SessionTimingPolicyTests(TestCase):
 
     def test_recent_dispatch_delays_next_due_at(self):
         session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')

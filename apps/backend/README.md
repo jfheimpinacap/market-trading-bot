@@ -181,6 +181,28 @@ This layer extends existing mission control and autonomous trader orchestration;
 
 This layer only automates due-tick progression of existing autonomous sessions and preserves paper-only, local-first boundaries.
 
+## Mission control governance review queue (new)
+
+`apps.mission_control` now exposes a cross-layer **governance review queue** focused on pending manual triage only.
+
+- service split:
+  - `services/collect.py`
+  - `services/prioritize.py`
+  - `services/recommendation.py`
+  - `services/run.py`
+- auditable entities:
+  - `GovernanceReviewQueueRun`
+  - `GovernanceReviewItem`
+  - `GovernanceReviewRecommendation`
+- API:
+  - `POST /api/mission-control/run-governance-review-queue/`
+  - `GET /api/mission-control/governance-review-runs/`
+  - `GET /api/mission-control/governance-review-items/`
+  - `GET /api/mission-control/governance-review-recommendations/`
+  - `GET /api/mission-control/governance-review-summary/`
+
+This layer centralizes blocked/manual/deferred/advisory outputs from runtime_governor + mission_control + portfolio_governor, reduces operator friction, and stays paper-only/read-only in this phase. Real resolution/apply actions are intentionally not implemented yet.
+
 ## Mission control session health governance (new)
 
 `apps.mission_control` now includes a conservative health/anomaly/intervention layer for autonomous sessions:

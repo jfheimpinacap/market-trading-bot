@@ -46,6 +46,10 @@ import type {
   AutonomousSessionAdmissionReview,
   AutonomousSessionAdmissionDecision,
   AutonomousSessionAdmissionRecommendation,
+  GovernanceReviewItem,
+  GovernanceReviewQueueRun,
+  GovernanceReviewRecommendation,
+  GovernanceReviewSummary,
   SessionAdmissionSummary,
   AutonomousSessionAdmissionRun,
   MissionControlCycle,
@@ -393,4 +397,24 @@ export function getSessionAdmissionRecommendations() {
 
 export function getSessionAdmissionSummary() {
   return requestJson<SessionAdmissionSummary>('/api/mission-control/session-admission-summary/');
+}
+
+export function runGovernanceReviewQueue() {
+  return requestJson<GovernanceReviewQueueRun>('/api/mission-control/run-governance-review-queue/', { method: 'POST', body: '{}' });
+}
+
+export function getGovernanceReviewRuns() {
+  return requestJson<GovernanceReviewQueueRun[]>('/api/mission-control/governance-review-runs/');
+}
+
+export function getGovernanceReviewItems() {
+  return requestJson<GovernanceReviewItem[]>('/api/mission-control/governance-review-items/');
+}
+
+export function getGovernanceReviewRecommendations() {
+  return requestJson<GovernanceReviewRecommendation[]>('/api/mission-control/governance-review-recommendations/');
+}
+
+export function getGovernanceReviewSummary() {
+  return requestJson<GovernanceReviewSummary>('/api/mission-control/governance-review-summary/');
 }
