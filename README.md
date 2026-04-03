@@ -98,6 +98,30 @@ Guardrails:
 - paper-only scope (no live trading / no real money)
 - reduces risk of human-review backlog drift and hidden stale blockers
 
+### Governance backlog pressure (delta-only) (new)
+
+`mission_control` now includes a compact and auditable **governance backlog pressure** layer that turns current human backlog status into an additional conservative runtime signal:
+
+`open governance backlog + aging outcomes -> pressure snapshot -> pressure decision -> conservative recommendation`
+
+- new entities:
+  - `GovernanceBacklogPressureRun`
+  - `GovernanceBacklogPressureSnapshot`
+  - `GovernanceBacklogPressureDecision`
+  - `GovernanceBacklogPressureRecommendation`
+- API:
+  - `POST /api/mission-control/run-governance-backlog-pressure-review/`
+  - `GET /api/mission-control/governance-backlog-pressure-runs/`
+  - `GET /api/mission-control/governance-backlog-pressure-snapshots/`
+  - `GET /api/mission-control/governance-backlog-pressure-decisions/`
+  - `GET /api/mission-control/governance-backlog-pressure-recommendations/`
+  - `GET /api/mission-control/governance-backlog-pressure-summary/`
+
+Guardrails:
+- does not replace governance review queue, auto-resolution, or queue aging/escalation
+- only adds an extra conservative runtime signal (`governance_backlog_pressure_state`)
+- paper-only scope (no live trading / no real money)
+
 ### Global operating mode downstream enforcement bridge (new)
 
 `runtime_governor` now includes an explicit and auditable **downstream mode enforcement bridge**:

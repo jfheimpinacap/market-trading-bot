@@ -265,6 +265,33 @@ This layer is intentionally conservative: it only auto-resolves explicit low-ris
 
 This layer is aging/escalation-only (no auto-resolution), keeps paper-only boundaries, does not replace existing queue/auto-resolution authorities, and reduces risk of unordered human-review backlog pressure.
 
+## Mission control governance backlog pressure (delta-only) (new)
+
+`apps.mission_control` now includes `governance_backlog_pressure/services/` as a short auditable layer that transforms current human governance backlog pressure into an additional conservative runtime signal.
+
+- service split:
+  - `governance_backlog_pressure/services/backlog_pressure.py`
+  - `governance_backlog_pressure/services/decision.py`
+  - `governance_backlog_pressure/services/recommendation.py`
+  - `governance_backlog_pressure/services/run.py`
+- auditable entities:
+  - `GovernanceBacklogPressureRun`
+  - `GovernanceBacklogPressureSnapshot`
+  - `GovernanceBacklogPressureDecision`
+  - `GovernanceBacklogPressureRecommendation`
+- API:
+  - `POST /api/mission-control/run-governance-backlog-pressure-review/`
+  - `GET /api/mission-control/governance-backlog-pressure-runs/`
+  - `GET /api/mission-control/governance-backlog-pressure-snapshots/`
+  - `GET /api/mission-control/governance-backlog-pressure-decisions/`
+  - `GET /api/mission-control/governance-backlog-pressure-recommendations/`
+  - `GET /api/mission-control/governance-backlog-pressure-summary/`
+
+Integration notes:
+- exposes `governance_backlog_pressure_state` in summary output
+- consumed as an additional conservative signal in runtime posture computation
+- does not duplicate queue aging logic or auto-resolution behavior
+
 ## Mission control session health governance (new)
 
 `apps.mission_control` now includes a conservative health/anomaly/intervention layer for autonomous sessions:

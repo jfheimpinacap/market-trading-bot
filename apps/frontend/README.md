@@ -67,6 +67,22 @@ Límites explícitos:
 - no reemplaza governance review queue ni governance auto-resolution existentes
 - sigue paper-only, sin live trading ni dinero real
 
+## Mission control governance backlog pressure UX (delta-only) (new)
+
+La vista `/mission-control` ahora agrega una sección adicional **Governance Backlog Pressure** (sin reemplazar `Queue Aging & Escalation`):
+
+- acción manual: `Run backlog pressure review`
+- resumen con `governance_backlog_pressure_state` + métricas de open/overdue/P1/stale blocked
+- listas auditables de:
+  - `governance-backlog-pressure-snapshots`
+  - `governance-backlog-pressure-decisions`
+  - `governance-backlog-pressure-recommendations`
+
+Límites explícitos:
+- capa delta conservadora; no reimplementa queue aging ni auto-resolution
+- no reemplaza autoridades existentes de governance
+- paper-only, sin live trading ni dinero real
+
 ## Runtime mode enforcement UX (new)
 
 La vista `/runtime` ahora incluye una sección técnica de **Mode Enforcement** para que el modo global no sea solo informativo:

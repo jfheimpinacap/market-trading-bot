@@ -1732,6 +1732,24 @@ class GovernanceQueueAgingRecommendationType(models.TextChoices):
     REQUIRE_OPERATOR_REVIEW_NOW = 'REQUIRE_OPERATOR_REVIEW_NOW', 'Require operator review now'
 
 
+class GovernanceBacklogPressureState(models.TextChoices):
+    NORMAL = 'NORMAL', 'Normal'
+    CAUTION = 'CAUTION', 'Caution'
+    HIGH = 'HIGH', 'High'
+
+
+class GovernanceBacklogPressureDecisionType(models.TextChoices):
+    KEEP_NORMAL_PRESSURE = 'KEEP_NORMAL_PRESSURE', 'Keep normal pressure'
+    SET_CAUTION_PRESSURE = 'SET_CAUTION_PRESSURE', 'Set caution pressure'
+    SET_HIGH_PRESSURE = 'SET_HIGH_PRESSURE', 'Set high pressure'
+
+
+class GovernanceBacklogPressureRecommendationType(models.TextChoices):
+    KEEP_BASELINE = 'KEEP_BASELINE', 'Keep baseline'
+    PREFER_REDUCED_CADENCE = 'PREFER_REDUCED_CADENCE', 'Prefer reduced cadence'
+    LIMIT_NEW_ACTIVITY = 'LIMIT_NEW_ACTIVITY', 'Limit new activity'
+
+
 class GovernanceQueueAgingRun(TimeStampedModel):
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -1784,6 +1802,91 @@ class GovernanceQueueAgingRecommendation(TimeStampedModel):
         related_name='recommendations',
     )
     recommendation_type = models.CharField(max_length=48, choices=GovernanceQueueAgingRecommendationType.choices)
+    rationale = models.CharField(max_length=255)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class GovernanceBacklogPressureRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_item_count = models.PositiveIntegerField(default=0)
+    pressure_state = models.CharField(max_length=12, choices=GovernanceBacklogPressureState.choices, default=GovernanceBacklogPressureState.NORMAL)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class GovernanceBacklogPressureSnapshot(TimeStampedModel):
+    linked_backlog_pressure_run = models.ForeignKey(
+        GovernanceBacklogPressureRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='snapshots',
+    )
+    open_item_count = models.PositiveIntegerField(default=0)
+    overdue_count = models.PositiveIntegerField(default=0)
+    overdue_p1_count = models.PositiveIntegerField(default=0)
+    stale_blocked_count = models.PositiveIntegerField(default=0)
+    persistent_stale_blocked_count = models.PositiveIntegerField(default=0)
+    pressure_score = models.PositiveIntegerField(default=0)
+    governance_backlog_pressure_state = models.CharField(
+        max_length=12,
+        choices=GovernanceBacklogPressureState.choices,
+        default=GovernanceBacklogPressureState.NORMAL,
+    )
+    snapshot_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class GovernanceBacklogPressureDecision(TimeStampedModel):
+    linked_backlog_pressure_snapshot = models.ForeignKey(
+        GovernanceBacklogPressureSnapshot,
+        on_delete=models.CASCADE,
+        related_name='decisions',
+    )
+    linked_backlog_pressure_run = models.ForeignKey(
+        GovernanceBacklogPressureRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='decisions',
+    )
+    decision_type = models.CharField(max_length=32, choices=GovernanceBacklogPressureDecisionType.choices)
+    decision_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class GovernanceBacklogPressureRecommendation(TimeStampedModel):
+    linked_backlog_pressure_decision = models.ForeignKey(
+        GovernanceBacklogPressureDecision,
+        on_delete=models.CASCADE,
+        related_name='recommendations',
+    )
+    linked_backlog_pressure_snapshot = models.ForeignKey(
+        GovernanceBacklogPressureSnapshot,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    recommendation_type = models.CharField(max_length=48, choices=GovernanceBacklogPressureRecommendationType.choices)
     rationale = models.CharField(max_length=255)
     confidence = models.FloatField(default=0.5)
     blockers = models.JSONField(default=list, blank=True)

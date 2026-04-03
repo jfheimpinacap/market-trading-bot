@@ -955,3 +955,73 @@ export type GovernanceQueueAgingSummary = {
   };
   status_breakdown: Record<string, number>;
 };
+
+export type GovernanceBacklogPressureRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_item_count: number;
+  pressure_state: 'NORMAL' | 'CAUTION' | 'HIGH';
+  metadata: Record<string, unknown>;
+};
+
+export type GovernanceBacklogPressureSnapshot = {
+  id: number;
+  linked_backlog_pressure_run: number | null;
+  open_item_count: number;
+  overdue_count: number;
+  overdue_p1_count: number;
+  stale_blocked_count: number;
+  persistent_stale_blocked_count: number;
+  pressure_score: number;
+  governance_backlog_pressure_state: 'NORMAL' | 'CAUTION' | 'HIGH';
+  snapshot_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type GovernanceBacklogPressureDecision = {
+  id: number;
+  linked_backlog_pressure_snapshot: number;
+  linked_backlog_pressure_run: number | null;
+  decision_type: 'KEEP_NORMAL_PRESSURE' | 'SET_CAUTION_PRESSURE' | 'SET_HIGH_PRESSURE';
+  decision_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type GovernanceBacklogPressureRecommendation = {
+  id: number;
+  linked_backlog_pressure_decision: number;
+  linked_backlog_pressure_snapshot: number | null;
+  recommendation_type: 'KEEP_BASELINE' | 'PREFER_REDUCED_CADENCE' | 'LIMIT_NEW_ACTIVITY';
+  rationale: string;
+  confidence: number;
+  blockers: string[];
+  created_at: string;
+};
+
+export type GovernanceBacklogPressureSummary = {
+  latest_run_id: number | null;
+  governance_backlog_pressure_state: 'NORMAL' | 'CAUTION' | 'HIGH';
+  latest_counts: {
+    considered: number;
+    open_items: number;
+    overdue: number;
+    overdue_p1: number;
+    stale_blocked: number;
+    persistent_stale_blocked: number;
+  };
+  totals: {
+    runs: number;
+    snapshots: number;
+    decisions: number;
+    recommendations: number;
+  };
+  latest_decision: {
+    id: number | null;
+    decision_type: string | null;
+  };
+};

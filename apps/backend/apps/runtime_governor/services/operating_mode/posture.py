@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 
 from apps.incident_commander.models import IncidentRecord, IncidentSeverity, IncidentStatus
+from apps.mission_control.governance_backlog_pressure.services.run import governance_backlog_pressure_summary
 from apps.mission_control.models import (
     AutonomousSessionAdmissionDecision,
     AutonomousSessionAdmissionDecisionType,
@@ -148,6 +149,11 @@ def build_posture_snapshot(*, posture_run: GlobalRuntimePostureRun | None = None
     runtime_posture, safety_posture = _derive_runtime_and_safety_posture()
     incident_pressure = _derive_incident_pressure_state()
     portfolio_pressure = _derive_portfolio_pressure_state()
+    governance_backlog_pressure_state = str(
+        governance_backlog_pressure_summary().get('governance_backlog_pressure_state') or 'NORMAL'
+    ).upper()
+    if governance_backlog_pressure_state == 'HIGH' and runtime_posture == RuntimePostureState.NORMAL:
+        runtime_posture = RuntimePostureState.CAUTION
 
     for label, value in {
         'exposure_pressure': exposure_state,
@@ -159,6 +165,7 @@ def build_posture_snapshot(*, posture_run: GlobalRuntimePostureRun | None = None
         'safety_posture': safety_posture,
         'incident_pressure': incident_pressure,
         'portfolio_pressure': portfolio_pressure,
+        'governance_backlog_pressure': governance_backlog_pressure_state,
     }.items():
         if value not in {'NORMAL', 'HEALTHY', 'NONE'}:
             reason_codes.append(f'{label}:{value}')
@@ -166,7 +173,8 @@ def build_posture_snapshot(*, posture_run: GlobalRuntimePostureRun | None = None
     summary = (
         f'Posture review found exposure={exposure_state}, admission={admission_state}, '
         f'health={session_health_state}, losses={recent_loss_state}, signal={signal_quality_state}, '
-        f'runtime={runtime_posture}, safety={safety_posture}, incident={incident_pressure}, portfolio={portfolio_pressure}.'
+        f'runtime={runtime_posture}, safety={safety_posture}, incident={incident_pressure}, '
+        f'portfolio={portfolio_pressure}, governance_backlog={governance_backlog_pressure_state}.'
     )
 
     metadata = {
@@ -177,6 +185,7 @@ def build_posture_snapshot(*, posture_run: GlobalRuntimePostureRun | None = None
             'recovery_snapshots': AutonomousSessionRecoverySnapshot.objects.count(),
             'admission_decisions': AutonomousSessionAdmissionDecision.objects.count(),
             'exposure_decisions': PortfolioExposureDecision.objects.count(),
+            'governance_backlog_pressure_state': governance_backlog_pressure_state,
         },
     }
 

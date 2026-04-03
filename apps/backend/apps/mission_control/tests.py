@@ -23,6 +23,7 @@ from apps.mission_control.models import (
     GovernanceAutoResolutionDecision,
     GovernanceAutoResolutionRecord,
     GovernanceQueueAgingReview,
+    GovernanceBacklogPressureSnapshot,
     MissionControlCycle,
     MissionControlSession,
     MissionControlState,
@@ -977,3 +978,70 @@ class GovernanceQueueAgingTests(TestCase):
         response = self.client.get(reverse('mission_control:governance-queue-aging-summary'))
         self.assertEqual(response.status_code, 200)
         self.assertIn('latest_counts', response.json())
+
+
+class GovernanceBacklogPressureTests(TestCase):
+    def _create_item(self, **overrides):
+        payload = {
+            'source_module': 'mission_control',
+            'source_type': 'session_recovery',
+            'source_object_id': overrides.pop('source_object_id', 12000 + GovernanceReviewItem.objects.count()),
+            'item_status': 'OPEN',
+            'severity': 'CAUTION',
+            'queue_priority': 'P3',
+            'title': 'Backlog pressure candidate',
+            'summary': 'candidate',
+            'blockers': [],
+            'reason_codes': [],
+            'metadata': {},
+        }
+        payload.update(overrides)
+        return GovernanceReviewItem.objects.create(**payload)
+
+    def test_light_backlog_stays_normal(self):
+        self._create_item()
+        response = self.client.post(reverse('mission_control:run-governance-backlog-pressure-review'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        snapshot = GovernanceBacklogPressureSnapshot.objects.order_by('-id').first()
+        self.assertIsNotNone(snapshot)
+        self.assertEqual(snapshot.governance_backlog_pressure_state, 'NORMAL')
+
+    def test_many_overdue_and_p1_items_raise_high_pressure(self):
+        items = [
+            self._create_item(queue_priority='P1', source_object_id=13000 + idx)
+            for idx in range(3)
+        ]
+        for item in items:
+            GovernanceReviewItem.objects.filter(pk=item.pk).update(
+                created_at=timezone.now() - timedelta(days=20),
+                updated_at=timezone.now() - timedelta(days=10),
+            )
+        self.client.post(reverse('mission_control:run-governance-queue-aging-review'), data='{}', content_type='application/json')
+        self.client.post(reverse('mission_control:run-governance-backlog-pressure-review'), data='{}', content_type='application/json')
+        snapshot = GovernanceBacklogPressureSnapshot.objects.order_by('-id').first()
+        self.assertIsNotNone(snapshot)
+        self.assertIn(snapshot.governance_backlog_pressure_state, {'CAUTION', 'HIGH'})
+
+    def test_persistent_stale_blocked_escalates_pressure(self):
+        item = self._create_item(blockers=['STATUS_BLOCKED'], source_object_id=14001)
+        GovernanceReviewItem.objects.filter(pk=item.pk).update(
+            created_at=timezone.now() - timedelta(days=8),
+            updated_at=timezone.now() - timedelta(days=6),
+        )
+        self.client.post(reverse('mission_control:run-governance-queue-aging-review'), data='{}', content_type='application/json')
+        GovernanceReviewItem.objects.filter(pk=item.pk).update(updated_at=timezone.now() - timedelta(days=7))
+        self.client.post(reverse('mission_control:run-governance-queue-aging-review'), data='{}', content_type='application/json')
+        self.client.post(reverse('mission_control:run-governance-backlog-pressure-review'), data='{}', content_type='application/json')
+        snapshot = GovernanceBacklogPressureSnapshot.objects.order_by('-id').first()
+        self.assertIsNotNone(snapshot)
+        self.assertGreaterEqual(snapshot.persistent_stale_blocked_count, 1)
+        self.assertIn(snapshot.governance_backlog_pressure_state, {'CAUTION', 'HIGH'})
+
+    def test_summary_endpoint(self):
+        self._create_item()
+        self.client.post(reverse('mission_control:run-governance-backlog-pressure-review'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:governance-backlog-pressure-summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('governance_backlog_pressure_state', payload)
+        self.assertIn('latest_counts', payload)
