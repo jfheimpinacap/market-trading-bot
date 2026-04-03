@@ -24,6 +24,7 @@ from apps.runtime_governor.models import (
 from apps.runtime_governor.services import get_capabilities_for_current_mode, get_runtime_state, set_runtime_mode
 from apps.runtime_governor.services.operating_mode.mode_switch import GLOBAL_MODE_METADATA_KEY
 from apps.mission_control.models import AutonomousRuntimeSession, AutonomousRuntimeSessionStatus, AutonomousSessionHealthSnapshot, AutonomousSessionHealthStatus
+from apps.mission_control.models import GovernanceBacklogPressureSnapshot
 from apps.mission_control.services.session_timing.timing import evaluate_session_timing
 from apps.portfolio_governor.models import (
     PortfolioExposureClusterSnapshot,
@@ -260,7 +261,7 @@ class RuntimeGovernorTests(TestCase):
 
             AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index + 1, tick_status=status)
 
-    def _create_feedback_decision(self, decision_type: str) -> RuntimeFeedbackDecision:
+    def _create_feedback_decision(self, decision_type: str, *, backlog_pressure_state: str = 'NORMAL') -> RuntimeFeedbackDecision:
         from apps.runtime_governor.models import RuntimeDiagnosticReview, RuntimePerformanceSnapshot
 
         snapshot = RuntimePerformanceSnapshot.objects.create(
@@ -268,7 +269,10 @@ class RuntimeGovernorTests(TestCase):
             runtime_pressure_state='NORMAL',
             signal_quality_state='NORMAL',
             reason_codes=['test_feedback_signal'],
-            metadata={'safety_posture': 'NORMAL'},
+            metadata={
+                'safety_posture': 'NORMAL',
+                'governance_backlog_pressure_state': backlog_pressure_state,
+            },
         )
         diagnostic = RuntimeDiagnosticReview.objects.create(
             linked_performance_snapshot=snapshot,
@@ -285,6 +289,16 @@ class RuntimeGovernorTests(TestCase):
             auto_applicable=True,
             decision_summary='test feedback decision',
             reason_codes=['test_feedback_decision'],
+        )
+
+    def _seed_governance_backlog_pressure(self, state: str):
+        GovernanceBacklogPressureSnapshot.objects.create(
+            governance_backlog_pressure_state=state,
+            open_item_count=10,
+            overdue_count=2,
+            pressure_score=1,
+            snapshot_summary=f'test backlog pressure {state}',
+            reason_codes=[f'test_{state.lower()}'],
         )
 
     def test_runtime_feedback_losses_trigger_recovery_recommendation(self):
@@ -331,6 +345,43 @@ class RuntimeGovernorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
         self.assertEqual(decision.decision_type, 'RELAX_TO_CAUTION')
+
+    def test_runtime_feedback_backlog_caution_adds_conservative_bias(self):
+        self._seed_governance_backlog_pressure('CAUTION')
+        self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(decision.decision_type, 'SHIFT_TO_MORE_CONSERVATIVE_MODE')
+        self.assertIn('backlog_caution_bias_conservative', decision.reason_codes)
+
+    def test_runtime_feedback_backlog_high_blocks_relax_from_recovery(self):
+        self._seed_governance_backlog_pressure('HIGH')
+        state = get_runtime_state()
+        state.metadata = {**(state.metadata or {}), GLOBAL_MODE_METADATA_KEY: 'RECOVERY_MODE'}
+        state.save(update_fields=['metadata', 'updated_at'])
+        self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(decision.decision_type, 'REDUCE_ADMISSION_AND_CADENCE')
+        self.assertIn('backlog_high_relaxation_guard', decision.reason_codes)
+
+    def test_runtime_feedback_backlog_critical_biases_manual_review_or_monitor_only(self):
+        self._seed_governance_backlog_pressure('CRITICAL')
+        self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        self.assertIn(decision.decision_type, {'REQUIRE_MANUAL_RUNTIME_REVIEW', 'SHIFT_TO_MONITOR_ONLY'})
+        self.assertIn('backlog_critical_manual_review_bias', decision.reason_codes)
+
+    def test_runtime_feedback_backlog_normal_keeps_base_behavior(self):
+        self._seed_governance_backlog_pressure('NORMAL')
+        self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(decision.decision_type, 'KEEP_CURRENT_GLOBAL_MODE')
+
+    def test_runtime_feedback_summary_includes_governance_backlog_pressure(self):
+        self._seed_governance_backlog_pressure('HIGH')
+        self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        response = self.client.get(reverse('runtime_governor_v2:runtime_feedback_summary'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['governance_backlog_pressure_state'], 'HIGH')
 
     def test_runtime_feedback_summary_endpoint(self):
         self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
@@ -417,13 +468,24 @@ class RuntimeGovernorTests(TestCase):
         state = get_runtime_state()
         state.metadata = {**(state.metadata or {}), GLOBAL_MODE_METADATA_KEY: 'RECOVERY_MODE'}
         state.save(update_fields=['metadata', 'updated_at'])
-        self._create_feedback_decision('RELAX_TO_CAUTION')
+        self._create_feedback_decision('RELAX_TO_CAUTION', backlog_pressure_state='HIGH')
         response = self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
         self.assertEqual(response.status_code, 200)
         decision = RuntimeModeTransitionDecision.objects.order_by('-created_at', '-id').first()
         self.assertIn(decision.decision_type, {'DEFER_MODE_SWITCH', 'KEEP_CURRENT_MODE_FOR_DWELL'})
         review = RuntimeModeStabilityReview.objects.order_by('-created_at', '-id').first()
         self.assertIn(review.review_type, {'EARLY_RELAX_ATTEMPT', 'INSUFFICIENT_DWELL_TIME'})
+
+    def test_mode_stabilization_backlog_high_extends_relaxation_dwell(self):
+        self._seed_governance_backlog_pressure('HIGH')
+        state = get_runtime_state()
+        state.metadata = {**(state.metadata or {}), GLOBAL_MODE_METADATA_KEY: 'RECOVERY_MODE'}
+        state.save(update_fields=['metadata', 'updated_at'])
+        state.__class__.objects.filter(pk=state.pk).update(updated_at=timezone.now() - timedelta(minutes=10))
+        self._create_feedback_decision('RELAX_TO_CAUTION', backlog_pressure_state='HIGH')
+        self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
+        decision = RuntimeModeTransitionDecision.objects.order_by('-created_at', '-id').first()
+        self.assertIn(decision.decision_type, {'DEFER_MODE_SWITCH', 'KEEP_CURRENT_MODE_FOR_DWELL'})
 
     def test_mode_stabilization_flapping_risk_blocks_or_defers(self):
         from apps.runtime_governor.models import RuntimeFeedbackApplyDecision, RuntimeFeedbackApplyRecord

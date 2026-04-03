@@ -106,6 +106,10 @@ def get_runtime_feedback_summary() -> dict:
         'recent_losses': latest_snapshot.recent_loss_count if latest_snapshot else 0,
         'no_action_pressure': latest_snapshot.recent_no_action_tick_count if latest_snapshot else 0,
         'blocked_pressure': latest_snapshot.recent_blocked_tick_count if latest_snapshot else 0,
+        'governance_backlog_pressure_state': (
+            (latest_snapshot.metadata or {}).get('governance_backlog_pressure_state') if latest_snapshot else 'NORMAL'
+        )
+        or 'NORMAL',
         'feedback_runs': RuntimeFeedbackRun.objects.count(),
         'feedback_decisions': RuntimeFeedbackDecision.objects.count(),
         'applied_decisions': status_counts.get(RuntimeFeedbackDecisionStatus.APPLIED, 0),

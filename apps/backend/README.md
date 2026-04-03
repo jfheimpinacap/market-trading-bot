@@ -64,6 +64,15 @@ Design guardrails remain unchanged: local-first, single-user, paper-only, no liv
 
 This review layer is recommendation-first and auditable. It feeds global posture tuning conservatively, does not replace operating mode / enforcement / health / recovery / admission / exposure authorities, and keeps paper-only, local-first boundaries.
 
+Delta update: governance backlog pressure (`NORMAL`/`CAUTION`/`HIGH`/`CRITICAL`) is now consumed more explicitly across runtime feedback and operating-mode/stabilization paths:
+- included in runtime performance snapshot metadata + summary
+- reflected in diagnostic severity/reason codes
+- used for stricter relaxation gating (especially from `RECOVERY_MODE` / `THROTTLED`)
+- increases manual-review bias under `HIGH`/`CRITICAL`
+- keeps baseline behavior unchanged at `NORMAL`
+
+Boundaries remain unchanged: paper-only, conservative tuning, no replacement of existing authorities, no live trading/real money.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:

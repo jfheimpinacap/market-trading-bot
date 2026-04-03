@@ -29,6 +29,13 @@ def _pressure_state_from_feedback_decision(feedback_decision: RuntimeFeedbackDec
     if not feedback_decision:
         return RuntimeModeFeedbackPressureState.NORMAL
     pressure = (feedback_decision.linked_performance_snapshot.runtime_pressure_state or 'NORMAL').upper()
+    backlog_pressure = str(
+        (feedback_decision.linked_performance_snapshot.metadata or {}).get('governance_backlog_pressure_state') or 'NORMAL'
+    ).upper()
+    if backlog_pressure == 'CRITICAL':
+        return RuntimeModeFeedbackPressureState.CRITICAL
+    if backlog_pressure == 'HIGH' and pressure in {'LOW', 'NORMAL', 'CAUTION'}:
+        return RuntimeModeFeedbackPressureState.HIGH
     if pressure == 'CRITICAL':
         return RuntimeModeFeedbackPressureState.CRITICAL
     if pressure == 'HIGH':
@@ -84,8 +91,13 @@ def build_runtime_mode_transition_snapshot(
     recent_switch_count = recent_switches.count()
     is_relaxation = _is_relaxation(current_mode=current_mode, target_mode=target_mode)
     reason_codes = list(dict.fromkeys((feedback_decision.reason_codes or []) + [feedback_decision.decision_type.lower()]))
+    governance_backlog_pressure_state = str(
+        (feedback_decision.linked_performance_snapshot.metadata or {}).get('governance_backlog_pressure_state') or 'NORMAL'
+    ).upper()
     if is_relaxation:
         reason_codes.append('relaxation_attempt')
+        if governance_backlog_pressure_state in {'HIGH', 'CRITICAL'}:
+            reason_codes.append(f'backlog_{governance_backlog_pressure_state.lower()}_relaxation_guard')
     if recent_switch_count >= 2:
         reason_codes.append('recent_switches_detected')
 
@@ -98,7 +110,7 @@ def build_runtime_mode_transition_snapshot(
     summary = (
         f'Mode stabilization snapshot: {current_mode} -> {target_mode}, '
         f'{recent_switch_count} switch(es) in {recent_switch_window_seconds}s, '
-        f'dwell {time_in_current_mode_seconds}s.'
+        f'dwell {time_in_current_mode_seconds}s, governance_backlog={governance_backlog_pressure_state}.'
     )
 
     return RuntimeModeTransitionSnapshot.objects.create(
@@ -119,5 +131,6 @@ def build_runtime_mode_transition_snapshot(
             'feedback_decision_id': feedback_decision.id,
             'feedback_decision_type': feedback_decision.decision_type,
             'is_relaxation': is_relaxation,
+            'governance_backlog_pressure_state': governance_backlog_pressure_state,
         },
     )
