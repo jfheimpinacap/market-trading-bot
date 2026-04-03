@@ -222,6 +222,28 @@ This layer centralizes blocked/manual/deferred/advisory outputs from runtime_gov
 
 This completes the manual-safe operator intervention step while keeping boundaries unchanged: paper-only, no live trading, no real money, and no replacement of existing authorities.
 
+## Mission control governance auto-resolution (low-risk only) (new)
+
+`apps.mission_control` now includes `governance_auto_resolution/` to reduce operator load on simple and explicitly safe governance items:
+
+- service split:
+  - `governance_auto_resolution/services/eligibility.py`
+  - `governance_auto_resolution/services/auto_resolve.py`
+  - `governance_auto_resolution/services/run.py`
+- auditable entities:
+  - `GovernanceAutoResolutionRun`
+  - `GovernanceAutoResolutionDecision`
+  - `GovernanceAutoResolutionRecord`
+- API:
+  - `POST /api/mission-control/run-governance-auto-resolution/`
+  - `GET /api/mission-control/governance-auto-resolution-runs/`
+  - `GET /api/mission-control/governance-auto-resolution-decisions/`
+  - `GET /api/mission-control/governance-auto-resolution-records/`
+  - `GET /api/mission-control/governance-auto-resolution-summary/`
+  - `POST /api/mission-control/apply-governance-auto-resolution/<decision_id>/` (optional/manual replay)
+
+This layer is intentionally conservative: it only auto-resolves explicit low-risk cases (advisory dismiss, safe retry when source supports it, or follow-up deferral), remains paper-only, and does not replace manual governance resolution.
+
 ## Mission control session health governance (new)
 
 `apps.mission_control` now includes a conservative health/anomaly/intervention layer for autonomous sessions:

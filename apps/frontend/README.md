@@ -35,6 +35,22 @@ Además, la misma sección ahora incluye resolución manual segura (sin pantalla
 
 Límites explícitos: paper-only, sin trading real, sin reemplazar authorities existentes, y sin LLM como autoridad final.
 
+## Mission control governance auto-resolution UX (new)
+
+La vista `/mission-control` ahora también incluye una sección **Governance Auto-Resolution** (sin pantalla nueva):
+
+- acción: `Run governance auto-resolution`
+- summary cards: considered / eligible / applied / skipped / blocked + totales
+- listas auditables de:
+  - `governance-auto-resolution-decisions`
+  - `governance-auto-resolution-records`
+
+Alcance y límites:
+- solo automatiza casos de bajo riesgo con camino explícito
+- mantiene `governance review resolution` manual como autoridad principal
+- paper-only, sin live trading ni dinero real
+- capa conservadora para reducir carga operativa humana, no para reemplazar gobernanza existente
+
 ## Runtime mode enforcement UX (new)
 
 La vista `/runtime` ahora incluye una sección técnica de **Mode Enforcement** para que el modo global no sea solo informativo:

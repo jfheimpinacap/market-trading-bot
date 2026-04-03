@@ -1678,3 +1678,95 @@ class GovernanceReviewResolution(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at', '-id']
+
+
+class GovernanceAutoResolutionDecisionType(models.TextChoices):
+    AUTO_DISMISS = 'AUTO_DISMISS', 'Auto dismiss'
+    AUTO_RETRY_SAFE_APPLY = 'AUTO_RETRY_SAFE_APPLY', 'Auto retry safe apply'
+    AUTO_REQUIRE_FOLLOWUP = 'AUTO_REQUIRE_FOLLOWUP', 'Auto require follow-up'
+    DO_NOT_AUTO_RESOLVE = 'DO_NOT_AUTO_RESOLVE', 'Do not auto-resolve'
+
+
+class GovernanceAutoResolutionDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class GovernanceAutoResolutionRecordStatus(models.TextChoices):
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    FAILED = 'FAILED', 'Failed'
+
+
+class GovernanceAutoResolutionEffectType(models.TextChoices):
+    DISMISSED = 'DISMISSED', 'Dismissed'
+    RETRY_SAFE_APPLY_TRIGGERED = 'RETRY_SAFE_APPLY_TRIGGERED', 'Retry safe apply triggered'
+    FOLLOWUP_MARKED = 'FOLLOWUP_MARKED', 'Follow-up marked'
+    NO_CHANGE = 'NO_CHANGE', 'No change'
+
+
+class GovernanceAutoResolutionRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_item_count = models.PositiveIntegerField(default=0)
+    eligible_count = models.PositiveIntegerField(default=0)
+    applied_count = models.PositiveIntegerField(default=0)
+    skipped_count = models.PositiveIntegerField(default=0)
+    blocked_count = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class GovernanceAutoResolutionDecision(TimeStampedModel):
+    linked_review_item = models.ForeignKey(
+        GovernanceReviewItem,
+        on_delete=models.CASCADE,
+        related_name='auto_resolution_decisions',
+    )
+    linked_auto_resolution_run = models.ForeignKey(
+        GovernanceAutoResolutionRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='decisions',
+    )
+    decision_type = models.CharField(max_length=32, choices=GovernanceAutoResolutionDecisionType.choices)
+    decision_status = models.CharField(
+        max_length=12,
+        choices=GovernanceAutoResolutionDecisionStatus.choices,
+        default=GovernanceAutoResolutionDecisionStatus.PROPOSED,
+    )
+    auto_applicable = models.BooleanField(default=False)
+    decision_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class GovernanceAutoResolutionRecord(TimeStampedModel):
+    linked_review_item = models.ForeignKey(
+        GovernanceReviewItem,
+        on_delete=models.CASCADE,
+        related_name='auto_resolution_records',
+    )
+    linked_auto_resolution_decision = models.ForeignKey(
+        GovernanceAutoResolutionDecision,
+        on_delete=models.CASCADE,
+        related_name='records',
+    )
+    record_status = models.CharField(max_length=12, choices=GovernanceAutoResolutionRecordStatus.choices)
+    effect_type = models.CharField(max_length=32, choices=GovernanceAutoResolutionEffectType.choices)
+    record_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']

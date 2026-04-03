@@ -95,4 +95,10 @@ urlpatterns = [
     path('resolve-governance-review-item/<int:item_id>/', views.ResolveGovernanceReviewItemView.as_view(), name='resolve-governance-review-item'),
     path('governance-review-resolutions/', views.GovernanceReviewResolutionListView.as_view(), name='governance-review-resolutions'),
     path('governance-review-summary/', views.GovernanceReviewSummaryView.as_view(), name='governance-review-summary'),
+    path('run-governance-auto-resolution/', views.RunGovernanceAutoResolutionView.as_view(), name='run-governance-auto-resolution'),
+    path('governance-auto-resolution-runs/', views.GovernanceAutoResolutionRunListView.as_view(), name='governance-auto-resolution-runs'),
+    path('governance-auto-resolution-decisions/', views.GovernanceAutoResolutionDecisionListView.as_view(), name='governance-auto-resolution-decisions'),
+    path('governance-auto-resolution-records/', views.GovernanceAutoResolutionRecordListView.as_view(), name='governance-auto-resolution-records'),
+    path('governance-auto-resolution-summary/', views.GovernanceAutoResolutionSummaryView.as_view(), name='governance-auto-resolution-summary'),
+    path('apply-governance-auto-resolution/<int:decision_id>/', views.ApplyGovernanceAutoResolutionDecisionView.as_view(), name='apply-governance-auto-resolution'),
 ]

@@ -50,6 +50,31 @@ Scope and boundaries:
 
 Boundaries stay strict: paper-only, no real money/live execution, and no replacement of runtime/safety/portfolio/mission authorities.
 
+### Governance auto-resolution (low-risk only) (new)
+
+`mission_control` now adds a **small conservative auto-resolution layer** on top of the existing governance review queue and manual-safe resolution path:
+
+`open governance items -> explicit low-risk eligibility -> auto-dismiss / safe retry / follow-up deferral -> audit trail`
+
+- new entities:
+  - `GovernanceAutoResolutionRun`
+  - `GovernanceAutoResolutionDecision`
+  - `GovernanceAutoResolutionRecord`
+- API:
+  - `POST /api/mission-control/run-governance-auto-resolution/`
+  - `GET /api/mission-control/governance-auto-resolution-runs/`
+  - `GET /api/mission-control/governance-auto-resolution-decisions/`
+  - `GET /api/mission-control/governance-auto-resolution-records/`
+  - `GET /api/mission-control/governance-auto-resolution-summary/`
+  - optional manual replay: `POST /api/mission-control/apply-governance-auto-resolution/<decision_id>/`
+
+Guardrails:
+- only explicit low-risk paths are auto-applied
+- no high/critical ambiguous auto-resolution
+- no incident/safety/runtime-pressure auto-resolution
+- no replacement of manual governance resolution authority
+- paper-only scope, no live trading, no real money
+
 ### Global operating mode downstream enforcement bridge (new)
 
 `runtime_governor` now includes an explicit and auditable **downstream mode enforcement bridge**:

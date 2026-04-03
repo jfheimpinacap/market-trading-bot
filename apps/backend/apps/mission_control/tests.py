@@ -20,6 +20,8 @@ from apps.mission_control.models import (
     AutonomousRuntimeTick,
     AutonomousScheduleProfile,
     GovernanceReviewResolution,
+    GovernanceAutoResolutionDecision,
+    GovernanceAutoResolutionRecord,
     MissionControlCycle,
     MissionControlSession,
     MissionControlState,
@@ -443,6 +445,98 @@ class GovernanceReviewResolutionTests(TestCase):
         response = self.client.get(reverse('mission_control:governance-review-summary'))
         self.assertEqual(response.status_code, 200)
         self.assertGreaterEqual(response.json().get('resolved_count', 0), 1)
+
+
+class GovernanceAutoResolutionTests(TestCase):
+    def _create_item(self, **overrides) -> GovernanceReviewItem:
+        payload = {
+            'source_module': 'mission_control',
+            'source_type': 'session_recovery',
+            'source_object_id': 1001,
+            'item_status': 'OPEN',
+            'severity': 'INFO',
+            'queue_priority': 'P4',
+            'title': 'Advisory test',
+            'summary': 'Safe low risk item.',
+            'blockers': [],
+            'reason_codes': ['ADVISORY_ONLY', 'SAFE_TO_DISMISS'],
+            'metadata': {'auto_applicable': False},
+        }
+        payload.update(overrides)
+        return GovernanceReviewItem.objects.create(**payload)
+
+    def test_advisory_only_low_risk_item_auto_dismisses(self):
+        item = self._create_item()
+        response = self.client.post(reverse('mission_control:run-governance-auto-resolution'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        item.refresh_from_db()
+        self.assertEqual(item.item_status, 'DISMISSED')
+        self.assertTrue(
+            GovernanceAutoResolutionRecord.objects.filter(
+                linked_review_item=item,
+                effect_type='DISMISSED',
+                record_status='APPLIED',
+            ).exists()
+        )
+
+    def test_safe_retry_only_runs_for_explicit_supported_items(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        snapshot = AutonomousSessionRecoverySnapshot.objects.create(linked_session=session)
+        decision = AutonomousResumeDecision.objects.create(
+            linked_session=session,
+            linked_recovery_snapshot=snapshot,
+            decision_type='READY_TO_RESUME',
+            decision_status='PROPOSED',
+            auto_applicable=True,
+            reason_codes=['SAFE_RETRY_ALLOWED'],
+        )
+        supported_item = self._create_item(
+            source_object_id=decision.id,
+            metadata={'auto_applicable': True},
+            reason_codes=['SAFE_RETRY_ALLOWED'],
+            title='Safe retry supported',
+        )
+        unsupported_item = self._create_item(
+            source_type='session_health',
+            source_object_id=2002,
+            metadata={'auto_applicable': True},
+            reason_codes=['SAFE_RETRY_ALLOWED'],
+            title='Safe retry not supported',
+        )
+
+        self.client.post(reverse('mission_control:run-governance-auto-resolution'), data='{}', content_type='application/json')
+        self.assertTrue(
+            GovernanceAutoResolutionRecord.objects.filter(
+                linked_review_item=supported_item,
+                effect_type='RETRY_SAFE_APPLY_TRIGGERED',
+            ).exists()
+        )
+        unsupported_decision = GovernanceAutoResolutionDecision.objects.filter(linked_review_item=unsupported_item).order_by('-id').first()
+        self.assertIsNotNone(unsupported_decision)
+        self.assertEqual(unsupported_decision.decision_type, 'DO_NOT_AUTO_RESOLVE')
+
+    def test_high_severity_items_are_not_auto_resolved(self):
+        item = self._create_item(
+            severity='HIGH',
+            queue_priority='P1',
+            reason_codes=['ADVISORY_ONLY'],
+            source_object_id=3003,
+        )
+        self.client.post(reverse('mission_control:run-governance-auto-resolution'), data='{}', content_type='application/json')
+        item.refresh_from_db()
+        self.assertEqual(item.item_status, 'OPEN')
+        decision = GovernanceAutoResolutionDecision.objects.filter(linked_review_item=item).order_by('-id').first()
+        self.assertIsNotNone(decision)
+        self.assertEqual(decision.decision_type, 'DO_NOT_AUTO_RESOLVE')
+
+    def test_auto_resolution_summary_endpoint(self):
+        self._create_item(source_object_id=4004)
+        self.client.post(reverse('mission_control:run-governance-auto-resolution'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:governance-auto-resolution-summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('totals', payload)
+        self.assertIn('latest_counts', payload)
 
 
 class SessionTimingPolicyTests(TestCase):

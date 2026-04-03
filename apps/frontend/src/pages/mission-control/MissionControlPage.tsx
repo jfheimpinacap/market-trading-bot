@@ -34,12 +34,16 @@ import {
   getSessionAdmissionRecommendations,
   getSessionAdmissionSummary,
   getGovernanceReviewItems,
+  getGovernanceAutoResolutionDecisions,
+  getGovernanceAutoResolutionRecords,
+  getGovernanceAutoResolutionSummary,
   getGovernanceReviewResolutions,
   getGovernanceReviewRecommendations,
   getGovernanceReviewSummary,
   resolveGovernanceReviewItem,
   runSessionAdmissionReview,
   runGovernanceReviewQueue,
+  runGovernanceAutoResolution,
   getSessionInterventionDecisions,
   getSessionTimingDecisions,
   getSessionTimingRecommendations,
@@ -98,6 +102,9 @@ import type {
   GovernanceReviewRecommendation,
   GovernanceReviewResolution,
   GovernanceReviewSummary,
+  GovernanceAutoResolutionDecision,
+  GovernanceAutoResolutionRecord,
+  GovernanceAutoResolutionSummary,
 } from '../../types/missionControl';
 
 export function MissionControlPage() {
@@ -140,6 +147,9 @@ export function MissionControlPage() {
   const [governanceItems, setGovernanceItems] = useState<GovernanceReviewItem[]>([]);
   const [governanceRecommendations, setGovernanceRecommendations] = useState<GovernanceReviewRecommendation[]>([]);
   const [governanceResolutions, setGovernanceResolutions] = useState<GovernanceReviewResolution[]>([]);
+  const [governanceAutoSummary, setGovernanceAutoSummary] = useState<GovernanceAutoResolutionSummary | null>(null);
+  const [governanceAutoDecisions, setGovernanceAutoDecisions] = useState<GovernanceAutoResolutionDecision[]>([]);
+  const [governanceAutoRecords, setGovernanceAutoRecords] = useState<GovernanceAutoResolutionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -149,7 +159,7 @@ export function MissionControlPage() {
     setLoading(true);
     setError(null);
     try {
-      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary, loadedRecoverySnapshots, loadedRecoveryBlockers, loadedResumeDecisions, loadedRecoveryRecommendations, loadedResumeRecords, loadedRecoverySummary, loadedCapacitySnapshots, loadedAdmissionReviews, loadedAdmissionDecisions, loadedAdmissionRecommendations, loadedAdmissionSummary, loadedGovernanceSummary, loadedGovernanceItems, loadedGovernanceRecommendations, loadedGovernanceResolutions] = await Promise.all([
+      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary, loadedRecoverySnapshots, loadedRecoveryBlockers, loadedResumeDecisions, loadedRecoveryRecommendations, loadedResumeRecords, loadedRecoverySummary, loadedCapacitySnapshots, loadedAdmissionReviews, loadedAdmissionDecisions, loadedAdmissionRecommendations, loadedAdmissionSummary, loadedGovernanceSummary, loadedGovernanceItems, loadedGovernanceRecommendations, loadedGovernanceResolutions, loadedGovernanceAutoSummary, loadedGovernanceAutoDecisions, loadedGovernanceAutoRecords] = await Promise.all([
         getAutonomousSessions(),
         getAutonomousSessionSummary(),
         getAutonomousRunnerState(),
@@ -189,6 +199,9 @@ export function MissionControlPage() {
         getGovernanceReviewItems(),
         getGovernanceReviewRecommendations(),
         getGovernanceReviewResolutions(),
+        getGovernanceAutoResolutionSummary(),
+        getGovernanceAutoResolutionDecisions(),
+        getGovernanceAutoResolutionRecords(),
       ]);
       setSessions(loadedSessions);
       setSummary(loadedSummary);
@@ -229,6 +242,9 @@ export function MissionControlPage() {
       setGovernanceItems(loadedGovernanceItems);
       setGovernanceRecommendations(loadedGovernanceRecommendations);
       setGovernanceResolutions(loadedGovernanceResolutions);
+      setGovernanceAutoSummary(loadedGovernanceAutoSummary);
+      setGovernanceAutoDecisions(loadedGovernanceAutoDecisions);
+      setGovernanceAutoRecords(loadedGovernanceAutoRecords);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load autonomous heartbeat runner state.');
     } finally {
@@ -433,6 +449,24 @@ export function MissionControlPage() {
           <ul>{governanceItems.slice(0, 10).map((item) => <li key={item.id}><strong>{item.queue_priority}</strong> [{item.severity}] {item.title} — module={item.source_module} type={item.source_type} status={item.item_status} <span style={{ marginLeft: 8, fontWeight: 700 }}>{item.item_status === 'DISMISSED' ? 'dismissed' : item.item_status === 'RESOLVED' ? 'resolved' : 'open'}</span><div className="button-row" style={{ marginTop: 8 }}><button type="button" className="primary-button" onClick={async () => { await resolveGovernanceReviewItem(item.id, { resolution_type: 'APPLY_MANUAL_APPROVAL' }); await load(); }}>Resolve item</button><button type="button" className="secondary-button" onClick={async () => { await resolveGovernanceReviewItem(item.id, { resolution_type: 'DISMISS_AS_EXPECTED' }); await load(); }}>Dismissed</button><button type="button" className="secondary-button" onClick={async () => { await resolveGovernanceReviewItem(item.id, { resolution_type: 'KEEP_BLOCKED' }); await load(); }}>Blocked</button><button type="button" className="secondary-button" onClick={async () => { await resolveGovernanceReviewItem(item.id, { resolution_type: 'REQUIRE_FOLLOWUP' }); await load(); }}>Follow-up</button><button type="button" className="secondary-button" onClick={async () => { await resolveGovernanceReviewItem(item.id, { resolution_type: 'RETRY_SAFE_APPLY' }); await load(); }}>Retry safe</button></div></li>)}</ul>
           <ul>{governanceRecommendations.slice(0, 10).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — item={recommendation.linked_review_item ?? 'n/a'} confidence={recommendation.confidence.toFixed(2)} rationale={recommendation.rationale}</li>)}</ul>
           <ul>{governanceResolutions.slice(0, 12).map((resolution) => <li key={resolution.id}><strong>{resolution.resolution_type}</strong> — item={resolution.linked_review_item} status={resolution.resolution_status} state={resolution.resolution_type === 'DISMISS_AS_EXPECTED' ? 'dismissed' : resolution.resolution_type === 'KEEP_BLOCKED' ? 'blocked' : resolution.resolution_type === 'REQUIRE_FOLLOWUP' ? 'follow-up' : 'resolved'} summary={resolution.resolution_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Governance Auto-Resolution" title="Conservative low-risk operator load reduction" description="Small and auditable automation layer that only auto-resolves explicit low-risk cases. Manual governance resolution remains the authority. Paper-only scope.">
+          <div className="button-row">
+            <button type="button" className="primary-button" onClick={async () => { await runGovernanceAutoResolution(); await load(); }}>Run governance auto-resolution</button>
+          </div>
+          <div className="system-metadata-grid">
+            <div><strong>Latest run:</strong> {governanceAutoSummary?.latest_run_id ?? 'n/a'}</div>
+            <div><strong>Considered:</strong> {governanceAutoSummary?.latest_counts.considered ?? 0}</div>
+            <div><strong>Eligible:</strong> {governanceAutoSummary?.latest_counts.eligible ?? 0}</div>
+            <div><strong>Applied:</strong> {governanceAutoSummary?.latest_counts.applied ?? 0}</div>
+            <div><strong>Skipped:</strong> {governanceAutoSummary?.latest_counts.skipped ?? 0}</div>
+            <div><strong>Blocked:</strong> {governanceAutoSummary?.latest_counts.blocked ?? 0}</div>
+            <div><strong>Total decisions:</strong> {governanceAutoSummary?.totals.decisions ?? 0}</div>
+            <div><strong>Total records:</strong> {governanceAutoSummary?.totals.records ?? 0}</div>
+          </div>
+          <ul>{governanceAutoDecisions.slice(0, 12).map((decision) => <li key={decision.id}><strong>{decision.decision_type}</strong> — item={decision.linked_review_item} status={decision.decision_status} auto={String(decision.auto_applicable)} summary={decision.decision_summary}</li>)}</ul>
+          <ul>{governanceAutoRecords.slice(0, 12).map((record) => <li key={record.id}><strong>{record.effect_type}</strong> — item={record.linked_review_item} decision={record.linked_auto_resolution_decision} status={record.record_status} summary={record.record_summary}</li>)}</ul>
         </SectionCard>
 
         <SectionCard eyebrow="Session timing policy" title="Schedule profiles" description="Reusable cadence profiles with explicit intervals and quiet/stop thresholds.">
