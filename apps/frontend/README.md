@@ -51,6 +51,22 @@ Alcance y límites:
 - paper-only, sin live trading ni dinero real
 - capa conservadora para reducir carga operativa humana, no para reemplazar gobernanza existente
 
+## Mission control queue aging & escalation UX (new)
+
+La vista `/mission-control` ahora agrega **Queue Aging & Escalation** sin crear pantalla nueva:
+
+- acción: `Run queue aging review`
+- summary cards: considered / stale-overdue / escalated / follow-up due / blocked stale
+- listas auditables de:
+  - `governance-queue-aging-reviews`
+  - `governance-queue-aging-recommendations`
+
+Límites explícitos:
+- esta capa solo revisa antigüedad y escalación
+- no auto-resuelve items
+- no reemplaza governance review queue ni governance auto-resolution existentes
+- sigue paper-only, sin live trading ni dinero real
+
 ## Runtime mode enforcement UX (new)
 
 La vista `/runtime` ahora incluye una sección técnica de **Mode Enforcement** para que el modo global no sea solo informativo:

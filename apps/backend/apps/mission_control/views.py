@@ -53,6 +53,9 @@ from apps.mission_control.models import (
     GovernanceAutoResolutionRecord,
     GovernanceReviewResolution,
     GovernanceReviewRecommendation,
+    GovernanceQueueAgingRun,
+    GovernanceQueueAgingReview,
+    GovernanceQueueAgingRecommendation,
     MissionControlCycle,
     MissionControlSession,
 )
@@ -116,6 +119,9 @@ from apps.mission_control.serializers import (
     GovernanceAutoResolutionRecordSerializer,
     GovernanceReviewResolutionSerializer,
     GovernanceReviewRecommendationSerializer,
+    GovernanceQueueAgingRunSerializer,
+    GovernanceQueueAgingReviewSerializer,
+    GovernanceQueueAgingRecommendationSerializer,
     ResolveGovernanceReviewItemRequestSerializer,
 )
 from apps.mission_control.services.resolve import resolve_governance_review_item
@@ -160,6 +166,10 @@ from apps.mission_control.services.run import governance_review_summary, run_gov
 from apps.mission_control.governance_auto_resolution.services.run import (
     build_governance_auto_resolution_summary,
     run_governance_auto_resolution,
+)
+from apps.mission_control.governance_queue_aging.services.run import (
+    governance_queue_aging_summary,
+    run_governance_queue_aging_review,
 )
 from apps.mission_control.governance_auto_resolution.services.auto_resolve import apply_auto_resolution_decision
 
@@ -801,3 +811,33 @@ class ApplyGovernanceAutoResolutionDecisionView(APIView):
         decision = get_object_or_404(GovernanceAutoResolutionDecision, pk=decision_id)
         record = apply_auto_resolution_decision(decision=decision)
         return Response(GovernanceAutoResolutionRecordSerializer(record).data, status=status.HTTP_200_OK)
+
+
+class RunGovernanceQueueAgingReviewView(APIView):
+    def post(self, request, *args, **kwargs):
+        run = run_governance_queue_aging_review()
+        return Response(GovernanceQueueAgingRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class GovernanceQueueAgingRunListView(generics.ListAPIView):
+    serializer_class = GovernanceQueueAgingRunSerializer
+    queryset = GovernanceQueueAgingRun.objects.order_by('-started_at', '-id')[:100]
+
+
+class GovernanceQueueAgingReviewListView(generics.ListAPIView):
+    serializer_class = GovernanceQueueAgingReviewSerializer
+    queryset = GovernanceQueueAgingReview.objects.select_related(
+        'linked_review_item', 'linked_aging_run',
+    ).order_by('-created_at', '-id')[:400]
+
+
+class GovernanceQueueAgingRecommendationListView(generics.ListAPIView):
+    serializer_class = GovernanceQueueAgingRecommendationSerializer
+    queryset = GovernanceQueueAgingRecommendation.objects.select_related(
+        'linked_review_item', 'linked_aging_review',
+    ).order_by('-created_at', '-id')[:400]
+
+
+class GovernanceQueueAgingSummaryView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(governance_queue_aging_summary(), status=status.HTTP_200_OK)

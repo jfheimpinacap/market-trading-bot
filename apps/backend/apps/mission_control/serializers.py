@@ -51,6 +51,9 @@ from apps.mission_control.models import (
     GovernanceReviewResolution,
     GovernanceReviewResolutionType,
     GovernanceReviewRecommendation,
+    GovernanceQueueAgingRun,
+    GovernanceQueueAgingReview,
+    GovernanceQueueAgingRecommendation,
     MissionControlCycle,
     MissionControlSession,
     MissionControlState,
@@ -450,4 +453,22 @@ class GovernanceAutoResolutionDecisionSerializer(serializers.ModelSerializer):
 class GovernanceAutoResolutionRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = GovernanceAutoResolutionRecord
+        fields = '__all__'
+
+
+class GovernanceQueueAgingRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GovernanceQueueAgingRun
+        fields = '__all__'
+
+
+class GovernanceQueueAgingReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GovernanceQueueAgingReview
+        fields = '__all__'
+
+
+class GovernanceQueueAgingRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GovernanceQueueAgingRecommendation
         fields = '__all__'
