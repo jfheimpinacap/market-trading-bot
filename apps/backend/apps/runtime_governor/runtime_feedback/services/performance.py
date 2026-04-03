@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.db.models import Sum
 
 from apps.autonomous_trader.models import AutonomousDispatchRecord, AutonomousDispatchStatus, AutonomousTradeOutcome, AutonomousOutcomeStatus, AutonomousOutcomeType
+from apps.mission_control.governance_backlog_pressure.services.run import governance_backlog_pressure_summary
 from apps.mission_control.models import (
     AutonomousResumeDecision,
     AutonomousResumeDecisionType,
@@ -93,6 +94,9 @@ def build_runtime_performance_snapshot(*, feedback_run=None) -> RuntimePerforman
         created_at__gte=since,
         decision_type__in=[AutonomousResumeDecisionType.READY_TO_RESUME, AutonomousResumeDecisionType.RESUME_IN_MONITOR_ONLY_MODE],
     ).count()
+    governance_backlog_pressure_state = str(
+        governance_backlog_pressure_summary().get('governance_backlog_pressure_state') or 'NORMAL'
+    ).upper()
 
     signal_quality_state = _signal_quality(
         dispatch_count=recent_dispatch_count,
@@ -117,13 +121,16 @@ def build_runtime_performance_snapshot(*, feedback_run=None) -> RuntimePerforman
         reason_codes.append('exposure_throttle_detected')
     if recent_dispatch_count >= 8:
         reason_codes.append('high_dispatch_velocity')
+    if governance_backlog_pressure_state != 'NORMAL':
+        reason_codes.append(f'governance_backlog_pressure:{governance_backlog_pressure_state}')
     if not reason_codes:
         reason_codes.append('stable_runtime_window')
 
     snapshot_summary = (
         f'Runtime feedback window ({WINDOW_HOURS}h): dispatch={recent_dispatch_count}, closed_outcomes={recent_closed_outcome_count}, '
         f'losses={recent_loss_count}, no_action_ticks={recent_no_action_tick_count}, blocked_ticks={recent_blocked_tick_count}, '
-        f'parked_sessions={recent_parked_session_count}, throttle_events={recent_exposure_throttle_count}.'
+        f'parked_sessions={recent_parked_session_count}, throttle_events={recent_exposure_throttle_count}, '
+        f'governance_backlog={governance_backlog_pressure_state}.'
     )
 
     return RuntimePerformanceSnapshot.objects.create(
@@ -142,5 +149,8 @@ def build_runtime_performance_snapshot(*, feedback_run=None) -> RuntimePerforman
         runtime_pressure_state=runtime_pressure_state,
         snapshot_summary=snapshot_summary,
         reason_codes=reason_codes,
-        metadata={'window_hours': WINDOW_HOURS},
+        metadata={
+            'window_hours': WINDOW_HOURS,
+            'governance_backlog_pressure_state': governance_backlog_pressure_state,
+        },
     )

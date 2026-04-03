@@ -403,6 +403,7 @@ export function RuntimePage() {
         >
           <div className="system-metadata-grid">
             <div><strong>Posture reviews:</strong> {operatingSummary?.posture_reviews ?? 0}</div>
+            <div><strong>Governance backlog pressure:</strong> {operatingSummary?.governance_backlog_pressure_state ?? 'NORMAL'}</div>
             <div><strong>Mode kept:</strong> {operatingSummary?.mode_kept ?? 0}</div>
             <div><strong>Caution:</strong> {operatingSummary?.caution_count ?? 0}</div>
             <div><strong>Monitor-only:</strong> {operatingSummary?.monitor_only_count ?? 0}</div>
@@ -435,6 +436,7 @@ export function RuntimePage() {
           <p><strong>Boundary:</strong> local-first, single-user, paper-only, no live execution, no real money, conservative and auditable recommendations.</p>
           <div className="system-metadata-grid">
             <div><strong>Current mode:</strong> {runtimeFeedbackSummary?.current_mode ?? 'BALANCED'}</div>
+            <div><strong>Governance backlog pressure:</strong> {runtimeFeedbackSummary?.governance_backlog_pressure_state ?? 'NORMAL'}</div>
             <div><strong>Recent dispatches:</strong> {runtimeFeedbackSummary?.recent_dispatches ?? 0}</div>
             <div><strong>Recent losses:</strong> {runtimeFeedbackSummary?.recent_losses ?? 0}</div>
             <div><strong>No-action pressure:</strong> {runtimeFeedbackSummary?.no_action_pressure ?? 0}</div>
@@ -443,7 +445,7 @@ export function RuntimePage() {
           </div>
 
           <h4>Performance snapshots</h4>
-          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Mode</th><th>Dispatch / Outcomes / Losses</th><th>No-action / Blocked / Deferred / Parked</th><th>Signal quality</th><th>Runtime pressure</th><th>Summary</th></tr></thead><tbody>{runtimePerformanceSnapshots.slice(0, 10).map((row) => <tr key={row.id}><td>{row.current_global_mode}</td><td>{row.recent_dispatch_count} / {row.recent_closed_outcome_count} / {row.recent_loss_count}</td><td>{row.recent_no_action_tick_count} / {row.recent_blocked_tick_count} / {row.recent_deferred_dispatch_count} / {row.recent_parked_session_count}</td><td>{row.signal_quality_state}</td><td>{row.runtime_pressure_state}</td><td>{row.snapshot_summary}</td></tr>)}</tbody></table></div>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Mode</th><th>Dispatch / Outcomes / Losses</th><th>No-action / Blocked / Deferred / Parked</th><th>Signal quality</th><th>Runtime pressure</th><th>Backlog pressure</th><th>Summary</th></tr></thead><tbody>{runtimePerformanceSnapshots.slice(0, 10).map((row) => <tr key={row.id}><td>{row.current_global_mode}</td><td>{row.recent_dispatch_count} / {row.recent_closed_outcome_count} / {row.recent_loss_count}</td><td>{row.recent_no_action_tick_count} / {row.recent_blocked_tick_count} / {row.recent_deferred_dispatch_count} / {row.recent_parked_session_count}</td><td>{row.signal_quality_state}</td><td>{row.runtime_pressure_state}</td><td>{String(row.metadata?.governance_backlog_pressure_state ?? 'NORMAL')}</td><td>{row.snapshot_summary}</td></tr>)}</tbody></table></div>
 
           <h4>Diagnostic reviews</h4>
           <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Severity</th><th>Summary</th></tr></thead><tbody>{runtimeDiagnosticReviews.slice(0, 10).map((row) => <tr key={row.id}><td>{row.diagnostic_type}</td><td>{row.diagnostic_severity}</td><td>{row.diagnostic_summary}</td></tr>)}</tbody></table></div>

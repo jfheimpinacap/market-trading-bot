@@ -172,6 +172,15 @@ This bridge does not replace runtime/safety/portfolio/mission authorities; it ad
 
 This layer provides conservative global tuning input and traceability; it does not replace runtime_governor, mission_control, portfolio_governor, risk, safety, or incident authorities. Scope remains local-first, single-user, paper-only, and no live execution.
 
+Backlog-pressure integration was tightened in this delta:
+- runtime feedback performance snapshots now persist `governance_backlog_pressure_state`
+- diagnostics and feedback decisions now add explicit reason codes/summaries for `CAUTION` / `HIGH` / `CRITICAL`
+- `HIGH`/`CRITICAL` now apply stricter relax gating and stronger manual-review bias
+- `CRITICAL` can bias toward monitor-only when other runtime signals are not severe
+- `NORMAL` keeps base behavior
+
+This remains conservative, transparent, paper-only, and does not replace existing authorities.
+
 ### Runtime feedback apply bridge / closed-loop tuning (new)
 
 `runtime_governor` now closes the loop from runtime feedback into conservative global posture adjustment:

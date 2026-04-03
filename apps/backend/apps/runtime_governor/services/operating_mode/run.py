@@ -55,6 +55,12 @@ def run_operating_mode_review(*, triggered_by: str = 'operator-ui', auto_apply: 
 def get_operating_mode_summary() -> dict:
     latest_run = GlobalRuntimePostureRun.objects.order_by('-started_at', '-id').first()
     latest_decision = GlobalOperatingModeDecision.objects.order_by('-created_at_decision', '-id').first()
+    latest_backlog_pressure = 'NORMAL'
+    if latest_decision:
+        latest_backlog_pressure = str(
+            ((latest_decision.linked_posture_snapshot.metadata or {}).get('linked_models') or {}).get('governance_backlog_pressure_state')
+            or 'NORMAL'
+        ).upper()
 
     decision_counts = Counter(
         GlobalOperatingModeDecision.objects.values_list('target_mode', flat=True)
@@ -75,5 +81,6 @@ def get_operating_mode_summary() -> dict:
         'recovery_mode_count': decision_counts.get(GlobalOperatingMode.RECOVERY_MODE, 0),
         'throttled_count': decision_counts.get(GlobalOperatingMode.THROTTLED, 0),
         'blocked_count': decision_counts.get(GlobalOperatingMode.BLOCKED, 0),
+        'governance_backlog_pressure_state': latest_backlog_pressure,
         'recommendation_summary': latest_run.recommendation_summary if latest_run else {},
     }

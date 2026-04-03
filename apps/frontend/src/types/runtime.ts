@@ -159,6 +159,7 @@ export type OperatingModeSummary = {
   recovery_mode_count: number;
   throttled_count: number;
   blocked_count: number;
+  governance_backlog_pressure_state: 'NORMAL' | 'CAUTION' | 'HIGH' | 'CRITICAL';
   recommendation_summary: Record<string, unknown>;
 };
 
@@ -309,6 +310,7 @@ export type RuntimeFeedbackSummary = {
   recent_losses: number;
   no_action_pressure: number;
   blocked_pressure: number;
+  governance_backlog_pressure_state: 'NORMAL' | 'CAUTION' | 'HIGH' | 'CRITICAL';
   feedback_runs: number;
   feedback_decisions: number;
   applied_decisions: number;

@@ -27,6 +27,12 @@ def _is_relaxation(snapshot: RuntimeModeTransitionSnapshot) -> bool:
 def build_runtime_mode_stability_review(*, transition_snapshot: RuntimeModeTransitionSnapshot) -> RuntimeModeStabilityReview:
     reason_codes = list(transition_snapshot.reason_codes or [])
     is_relaxation = bool((transition_snapshot.metadata or {}).get('is_relaxation')) or _is_relaxation(transition_snapshot)
+    governance_backlog_pressure_state = str((transition_snapshot.metadata or {}).get('governance_backlog_pressure_state') or 'NORMAL').upper()
+    effective_relaxation_dwell_seconds = RELAXATION_DWELL_SECONDS
+    if governance_backlog_pressure_state == 'HIGH':
+        effective_relaxation_dwell_seconds = RELAXATION_DWELL_SECONDS + 900
+    elif governance_backlog_pressure_state == 'CRITICAL':
+        effective_relaxation_dwell_seconds = RELAXATION_DWELL_SECONDS + 1800
 
     review_type = RuntimeModeStabilityReviewType.STABLE_TRANSITION
     severity = RuntimeModeStabilityReviewSeverity.INFO
@@ -42,11 +48,20 @@ def build_runtime_mode_stability_review(*, transition_snapshot: RuntimeModeTrans
         severity = RuntimeModeStabilityReviewSeverity.INFO
         reason_codes.append('safe_recovery_entry')
         review_summary = 'Escalation into protective mode is considered safe to allow quickly.'
-    elif is_relaxation and transition_snapshot.time_in_current_mode_seconds < RELAXATION_DWELL_SECONDS:
+    elif governance_backlog_pressure_state == 'CRITICAL' and is_relaxation:
+        review_type = RuntimeModeStabilityReviewType.EARLY_RELAX_ATTEMPT
+        severity = RuntimeModeStabilityReviewSeverity.CRITICAL
+        reason_codes.append('backlog_critical_relaxation_block')
+        review_summary = 'Relaxation is blocked while governance backlog pressure remains CRITICAL.'
+    elif is_relaxation and transition_snapshot.time_in_current_mode_seconds < effective_relaxation_dwell_seconds:
         review_type = RuntimeModeStabilityReviewType.EARLY_RELAX_ATTEMPT
         severity = RuntimeModeStabilityReviewSeverity.HIGH
         reason_codes.append('early_relaxation')
-        review_summary = 'Relaxation attempt is premature relative to recovery/throttled dwell policy.'
+        if governance_backlog_pressure_state == 'HIGH':
+            reason_codes.append('backlog_high_relaxation_extended_dwell')
+            review_summary = 'Relaxation attempt is premature; HIGH governance backlog pressure requires longer dwell.'
+        else:
+            review_summary = 'Relaxation attempt is premature relative to recovery/throttled dwell policy.'
     elif transition_snapshot.time_in_current_mode_seconds < MIN_DWELL_SECONDS:
         review_type = RuntimeModeStabilityReviewType.INSUFFICIENT_DWELL_TIME
         severity = RuntimeModeStabilityReviewSeverity.CAUTION
@@ -67,6 +82,8 @@ def build_runtime_mode_stability_review(*, transition_snapshot: RuntimeModeTrans
         metadata={
             'min_dwell_seconds': MIN_DWELL_SECONDS,
             'relaxation_dwell_seconds': RELAXATION_DWELL_SECONDS,
+            'effective_relaxation_dwell_seconds': effective_relaxation_dwell_seconds,
             'is_relaxation': is_relaxation,
+            'governance_backlog_pressure_state': governance_backlog_pressure_state,
         },
     )

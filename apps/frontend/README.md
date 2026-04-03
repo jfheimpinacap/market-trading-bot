@@ -126,6 +126,10 @@ La vista `/runtime` ahora incluye una sección técnica de **Runtime Feedback** 
 
 Esta capa visualiza performance agregada y recomendaciones de endurecer/relajar postura global sin reemplazar runtime_governor, mission_control ni portfolio/risk/safety/incident authorities.
 
+Delta UX: `/runtime` ahora muestra de forma más explícita la señal de `governance_backlog_pressure_state` en Runtime Feedback / Operating Mode (sin pantalla nueva), incluyendo contexto en tablas y summaries cuando afecta decisiones conservadoras.
+
+Se mantienen límites: paper-only, sin trading real/dinero real, sin reemplazar authorities existentes.
+
 ## Runtime feedback apply UX (new)
 
 La vista `/runtime` ahora incluye sección **Runtime Feedback Apply** para cerrar el loop de forma conservadora y auditable:

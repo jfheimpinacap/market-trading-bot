@@ -10,6 +10,7 @@ from apps.runtime_governor.models import (
 
 def build_runtime_diagnostic_review(*, snapshot: RuntimePerformanceSnapshot) -> RuntimeDiagnosticReview:
     reason_codes = list(snapshot.reason_codes or [])
+    governance_backlog_pressure_state = str((snapshot.metadata or {}).get('governance_backlog_pressure_state') or 'NORMAL').upper()
 
     diagnostic_type = RuntimeFeedbackDiagnosticType.HEALTHY_RUNTIME
     severity = RuntimeFeedbackDiagnosticSeverity.INFO
@@ -46,11 +47,30 @@ def build_runtime_diagnostic_review(*, snapshot: RuntimePerformanceSnapshot) -> 
         summary = 'Runtime is saturated by blocked ticks or parked sessions.'
         reason_codes.append('blocked_runtime_saturation')
 
+    if governance_backlog_pressure_state in {'CAUTION', 'HIGH', 'CRITICAL'}:
+        reason_codes.append(f'backlog_pressure_{governance_backlog_pressure_state.lower()}')
+    if governance_backlog_pressure_state == 'CAUTION' and severity == RuntimeFeedbackDiagnosticSeverity.INFO:
+        severity = RuntimeFeedbackDiagnosticSeverity.CAUTION
+        summary = f'{summary} Governance backlog pressure is CAUTION, so conservative bias is maintained.'
+    elif governance_backlog_pressure_state == 'HIGH' and severity in {
+        RuntimeFeedbackDiagnosticSeverity.INFO,
+        RuntimeFeedbackDiagnosticSeverity.CAUTION,
+    }:
+        severity = RuntimeFeedbackDiagnosticSeverity.HIGH
+        summary = f'{summary} Governance backlog pressure is HIGH, increasing conservative runtime bias.'
+    elif governance_backlog_pressure_state == 'CRITICAL' and severity != RuntimeFeedbackDiagnosticSeverity.CRITICAL:
+        severity = RuntimeFeedbackDiagnosticSeverity.CRITICAL
+        summary = f'{summary} Governance backlog pressure is CRITICAL, requiring stricter runtime governance.'
+
     return RuntimeDiagnosticReview.objects.create(
         linked_performance_snapshot=snapshot,
         diagnostic_type=diagnostic_type,
         diagnostic_severity=severity,
         diagnostic_summary=summary,
         reason_codes=sorted(set(reason_codes)),
-        metadata={'signal_quality_state': snapshot.signal_quality_state, 'runtime_pressure_state': snapshot.runtime_pressure_state},
+        metadata={
+            'signal_quality_state': snapshot.signal_quality_state,
+            'runtime_pressure_state': snapshot.runtime_pressure_state,
+            'governance_backlog_pressure_state': governance_backlog_pressure_state,
+        },
     )

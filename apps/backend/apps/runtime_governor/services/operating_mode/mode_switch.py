@@ -31,19 +31,35 @@ def get_active_global_operating_mode() -> str:
 
 
 def _with_hysteresis(*, current_mode: str, proposed_mode: str, snapshot: GlobalRuntimePostureSnapshot) -> str:
+    governance_backlog_pressure_state = str(
+        ((snapshot.metadata or {}).get('linked_models') or {}).get('governance_backlog_pressure_state') or 'NORMAL'
+    ).upper()
     if current_mode == GlobalOperatingMode.BLOCKED and proposed_mode != GlobalOperatingMode.BLOCKED:
         if snapshot.safety_posture == 'HARD_BLOCK' or snapshot.runtime_posture == 'BLOCKED':
             return GlobalOperatingMode.BLOCKED
     if current_mode == GlobalOperatingMode.THROTTLED and proposed_mode == GlobalOperatingMode.CAUTION:
-        return GlobalOperatingMode.THROTTLED
+        if governance_backlog_pressure_state in {'HIGH', 'CRITICAL'}:
+            return GlobalOperatingMode.THROTTLED
     if current_mode == GlobalOperatingMode.RECOVERY_MODE and proposed_mode == GlobalOperatingMode.BALANCED:
-        if snapshot.recent_loss_state != 'NONE':
+        if snapshot.recent_loss_state != 'NONE' or governance_backlog_pressure_state in {'HIGH', 'CRITICAL'}:
             return GlobalOperatingMode.RECOVERY_MODE
+    if current_mode in {GlobalOperatingMode.RECOVERY_MODE, GlobalOperatingMode.THROTTLED} and proposed_mode in {
+        GlobalOperatingMode.CAUTION,
+        GlobalOperatingMode.BALANCED,
+        GlobalOperatingMode.MONITOR_ONLY,
+    }:
+        if governance_backlog_pressure_state == 'CRITICAL':
+            return current_mode
     return proposed_mode
 
 
 def _derive_target_mode(snapshot: GlobalRuntimePostureSnapshot) -> tuple[str, str, bool, list[str]]:
     reason_codes = list(snapshot.reason_codes or [])
+    governance_backlog_pressure_state = str(
+        ((snapshot.metadata or {}).get('linked_models') or {}).get('governance_backlog_pressure_state') or 'NORMAL'
+    ).upper()
+    if governance_backlog_pressure_state != 'NORMAL':
+        reason_codes.append(f'governance_backlog_pressure:{governance_backlog_pressure_state}')
     if snapshot.safety_posture == 'HARD_BLOCK' or snapshot.runtime_posture == 'BLOCKED':
         return GlobalOperatingMode.BLOCKED, GlobalOperatingModeDecisionType.SWITCH_TO_BLOCKED, True, reason_codes
 
@@ -75,6 +91,23 @@ def _derive_target_mode(snapshot: GlobalRuntimePostureSnapshot) -> tuple[str, st
     if caution_flags == 1 and snapshot.signal_quality_state == 'WEAK':
         return GlobalOperatingMode.CAUTION, GlobalOperatingModeDecisionType.REQUIRE_MANUAL_MODE_REVIEW, False, reason_codes + ['ambiguous_context']
 
+    if governance_backlog_pressure_state == 'CAUTION':
+        return GlobalOperatingMode.CAUTION, GlobalOperatingModeDecisionType.SWITCH_TO_CAUTION, True, reason_codes + ['backlog_caution_bias']
+    if governance_backlog_pressure_state == 'HIGH':
+        return (
+            GlobalOperatingMode.THROTTLED,
+            GlobalOperatingModeDecisionType.SWITCH_TO_THROTTLED,
+            True,
+            reason_codes + ['backlog_high_reduce_admission_and_cadence'],
+        )
+    if governance_backlog_pressure_state == 'CRITICAL':
+        return (
+            GlobalOperatingMode.MONITOR_ONLY,
+            GlobalOperatingModeDecisionType.REQUIRE_MANUAL_MODE_REVIEW,
+            False,
+            reason_codes + ['backlog_critical_manual_review_required'],
+        )
+
     return GlobalOperatingMode.BALANCED, GlobalOperatingModeDecisionType.KEEP_CURRENT_MODE, True, reason_codes
 
 
@@ -105,9 +138,19 @@ def decide_and_optionally_apply_mode(*, snapshot: GlobalRuntimePostureSnapshot, 
     current_mode = get_active_global_operating_mode()
     target_mode, decision_type, auto_applicable, reason_codes = _derive_target_mode(snapshot)
     target_mode = _with_hysteresis(current_mode=current_mode, proposed_mode=target_mode, snapshot=snapshot)
+    governance_backlog_pressure_state = str(
+        ((snapshot.metadata or {}).get('linked_models') or {}).get('governance_backlog_pressure_state') or 'NORMAL'
+    ).upper()
 
     if target_mode == current_mode and decision_type != GlobalOperatingModeDecisionType.REQUIRE_MANUAL_MODE_REVIEW:
         decision_type = GlobalOperatingModeDecisionType.KEEP_CURRENT_MODE
+
+    decision_summary = f'Global operating mode review proposes {target_mode} from {current_mode}.'
+    if governance_backlog_pressure_state != 'NORMAL':
+        decision_summary = (
+            f'Global operating mode review proposes {target_mode} from {current_mode} with '
+            f'governance backlog pressure {governance_backlog_pressure_state}.'
+        )
 
     decision = GlobalOperatingModeDecision.objects.create(
         linked_posture_snapshot=snapshot,
@@ -116,9 +159,12 @@ def decide_and_optionally_apply_mode(*, snapshot: GlobalRuntimePostureSnapshot, 
         decision_type=decision_type,
         decision_status=GlobalOperatingModeDecisionStatus.PROPOSED,
         auto_applicable=auto_applicable,
-        decision_summary=f'Global operating mode review proposes {target_mode} from {current_mode}.',
+        decision_summary=decision_summary,
         reason_codes=reason_codes,
-        metadata={'downstream_influence': build_downstream_influence(mode=target_mode)},
+        metadata={
+            'downstream_influence': build_downstream_influence(mode=target_mode),
+            'governance_backlog_pressure_state': governance_backlog_pressure_state,
+        },
     )
 
     switch_status = GlobalOperatingModeSwitchStatus.SKIPPED
