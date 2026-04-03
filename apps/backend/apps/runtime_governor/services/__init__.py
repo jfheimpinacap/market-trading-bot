@@ -21,6 +21,10 @@ from apps.runtime_governor.runtime_feedback_apply.services import (
     get_runtime_feedback_apply_summary,
     run_runtime_feedback_apply_review,
 )
+from apps.runtime_governor.services.run import (
+    get_mode_stabilization_summary,
+    run_mode_stabilization_review,
+)
 
 __all__ = [
     'get_capabilities_for_current_mode',
@@ -40,4 +44,6 @@ __all__ = [
     'get_runtime_feedback_summary',
     'run_runtime_feedback_apply_review',
     'get_runtime_feedback_apply_summary',
+    'run_mode_stabilization_review',
+    'get_mode_stabilization_summary',
 ]

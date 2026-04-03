@@ -614,6 +614,194 @@ class RuntimeFeedbackApplyRecommendation(TimeStampedModel):
         ordering = ['-created_at', '-id']
 
 
+class RuntimeModeFeedbackPressureState(models.TextChoices):
+    LOW = 'LOW', 'Low'
+    NORMAL = 'NORMAL', 'Normal'
+    HIGH = 'HIGH', 'High'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class RuntimeModeTransitionRiskState(models.TextChoices):
+    LOW = 'LOW', 'Low'
+    CAUTION = 'CAUTION', 'Caution'
+    HIGH = 'HIGH', 'High'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class RuntimeModeStabilityReviewType(models.TextChoices):
+    STABLE_TRANSITION = 'STABLE_TRANSITION', 'Stable transition'
+    EARLY_RELAX_ATTEMPT = 'EARLY_RELAX_ATTEMPT', 'Early relax attempt'
+    FLAPPING_RISK = 'FLAPPING_RISK', 'Flapping risk'
+    INSUFFICIENT_DWELL_TIME = 'INSUFFICIENT_DWELL_TIME', 'Insufficient dwell time'
+    SAFE_RECOVERY_ENTRY = 'SAFE_RECOVERY_ENTRY', 'Safe recovery entry'
+    SAFE_RELAXATION_WINDOW = 'SAFE_RELAXATION_WINDOW', 'Safe relaxation window'
+
+
+class RuntimeModeStabilityReviewSeverity(models.TextChoices):
+    INFO = 'INFO', 'Info'
+    CAUTION = 'CAUTION', 'Caution'
+    HIGH = 'HIGH', 'High'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class RuntimeModeTransitionDecisionType(models.TextChoices):
+    ALLOW_MODE_SWITCH = 'ALLOW_MODE_SWITCH', 'Allow mode switch'
+    DEFER_MODE_SWITCH = 'DEFER_MODE_SWITCH', 'Defer mode switch'
+    KEEP_CURRENT_MODE_FOR_DWELL = 'KEEP_CURRENT_MODE_FOR_DWELL', 'Keep current mode for dwell'
+    REQUIRE_MANUAL_STABILITY_REVIEW = 'REQUIRE_MANUAL_STABILITY_REVIEW', 'Require manual stability review'
+    BLOCK_MODE_SWITCH = 'BLOCK_MODE_SWITCH', 'Block mode switch'
+
+
+class RuntimeModeTransitionDecisionStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class RuntimeModeStabilizationRecommendationType(models.TextChoices):
+    ALLOW_TRANSITION_NOW = 'ALLOW_TRANSITION_NOW', 'Allow transition now'
+    HOLD_CURRENT_MODE_LONGER = 'HOLD_CURRENT_MODE_LONGER', 'Hold current mode longer'
+    DEFER_RELAXATION = 'DEFER_RELAXATION', 'Defer relaxation'
+    BLOCK_FLAPPING_TRANSITION = 'BLOCK_FLAPPING_TRANSITION', 'Block flapping transition'
+    REQUIRE_MANUAL_STABILITY_REVIEW = 'REQUIRE_MANUAL_STABILITY_REVIEW', 'Require manual stability review'
+    KEEP_RECOVERY_MODE_UNTIL_STABLE = 'KEEP_RECOVERY_MODE_UNTIL_STABLE', 'Keep recovery mode until stable'
+
+
+class RuntimeModeStabilizationRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_transition_count = models.PositiveIntegerField(default=0)
+    allowed_count = models.PositiveIntegerField(default=0)
+    deferred_count = models.PositiveIntegerField(default=0)
+    dwell_hold_count = models.PositiveIntegerField(default=0)
+    blocked_count = models.PositiveIntegerField(default=0)
+    manual_review_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class RuntimeModeTransitionSnapshot(TimeStampedModel):
+    linked_run = models.ForeignKey(
+        RuntimeModeStabilizationRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='transition_snapshots',
+    )
+    linked_feedback_decision = models.ForeignKey(
+        RuntimeFeedbackDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='mode_transition_snapshots',
+    )
+    current_mode = models.CharField(max_length=24, choices=GlobalOperatingMode.choices)
+    target_mode = models.CharField(max_length=24, choices=GlobalOperatingMode.choices)
+    current_mode_started_at = models.DateTimeField(null=True, blank=True)
+    time_in_current_mode_seconds = models.PositiveIntegerField(default=0)
+    recent_switch_count = models.PositiveIntegerField(default=0)
+    recent_switch_window_seconds = models.PositiveIntegerField(default=0)
+    last_switch_at = models.DateTimeField(null=True, blank=True)
+    feedback_pressure_state = models.CharField(
+        max_length=12,
+        choices=RuntimeModeFeedbackPressureState.choices,
+        default=RuntimeModeFeedbackPressureState.NORMAL,
+    )
+    transition_risk_state = models.CharField(
+        max_length=12,
+        choices=RuntimeModeTransitionRiskState.choices,
+        default=RuntimeModeTransitionRiskState.LOW,
+    )
+    snapshot_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class RuntimeModeStabilityReview(TimeStampedModel):
+    linked_transition_snapshot = models.ForeignKey(
+        RuntimeModeTransitionSnapshot,
+        on_delete=models.CASCADE,
+        related_name='stability_reviews',
+    )
+    review_type = models.CharField(max_length=40, choices=RuntimeModeStabilityReviewType.choices)
+    review_severity = models.CharField(
+        max_length=12,
+        choices=RuntimeModeStabilityReviewSeverity.choices,
+        default=RuntimeModeStabilityReviewSeverity.INFO,
+    )
+    review_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class RuntimeModeTransitionDecision(TimeStampedModel):
+    linked_transition_snapshot = models.ForeignKey(
+        RuntimeModeTransitionSnapshot,
+        on_delete=models.CASCADE,
+        related_name='transition_decisions',
+    )
+    linked_stability_review = models.ForeignKey(
+        RuntimeModeStabilityReview,
+        on_delete=models.CASCADE,
+        related_name='transition_decisions',
+    )
+    decision_type = models.CharField(max_length=40, choices=RuntimeModeTransitionDecisionType.choices)
+    decision_status = models.CharField(
+        max_length=12,
+        choices=RuntimeModeTransitionDecisionStatus.choices,
+        default=RuntimeModeTransitionDecisionStatus.PROPOSED,
+    )
+    auto_applicable = models.BooleanField(default=False)
+    decision_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class RuntimeModeStabilizationRecommendation(TimeStampedModel):
+    target_transition_snapshot = models.ForeignKey(
+        RuntimeModeTransitionSnapshot,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    target_stability_review = models.ForeignKey(
+        RuntimeModeStabilityReview,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    target_transition_decision = models.ForeignKey(
+        RuntimeModeTransitionDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    recommendation_type = models.CharField(max_length=48, choices=RuntimeModeStabilizationRecommendationType.choices)
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
 class GlobalModeEnforcementRun(TimeStampedModel):
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)

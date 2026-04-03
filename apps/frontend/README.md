@@ -74,6 +74,21 @@ La vista `/runtime` ahora incluye sección **Runtime Feedback Apply** para cerra
 
 Esta UI no habilita trading real ni reemplaza autoridades existentes; solo supervisa el puente feedback → mode → enforcement dentro del scope local-first, single-user, paper-only.
 
+## Runtime mode stabilization UX (new)
+
+La vista `/runtime` ahora agrega una sección **Mode Stabilization** (sin crear pantalla nueva):
+
+- acción manual: `Run mode stabilization review`
+- summary cards de runs/snapshots/reviews/decisions/recommendations y conteos (allow/defer/dwell-hold/block/manual)
+- paneles técnicos:
+  - transition snapshots
+  - stability reviews
+  - transition decisions
+  - recommendations
+  - runs
+
+En esta etapa es solo capa de review/diagnóstico/decisión/recomendación. Sigue paper-only y **no** aplica todavía la transición estabilizada real.
+
 ## Mission control autonomous runner UX (new)
 
 `/mission-control` ahora también expone una sección de **Autonomous Runner** para autoavance local de sesiones activas:

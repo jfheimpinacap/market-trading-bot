@@ -384,3 +384,92 @@ export type RuntimeFeedbackApplySummary = {
   enforcement_refresh_count: number;
   recommendation_summary: Record<string, unknown>;
 };
+
+export type RuntimeModeStabilizationRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_transition_count: number;
+  allowed_count: number;
+  deferred_count: number;
+  dwell_hold_count: number;
+  blocked_count: number;
+  manual_review_count: number;
+  recommendation_summary: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+};
+
+export type RuntimeModeTransitionSnapshot = {
+  id: number;
+  linked_run: number | null;
+  linked_feedback_decision: number | null;
+  current_mode: GlobalOperatingMode;
+  target_mode: GlobalOperatingMode;
+  current_mode_started_at: string | null;
+  time_in_current_mode_seconds: number;
+  recent_switch_count: number;
+  recent_switch_window_seconds: number;
+  last_switch_at: string | null;
+  feedback_pressure_state: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
+  transition_risk_state: 'LOW' | 'CAUTION' | 'HIGH' | 'CRITICAL';
+  snapshot_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RuntimeModeStabilityReview = {
+  id: number;
+  linked_transition_snapshot: number;
+  review_type: string;
+  review_severity: 'INFO' | 'CAUTION' | 'HIGH' | 'CRITICAL';
+  review_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RuntimeModeTransitionDecision = {
+  id: number;
+  linked_transition_snapshot: number;
+  linked_stability_review: number;
+  decision_type: string;
+  decision_status: 'PROPOSED' | 'SKIPPED' | 'BLOCKED';
+  auto_applicable: boolean;
+  decision_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RuntimeModeStabilizationRecommendation = {
+  id: number;
+  target_transition_snapshot: number | null;
+  target_stability_review: number | null;
+  target_transition_decision: number | null;
+  recommendation_type: string;
+  rationale: string;
+  reason_codes: string[];
+  confidence: number;
+  blockers: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RuntimeModeStabilizationSummary = {
+  latest_run_id: number | null;
+  latest_snapshot_id: number | null;
+  latest_review_id: number | null;
+  latest_decision_id: number | null;
+  runs: number;
+  snapshots: number;
+  reviews: number;
+  decisions: number;
+  recommendations: number;
+  allowed_count: number;
+  deferred_count: number;
+  dwell_hold_count: number;
+  blocked_count: number;
+  manual_review_count: number;
+  recommendation_summary: Record<string, unknown>;
+};

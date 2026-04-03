@@ -35,6 +35,13 @@ import {
   getRuntimeFeedbackApplyRecommendations,
   getRuntimeFeedbackApplySummary,
   applyRuntimeFeedbackDecision,
+  runModeStabilizationReview,
+  getModeStabilizationRuns,
+  getModeTransitionSnapshots,
+  getModeStabilityReviews,
+  getModeTransitionDecisions,
+  getModeStabilizationRecommendations,
+  getModeStabilizationSummary,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -60,6 +67,12 @@ import type {
   RuntimeFeedbackApplyRecord,
   RuntimeFeedbackApplyRecommendation,
   RuntimeFeedbackApplySummary,
+  RuntimeModeStabilizationRecommendation,
+  RuntimeModeStabilizationRun,
+  RuntimeModeStabilizationSummary,
+  RuntimeModeStabilityReview,
+  RuntimeModeTransitionDecision,
+  RuntimeModeTransitionSnapshot,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -94,6 +107,12 @@ export function RuntimePage() {
   const [runtimeFeedbackApplyRecords, setRuntimeFeedbackApplyRecords] = useState<RuntimeFeedbackApplyRecord[]>([]);
   const [runtimeFeedbackApplyRecommendations, setRuntimeFeedbackApplyRecommendations] = useState<RuntimeFeedbackApplyRecommendation[]>([]);
   const [runtimeFeedbackApplySummary, setRuntimeFeedbackApplySummary] = useState<RuntimeFeedbackApplySummary | null>(null);
+  const [modeStabilizationRuns, setModeStabilizationRuns] = useState<RuntimeModeStabilizationRun[]>([]);
+  const [modeTransitionSnapshots, setModeTransitionSnapshots] = useState<RuntimeModeTransitionSnapshot[]>([]);
+  const [modeStabilityReviews, setModeStabilityReviews] = useState<RuntimeModeStabilityReview[]>([]);
+  const [modeTransitionDecisions, setModeTransitionDecisions] = useState<RuntimeModeTransitionDecision[]>([]);
+  const [modeStabilizationRecommendations, setModeStabilizationRecommendations] = useState<RuntimeModeStabilizationRecommendation[]>([]);
+  const [modeStabilizationSummary, setModeStabilizationSummary] = useState<RuntimeModeStabilizationSummary | null>(null);
 
   const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -105,7 +124,7 @@ export function RuntimePage() {
     setLoading(true);
     setError(null);
     try {
-      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, stabilizationRecommendationsRes, stabilizationSummaryRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
@@ -130,6 +149,12 @@ export function RuntimePage() {
         getRuntimeFeedbackApplyRecords(),
         getRuntimeFeedbackApplyRecommendations(),
         getRuntimeFeedbackApplySummary(),
+        getModeStabilizationRuns(),
+        getModeTransitionSnapshots(),
+        getModeStabilityReviews(),
+        getModeTransitionDecisions(),
+        getModeStabilizationRecommendations(),
+        getModeStabilizationSummary(),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
@@ -155,6 +180,12 @@ export function RuntimePage() {
       setRuntimeFeedbackApplyRecords(feedbackApplyRecordsRes);
       setRuntimeFeedbackApplyRecommendations(feedbackApplyRecommendationsRes);
       setRuntimeFeedbackApplySummary(feedbackApplySummaryRes);
+      setModeStabilizationRuns(stabilizationRunsRes);
+      setModeTransitionSnapshots(transitionSnapshotsRes);
+      setModeStabilityReviews(stabilityReviewsRes);
+      setModeTransitionDecisions(transitionDecisionsRes);
+      setModeStabilizationRecommendations(stabilizationRecommendationsRes);
+      setModeStabilizationSummary(stabilizationSummaryRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load runtime governance.');
     } finally {
@@ -239,6 +270,19 @@ export function RuntimePage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not apply runtime feedback decision.');
+    } finally {
+      setRunningReview(false);
+    }
+  }
+
+  async function onRunModeStabilizationReview() {
+    setRunningReview(true);
+    setError(null);
+    try {
+      await runModeStabilizationReview({ triggered_by: 'runtime-page' });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not run mode stabilization review.');
     } finally {
       setRunningReview(false);
     }
@@ -421,6 +465,41 @@ export function RuntimePage() {
 
           <h4>Apply runs</h4>
           <div className="table-wrapper"><table className="data-table"><thead><tr><th>Started</th><th>Considered</th><th>Applied</th><th>Manual/Blocked</th><th>Mode switches</th><th>Enforcement refresh</th></tr></thead><tbody>{runtimeFeedbackApplyRuns.slice(0, 10).map((row) => <tr key={row.id}><td>{new Date(row.started_at).toLocaleString()}</td><td>{row.considered_feedback_decision_count}</td><td>{row.applied_count}</td><td>{row.manual_review_count} / {row.blocked_count}</td><td>{row.mode_switch_count}</td><td>{row.enforcement_refresh_count}</td></tr>)}</tbody></table></div>
+        </SectionCard>
+
+        <SectionCard
+          eyebrow="Mode stabilization"
+          title="Mode Stabilization"
+          description="Anti-flapping hysteresis and dwell diagnostics that review transition intents before any real apply action. Paper-only and advisory in this phase."
+          aside={<button type="button" className="secondary-button" disabled={runningReview} onClick={() => void onRunModeStabilizationReview()}>{runningReview ? 'Running…' : 'Run mode stabilization review'}</button>}
+        >
+          <div className="system-metadata-grid">
+            <div><strong>Runs:</strong> {modeStabilizationSummary?.runs ?? 0}</div>
+            <div><strong>Snapshots:</strong> {modeStabilizationSummary?.snapshots ?? 0}</div>
+            <div><strong>Reviews:</strong> {modeStabilizationSummary?.reviews ?? 0}</div>
+            <div><strong>Decisions:</strong> {modeStabilizationSummary?.decisions ?? 0}</div>
+            <div><strong>Recommendations:</strong> {modeStabilizationSummary?.recommendations ?? 0}</div>
+            <div><strong>Allowed:</strong> {modeStabilizationSummary?.allowed_count ?? 0}</div>
+            <div><strong>Deferred:</strong> {modeStabilizationSummary?.deferred_count ?? 0}</div>
+            <div><strong>Dwell hold:</strong> {modeStabilizationSummary?.dwell_hold_count ?? 0}</div>
+            <div><strong>Blocked:</strong> {modeStabilizationSummary?.blocked_count ?? 0}</div>
+            <div><strong>Manual review:</strong> {modeStabilizationSummary?.manual_review_count ?? 0}</div>
+          </div>
+
+          <h4>Transition snapshots</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Current → Target</th><th>Dwell (s)</th><th>Recent switches</th><th>Pressure/Risk</th><th>Summary</th></tr></thead><tbody>{modeTransitionSnapshots.slice(0, 10).map((row) => <tr key={row.id}><td>{row.current_mode} → {row.target_mode}</td><td>{row.time_in_current_mode_seconds}</td><td>{row.recent_switch_count} / {row.recent_switch_window_seconds}s</td><td>{row.feedback_pressure_state} / {row.transition_risk_state}</td><td>{row.snapshot_summary}</td></tr>)}</tbody></table></div>
+
+          <h4>Stability reviews</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Review type</th><th>Severity</th><th>Summary</th></tr></thead><tbody>{modeStabilityReviews.slice(0, 10).map((row) => <tr key={row.id}><td>{row.review_type}</td><td>{row.review_severity}</td><td>{row.review_summary}</td></tr>)}</tbody></table></div>
+
+          <h4>Transition decisions</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Decision type</th><th>Status</th><th>Auto</th><th>Summary</th></tr></thead><tbody>{modeTransitionDecisions.slice(0, 10).map((row) => <tr key={row.id}><td>{row.decision_type}</td><td>{row.decision_status}</td><td>{row.auto_applicable ? 'Yes' : 'No'}</td><td>{row.decision_summary}</td></tr>)}</tbody></table></div>
+
+          <h4>Recommendations</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{modeStabilizationRecommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>
+
+          <h4>Runs</h4>
+          <div className="table-wrapper"><table className="data-table"><thead><tr><th>Started</th><th>Considered</th><th>Allowed</th><th>Deferred</th><th>Dwell hold</th><th>Blocked</th><th>Manual review</th></tr></thead><tbody>{modeStabilizationRuns.slice(0, 10).map((row) => <tr key={row.id}><td>{new Date(row.started_at).toLocaleString()}</td><td>{row.considered_transition_count}</td><td>{row.allowed_count}</td><td>{row.deferred_count}</td><td>{row.dwell_hold_count}</td><td>{row.blocked_count}</td><td>{row.manual_review_count}</td></tr>)}</tbody></table></div>
         </SectionCard>
 
         <SectionCard

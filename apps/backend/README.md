@@ -88,6 +88,33 @@ This review layer is recommendation-first and auditable. It feeds global posture
 
 This layer closes feedback → mode → enforcement without replacing `runtime_governor`, `mission_control`, `portfolio_governor`, `risk_agent`, `safety_guard`, or `incident_commander`. Boundaries remain strict: local-first, single-user, paper-only, no real money, no live routing.
 
+## Runtime mode stabilization review (new)
+
+`apps.runtime_governor` now includes a dedicated stabilization review layer for anti-flapping + dwell-aware transition diagnostics:
+
+- service split:
+  - `services/transition_snapshot.py`
+  - `services/stability_review.py`
+  - `services/transition_decision.py`
+  - `services/recommendation.py`
+  - `services/run.py`
+- auditable entities:
+  - `RuntimeModeStabilizationRun`
+  - `RuntimeModeTransitionSnapshot`
+  - `RuntimeModeStabilityReview`
+  - `RuntimeModeTransitionDecision`
+  - `RuntimeModeStabilizationRecommendation`
+- API:
+  - `POST /api/runtime-governor/run-mode-stabilization-review/`
+  - `GET /api/runtime-governor/mode-stabilization-runs/`
+  - `GET /api/runtime-governor/mode-transition-snapshots/`
+  - `GET /api/runtime-governor/mode-stability-reviews/`
+  - `GET /api/runtime-governor/mode-transition-decisions/`
+  - `GET /api/runtime-governor/mode-stabilization-recommendations/`
+  - `GET /api/runtime-governor/mode-stabilization-summary/`
+
+This layer is review/decision/recommendation only in this step: it does not apply a stabilized transition yet. Scope remains local-first, single-user, paper-only, no real money/live routing.
+
 ## Mission control autonomous session runtime (new)
 
 `apps.mission_control` now has an explicit persistent session runtime layer (paper-only):
