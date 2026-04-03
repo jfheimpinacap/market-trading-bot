@@ -34,8 +34,10 @@ import {
   getSessionAdmissionRecommendations,
   getSessionAdmissionSummary,
   getGovernanceReviewItems,
+  getGovernanceReviewResolutions,
   getGovernanceReviewRecommendations,
   getGovernanceReviewSummary,
+  resolveGovernanceReviewItem,
   runSessionAdmissionReview,
   runGovernanceReviewQueue,
   getSessionInterventionDecisions,
@@ -94,6 +96,7 @@ import type {
   SessionAdmissionSummary,
   GovernanceReviewItem,
   GovernanceReviewRecommendation,
+  GovernanceReviewResolution,
   GovernanceReviewSummary,
 } from '../../types/missionControl';
 
@@ -136,6 +139,7 @@ export function MissionControlPage() {
   const [governanceSummary, setGovernanceSummary] = useState<GovernanceReviewSummary | null>(null);
   const [governanceItems, setGovernanceItems] = useState<GovernanceReviewItem[]>([]);
   const [governanceRecommendations, setGovernanceRecommendations] = useState<GovernanceReviewRecommendation[]>([]);
+  const [governanceResolutions, setGovernanceResolutions] = useState<GovernanceReviewResolution[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -145,7 +149,7 @@ export function MissionControlPage() {
     setLoading(true);
     setError(null);
     try {
-      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary, loadedRecoverySnapshots, loadedRecoveryBlockers, loadedResumeDecisions, loadedRecoveryRecommendations, loadedResumeRecords, loadedRecoverySummary, loadedCapacitySnapshots, loadedAdmissionReviews, loadedAdmissionDecisions, loadedAdmissionRecommendations, loadedAdmissionSummary, loadedGovernanceSummary, loadedGovernanceItems, loadedGovernanceRecommendations] = await Promise.all([
+      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary, loadedRecoverySnapshots, loadedRecoveryBlockers, loadedResumeDecisions, loadedRecoveryRecommendations, loadedResumeRecords, loadedRecoverySummary, loadedCapacitySnapshots, loadedAdmissionReviews, loadedAdmissionDecisions, loadedAdmissionRecommendations, loadedAdmissionSummary, loadedGovernanceSummary, loadedGovernanceItems, loadedGovernanceRecommendations, loadedGovernanceResolutions] = await Promise.all([
         getAutonomousSessions(),
         getAutonomousSessionSummary(),
         getAutonomousRunnerState(),
@@ -184,6 +188,7 @@ export function MissionControlPage() {
         getGovernanceReviewSummary(),
         getGovernanceReviewItems(),
         getGovernanceReviewRecommendations(),
+        getGovernanceReviewResolutions(),
       ]);
       setSessions(loadedSessions);
       setSummary(loadedSummary);
@@ -223,6 +228,7 @@ export function MissionControlPage() {
       setGovernanceSummary(loadedGovernanceSummary);
       setGovernanceItems(loadedGovernanceItems);
       setGovernanceRecommendations(loadedGovernanceRecommendations);
+      setGovernanceResolutions(loadedGovernanceResolutions);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load autonomous heartbeat runner state.');
     } finally {
@@ -411,20 +417,22 @@ export function MissionControlPage() {
           <ul>{admissionRecommendations.slice(0, 12).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — {recommendation.rationale} blockers=[{recommendation.blockers.join(', ')}] confidence={recommendation.confidence}</li>)}</ul>
         </SectionCard>
 
-        <SectionCard eyebrow="Governance Review Queue" title="Cross-layer review inbox" description="Unified blocked/manual/deferred/advisory queue across runtime_governor, mission_control, and portfolio_governor. This phase is read-only and paper-only (no real apply/resolution).">
+        <SectionCard eyebrow="Governance Review Queue" title="Cross-layer review inbox" description="Unified blocked/manual/deferred/advisory queue across runtime_governor, mission_control, and portfolio_governor with explicit manual-safe resolution and audit trail. Paper-only scope.">
           <div className="button-row">
             <button type="button" className="primary-button" onClick={async () => { await runGovernanceReviewQueue(); await load(); }}>Run governance review queue</button>
           </div>
           <div className="system-metadata-grid">
             <div><strong>Open items:</strong> {governanceSummary?.open_count ?? 0}</div>
+            <div><strong>Resolved:</strong> {governanceSummary?.resolved_count ?? 0}</div>
             <div><strong>High priority (P1):</strong> {governanceSummary?.high_priority_count ?? 0}</div>
             <div><strong>Blocked:</strong> {governanceSummary?.blocked_count ?? 0}</div>
             <div><strong>Deferred:</strong> {governanceSummary?.deferred_count ?? 0}</div>
             <div><strong>Manual review:</strong> {governanceSummary?.manual_review_count ?? 0}</div>
             <div><strong>Latest run:</strong> {governanceSummary?.latest_run ?? 'n/a'}</div>
           </div>
-          <ul>{governanceItems.slice(0, 10).map((item) => <li key={item.id}><strong>{item.queue_priority}</strong> [{item.severity}] {item.title} — module={item.source_module} type={item.source_type} status={item.item_status}</li>)}</ul>
+          <ul>{governanceItems.slice(0, 10).map((item) => <li key={item.id}><strong>{item.queue_priority}</strong> [{item.severity}] {item.title} — module={item.source_module} type={item.source_type} status={item.item_status} <span style={{ marginLeft: 8, fontWeight: 700 }}>{item.item_status === 'DISMISSED' ? 'dismissed' : item.item_status === 'RESOLVED' ? 'resolved' : 'open'}</span><div className="button-row" style={{ marginTop: 8 }}><button type="button" className="primary-button" onClick={async () => { await resolveGovernanceReviewItem(item.id, { resolution_type: 'APPLY_MANUAL_APPROVAL' }); await load(); }}>Resolve item</button><button type="button" className="secondary-button" onClick={async () => { await resolveGovernanceReviewItem(item.id, { resolution_type: 'DISMISS_AS_EXPECTED' }); await load(); }}>Dismissed</button><button type="button" className="secondary-button" onClick={async () => { await resolveGovernanceReviewItem(item.id, { resolution_type: 'KEEP_BLOCKED' }); await load(); }}>Blocked</button><button type="button" className="secondary-button" onClick={async () => { await resolveGovernanceReviewItem(item.id, { resolution_type: 'REQUIRE_FOLLOWUP' }); await load(); }}>Follow-up</button><button type="button" className="secondary-button" onClick={async () => { await resolveGovernanceReviewItem(item.id, { resolution_type: 'RETRY_SAFE_APPLY' }); await load(); }}>Retry safe</button></div></li>)}</ul>
           <ul>{governanceRecommendations.slice(0, 10).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — item={recommendation.linked_review_item ?? 'n/a'} confidence={recommendation.confidence.toFixed(2)} rationale={recommendation.rationale}</li>)}</ul>
+          <ul>{governanceResolutions.slice(0, 12).map((resolution) => <li key={resolution.id}><strong>{resolution.resolution_type}</strong> — item={resolution.linked_review_item} status={resolution.resolution_status} state={resolution.resolution_type === 'DISMISS_AS_EXPECTED' ? 'dismissed' : resolution.resolution_type === 'KEEP_BLOCKED' ? 'blocked' : resolution.resolution_type === 'REQUIRE_FOLLOWUP' ? 'follow-up' : 'resolved'} summary={resolution.resolution_summary}</li>)}</ul>
         </SectionCard>
 
         <SectionCard eyebrow="Session timing policy" title="Schedule profiles" description="Reusable cadence profiles with explicit intervals and quiet/stop thresholds.">

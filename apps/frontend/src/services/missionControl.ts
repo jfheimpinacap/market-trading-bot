@@ -48,6 +48,7 @@ import type {
   AutonomousSessionAdmissionRecommendation,
   GovernanceReviewItem,
   GovernanceReviewQueueRun,
+  GovernanceReviewResolution,
   GovernanceReviewRecommendation,
   GovernanceReviewSummary,
   SessionAdmissionSummary,
@@ -413,6 +414,24 @@ export function getGovernanceReviewItems() {
 
 export function getGovernanceReviewRecommendations() {
   return requestJson<GovernanceReviewRecommendation[]>('/api/mission-control/governance-review-recommendations/');
+}
+
+export function resolveGovernanceReviewItem(
+  itemId: number,
+  payload: {
+    resolution_type: 'APPLY_MANUAL_APPROVAL' | 'KEEP_BLOCKED' | 'DISMISS_AS_EXPECTED' | 'REQUIRE_FOLLOWUP' | 'RETRY_SAFE_APPLY';
+    resolution_summary?: string;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  return requestJson<GovernanceReviewResolution>(`/api/mission-control/resolve-governance-review-item/${itemId}/`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getGovernanceReviewResolutions() {
+  return requestJson<GovernanceReviewResolution[]>('/api/mission-control/governance-review-resolutions/');
 }
 
 export function getGovernanceReviewSummary() {

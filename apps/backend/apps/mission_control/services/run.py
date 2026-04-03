@@ -128,6 +128,7 @@ def governance_review_summary() -> dict:
     return {
         'latest_run': latest_run.id if latest_run else None,
         'open_count': len(open_items_list),
+        'resolved_count': GovernanceReviewItem.objects.filter(item_status=GovernanceReviewItemStatus.RESOLVED).count(),
         'high_priority_count': sum(1 for item in open_items_list if item.queue_priority == GovernanceReviewPriority.P1),
         'blocked_count': sum(1 for item in open_items_list if 'STATUS_BLOCKED' in [*item.blockers, *item.reason_codes]),
         'deferred_count': sum(1 for item in open_items_list if any('DEFER' in marker for marker in [*item.blockers, *item.reason_codes])),

@@ -1647,3 +1647,34 @@ class GovernanceReviewRecommendation(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at', '-id']
+
+
+class GovernanceReviewResolutionType(models.TextChoices):
+    APPLY_MANUAL_APPROVAL = 'APPLY_MANUAL_APPROVAL', 'Apply manual approval'
+    KEEP_BLOCKED = 'KEEP_BLOCKED', 'Keep blocked'
+    DISMISS_AS_EXPECTED = 'DISMISS_AS_EXPECTED', 'Dismiss as expected'
+    REQUIRE_FOLLOWUP = 'REQUIRE_FOLLOWUP', 'Require follow-up'
+    RETRY_SAFE_APPLY = 'RETRY_SAFE_APPLY', 'Retry safe apply'
+
+
+class GovernanceReviewResolutionStatus(models.TextChoices):
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    FAILED = 'FAILED', 'Failed'
+
+
+class GovernanceReviewResolution(TimeStampedModel):
+    linked_review_item = models.ForeignKey(
+        GovernanceReviewItem,
+        on_delete=models.CASCADE,
+        related_name='resolutions',
+    )
+    resolution_type = models.CharField(max_length=32, choices=GovernanceReviewResolutionType.choices)
+    resolution_status = models.CharField(max_length=12, choices=GovernanceReviewResolutionStatus.choices)
+    resolution_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']

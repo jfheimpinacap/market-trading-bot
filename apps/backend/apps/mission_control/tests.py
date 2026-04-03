@@ -11,6 +11,7 @@ from apps.mission_control.models import (
     AutonomousProfileSwitchRecord,
     AutonomousCooldownState,
     AutonomousSessionInterventionDecision,
+    AutonomousSessionHealthSnapshot,
     AutonomousResumeDecision,
     AutonomousResumeRecord,
     AutonomousSessionRecoveryRecommendation,
@@ -18,6 +19,7 @@ from apps.mission_control.models import (
     AutonomousRuntimeSession,
     AutonomousRuntimeTick,
     AutonomousScheduleProfile,
+    GovernanceReviewResolution,
     MissionControlCycle,
     MissionControlSession,
     MissionControlState,
@@ -340,6 +342,107 @@ class GovernanceReviewQueueTests(TestCase):
         payload = response.json()
         self.assertIn('open_count', payload)
         self.assertIn('high_priority_count', payload)
+
+
+class GovernanceReviewResolutionTests(TestCase):
+    def _build_recovery_item(self) -> GovernanceReviewItem:
+        session = AutonomousRuntimeSession.objects.create(session_status='PAUSED', runtime_mode='PAPER')
+        snapshot = AutonomousSessionRecoverySnapshot.objects.create(linked_session=session)
+        decision = AutonomousResumeDecision.objects.create(
+            linked_session=session,
+            linked_recovery_snapshot=snapshot,
+            decision_type='READY_TO_RESUME',
+            decision_status='PROPOSED',
+            auto_applicable=True,
+            reason_codes=['manual_review_required'],
+        )
+        return GovernanceReviewItem.objects.create(
+            source_module='mission_control',
+            source_type='session_recovery',
+            source_object_id=decision.id,
+            item_status='OPEN',
+            title='Recovery decision',
+            summary='Manual recovery review needed',
+        )
+
+    def test_resolve_creates_governance_resolution(self):
+        item = self._build_recovery_item()
+        response = self.client.post(
+            reverse('mission_control:resolve-governance-review-item', args=[item.id]),
+            data=json.dumps({'resolution_type': 'APPLY_MANUAL_APPROVAL'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(GovernanceReviewResolution.objects.filter(linked_review_item=item).exists())
+        item.refresh_from_db()
+        self.assertEqual(item.item_status, 'RESOLVED')
+
+    def test_dismiss_closes_item_without_deleting(self):
+        item = self._build_recovery_item()
+        response = self.client.post(
+            reverse('mission_control:resolve-governance-review-item', args=[item.id]),
+            data=json.dumps({'resolution_type': 'DISMISS_AS_EXPECTED'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        item.refresh_from_db()
+        self.assertEqual(item.item_status, 'DISMISSED')
+        self.assertTrue(GovernanceReviewItem.objects.filter(id=item.id).exists())
+
+    def test_keep_blocked_preserves_traceability(self):
+        item = self._build_recovery_item()
+        response = self.client.post(
+            reverse('mission_control:resolve-governance-review-item', args=[item.id]),
+            data=json.dumps({'resolution_type': 'KEEP_BLOCKED'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        resolution = GovernanceReviewResolution.objects.filter(linked_review_item=item).order_by('-id').first()
+        self.assertIsNotNone(resolution)
+        self.assertEqual(resolution.resolution_status, 'BLOCKED')
+        self.assertIn('closed_as', resolution.metadata)
+
+    def test_retry_safe_apply_only_for_supported_source(self):
+        session = AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        health_snapshot = AutonomousSessionHealthSnapshot.objects.create(linked_session=session)
+        decision = AutonomousSessionInterventionDecision.objects.create(
+            linked_session=session,
+            linked_health_snapshot=health_snapshot,
+            decision_type='REQUIRE_MANUAL_REVIEW',
+            decision_status='PROPOSED',
+        )
+        item = GovernanceReviewItem.objects.create(
+            source_module='mission_control',
+            source_type='session_health',
+            source_object_id=decision.id,
+            item_status='OPEN',
+            title='Health decision',
+        )
+        response = self.client.post(
+            reverse('mission_control:resolve-governance-review-item', args=[item.id]),
+            data=json.dumps({'resolution_type': 'RETRY_SAFE_APPLY'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        resolution = GovernanceReviewResolution.objects.filter(linked_review_item=item).order_by('-id').first()
+        self.assertEqual(resolution.resolution_status, 'BLOCKED')
+
+    def test_summary_reflects_resolved_count(self):
+        item = self._build_recovery_item()
+        self.client.post(
+            reverse('mission_control:resolve-governance-review-item', args=[item.id]),
+            data=json.dumps({'resolution_type': 'DISMISS_AS_EXPECTED'}),
+            content_type='application/json',
+        )
+        resolved_item = self._build_recovery_item()
+        self.client.post(
+            reverse('mission_control:resolve-governance-review-item', args=[resolved_item.id]),
+            data=json.dumps({'resolution_type': 'KEEP_BLOCKED'}),
+            content_type='application/json',
+        )
+        response = self.client.get(reverse('mission_control:governance-review-summary'))
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.json().get('resolved_count', 0), 1)
 
 
 class SessionTimingPolicyTests(TestCase):

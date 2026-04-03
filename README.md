@@ -29,7 +29,26 @@ Scope and boundaries:
 - paper-only and local-first
 - no live trading / no real money
 - no replacement of existing authorities
-- no automatic resolution apply yet (read-only triage in this phase)
+- no LLM as final authority
+
+### Governance review manual-safe resolution (new)
+
+`mission_control` now closes the governance loop with explicit operator-driven resolution:
+
+`review item -> operator resolution -> safe manual action -> auditable resolution record`
+
+- new entity: `GovernanceReviewResolution`
+- new actions:
+  - `APPLY_MANUAL_APPROVAL`
+  - `KEEP_BLOCKED`
+  - `DISMISS_AS_EXPECTED`
+  - `REQUIRE_FOLLOWUP`
+  - `RETRY_SAFE_APPLY`
+- API:
+  - `POST /api/mission-control/resolve-governance-review-item/<item_id>/`
+  - `GET /api/mission-control/governance-review-resolutions/`
+
+Boundaries stay strict: paper-only, no real money/live execution, and no replacement of runtime/safety/portfolio/mission authorities.
 
 ### Global operating mode downstream enforcement bridge (new)
 

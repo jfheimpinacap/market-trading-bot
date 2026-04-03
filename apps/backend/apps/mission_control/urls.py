@@ -92,5 +92,7 @@ urlpatterns = [
     path('governance-review-runs/', views.GovernanceReviewRunListView.as_view(), name='governance-review-runs'),
     path('governance-review-items/', views.GovernanceReviewItemListView.as_view(), name='governance-review-items'),
     path('governance-review-recommendations/', views.GovernanceReviewRecommendationListView.as_view(), name='governance-review-recommendations'),
+    path('resolve-governance-review-item/<int:item_id>/', views.ResolveGovernanceReviewItemView.as_view(), name='resolve-governance-review-item'),
+    path('governance-review-resolutions/', views.GovernanceReviewResolutionListView.as_view(), name='governance-review-resolutions'),
     path('governance-review-summary/', views.GovernanceReviewSummaryView.as_view(), name='governance-review-summary'),
 ]
