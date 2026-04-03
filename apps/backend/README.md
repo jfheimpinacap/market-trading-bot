@@ -244,6 +244,27 @@ This completes the manual-safe operator intervention step while keeping boundari
 
 This layer is intentionally conservative: it only auto-resolves explicit low-risk cases (advisory dismiss, safe retry when source supports it, or follow-up deferral), remains paper-only, and does not replace manual governance resolution.
 
+## Mission control governance queue aging & escalation (new)
+
+`apps.mission_control` now includes `governance_queue_aging/services/` to keep the existing governance queue healthy when items linger too long:
+
+- service split:
+  - `governance_queue_aging/services/aging.py`
+  - `governance_queue_aging/services/escalation.py`
+  - `governance_queue_aging/services/run.py`
+- auditable entities:
+  - `GovernanceQueueAgingRun`
+  - `GovernanceQueueAgingReview`
+  - `GovernanceQueueAgingRecommendation`
+- API:
+  - `POST /api/mission-control/run-governance-queue-aging-review/`
+  - `GET /api/mission-control/governance-queue-aging-runs/`
+  - `GET /api/mission-control/governance-queue-aging-reviews/`
+  - `GET /api/mission-control/governance-queue-aging-recommendations/`
+  - `GET /api/mission-control/governance-queue-aging-summary/`
+
+This layer is aging/escalation-only (no auto-resolution), keeps paper-only boundaries, does not replace existing queue/auto-resolution authorities, and reduces risk of unordered human-review backlog pressure.
+
 ## Mission control session health governance (new)
 
 `apps.mission_control` now includes a conservative health/anomaly/intervention layer for autonomous sessions:

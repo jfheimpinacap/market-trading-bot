@@ -903,3 +903,55 @@ export type GovernanceAutoResolutionSummary = {
   };
   decision_breakdown: Record<string, number>;
 };
+
+export type GovernanceQueueAgingRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_item_count: number;
+  stale_item_count: number;
+  escalated_count: number;
+  followup_due_count: number;
+  blocked_stale_count: number;
+  metadata: Record<string, unknown>;
+};
+
+export type GovernanceQueueAgingReview = {
+  id: number;
+  linked_review_item: number;
+  linked_aging_run: number | null;
+  age_bucket: 'FRESH' | 'AGING' | 'STALE' | 'OVERDUE';
+  aging_status: 'NORMAL' | 'PRIORITY_ESCALATION' | 'FOLLOWUP_DUE' | 'STALE_BLOCKED' | 'MANUAL_REVIEW_OVERDUE';
+  review_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type GovernanceQueueAgingRecommendation = {
+  id: number;
+  linked_review_item: number;
+  linked_aging_review: number | null;
+  recommendation_type: 'KEEP_PRIORITY' | 'ESCALATE_TO_P1' | 'ESCALATE_TO_P2' | 'REQUIRE_FOLLOWUP_NOW' | 'ESCALATE_BLOCKED_ITEM' | 'REQUIRE_OPERATOR_REVIEW_NOW';
+  rationale: string;
+  confidence: number;
+  blockers: string[];
+  created_at: string;
+};
+
+export type GovernanceQueueAgingSummary = {
+  latest_run_id: number | null;
+  latest_counts: {
+    considered: number;
+    stale_items: number;
+    escalated: number;
+    followup_due: number;
+    blocked_stale: number;
+  };
+  totals: {
+    runs: number;
+    reviews: number;
+    recommendations: number;
+  };
+  status_breakdown: Record<string, number>;
+};

@@ -75,6 +75,29 @@ Guardrails:
 - no replacement of manual governance resolution authority
 - paper-only scope, no live trading, no real money
 
+### Governance queue aging & escalation (new)
+
+`mission_control` now includes an explicit **queue aging/escalation pass** focused only on stale governance backlog pressure:
+
+`open governance items -> age/staleness review -> overdue escalation -> updated priority/recommendation -> audit trail`
+
+- new entities:
+  - `GovernanceQueueAgingRun`
+  - `GovernanceQueueAgingReview`
+  - `GovernanceQueueAgingRecommendation`
+- API:
+  - `POST /api/mission-control/run-governance-queue-aging-review/`
+  - `GET /api/mission-control/governance-queue-aging-runs/`
+  - `GET /api/mission-control/governance-queue-aging-reviews/`
+  - `GET /api/mission-control/governance-queue-aging-recommendations/`
+  - `GET /api/mission-control/governance-queue-aging-summary/`
+
+Guardrails:
+- does not auto-resolve items (review/escalation only)
+- does not replace the existing governance queue or low-risk auto-resolution
+- paper-only scope (no live trading / no real money)
+- reduces risk of human-review backlog drift and hidden stale blockers
+
 ### Global operating mode downstream enforcement bridge (new)
 
 `runtime_governor` now includes an explicit and auditable **downstream mode enforcement bridge**:

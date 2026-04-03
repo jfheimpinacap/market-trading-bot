@@ -101,4 +101,9 @@ urlpatterns = [
     path('governance-auto-resolution-records/', views.GovernanceAutoResolutionRecordListView.as_view(), name='governance-auto-resolution-records'),
     path('governance-auto-resolution-summary/', views.GovernanceAutoResolutionSummaryView.as_view(), name='governance-auto-resolution-summary'),
     path('apply-governance-auto-resolution/<int:decision_id>/', views.ApplyGovernanceAutoResolutionDecisionView.as_view(), name='apply-governance-auto-resolution'),
+    path('run-governance-queue-aging-review/', views.RunGovernanceQueueAgingReviewView.as_view(), name='run-governance-queue-aging-review'),
+    path('governance-queue-aging-runs/', views.GovernanceQueueAgingRunListView.as_view(), name='governance-queue-aging-runs'),
+    path('governance-queue-aging-reviews/', views.GovernanceQueueAgingReviewListView.as_view(), name='governance-queue-aging-reviews'),
+    path('governance-queue-aging-recommendations/', views.GovernanceQueueAgingRecommendationListView.as_view(), name='governance-queue-aging-recommendations'),
+    path('governance-queue-aging-summary/', views.GovernanceQueueAgingSummaryView.as_view(), name='governance-queue-aging-summary'),
 ]

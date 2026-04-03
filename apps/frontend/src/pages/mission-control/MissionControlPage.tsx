@@ -44,6 +44,10 @@ import {
   runSessionAdmissionReview,
   runGovernanceReviewQueue,
   runGovernanceAutoResolution,
+  runGovernanceQueueAgingReview,
+  getGovernanceQueueAgingReviews,
+  getGovernanceQueueAgingRecommendations,
+  getGovernanceQueueAgingSummary,
   getSessionInterventionDecisions,
   getSessionTimingDecisions,
   getSessionTimingRecommendations,
@@ -105,6 +109,9 @@ import type {
   GovernanceAutoResolutionDecision,
   GovernanceAutoResolutionRecord,
   GovernanceAutoResolutionSummary,
+  GovernanceQueueAgingReview,
+  GovernanceQueueAgingRecommendation,
+  GovernanceQueueAgingSummary,
 } from '../../types/missionControl';
 
 export function MissionControlPage() {
@@ -150,6 +157,9 @@ export function MissionControlPage() {
   const [governanceAutoSummary, setGovernanceAutoSummary] = useState<GovernanceAutoResolutionSummary | null>(null);
   const [governanceAutoDecisions, setGovernanceAutoDecisions] = useState<GovernanceAutoResolutionDecision[]>([]);
   const [governanceAutoRecords, setGovernanceAutoRecords] = useState<GovernanceAutoResolutionRecord[]>([]);
+  const [governanceAgingSummary, setGovernanceAgingSummary] = useState<GovernanceQueueAgingSummary | null>(null);
+  const [governanceAgingReviews, setGovernanceAgingReviews] = useState<GovernanceQueueAgingReview[]>([]);
+  const [governanceAgingRecommendations, setGovernanceAgingRecommendations] = useState<GovernanceQueueAgingRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -159,7 +169,7 @@ export function MissionControlPage() {
     setLoading(true);
     setError(null);
     try {
-      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary, loadedRecoverySnapshots, loadedRecoveryBlockers, loadedResumeDecisions, loadedRecoveryRecommendations, loadedResumeRecords, loadedRecoverySummary, loadedCapacitySnapshots, loadedAdmissionReviews, loadedAdmissionDecisions, loadedAdmissionRecommendations, loadedAdmissionSummary, loadedGovernanceSummary, loadedGovernanceItems, loadedGovernanceRecommendations, loadedGovernanceResolutions, loadedGovernanceAutoSummary, loadedGovernanceAutoDecisions, loadedGovernanceAutoRecords] = await Promise.all([
+      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary, loadedRecoverySnapshots, loadedRecoveryBlockers, loadedResumeDecisions, loadedRecoveryRecommendations, loadedResumeRecords, loadedRecoverySummary, loadedCapacitySnapshots, loadedAdmissionReviews, loadedAdmissionDecisions, loadedAdmissionRecommendations, loadedAdmissionSummary, loadedGovernanceSummary, loadedGovernanceItems, loadedGovernanceRecommendations, loadedGovernanceResolutions, loadedGovernanceAutoSummary, loadedGovernanceAutoDecisions, loadedGovernanceAutoRecords, loadedGovernanceAgingSummary, loadedGovernanceAgingReviews, loadedGovernanceAgingRecommendations] = await Promise.all([
         getAutonomousSessions(),
         getAutonomousSessionSummary(),
         getAutonomousRunnerState(),
@@ -202,6 +212,9 @@ export function MissionControlPage() {
         getGovernanceAutoResolutionSummary(),
         getGovernanceAutoResolutionDecisions(),
         getGovernanceAutoResolutionRecords(),
+        getGovernanceQueueAgingSummary(),
+        getGovernanceQueueAgingReviews(),
+        getGovernanceQueueAgingRecommendations(),
       ]);
       setSessions(loadedSessions);
       setSummary(loadedSummary);
@@ -245,6 +258,9 @@ export function MissionControlPage() {
       setGovernanceAutoSummary(loadedGovernanceAutoSummary);
       setGovernanceAutoDecisions(loadedGovernanceAutoDecisions);
       setGovernanceAutoRecords(loadedGovernanceAutoRecords);
+      setGovernanceAgingSummary(loadedGovernanceAgingSummary);
+      setGovernanceAgingReviews(loadedGovernanceAgingReviews);
+      setGovernanceAgingRecommendations(loadedGovernanceAgingRecommendations);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load autonomous heartbeat runner state.');
     } finally {
@@ -467,6 +483,22 @@ export function MissionControlPage() {
           </div>
           <ul>{governanceAutoDecisions.slice(0, 12).map((decision) => <li key={decision.id}><strong>{decision.decision_type}</strong> — item={decision.linked_review_item} status={decision.decision_status} auto={String(decision.auto_applicable)} summary={decision.decision_summary}</li>)}</ul>
           <ul>{governanceAutoRecords.slice(0, 12).map((record) => <li key={record.id}><strong>{record.effect_type}</strong> — item={record.linked_review_item} decision={record.linked_auto_resolution_decision} status={record.record_status} summary={record.record_summary}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Queue Aging & Escalation" title="Backlog pressure guardrails" description="Aging-focused review pass that flags stale open/in-review items, overdue follow-ups, and persistent blocked entries. It updates queue priority and recommendations only—no auto-resolution.">
+          <div className="button-row">
+            <button type="button" className="primary-button" onClick={async () => { await runGovernanceQueueAgingReview(); await load(); }}>Run queue aging review</button>
+          </div>
+          <div className="system-metadata-grid">
+            <div><strong>Latest run:</strong> {governanceAgingSummary?.latest_run_id ?? 'n/a'}</div>
+            <div><strong>Considered:</strong> {governanceAgingSummary?.latest_counts.considered ?? 0}</div>
+            <div><strong>Stale/overdue:</strong> {governanceAgingSummary?.latest_counts.stale_items ?? 0}</div>
+            <div><strong>Escalated:</strong> {governanceAgingSummary?.latest_counts.escalated ?? 0}</div>
+            <div><strong>Follow-up due:</strong> {governanceAgingSummary?.latest_counts.followup_due ?? 0}</div>
+            <div><strong>Blocked stale:</strong> {governanceAgingSummary?.latest_counts.blocked_stale ?? 0}</div>
+          </div>
+          <ul>{governanceAgingReviews.slice(0, 12).map((review) => <li key={review.id}><strong>{review.aging_status}</strong> — item={review.linked_review_item} bucket={review.age_bucket} reason=[{review.reason_codes.join(', ')}] summary={review.review_summary}</li>)}</ul>
+          <ul>{governanceAgingRecommendations.slice(0, 12).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — item={recommendation.linked_review_item} confidence={recommendation.confidence.toFixed(2)} rationale={recommendation.rationale}</li>)}</ul>
         </SectionCard>
 
         <SectionCard eyebrow="Session timing policy" title="Schedule profiles" description="Reusable cadence profiles with explicit intervals and quiet/stop thresholds.">

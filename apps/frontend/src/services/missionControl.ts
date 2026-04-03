@@ -51,6 +51,10 @@ import type {
   GovernanceAutoResolutionRecord,
   GovernanceAutoResolutionRun,
   GovernanceAutoResolutionSummary,
+  GovernanceQueueAgingRun,
+  GovernanceQueueAgingReview,
+  GovernanceQueueAgingRecommendation,
+  GovernanceQueueAgingSummary,
   GovernanceReviewQueueRun,
   GovernanceReviewResolution,
   GovernanceReviewRecommendation,
@@ -460,4 +464,24 @@ export function getGovernanceAutoResolutionRecords() {
 
 export function getGovernanceAutoResolutionSummary() {
   return requestJson<GovernanceAutoResolutionSummary>('/api/mission-control/governance-auto-resolution-summary/');
+}
+
+export function runGovernanceQueueAgingReview() {
+  return requestJson<GovernanceQueueAgingRun>('/api/mission-control/run-governance-queue-aging-review/', { method: 'POST', body: '{}' });
+}
+
+export function getGovernanceQueueAgingRuns() {
+  return requestJson<GovernanceQueueAgingRun[]>('/api/mission-control/governance-queue-aging-runs/');
+}
+
+export function getGovernanceQueueAgingReviews() {
+  return requestJson<GovernanceQueueAgingReview[]>('/api/mission-control/governance-queue-aging-reviews/');
+}
+
+export function getGovernanceQueueAgingRecommendations() {
+  return requestJson<GovernanceQueueAgingRecommendation[]>('/api/mission-control/governance-queue-aging-recommendations/');
+}
+
+export function getGovernanceQueueAgingSummary() {
+  return requestJson<GovernanceQueueAgingSummary>('/api/mission-control/governance-queue-aging-summary/');
 }

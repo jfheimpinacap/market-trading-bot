@@ -22,6 +22,7 @@ from apps.mission_control.models import (
     GovernanceReviewResolution,
     GovernanceAutoResolutionDecision,
     GovernanceAutoResolutionRecord,
+    GovernanceQueueAgingReview,
     MissionControlCycle,
     MissionControlSession,
     MissionControlState,
@@ -908,3 +909,71 @@ class SessionAdmissionControlTests(TestCase):
         response = self.client.get(reverse('mission_control:session-admission-summary'))
         self.assertEqual(response.status_code, 200)
         self.assertIn('summary', response.json())
+
+
+class GovernanceQueueAgingTests(TestCase):
+    def _create_item(self, **overrides):
+        payload = {
+            'source_module': 'mission_control',
+            'source_type': 'session_recovery',
+            'source_object_id': overrides.pop('source_object_id', 9000 + GovernanceReviewItem.objects.count()),
+            'item_status': 'OPEN',
+            'severity': 'CAUTION',
+            'queue_priority': 'P3',
+            'title': 'Aging candidate',
+            'summary': 'candidate',
+            'blockers': [],
+            'reason_codes': [],
+            'metadata': {},
+        }
+        payload.update(overrides)
+        return GovernanceReviewItem.objects.create(**payload)
+
+    def test_old_open_item_escalates_priority(self):
+        item = self._create_item()
+        GovernanceReviewItem.objects.filter(pk=item.pk).update(
+            created_at=timezone.now() - timedelta(days=10),
+            updated_at=timezone.now() - timedelta(days=8),
+        )
+        response = self.client.post(reverse('mission_control:run-governance-queue-aging-review'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        item.refresh_from_db()
+        self.assertEqual(item.queue_priority, 'P2')
+
+    def test_persistent_blocked_item_marked_stale_blocked(self):
+        item = self._create_item(blockers=['STATUS_BLOCKED'])
+        GovernanceReviewItem.objects.filter(pk=item.pk).update(
+            created_at=timezone.now() - timedelta(days=6),
+            updated_at=timezone.now() - timedelta(days=5),
+        )
+        self.client.post(reverse('mission_control:run-governance-queue-aging-review'), data='{}', content_type='application/json')
+        review = GovernanceQueueAgingReview.objects.filter(linked_review_item=item).order_by('-id').first()
+        self.assertIsNotNone(review)
+        self.assertEqual(review.aging_status, 'STALE_BLOCKED')
+
+    def test_followup_due_detected(self):
+        item = self._create_item(
+            metadata={'followup_required': True},
+            reason_codes=['FOLLOWUP_REQUIRED'],
+        )
+        GovernanceReviewItem.objects.filter(pk=item.pk).update(updated_at=timezone.now() - timedelta(days=4))
+        self.client.post(reverse('mission_control:run-governance-queue-aging-review'), data='{}', content_type='application/json')
+        review = GovernanceQueueAgingReview.objects.filter(linked_review_item=item).order_by('-id').first()
+        self.assertIsNotNone(review)
+        self.assertEqual(review.aging_status, 'FOLLOWUP_DUE')
+
+    def test_resolved_or_dismissed_items_not_considered(self):
+        self._create_item(item_status='RESOLVED', source_object_id=10001)
+        self._create_item(item_status='DISMISSED', source_object_id=10002)
+        response = self.client.post(reverse('mission_control:run-governance-queue-aging-review'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['considered_item_count'], 0)
+
+    def test_summary_endpoint(self):
+        item = self._create_item()
+        GovernanceReviewItem.objects.filter(pk=item.pk).update(created_at=timezone.now() - timedelta(days=10))
+        self.client.post(reverse('mission_control:run-governance-queue-aging-review'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:governance-queue-aging-summary'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('latest_counts', response.json())

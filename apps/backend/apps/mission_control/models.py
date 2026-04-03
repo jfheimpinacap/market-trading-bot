@@ -1708,6 +1708,91 @@ class GovernanceAutoResolutionEffectType(models.TextChoices):
     NO_CHANGE = 'NO_CHANGE', 'No change'
 
 
+class GovernanceQueueAgeBucket(models.TextChoices):
+    FRESH = 'FRESH', 'Fresh'
+    AGING = 'AGING', 'Aging'
+    STALE = 'STALE', 'Stale'
+    OVERDUE = 'OVERDUE', 'Overdue'
+
+
+class GovernanceQueueAgingStatus(models.TextChoices):
+    NORMAL = 'NORMAL', 'Normal'
+    PRIORITY_ESCALATION = 'PRIORITY_ESCALATION', 'Priority escalation'
+    FOLLOWUP_DUE = 'FOLLOWUP_DUE', 'Follow-up due'
+    STALE_BLOCKED = 'STALE_BLOCKED', 'Stale blocked'
+    MANUAL_REVIEW_OVERDUE = 'MANUAL_REVIEW_OVERDUE', 'Manual review overdue'
+
+
+class GovernanceQueueAgingRecommendationType(models.TextChoices):
+    KEEP_PRIORITY = 'KEEP_PRIORITY', 'Keep priority'
+    ESCALATE_TO_P1 = 'ESCALATE_TO_P1', 'Escalate to P1'
+    ESCALATE_TO_P2 = 'ESCALATE_TO_P2', 'Escalate to P2'
+    REQUIRE_FOLLOWUP_NOW = 'REQUIRE_FOLLOWUP_NOW', 'Require follow-up now'
+    ESCALATE_BLOCKED_ITEM = 'ESCALATE_BLOCKED_ITEM', 'Escalate blocked item'
+    REQUIRE_OPERATOR_REVIEW_NOW = 'REQUIRE_OPERATOR_REVIEW_NOW', 'Require operator review now'
+
+
+class GovernanceQueueAgingRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_item_count = models.PositiveIntegerField(default=0)
+    stale_item_count = models.PositiveIntegerField(default=0)
+    escalated_count = models.PositiveIntegerField(default=0)
+    followup_due_count = models.PositiveIntegerField(default=0)
+    blocked_stale_count = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class GovernanceQueueAgingReview(TimeStampedModel):
+    linked_review_item = models.ForeignKey(
+        GovernanceReviewItem,
+        on_delete=models.CASCADE,
+        related_name='aging_reviews',
+    )
+    linked_aging_run = models.ForeignKey(
+        GovernanceQueueAgingRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='reviews',
+    )
+    age_bucket = models.CharField(max_length=12, choices=GovernanceQueueAgeBucket.choices, default=GovernanceQueueAgeBucket.FRESH)
+    aging_status = models.CharField(max_length=32, choices=GovernanceQueueAgingStatus.choices, default=GovernanceQueueAgingStatus.NORMAL)
+    review_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class GovernanceQueueAgingRecommendation(TimeStampedModel):
+    linked_review_item = models.ForeignKey(
+        GovernanceReviewItem,
+        on_delete=models.CASCADE,
+        related_name='aging_recommendations',
+    )
+    linked_aging_review = models.ForeignKey(
+        GovernanceQueueAgingReview,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    recommendation_type = models.CharField(max_length=48, choices=GovernanceQueueAgingRecommendationType.choices)
+    rationale = models.CharField(max_length=255)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
 class GovernanceAutoResolutionRun(TimeStampedModel):
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)
