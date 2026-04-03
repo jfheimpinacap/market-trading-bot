@@ -201,7 +201,26 @@ This layer only automates due-tick progression of existing autonomous sessions a
   - `GET /api/mission-control/governance-review-recommendations/`
   - `GET /api/mission-control/governance-review-summary/`
 
-This layer centralizes blocked/manual/deferred/advisory outputs from runtime_governor + mission_control + portfolio_governor, reduces operator friction, and stays paper-only/read-only in this phase. Real resolution/apply actions are intentionally not implemented yet.
+This layer centralizes blocked/manual/deferred/advisory outputs from runtime_governor + mission_control + portfolio_governor, reduces operator friction, and stays paper-only. Resolution is now available only through explicit operator actions (see section below).
+
+## Mission control governance manual-safe resolution (new)
+
+`apps.mission_control` now adds explicit operator resolution on top of the governance queue:
+
+- new service: `services/resolve.py`
+- new auditable entity:
+  - `GovernanceReviewResolution`
+- resolution actions:
+  - `APPLY_MANUAL_APPROVAL`
+  - `KEEP_BLOCKED`
+  - `DISMISS_AS_EXPECTED`
+  - `REQUIRE_FOLLOWUP`
+  - `RETRY_SAFE_APPLY` (only when a source-safe retry path exists)
+- API:
+  - `POST /api/mission-control/resolve-governance-review-item/<item_id>/`
+  - `GET /api/mission-control/governance-review-resolutions/`
+
+This completes the manual-safe operator intervention step while keeping boundaries unchanged: paper-only, no live trading, no real money, and no replacement of existing authorities.
 
 ## Mission control session health governance (new)
 

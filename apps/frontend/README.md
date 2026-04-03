@@ -23,7 +23,17 @@ La vista `/mission-control` ahora incluye una sección **Governance Review Queue
   - review items centralizados (runtime_governor + mission_control + portfolio_governor)
   - recomendaciones por item
 
-Límites explícitos: paper-only, sin trading real, sin resolución/aplicación real todavía. Esta fase reduce fricción operativa humana centralizando la revisión pendiente.
+Además, la misma sección ahora incluye resolución manual segura (sin pantalla nueva):
+
+- botón `Resolve item`
+- acciones explícitas: dismiss / keep blocked / require follow-up / retry safe apply
+- historial de `governance-review-resolutions` con estado distinguible:
+  - resolved
+  - dismissed
+  - blocked
+  - follow-up
+
+Límites explícitos: paper-only, sin trading real, sin reemplazar authorities existentes, y sin LLM como autoridad final.
 
 ## Runtime mode enforcement UX (new)
 

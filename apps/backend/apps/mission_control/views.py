@@ -48,6 +48,7 @@ from apps.mission_control.models import (
     AutonomousSessionAdmissionRecommendation,
     GovernanceReviewItem,
     GovernanceReviewQueueRun,
+    GovernanceReviewResolution,
     GovernanceReviewRecommendation,
     MissionControlCycle,
     MissionControlSession,
@@ -107,8 +108,11 @@ from apps.mission_control.serializers import (
     AutonomousSessionAdmissionRecommendationSerializer,
     GovernanceReviewItemSerializer,
     GovernanceReviewQueueRunSerializer,
+    GovernanceReviewResolutionSerializer,
     GovernanceReviewRecommendationSerializer,
+    ResolveGovernanceReviewItemRequestSerializer,
 )
+from apps.mission_control.services.resolve import resolve_governance_review_item
 from apps.mission_control.services.session_timing import (
     apply_schedule_profile,
     build_session_timing_summary,
@@ -727,6 +731,25 @@ class GovernanceReviewItemListView(generics.ListAPIView):
 class GovernanceReviewRecommendationListView(generics.ListAPIView):
     serializer_class = GovernanceReviewRecommendationSerializer
     queryset = GovernanceReviewRecommendation.objects.select_related('linked_review_item').order_by('-created_at', '-id')[:300]
+
+
+class ResolveGovernanceReviewItemView(APIView):
+    def post(self, request, item_id: int, *args, **kwargs):
+        item = get_object_or_404(GovernanceReviewItem, pk=item_id)
+        serializer = ResolveGovernanceReviewItemRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        resolution = resolve_governance_review_item(
+            item=item,
+            resolution_type=serializer.validated_data['resolution_type'],
+            resolution_summary=serializer.validated_data.get('resolution_summary', ''),
+            metadata=serializer.validated_data.get('metadata') or {},
+        )
+        return Response(GovernanceReviewResolutionSerializer(resolution).data, status=status.HTTP_200_OK)
+
+
+class GovernanceReviewResolutionListView(generics.ListAPIView):
+    serializer_class = GovernanceReviewResolutionSerializer
+    queryset = GovernanceReviewResolution.objects.select_related('linked_review_item').order_by('-created_at', '-id')[:500]
 
 
 class GovernanceReviewSummaryView(APIView):

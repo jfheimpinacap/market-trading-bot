@@ -45,6 +45,8 @@ from apps.mission_control.models import (
     AutonomousSessionAdmissionReview,
     GovernanceReviewItem,
     GovernanceReviewQueueRun,
+    GovernanceReviewResolution,
+    GovernanceReviewResolutionType,
     GovernanceReviewRecommendation,
     MissionControlCycle,
     MissionControlSession,
@@ -416,3 +418,15 @@ class GovernanceReviewRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = GovernanceReviewRecommendation
         fields = '__all__'
+
+
+class GovernanceReviewResolutionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GovernanceReviewResolution
+        fields = '__all__'
+
+
+class ResolveGovernanceReviewItemRequestSerializer(serializers.Serializer):
+    resolution_type = serializers.ChoiceField(choices=GovernanceReviewResolutionType.choices)
+    resolution_summary = serializers.CharField(required=False, allow_blank=True)
+    metadata = serializers.JSONField(required=False)

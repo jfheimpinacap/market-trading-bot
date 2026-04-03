@@ -830,9 +830,20 @@ export type GovernanceReviewRecommendation = {
   created_at: string;
 };
 
+export type GovernanceReviewResolution = {
+  id: number;
+  linked_review_item: number;
+  resolution_type: 'APPLY_MANUAL_APPROVAL' | 'KEEP_BLOCKED' | 'DISMISS_AS_EXPECTED' | 'REQUIRE_FOLLOWUP' | 'RETRY_SAFE_APPLY';
+  resolution_status: 'APPLIED' | 'SKIPPED' | 'BLOCKED' | 'FAILED';
+  resolution_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
 export type GovernanceReviewSummary = {
   latest_run: number | null;
   open_count: number;
+  resolved_count: number;
   high_priority_count: number;
   blocked_count: number;
   deferred_count: number;
