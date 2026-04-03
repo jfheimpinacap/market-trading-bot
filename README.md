@@ -88,6 +88,29 @@ This layer provides conservative global tuning input and traceability; it does n
 
 The bridge is conservative and transparent (manual-review blocks, safety-aware apply rules, hysteresis-friendly behavior). It does not replace existing authorities and remains local-first, single-user, paper/sandbox only, no real money, and no live broker/exchange execution.
 
+### Runtime mode stabilization review layer (new)
+
+`runtime_governor` now includes a dedicated stabilization review path for global mode transition intents:
+
+- flow:
+  - mode change intent
+  - `RuntimeModeTransitionSnapshot`
+  - `RuntimeModeStabilityReview`
+  - `RuntimeModeTransitionDecision`
+  - `RuntimeModeStabilizationRecommendation`
+- run-level audit entity:
+  - `RuntimeModeStabilizationRun`
+- API:
+  - `POST /api/runtime-governor/run-mode-stabilization-review/`
+  - `GET /api/runtime-governor/mode-stabilization-runs/`
+  - `GET /api/runtime-governor/mode-transition-snapshots/`
+  - `GET /api/runtime-governor/mode-stability-reviews/`
+  - `GET /api/runtime-governor/mode-transition-decisions/`
+  - `GET /api/runtime-governor/mode-stabilization-recommendations/`
+  - `GET /api/runtime-governor/mode-stabilization-summary/`
+
+This layer is transparent and paper-only. It complements operating mode + runtime feedback apply + downstream enforcement and does **not** apply a stabilized transition automatically in this phase.
+
 ### Precedent-aware agents (new)
 
 - Memory is now used as **decision support**, not as an opaque planner.

@@ -12,11 +12,14 @@ from apps.runtime_governor.models import (
     RuntimeFeedbackApplyRecord,
     RuntimeFeedbackDecision,
     RuntimeFeedbackRecommendation,
+    RuntimeModeStabilityReview,
+    RuntimeModeTransitionDecision,
     RuntimeMode,
     RuntimeSetBy,
     RuntimeTransitionLog,
 )
 from apps.runtime_governor.services import get_capabilities_for_current_mode, get_runtime_state, set_runtime_mode
+from apps.runtime_governor.services.operating_mode.mode_switch import GLOBAL_MODE_METADATA_KEY
 from apps.mission_control.models import AutonomousRuntimeSession, AutonomousRuntimeSessionStatus, AutonomousSessionHealthSnapshot, AutonomousSessionHealthStatus
 from apps.mission_control.services.session_timing.timing import evaluate_session_timing
 from apps.portfolio_governor.models import (
@@ -254,6 +257,33 @@ class RuntimeGovernorTests(TestCase):
 
             AutonomousRuntimeTick.objects.create(linked_session=session, tick_index=index + 1, tick_status=status)
 
+    def _create_feedback_decision(self, decision_type: str) -> RuntimeFeedbackDecision:
+        from apps.runtime_governor.models import RuntimeDiagnosticReview, RuntimePerformanceSnapshot
+
+        snapshot = RuntimePerformanceSnapshot.objects.create(
+            current_global_mode=get_runtime_state().metadata.get(GLOBAL_MODE_METADATA_KEY, 'BALANCED'),
+            runtime_pressure_state='NORMAL',
+            signal_quality_state='NORMAL',
+            reason_codes=['test_feedback_signal'],
+            metadata={'safety_posture': 'NORMAL'},
+        )
+        diagnostic = RuntimeDiagnosticReview.objects.create(
+            linked_performance_snapshot=snapshot,
+            diagnostic_type='HEALTHY_RUNTIME',
+            diagnostic_severity='INFO',
+            diagnostic_summary='test diagnostic',
+            reason_codes=['test_diagnostic'],
+        )
+        return RuntimeFeedbackDecision.objects.create(
+            linked_performance_snapshot=snapshot,
+            linked_diagnostic_review=diagnostic,
+            decision_type=decision_type,
+            decision_status='PROPOSED',
+            auto_applicable=True,
+            decision_summary='test feedback decision',
+            reason_codes=['test_feedback_decision'],
+        )
+
     def test_runtime_feedback_losses_trigger_recovery_recommendation(self):
         session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
         AutonomousSessionHealthSnapshot.objects.create(
@@ -367,3 +397,67 @@ class RuntimeGovernorTests(TestCase):
         response = self.client.get(reverse('runtime_governor_v2:runtime_feedback_apply_summary'))
         self.assertEqual(response.status_code, 200)
         self.assertIn('apply_runs', response.json())
+
+    def test_mode_stabilization_entry_to_recovery_allows_fast(self):
+        self._create_feedback_decision('ENTER_RECOVERY_MODE')
+        response = self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        decision = RuntimeModeTransitionDecision.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(decision.decision_type, 'ALLOW_MODE_SWITCH')
+
+    def test_mode_stabilization_relax_from_recovery_is_deferred_when_early(self):
+        state = get_runtime_state()
+        state.metadata = {**(state.metadata or {}), GLOBAL_MODE_METADATA_KEY: 'RECOVERY_MODE'}
+        state.save(update_fields=['metadata', 'updated_at'])
+        self._create_feedback_decision('RELAX_TO_CAUTION')
+        response = self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        decision = RuntimeModeTransitionDecision.objects.order_by('-created_at', '-id').first()
+        self.assertIn(decision.decision_type, {'DEFER_MODE_SWITCH', 'KEEP_CURRENT_MODE_FOR_DWELL'})
+        review = RuntimeModeStabilityReview.objects.order_by('-created_at', '-id').first()
+        self.assertIn(review.review_type, {'EARLY_RELAX_ATTEMPT', 'INSUFFICIENT_DWELL_TIME'})
+
+    def test_mode_stabilization_flapping_risk_blocks_or_defers(self):
+        from apps.runtime_governor.models import RuntimeFeedbackApplyDecision, RuntimeFeedbackApplyRecord
+
+        for _ in range(4):
+            feedback = self._create_feedback_decision('SHIFT_TO_MORE_CONSERVATIVE_MODE')
+            apply_decision = RuntimeFeedbackApplyDecision.objects.create(
+                linked_feedback_decision=feedback,
+                current_mode='BALANCED',
+                target_mode='CAUTION',
+                apply_type='APPLY_SHIFT_TO_CAUTION',
+                apply_status='APPLIED',
+                auto_applicable=True,
+                apply_summary='test apply',
+            )
+            RuntimeFeedbackApplyRecord.objects.create(
+                linked_apply_decision=apply_decision,
+                record_status='APPLIED',
+                previous_mode='BALANCED',
+                applied_mode='CAUTION',
+                metadata={'mode_switched': True},
+            )
+        self._create_feedback_decision('SHIFT_TO_MONITOR_ONLY')
+        self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
+        decision = RuntimeModeTransitionDecision.objects.order_by('-created_at', '-id').first()
+        self.assertIn(decision.decision_type, {'BLOCK_MODE_SWITCH', 'DEFER_MODE_SWITCH'})
+
+    def test_mode_stabilization_hard_block_transition_is_allowed(self):
+        decision = self._create_feedback_decision('SHIFT_TO_MORE_CONSERVATIVE_MODE')
+        decision.linked_performance_snapshot.runtime_pressure_state = 'CRITICAL'
+        decision.linked_performance_snapshot.metadata = {'safety_posture': 'HARD_BLOCK'}
+        decision.linked_performance_snapshot.save(update_fields=['runtime_pressure_state', 'metadata', 'updated_at'])
+        decision.reason_codes = ['safety_hard_block_trigger']
+        decision.save(update_fields=['reason_codes', 'updated_at'])
+        self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
+        latest = RuntimeModeTransitionDecision.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(latest.decision_type, 'ALLOW_MODE_SWITCH')
+
+    def test_mode_stabilization_summary_endpoint(self):
+        self._create_feedback_decision('ENTER_RECOVERY_MODE')
+        self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
+        response = self.client.get(reverse('runtime_governor_v2:mode_stabilization_summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('runs', payload)
