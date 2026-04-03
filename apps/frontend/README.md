@@ -66,6 +66,7 @@ Límites explícitos:
 - no auto-resuelve items
 - no reemplaza governance review queue ni governance auto-resolution existentes
 - sigue paper-only, sin live trading ni dinero real
+- incluye señal visible para `manual review overdue` y `overdue` para reducir backlog humano desordenado
 
 ## Mission control governance backlog pressure UX (delta-only) (new)
 

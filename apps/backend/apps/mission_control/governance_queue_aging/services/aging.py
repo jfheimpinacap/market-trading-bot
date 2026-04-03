@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from django.utils.dateparse import parse_datetime
+from datetime import datetime, time
+
+from django.utils.dateparse import parse_date, parse_datetime
 from django.utils import timezone
 
 from apps.mission_control.models import (
@@ -51,6 +53,10 @@ def assess_item_aging(*, item: GovernanceReviewItem, as_of=None) -> AgingAssessm
     followup_due = False
     if followup_due_at:
         parsed_followup_due_at = parse_datetime(str(followup_due_at))
+        if parsed_followup_due_at is None:
+            parsed_followup_date = parse_date(str(followup_due_at))
+            if parsed_followup_date is not None:
+                parsed_followup_due_at = datetime.combine(parsed_followup_date, time.min)
         if parsed_followup_due_at:
             if timezone.is_naive(parsed_followup_due_at):
                 parsed_followup_due_at = timezone.make_aware(parsed_followup_due_at, timezone.get_current_timezone())

@@ -947,6 +947,8 @@ export type GovernanceQueueAgingSummary = {
     escalated: number;
     followup_due: number;
     blocked_stale: number;
+    overdue: number;
+    manual_review_overdue: number;
   };
   totals: {
     runs: number;

@@ -276,6 +276,8 @@ This layer is intentionally conservative: it only auto-resolves explicit low-ris
 
 This layer is aging/escalation-only (no auto-resolution), keeps paper-only boundaries, does not replace existing queue/auto-resolution authorities, and reduces risk of unordered human-review backlog pressure.
 
+Rule highlights: stale `OPEN` items are priority-escalated, stalled `IN_REVIEW` items become manual-review-overdue, follow-up-due markers trigger immediate follow-up recommendations, and persistent blocked stale items escalate with stronger priority guidance.
+
 ## Mission control governance backlog pressure (delta-only) (new)
 
 `apps.mission_control` now includes `governance_backlog_pressure/services/` as a short auditable layer that transforms current human governance backlog pressure into an additional conservative runtime signal.
