@@ -109,7 +109,7 @@ The bridge is conservative and transparent (manual-review blocks, safety-aware a
   - `GET /api/runtime-governor/mode-stabilization-recommendations/`
   - `GET /api/runtime-governor/mode-stabilization-summary/`
 
-This layer is transparent and paper-only. It complements operating mode + runtime feedback apply + downstream enforcement and does **not** apply a stabilized transition automatically in this phase.
+This layer is transparent and paper-only. It now supports stabilized transition apply records (`RuntimeModeTransitionApplyRecord`), manual apply via API, optional conservative `auto_apply_safe`, and enforcement refresh only when the global mode actually changes. It complements operating mode + runtime feedback apply + downstream enforcement and does **not** replace those existing authorities.
 
 ### Precedent-aware agents (new)
 

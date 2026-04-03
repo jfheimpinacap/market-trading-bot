@@ -24,6 +24,7 @@ from apps.runtime_governor.models import (
     RuntimeModeStabilizationRecommendation,
     RuntimeModeStabilizationRun,
     RuntimeModeStabilityReview,
+    RuntimeModeTransitionApplyRecord,
     RuntimeModeTransitionDecision,
     RuntimeModeTransitionSnapshot,
     RuntimeFeedbackRecommendation,
@@ -54,6 +55,7 @@ from apps.runtime_governor.serializers import (
     RuntimeModeStabilizationRecommendationSerializer,
     RuntimeModeStabilizationRunSerializer,
     RuntimeModeStabilityReviewSerializer,
+    RuntimeModeTransitionApplyRecordSerializer,
     RuntimeModeTransitionDecisionSerializer,
     RuntimeModeTransitionSnapshotSerializer,
     RuntimeFeedbackRecommendationSerializer,
@@ -72,6 +74,7 @@ from apps.runtime_governor.services import (
     set_runtime_mode,
     get_mode_stabilization_summary,
     run_mode_stabilization_review,
+    apply_stabilized_transition_decision,
 )
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
@@ -533,6 +536,7 @@ class RunModeStabilizationReviewView(APIView):
         serializer.is_valid(raise_exception=True)
         result = run_mode_stabilization_review(
             triggered_by=serializer.validated_data.get('triggered_by') or 'operator-ui',
+            auto_apply_safe=serializer.validated_data.get('auto_apply_safe', False),
         )
         return Response(
             {
@@ -542,6 +546,7 @@ class RunModeStabilizationReviewView(APIView):
                 'review_count': len(result['reviews']),
                 'decision_count': len(result['decisions']),
                 'recommendation_count': len(result['recommendations']),
+                'apply_record_count': len(result['apply_records']),
             },
             status=status.HTTP_200_OK,
         )
@@ -581,6 +586,29 @@ class ModeTransitionDecisionListView(generics.ListAPIView):
 
     def get_queryset(self):
         return RuntimeModeTransitionDecision.objects.select_related('linked_transition_snapshot', 'linked_stability_review').order_by('-created_at', '-id')[:300]
+
+
+class ApplyStabilizedModeTransitionView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, decision_id: int, *args, **kwargs):
+        transition_decision = get_object_or_404(RuntimeModeTransitionDecision, pk=decision_id)
+        result = apply_stabilized_transition_decision(
+            transition_decision=transition_decision,
+            triggered_by='runtime-page-manual',
+            auto_apply_safe=False,
+        )
+        return Response(RuntimeModeTransitionApplyRecordSerializer(result.apply_record).data, status=status.HTTP_200_OK)
+
+
+class ModeTransitionApplyRecordListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RuntimeModeTransitionApplyRecordSerializer
+
+    def get_queryset(self):
+        return RuntimeModeTransitionApplyRecord.objects.select_related('linked_transition_decision').order_by('-created_at', '-id')[:300]
 
 
 class ModeStabilizationRecommendationListView(generics.ListAPIView):

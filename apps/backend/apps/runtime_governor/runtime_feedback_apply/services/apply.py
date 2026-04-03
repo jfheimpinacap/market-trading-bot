@@ -15,6 +15,10 @@ from apps.runtime_governor.models import (
     RuntimeFeedbackDecisionType,
     SafetyPostureState,
 )
+from apps.runtime_governor.services.apply_transition import apply_stabilized_transition_decision
+from apps.runtime_governor.services.stability_review import build_runtime_mode_stability_review
+from apps.runtime_governor.services.transition_decision import build_runtime_mode_transition_decision
+from apps.runtime_governor.services.transition_snapshot import build_runtime_mode_transition_snapshot
 from apps.runtime_governor.services.operating_mode.mode_switch import (
     GLOBAL_MODE_METADATA_KEY,
     build_downstream_influence,
@@ -132,6 +136,47 @@ def apply_runtime_feedback_apply_decision(*, apply_decision: RuntimeFeedbackAppl
         )
         return ApplyExecutionResult(apply_decision=apply_decision, apply_record=record)
 
+    stabilization_apply_record = None
+    if mode_switched:
+        transition_snapshot = build_runtime_mode_transition_snapshot(
+            run_id=None,
+            feedback_decision=apply_decision.linked_feedback_decision,
+            target_mode=target_mode,
+        )
+        stability_review = build_runtime_mode_stability_review(transition_snapshot=transition_snapshot)
+        transition_decision = build_runtime_mode_transition_decision(
+            transition_snapshot=transition_snapshot,
+            stability_review=stability_review,
+        )
+        stabilization_result = apply_stabilized_transition_decision(
+            transition_decision=transition_decision,
+            triggered_by=f'runtime-feedback-apply:{triggered_by}',
+            auto_apply_safe=False,
+        )
+        stabilization_apply_record = stabilization_result.apply_record
+        if stabilization_apply_record.apply_status != 'APPLIED':
+            apply_decision.apply_status = RuntimeFeedbackApplyStatus.BLOCKED
+            apply_decision.metadata = {
+                **(apply_decision.metadata or {}),
+                'stabilization_transition_decision_id': transition_decision.id,
+                'stabilization_apply_record_id': stabilization_apply_record.id,
+            }
+            apply_decision.save(update_fields=['apply_status', 'metadata', 'updated_at'])
+            record = RuntimeFeedbackApplyRecord.objects.create(
+                linked_apply_decision=apply_decision,
+                record_status=RuntimeFeedbackApplyRecordStatus.BLOCKED,
+                previous_mode=current_mode,
+                applied_mode=None,
+                enforcement_refreshed=False,
+                record_summary='Runtime feedback apply blocked by mode stabilization gate.',
+                metadata={
+                    'triggered_by': triggered_by,
+                    'stabilization_transition_decision_id': transition_decision.id,
+                    'stabilization_apply_record_id': stabilization_apply_record.id,
+                },
+            )
+            return ApplyExecutionResult(apply_decision=apply_decision, apply_record=record)
+
     state = get_runtime_state()
     metadata = dict(state.metadata or {})
     metadata[GLOBAL_MODE_METADATA_KEY] = target_mode
@@ -148,12 +193,14 @@ def apply_runtime_feedback_apply_decision(*, apply_decision: RuntimeFeedbackAppl
     }
     apply_decision.save(update_fields=['apply_status', 'metadata', 'updated_at'])
 
-    enforcement_refreshed = False
+    enforcement_refreshed = bool(stabilization_apply_record.enforcement_refreshed) if stabilization_apply_record else False
     enforcement_run_id = None
-    if mode_switched:
+    if mode_switched and not stabilization_apply_record:
         enforcement_result = run_mode_enforcement_review(triggered_by='runtime-feedback-apply')
         enforcement_refreshed = True
         enforcement_run_id = enforcement_result['run'].id
+    elif stabilization_apply_record:
+        enforcement_run_id = stabilization_apply_record.metadata.get('enforcement_run_id')
 
     record = RuntimeFeedbackApplyRecord.objects.create(
         linked_apply_decision=apply_decision,
@@ -166,6 +213,7 @@ def apply_runtime_feedback_apply_decision(*, apply_decision: RuntimeFeedbackAppl
             'triggered_by': triggered_by,
             'mode_switched': mode_switched,
             'enforcement_run_id': enforcement_run_id,
+            'stabilization_apply_record_id': stabilization_apply_record.id if stabilization_apply_record else None,
         },
     )
     return ApplyExecutionResult(apply_decision=apply_decision, apply_record=record)

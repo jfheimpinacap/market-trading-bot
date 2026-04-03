@@ -25,6 +25,7 @@ from apps.runtime_governor.services.run import (
     get_mode_stabilization_summary,
     run_mode_stabilization_review,
 )
+from apps.runtime_governor.services.apply_transition import apply_stabilized_transition_decision
 
 __all__ = [
     'get_capabilities_for_current_mode',
@@ -46,4 +47,5 @@ __all__ = [
     'get_runtime_feedback_apply_summary',
     'run_mode_stabilization_review',
     'get_mode_stabilization_summary',
+    'apply_stabilized_transition_decision',
 ]

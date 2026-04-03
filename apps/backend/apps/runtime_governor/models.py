@@ -802,6 +802,31 @@ class RuntimeModeStabilizationRecommendation(TimeStampedModel):
         ordering = ['-created_at', '-id']
 
 
+class RuntimeModeTransitionApplyStatus(models.TextChoices):
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    FAILED = 'FAILED', 'Failed'
+
+
+class RuntimeModeTransitionApplyRecord(TimeStampedModel):
+    linked_transition_decision = models.ForeignKey(
+        RuntimeModeTransitionDecision,
+        on_delete=models.CASCADE,
+        related_name='apply_records',
+    )
+    apply_status = models.CharField(max_length=12, choices=RuntimeModeTransitionApplyStatus.choices)
+    previous_mode = models.CharField(max_length=24, choices=GlobalOperatingMode.choices, null=True, blank=True)
+    applied_mode = models.CharField(max_length=24, choices=GlobalOperatingMode.choices, null=True, blank=True)
+    enforcement_refreshed = models.BooleanField(default=False)
+    apply_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
 class GlobalModeEnforcementRun(TimeStampedModel):
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)

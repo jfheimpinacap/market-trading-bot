@@ -18,6 +18,7 @@ from apps.runtime_governor.models import (
     RuntimeModeStabilizationRecommendation,
     RuntimeModeStabilizationRun,
     RuntimeModeStabilityReview,
+    RuntimeModeTransitionApplyRecord,
     RuntimeModeTransitionDecision,
     RuntimeModeTransitionSnapshot,
     RuntimeFeedbackRecommendation,
@@ -161,6 +162,7 @@ class RunRuntimeFeedbackApplyReviewSerializer(serializers.Serializer):
 
 class RunModeStabilizationReviewSerializer(serializers.Serializer):
     triggered_by = serializers.CharField(required=False, allow_blank=True, default='operator-ui')
+    auto_apply_safe = serializers.BooleanField(required=False, default=False)
 
 
 class RuntimeModeStabilizationRunSerializer(serializers.ModelSerializer):
@@ -190,6 +192,12 @@ class RuntimeModeTransitionDecisionSerializer(serializers.ModelSerializer):
 class RuntimeModeStabilizationRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeModeStabilizationRecommendation
+        fields = '__all__'
+
+
+class RuntimeModeTransitionApplyRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RuntimeModeTransitionApplyRecord
         fields = '__all__'
 
 

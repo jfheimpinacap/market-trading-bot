@@ -113,7 +113,18 @@ This layer closes feedback → mode → enforcement without replacing `runtime_g
   - `GET /api/runtime-governor/mode-stabilization-recommendations/`
   - `GET /api/runtime-governor/mode-stabilization-summary/`
 
-This layer is review/decision/recommendation only in this step: it does not apply a stabilized transition yet. Scope remains local-first, single-user, paper-only, no real money/live routing.
+This layer now includes real stabilized transition apply with explicit audit trail:
+
+- new service: `services/apply_transition.py`
+- new auditable entity: `RuntimeModeTransitionApplyRecord`
+- new endpoints:
+  - `POST /api/runtime-governor/apply-stabilized-mode-transition/<decision_id>/`
+  - `GET /api/runtime-governor/mode-transition-apply-records/`
+- optional conservative auto apply:
+  - `POST /api/runtime-governor/run-mode-stabilization-review/` with `auto_apply_safe=true`
+- enforcement refresh runs only when a mode switch is actually applied.
+
+This does not replace operating mode, runtime feedback apply, or mode enforcement authorities. Scope remains local-first, single-user, paper-only, no real money/live routing.
 
 ## Mission control autonomous session runtime (new)
 
