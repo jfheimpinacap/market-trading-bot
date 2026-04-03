@@ -73,6 +73,8 @@ Delta update: governance backlog pressure (`NORMAL`/`CAUTION`/`HIGH`/`CRITICAL`)
 
 Boundaries remain unchanged: paper-only, conservative tuning, no replacement of existing authorities, no live trading/real money.
 
+Conservative tuning parameters are now centralized in `apps.runtime_governor.tuning_profiles` (single code-level profile, no complex settings system). This includes backlog-pressure score thresholds/weights and runtime backlog bias knobs for relax gating, manual review bias, monitor-only bias, and dwell multipliers.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:

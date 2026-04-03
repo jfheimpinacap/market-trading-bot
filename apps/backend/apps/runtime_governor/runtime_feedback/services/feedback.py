@@ -7,9 +7,11 @@ from apps.runtime_governor.models import (
     RuntimeDiagnosticReview,
     RuntimePerformanceSnapshot,
 )
+from apps.runtime_governor.tuning_profiles import get_runtime_conservative_tuning_profile
 
 
 def build_runtime_feedback_decision(*, snapshot: RuntimePerformanceSnapshot, diagnostic: RuntimeDiagnosticReview) -> RuntimeFeedbackDecision:
+    tuning = get_runtime_conservative_tuning_profile()
     reason_codes = sorted(set((snapshot.reason_codes or []) + (diagnostic.reason_codes or [])))
     governance_backlog_pressure_state = str((snapshot.metadata or {}).get('governance_backlog_pressure_state') or 'NORMAL').upper()
 
@@ -48,7 +50,9 @@ def build_runtime_feedback_decision(*, snapshot: RuntimePerformanceSnapshot, dia
         elif decision_type == RuntimeFeedbackDecisionType.RELAX_TO_CAUTION:
             summary = 'Backlog pressure is CAUTION; relaxation is allowed only to cautious posture.'
     elif governance_backlog_pressure_state == 'HIGH':
-        reason_codes.extend(['backlog_high_relaxation_guard', 'backlog_high_manual_review_bias'])
+        reason_codes.append('backlog_high_relaxation_guard')
+        if tuning.high_backlog_manual_review_bias:
+            reason_codes.append('backlog_high_manual_review_bias')
         if decision_type == RuntimeFeedbackDecisionType.RELAX_TO_CAUTION:
             decision_type = RuntimeFeedbackDecisionType.REDUCE_ADMISSION_AND_CADENCE
             summary = 'Backlog pressure is HIGH; defer relaxation and reduce admission/cadence.'
@@ -59,12 +63,18 @@ def build_runtime_feedback_decision(*, snapshot: RuntimePerformanceSnapshot, dia
             decision_type = RuntimeFeedbackDecisionType.REDUCE_ADMISSION_AND_CADENCE
             summary = 'Backlog pressure is HIGH; favor reduced admission/cadence under conservative runtime tuning.'
     elif governance_backlog_pressure_state == 'CRITICAL':
-        reason_codes.extend(['backlog_critical_relaxation_block', 'backlog_critical_manual_review_bias'])
+        reason_codes.append('backlog_critical_relaxation_block')
+        if tuning.critical_backlog_monitor_only_bias:
+            reason_codes.append('backlog_critical_manual_review_bias')
         if decision_type == RuntimeFeedbackDecisionType.RELAX_TO_CAUTION:
-            decision_type = RuntimeFeedbackDecisionType.REQUIRE_MANUAL_RUNTIME_REVIEW
-            auto_applicable = False
-            summary = 'Backlog pressure is CRITICAL; aggressive relaxation is blocked pending manual runtime review.'
-        elif diagnostic.diagnostic_severity in {'INFO', 'CAUTION'}:
+            if tuning.critical_backlog_blocks_relax:
+                decision_type = RuntimeFeedbackDecisionType.REQUIRE_MANUAL_RUNTIME_REVIEW
+                auto_applicable = False
+                summary = 'Backlog pressure is CRITICAL; aggressive relaxation is blocked pending manual runtime review.'
+            else:
+                decision_type = RuntimeFeedbackDecisionType.SHIFT_TO_MONITOR_ONLY
+                summary = 'Backlog pressure is CRITICAL; relaxation falls back to monitor-only conservative posture.'
+        elif tuning.critical_backlog_monitor_only_bias and diagnostic.diagnostic_severity in {'INFO', 'CAUTION'}:
             decision_type = RuntimeFeedbackDecisionType.SHIFT_TO_MONITOR_ONLY
             summary = 'Backlog pressure is CRITICAL with non-severe runtime signals; bias to monitor-only posture.'
         elif decision_type != RuntimeFeedbackDecisionType.REQUIRE_MANUAL_RUNTIME_REVIEW:
@@ -92,5 +102,6 @@ def build_runtime_feedback_decision(*, snapshot: RuntimePerformanceSnapshot, dia
             'diagnostic_type': diagnostic.diagnostic_type,
             'diagnostic_severity': diagnostic.diagnostic_severity,
             'governance_backlog_pressure_state': governance_backlog_pressure_state,
+            'tuning_profile': tuning.profile_name,
         },
     )
