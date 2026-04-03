@@ -13,6 +13,18 @@ La vista `/mission-control` ahora incluye una sección explícita de **Autonomou
 
 La UI extiende capacidades existentes de mission control/autonomous runtime sin crear un scheduler opaco ni un flujo de live trading.
 
+## Mission control governance review queue UX (new)
+
+La vista `/mission-control` ahora incluye una sección **Governance Review Queue** (sin crear pantalla nueva):
+
+- acción manual: `Run governance review queue`
+- summary cards: open / P1 / blocked / deferred / manual review / latest run
+- listas read-only de:
+  - review items centralizados (runtime_governor + mission_control + portfolio_governor)
+  - recomendaciones por item
+
+Límites explícitos: paper-only, sin trading real, sin resolución/aplicación real todavía. Esta fase reduce fricción operativa humana centralizando la revisión pendiente.
+
 ## Runtime mode enforcement UX (new)
 
 La vista `/runtime` ahora incluye una sección técnica de **Mode Enforcement** para que el modo global no sea solo informativo:

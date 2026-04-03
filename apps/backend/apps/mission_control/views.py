@@ -46,6 +46,9 @@ from apps.mission_control.models import (
     AutonomousSessionAdmissionReview,
     AutonomousSessionAdmissionDecision,
     AutonomousSessionAdmissionRecommendation,
+    GovernanceReviewItem,
+    GovernanceReviewQueueRun,
+    GovernanceReviewRecommendation,
     MissionControlCycle,
     MissionControlSession,
 )
@@ -102,6 +105,9 @@ from apps.mission_control.serializers import (
     AutonomousSessionAdmissionReviewSerializer,
     AutonomousSessionAdmissionDecisionSerializer,
     AutonomousSessionAdmissionRecommendationSerializer,
+    GovernanceReviewItemSerializer,
+    GovernanceReviewQueueRunSerializer,
+    GovernanceReviewRecommendationSerializer,
 )
 from apps.mission_control.services.session_timing import (
     apply_schedule_profile,
@@ -140,6 +146,7 @@ from apps.mission_control.services.session_health import (
 from apps.mission_control.services.session_recovery import apply_session_resume, build_session_recovery_summary, run_session_recovery_review
 from apps.mission_control.services.session_admission import apply_admission_decision, build_session_admission_summary, run_session_admission_review
 from apps.mission_control.services.session_profile_control.profile_switch import apply_profile_switch_decision
+from apps.mission_control.services.run import governance_review_summary, run_governance_review_queue
 
 
 class MissionControlStatusView(APIView):
@@ -699,3 +706,29 @@ class ApplySessionAdmissionDecisionView(APIView):
         decision = get_object_or_404(AutonomousSessionAdmissionDecision, pk=decision_id)
         applied = apply_admission_decision(decision=decision, automatic=False)
         return Response(AutonomousSessionAdmissionDecisionSerializer(applied).data, status=status.HTTP_200_OK)
+
+
+class RunGovernanceReviewQueueView(APIView):
+    def post(self, request, *args, **kwargs):
+        run = run_governance_review_queue()
+        return Response(GovernanceReviewQueueRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class GovernanceReviewRunListView(generics.ListAPIView):
+    serializer_class = GovernanceReviewQueueRunSerializer
+    queryset = GovernanceReviewQueueRun.objects.order_by('-started_at', '-id')[:100]
+
+
+class GovernanceReviewItemListView(generics.ListAPIView):
+    serializer_class = GovernanceReviewItemSerializer
+    queryset = GovernanceReviewItem.objects.select_related('linked_session', 'linked_market').order_by('queue_priority', '-updated_at', '-id')[:300]
+
+
+class GovernanceReviewRecommendationListView(generics.ListAPIView):
+    serializer_class = GovernanceReviewRecommendationSerializer
+    queryset = GovernanceReviewRecommendation.objects.select_related('linked_review_item').order_by('-created_at', '-id')[:300]
+
+
+class GovernanceReviewSummaryView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(governance_review_summary(), status=status.HTTP_200_OK)

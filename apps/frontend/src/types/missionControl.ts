@@ -788,3 +788,54 @@ export type SessionAdmissionSummary = {
     recommendations: number;
   };
 };
+
+export type GovernanceReviewQueueRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  collected_item_count: number;
+  high_priority_count: number;
+  blocked_count: number;
+  deferred_count: number;
+  manual_review_count: number;
+  metadata: Record<string, unknown>;
+};
+
+export type GovernanceReviewItem = {
+  id: number;
+  source_module: 'runtime_governor' | 'mission_control' | 'portfolio_governor';
+  source_type: 'mode_feedback_apply' | 'mode_stabilization' | 'session_health' | 'session_recovery' | 'session_admission' | 'exposure_coordination' | 'exposure_apply';
+  source_object_id: number;
+  item_status: 'OPEN' | 'IN_REVIEW' | 'RESOLVED' | 'DISMISSED';
+  severity: 'INFO' | 'CAUTION' | 'HIGH' | 'CRITICAL';
+  queue_priority: 'P1' | 'P2' | 'P3' | 'P4';
+  linked_session: number | null;
+  linked_market: number | null;
+  title: string;
+  summary: string;
+  blockers: string[];
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GovernanceReviewRecommendation = {
+  id: number;
+  linked_review_item: number | null;
+  recommendation_type: 'REVIEW_NOW' | 'SAFE_TO_DISMISS' | 'RETRY_LATER' | 'REQUIRE_OPERATOR_CONFIRMATION' | 'ESCALATE_PRIORITY';
+  rationale: string;
+  confidence: number;
+  blockers: string[];
+  created_at: string;
+};
+
+export type GovernanceReviewSummary = {
+  latest_run: number | null;
+  open_count: number;
+  high_priority_count: number;
+  blocked_count: number;
+  deferred_count: number;
+  manual_review_count: number;
+  by_source_module: Record<string, number>;
+};

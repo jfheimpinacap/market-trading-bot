@@ -12,6 +12,25 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
 - **Precedent-aware decision support (new):** research, prediction, risk, signal-fusion, and postmortem now consume semantic precedents automatically in internal flows with conservative influence and explicit audit trails (`AgentPrecedentUse`).
 
+### Governance review queue (new)
+
+`mission_control` now includes a **unified governance review queue** to centralize pending manual triage from:
+
+- `runtime_governor` (`runtime_feedback_apply`, `mode_stabilization`)
+- `mission_control` (`session_health`, `session_recovery`, `session_admission`)
+- `portfolio_governor` (`exposure_coordination`, `exposure_apply`)
+
+Flow:
+
+`blocked/manual/deferred/advisory outcomes -> unified queue -> severity + priority + recommendations -> operator inbox`
+
+Scope and boundaries:
+
+- paper-only and local-first
+- no live trading / no real money
+- no replacement of existing authorities
+- no automatic resolution apply yet (read-only triage in this phase)
+
 ### Global operating mode downstream enforcement bridge (new)
 
 `runtime_governor` now includes an explicit and auditable **downstream mode enforcement bridge**:

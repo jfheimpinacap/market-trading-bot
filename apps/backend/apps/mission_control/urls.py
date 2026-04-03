@@ -88,4 +88,9 @@ urlpatterns = [
     path('session-admission-recommendations/', views.SessionAdmissionRecommendationListView.as_view(), name='session-admission-recommendations'),
     path('session-admission-summary/', views.SessionAdmissionSummaryView.as_view(), name='session-admission-summary'),
     path('apply-session-admission/<int:decision_id>/', views.ApplySessionAdmissionDecisionView.as_view(), name='apply-session-admission'),
+    path('run-governance-review-queue/', views.RunGovernanceReviewQueueView.as_view(), name='run-governance-review-queue'),
+    path('governance-review-runs/', views.GovernanceReviewRunListView.as_view(), name='governance-review-runs'),
+    path('governance-review-items/', views.GovernanceReviewItemListView.as_view(), name='governance-review-items'),
+    path('governance-review-recommendations/', views.GovernanceReviewRecommendationListView.as_view(), name='governance-review-recommendations'),
+    path('governance-review-summary/', views.GovernanceReviewSummaryView.as_view(), name='governance-review-summary'),
 ]

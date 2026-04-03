@@ -43,6 +43,9 @@ from apps.mission_control.models import (
     AutonomousSessionAdmissionRun,
     AutonomousGlobalCapacitySnapshot,
     AutonomousSessionAdmissionReview,
+    GovernanceReviewItem,
+    GovernanceReviewQueueRun,
+    GovernanceReviewRecommendation,
     MissionControlCycle,
     MissionControlSession,
     MissionControlState,
@@ -394,4 +397,22 @@ class AutonomousSessionAdmissionDecisionSerializer(serializers.ModelSerializer):
 class AutonomousSessionAdmissionRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousSessionAdmissionRecommendation
+        fields = '__all__'
+
+
+class GovernanceReviewQueueRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GovernanceReviewQueueRun
+        fields = '__all__'
+
+
+class GovernanceReviewItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GovernanceReviewItem
+        fields = '__all__'
+
+
+class GovernanceReviewRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GovernanceReviewRecommendation
         fields = '__all__'

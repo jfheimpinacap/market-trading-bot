@@ -1533,3 +1533,117 @@ class AutonomousSessionAdmissionRecommendation(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at', '-id']
+
+
+class GovernanceReviewSourceModule(models.TextChoices):
+    RUNTIME_GOVERNOR = 'runtime_governor', 'Runtime governor'
+    MISSION_CONTROL = 'mission_control', 'Mission control'
+    PORTFOLIO_GOVERNOR = 'portfolio_governor', 'Portfolio governor'
+
+
+class GovernanceReviewSourceType(models.TextChoices):
+    MODE_FEEDBACK_APPLY = 'mode_feedback_apply', 'Mode feedback apply'
+    MODE_STABILIZATION = 'mode_stabilization', 'Mode stabilization'
+    SESSION_HEALTH = 'session_health', 'Session health'
+    SESSION_RECOVERY = 'session_recovery', 'Session recovery'
+    SESSION_ADMISSION = 'session_admission', 'Session admission'
+    EXPOSURE_COORDINATION = 'exposure_coordination', 'Exposure coordination'
+    EXPOSURE_APPLY = 'exposure_apply', 'Exposure apply'
+
+
+class GovernanceReviewItemStatus(models.TextChoices):
+    OPEN = 'OPEN', 'Open'
+    IN_REVIEW = 'IN_REVIEW', 'In review'
+    RESOLVED = 'RESOLVED', 'Resolved'
+    DISMISSED = 'DISMISSED', 'Dismissed'
+
+
+class GovernanceReviewSeverity(models.TextChoices):
+    INFO = 'INFO', 'Info'
+    CAUTION = 'CAUTION', 'Caution'
+    HIGH = 'HIGH', 'High'
+    CRITICAL = 'CRITICAL', 'Critical'
+
+
+class GovernanceReviewPriority(models.TextChoices):
+    P1 = 'P1', 'P1'
+    P2 = 'P2', 'P2'
+    P3 = 'P3', 'P3'
+    P4 = 'P4', 'P4'
+
+
+class GovernanceReviewRecommendationType(models.TextChoices):
+    REVIEW_NOW = 'REVIEW_NOW', 'Review now'
+    SAFE_TO_DISMISS = 'SAFE_TO_DISMISS', 'Safe to dismiss'
+    RETRY_LATER = 'RETRY_LATER', 'Retry later'
+    REQUIRE_OPERATOR_CONFIRMATION = 'REQUIRE_OPERATOR_CONFIRMATION', 'Require operator confirmation'
+    ESCALATE_PRIORITY = 'ESCALATE_PRIORITY', 'Escalate priority'
+
+
+class GovernanceReviewQueueRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    collected_item_count = models.PositiveIntegerField(default=0)
+    high_priority_count = models.PositiveIntegerField(default=0)
+    blocked_count = models.PositiveIntegerField(default=0)
+    deferred_count = models.PositiveIntegerField(default=0)
+    manual_review_count = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class GovernanceReviewItem(TimeStampedModel):
+    source_module = models.CharField(max_length=32, choices=GovernanceReviewSourceModule.choices)
+    source_type = models.CharField(max_length=32, choices=GovernanceReviewSourceType.choices)
+    source_object_id = models.PositiveIntegerField()
+    item_status = models.CharField(max_length=12, choices=GovernanceReviewItemStatus.choices, default=GovernanceReviewItemStatus.OPEN)
+    severity = models.CharField(max_length=12, choices=GovernanceReviewSeverity.choices, default=GovernanceReviewSeverity.CAUTION)
+    queue_priority = models.CharField(max_length=2, choices=GovernanceReviewPriority.choices, default=GovernanceReviewPriority.P3)
+    linked_session = models.ForeignKey(
+        AutonomousRuntimeSession,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='governance_review_items',
+    )
+    linked_market = models.ForeignKey(
+        'markets.Market',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='governance_review_items',
+    )
+    title = models.CharField(max_length=255)
+    summary = models.CharField(max_length=255, blank=True)
+    blockers = models.JSONField(default=list, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['queue_priority', '-updated_at', '-id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['source_module', 'source_type', 'source_object_id'],
+                name='governance_review_item_source_unique',
+            ),
+        ]
+
+
+class GovernanceReviewRecommendation(TimeStampedModel):
+    linked_review_item = models.ForeignKey(
+        GovernanceReviewItem,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    recommendation_type = models.CharField(max_length=40, choices=GovernanceReviewRecommendationType.choices)
+    rationale = models.CharField(max_length=255)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
