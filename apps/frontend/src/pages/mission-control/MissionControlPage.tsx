@@ -45,9 +45,14 @@ import {
   runGovernanceReviewQueue,
   runGovernanceAutoResolution,
   runGovernanceQueueAgingReview,
+  runGovernanceBacklogPressureReview,
   getGovernanceQueueAgingReviews,
   getGovernanceQueueAgingRecommendations,
   getGovernanceQueueAgingSummary,
+  getGovernanceBacklogPressureSummary,
+  getGovernanceBacklogPressureSnapshots,
+  getGovernanceBacklogPressureDecisions,
+  getGovernanceBacklogPressureRecommendations,
   getSessionInterventionDecisions,
   getSessionTimingDecisions,
   getSessionTimingRecommendations,
@@ -112,6 +117,10 @@ import type {
   GovernanceQueueAgingReview,
   GovernanceQueueAgingRecommendation,
   GovernanceQueueAgingSummary,
+  GovernanceBacklogPressureSummary,
+  GovernanceBacklogPressureSnapshot,
+  GovernanceBacklogPressureDecision,
+  GovernanceBacklogPressureRecommendation,
 } from '../../types/missionControl';
 
 export function MissionControlPage() {
@@ -160,6 +169,10 @@ export function MissionControlPage() {
   const [governanceAgingSummary, setGovernanceAgingSummary] = useState<GovernanceQueueAgingSummary | null>(null);
   const [governanceAgingReviews, setGovernanceAgingReviews] = useState<GovernanceQueueAgingReview[]>([]);
   const [governanceAgingRecommendations, setGovernanceAgingRecommendations] = useState<GovernanceQueueAgingRecommendation[]>([]);
+  const [governanceBacklogPressureSummary, setGovernanceBacklogPressureSummary] = useState<GovernanceBacklogPressureSummary | null>(null);
+  const [governanceBacklogPressureSnapshots, setGovernanceBacklogPressureSnapshots] = useState<GovernanceBacklogPressureSnapshot[]>([]);
+  const [governanceBacklogPressureDecisions, setGovernanceBacklogPressureDecisions] = useState<GovernanceBacklogPressureDecision[]>([]);
+  const [governanceBacklogPressureRecommendations, setGovernanceBacklogPressureRecommendations] = useState<GovernanceBacklogPressureRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -169,7 +182,7 @@ export function MissionControlPage() {
     setLoading(true);
     setError(null);
     try {
-      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary, loadedRecoverySnapshots, loadedRecoveryBlockers, loadedResumeDecisions, loadedRecoveryRecommendations, loadedResumeRecords, loadedRecoverySummary, loadedCapacitySnapshots, loadedAdmissionReviews, loadedAdmissionDecisions, loadedAdmissionRecommendations, loadedAdmissionSummary, loadedGovernanceSummary, loadedGovernanceItems, loadedGovernanceRecommendations, loadedGovernanceResolutions, loadedGovernanceAutoSummary, loadedGovernanceAutoDecisions, loadedGovernanceAutoRecords, loadedGovernanceAgingSummary, loadedGovernanceAgingReviews, loadedGovernanceAgingRecommendations] = await Promise.all([
+      const [loadedSessions, loadedSummary, loadedRunnerState, loadedRuns, loadedDecisions, loadedDispatches, loadedRecommendations, loadedHeartbeatSummary, loadedScheduleProfiles, loadedTimingSnapshots, loadedStopEvaluations, loadedTimingDecisions, loadedTimingRecommendations, loadedTimingSummary, loadedContextReviews, loadedProfileSwitchDecisions, loadedProfileSwitchRecords, loadedProfileRecommendations, loadedProfileSelectionSummary, loadedHealthSnapshots, loadedHealthAnomalies, loadedHealthDecisions, loadedHealthRecommendations, loadedHealthSummary, loadedRecoverySnapshots, loadedRecoveryBlockers, loadedResumeDecisions, loadedRecoveryRecommendations, loadedResumeRecords, loadedRecoverySummary, loadedCapacitySnapshots, loadedAdmissionReviews, loadedAdmissionDecisions, loadedAdmissionRecommendations, loadedAdmissionSummary, loadedGovernanceSummary, loadedGovernanceItems, loadedGovernanceRecommendations, loadedGovernanceResolutions, loadedGovernanceAutoSummary, loadedGovernanceAutoDecisions, loadedGovernanceAutoRecords, loadedGovernanceAgingSummary, loadedGovernanceAgingReviews, loadedGovernanceAgingRecommendations, loadedGovernanceBacklogPressureSummary, loadedGovernanceBacklogPressureSnapshots, loadedGovernanceBacklogPressureDecisions, loadedGovernanceBacklogPressureRecommendations] = await Promise.all([
         getAutonomousSessions(),
         getAutonomousSessionSummary(),
         getAutonomousRunnerState(),
@@ -215,6 +228,10 @@ export function MissionControlPage() {
         getGovernanceQueueAgingSummary(),
         getGovernanceQueueAgingReviews(),
         getGovernanceQueueAgingRecommendations(),
+        getGovernanceBacklogPressureSummary(),
+        getGovernanceBacklogPressureSnapshots(),
+        getGovernanceBacklogPressureDecisions(),
+        getGovernanceBacklogPressureRecommendations(),
       ]);
       setSessions(loadedSessions);
       setSummary(loadedSummary);
@@ -261,6 +278,10 @@ export function MissionControlPage() {
       setGovernanceAgingSummary(loadedGovernanceAgingSummary);
       setGovernanceAgingReviews(loadedGovernanceAgingReviews);
       setGovernanceAgingRecommendations(loadedGovernanceAgingRecommendations);
+      setGovernanceBacklogPressureSummary(loadedGovernanceBacklogPressureSummary);
+      setGovernanceBacklogPressureSnapshots(loadedGovernanceBacklogPressureSnapshots);
+      setGovernanceBacklogPressureDecisions(loadedGovernanceBacklogPressureDecisions);
+      setGovernanceBacklogPressureRecommendations(loadedGovernanceBacklogPressureRecommendations);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load autonomous heartbeat runner state.');
     } finally {
@@ -499,6 +520,24 @@ export function MissionControlPage() {
           </div>
           <ul>{governanceAgingReviews.slice(0, 12).map((review) => <li key={review.id}><strong>{review.aging_status}</strong> — item={review.linked_review_item} bucket={review.age_bucket} reason=[{review.reason_codes.join(', ')}] summary={review.review_summary}</li>)}</ul>
           <ul>{governanceAgingRecommendations.slice(0, 12).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — item={recommendation.linked_review_item} confidence={recommendation.confidence.toFixed(2)} rationale={recommendation.rationale}</li>)}</ul>
+        </SectionCard>
+
+        <SectionCard eyebrow="Governance Backlog Pressure" title="Conservative backlog pressure signal" description="Delta-only layer that converts current governance backlog load into an auditable pressure signal for runtime posture. It does not replace queue aging or auto-resolution authorities.">
+          <div className="button-row">
+            <button type="button" className="primary-button" onClick={async () => { await runGovernanceBacklogPressureReview(); await load(); }}>Run backlog pressure review</button>
+          </div>
+          <div className="system-metadata-grid">
+            <div><strong>Latest run:</strong> {governanceBacklogPressureSummary?.latest_run_id ?? 'n/a'}</div>
+            <div><strong>Pressure state:</strong> {governanceBacklogPressureSummary?.governance_backlog_pressure_state ?? 'NORMAL'}</div>
+            <div><strong>Open items:</strong> {governanceBacklogPressureSummary?.latest_counts.open_items ?? 0}</div>
+            <div><strong>Overdue:</strong> {governanceBacklogPressureSummary?.latest_counts.overdue ?? 0}</div>
+            <div><strong>Overdue P1:</strong> {governanceBacklogPressureSummary?.latest_counts.overdue_p1 ?? 0}</div>
+            <div><strong>Stale blocked:</strong> {governanceBacklogPressureSummary?.latest_counts.stale_blocked ?? 0}</div>
+            <div><strong>Persistent stale blocked:</strong> {governanceBacklogPressureSummary?.latest_counts.persistent_stale_blocked ?? 0}</div>
+          </div>
+          <ul>{governanceBacklogPressureSnapshots.slice(0, 8).map((snapshot) => <li key={snapshot.id}><strong>{snapshot.governance_backlog_pressure_state}</strong> — score={snapshot.pressure_score} open={snapshot.open_item_count} overdue={snapshot.overdue_count} overdue_p1={snapshot.overdue_p1_count} stale_blocked={snapshot.stale_blocked_count} persistent_stale_blocked={snapshot.persistent_stale_blocked_count} reason=[{snapshot.reason_codes.join(', ')}]</li>)}</ul>
+          <ul>{governanceBacklogPressureDecisions.slice(0, 8).map((decision) => <li key={decision.id}><strong>{decision.decision_type}</strong> — snapshot={decision.linked_backlog_pressure_snapshot} summary={decision.decision_summary}</li>)}</ul>
+          <ul>{governanceBacklogPressureRecommendations.slice(0, 8).map((recommendation) => <li key={recommendation.id}><strong>{recommendation.recommendation_type}</strong> — confidence={recommendation.confidence.toFixed(2)} rationale={recommendation.rationale}</li>)}</ul>
         </SectionCard>
 
         <SectionCard eyebrow="Session timing policy" title="Schedule profiles" description="Reusable cadence profiles with explicit intervals and quiet/stop thresholds.">

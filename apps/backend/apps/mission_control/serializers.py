@@ -54,6 +54,10 @@ from apps.mission_control.models import (
     GovernanceQueueAgingRun,
     GovernanceQueueAgingReview,
     GovernanceQueueAgingRecommendation,
+    GovernanceBacklogPressureRun,
+    GovernanceBacklogPressureSnapshot,
+    GovernanceBacklogPressureDecision,
+    GovernanceBacklogPressureRecommendation,
     MissionControlCycle,
     MissionControlSession,
     MissionControlState,
@@ -471,4 +475,28 @@ class GovernanceQueueAgingReviewSerializer(serializers.ModelSerializer):
 class GovernanceQueueAgingRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = GovernanceQueueAgingRecommendation
+        fields = '__all__'
+
+
+class GovernanceBacklogPressureRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GovernanceBacklogPressureRun
+        fields = '__all__'
+
+
+class GovernanceBacklogPressureSnapshotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GovernanceBacklogPressureSnapshot
+        fields = '__all__'
+
+
+class GovernanceBacklogPressureDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GovernanceBacklogPressureDecision
+        fields = '__all__'
+
+
+class GovernanceBacklogPressureRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GovernanceBacklogPressureRecommendation
         fields = '__all__'

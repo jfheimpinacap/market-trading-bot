@@ -106,4 +106,10 @@ urlpatterns = [
     path('governance-queue-aging-reviews/', views.GovernanceQueueAgingReviewListView.as_view(), name='governance-queue-aging-reviews'),
     path('governance-queue-aging-recommendations/', views.GovernanceQueueAgingRecommendationListView.as_view(), name='governance-queue-aging-recommendations'),
     path('governance-queue-aging-summary/', views.GovernanceQueueAgingSummaryView.as_view(), name='governance-queue-aging-summary'),
+    path('run-governance-backlog-pressure-review/', views.RunGovernanceBacklogPressureReviewView.as_view(), name='run-governance-backlog-pressure-review'),
+    path('governance-backlog-pressure-runs/', views.GovernanceBacklogPressureRunListView.as_view(), name='governance-backlog-pressure-runs'),
+    path('governance-backlog-pressure-snapshots/', views.GovernanceBacklogPressureSnapshotListView.as_view(), name='governance-backlog-pressure-snapshots'),
+    path('governance-backlog-pressure-decisions/', views.GovernanceBacklogPressureDecisionListView.as_view(), name='governance-backlog-pressure-decisions'),
+    path('governance-backlog-pressure-recommendations/', views.GovernanceBacklogPressureRecommendationListView.as_view(), name='governance-backlog-pressure-recommendations'),
+    path('governance-backlog-pressure-summary/', views.GovernanceBacklogPressureSummaryView.as_view(), name='governance-backlog-pressure-summary'),
 ]

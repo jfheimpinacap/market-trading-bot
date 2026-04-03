@@ -56,6 +56,10 @@ from apps.mission_control.models import (
     GovernanceQueueAgingRun,
     GovernanceQueueAgingReview,
     GovernanceQueueAgingRecommendation,
+    GovernanceBacklogPressureRun,
+    GovernanceBacklogPressureSnapshot,
+    GovernanceBacklogPressureDecision,
+    GovernanceBacklogPressureRecommendation,
     MissionControlCycle,
     MissionControlSession,
 )
@@ -122,6 +126,10 @@ from apps.mission_control.serializers import (
     GovernanceQueueAgingRunSerializer,
     GovernanceQueueAgingReviewSerializer,
     GovernanceQueueAgingRecommendationSerializer,
+    GovernanceBacklogPressureRunSerializer,
+    GovernanceBacklogPressureSnapshotSerializer,
+    GovernanceBacklogPressureDecisionSerializer,
+    GovernanceBacklogPressureRecommendationSerializer,
     ResolveGovernanceReviewItemRequestSerializer,
 )
 from apps.mission_control.services.resolve import resolve_governance_review_item
@@ -170,6 +178,10 @@ from apps.mission_control.governance_auto_resolution.services.run import (
 from apps.mission_control.governance_queue_aging.services.run import (
     governance_queue_aging_summary,
     run_governance_queue_aging_review,
+)
+from apps.mission_control.governance_backlog_pressure.services.run import (
+    governance_backlog_pressure_summary,
+    run_governance_backlog_pressure_review,
 )
 from apps.mission_control.governance_auto_resolution.services.auto_resolve import apply_auto_resolution_decision
 
@@ -841,3 +853,40 @@ class GovernanceQueueAgingRecommendationListView(generics.ListAPIView):
 class GovernanceQueueAgingSummaryView(APIView):
     def get(self, request, *args, **kwargs):
         return Response(governance_queue_aging_summary(), status=status.HTTP_200_OK)
+
+
+class RunGovernanceBacklogPressureReviewView(APIView):
+    def post(self, request, *args, **kwargs):
+        run = run_governance_backlog_pressure_review()
+        return Response(GovernanceBacklogPressureRunSerializer(run).data, status=status.HTTP_200_OK)
+
+
+class GovernanceBacklogPressureRunListView(generics.ListAPIView):
+    serializer_class = GovernanceBacklogPressureRunSerializer
+    queryset = GovernanceBacklogPressureRun.objects.order_by('-started_at', '-id')[:100]
+
+
+class GovernanceBacklogPressureSnapshotListView(generics.ListAPIView):
+    serializer_class = GovernanceBacklogPressureSnapshotSerializer
+    queryset = GovernanceBacklogPressureSnapshot.objects.select_related(
+        'linked_backlog_pressure_run',
+    ).order_by('-created_at', '-id')[:400]
+
+
+class GovernanceBacklogPressureDecisionListView(generics.ListAPIView):
+    serializer_class = GovernanceBacklogPressureDecisionSerializer
+    queryset = GovernanceBacklogPressureDecision.objects.select_related(
+        'linked_backlog_pressure_run', 'linked_backlog_pressure_snapshot',
+    ).order_by('-created_at', '-id')[:400]
+
+
+class GovernanceBacklogPressureRecommendationListView(generics.ListAPIView):
+    serializer_class = GovernanceBacklogPressureRecommendationSerializer
+    queryset = GovernanceBacklogPressureRecommendation.objects.select_related(
+        'linked_backlog_pressure_decision', 'linked_backlog_pressure_snapshot',
+    ).order_by('-created_at', '-id')[:400]
+
+
+class GovernanceBacklogPressureSummaryView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(governance_backlog_pressure_summary(), status=status.HTTP_200_OK)
