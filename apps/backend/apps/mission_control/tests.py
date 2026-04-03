@@ -539,6 +539,58 @@ class GovernanceAutoResolutionTests(TestCase):
         self.assertIn('latest_counts', payload)
 
 
+class GovernanceBacklogPressureTests(TestCase):
+    def _create_item(self, **overrides):
+        payload = {
+            'source_module': 'mission_control',
+            'source_type': 'session_recovery',
+            'source_object_id': 9000 + GovernanceReviewItem.objects.count(),
+            'item_status': 'OPEN',
+            'severity': 'CAUTION',
+            'queue_priority': 'P3',
+            'title': 'Backlog pressure item',
+            'summary': 'Test item',
+            'blockers': [],
+            'reason_codes': [],
+            'metadata': {},
+        }
+        payload.update(overrides)
+        return GovernanceReviewItem.objects.create(**payload)
+
+    def test_light_backlog_stays_normal(self):
+        self._create_item(queue_priority='P4', reason_codes=['ADVISORY_ONLY'])
+        response = self.client.post(reverse('mission_control:run-governance-backlog-pressure-review'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        summary = self.client.get(reverse('mission_control:governance-backlog-pressure-summary')).json()
+        self.assertEqual(summary['governance_backlog_pressure_state'], 'NORMAL')
+
+    def test_overdue_and_high_priority_moves_to_caution_or_high(self):
+        self._create_item(queue_priority='P1', reason_codes=['MANUAL_REVIEW_OVERDUE'])
+        self._create_item(queue_priority='P2', reason_codes=['REVIEW_OVERDUE'])
+        self._create_item(queue_priority='P1', reason_codes=['OVERDUE'])
+        self.client.post(reverse('mission_control:run-governance-backlog-pressure-review'), data='{}', content_type='application/json')
+        snapshots = self.client.get(reverse('mission_control:governance-backlog-pressure-snapshots')).json()
+        self.assertIn(snapshots[0]['pressure_state'], {'CAUTION', 'HIGH'})
+
+    def test_persistent_blocked_stale_elevates_pressure(self):
+        stale_time = timezone.now() - timedelta(days=5)
+        first = self._create_item(queue_priority='P2', blockers=['STATUS_BLOCKED'], reason_codes=['STALE'])
+        second = self._create_item(queue_priority='P2', blockers=['STATUS_BLOCKED'], reason_codes=['PERSISTENT'])
+        GovernanceReviewItem.objects.filter(id__in=[first.id, second.id]).update(updated_at=stale_time)
+        self.client.post(reverse('mission_control:run-governance-backlog-pressure-review'), data='{}', content_type='application/json')
+        snapshots = self.client.get(reverse('mission_control:governance-backlog-pressure-snapshots')).json()
+        self.assertIn(snapshots[0]['pressure_state'], {'HIGH', 'CRITICAL'})
+
+    def test_summary_endpoint(self):
+        self._create_item(queue_priority='P1', reason_codes=['FOLLOWUP_DUE', 'MANUAL_REVIEW_OVERDUE'])
+        self.client.post(reverse('mission_control:run-governance-backlog-pressure-review'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:governance-backlog-pressure-summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('totals', payload)
+        self.assertIn('latest_counts', payload)
+
+
 class SessionTimingPolicyTests(TestCase):
 
     def test_recent_dispatch_delays_next_due_at(self):

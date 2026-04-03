@@ -101,4 +101,10 @@ urlpatterns = [
     path('governance-auto-resolution-records/', views.GovernanceAutoResolutionRecordListView.as_view(), name='governance-auto-resolution-records'),
     path('governance-auto-resolution-summary/', views.GovernanceAutoResolutionSummaryView.as_view(), name='governance-auto-resolution-summary'),
     path('apply-governance-auto-resolution/<int:decision_id>/', views.ApplyGovernanceAutoResolutionDecisionView.as_view(), name='apply-governance-auto-resolution'),
+    path('run-governance-backlog-pressure-review/', views.RunGovernanceBacklogPressureReviewView.as_view(), name='run-governance-backlog-pressure-review'),
+    path('governance-backlog-pressure-runs/', views.GovernanceBacklogPressureRunListView.as_view(), name='governance-backlog-pressure-runs'),
+    path('governance-backlog-pressure-snapshots/', views.GovernanceBacklogPressureSnapshotListView.as_view(), name='governance-backlog-pressure-snapshots'),
+    path('governance-backlog-pressure-decisions/', views.GovernanceBacklogPressureDecisionListView.as_view(), name='governance-backlog-pressure-decisions'),
+    path('governance-backlog-pressure-recommendations/', views.GovernanceBacklogPressureRecommendationListView.as_view(), name='governance-backlog-pressure-recommendations'),
+    path('governance-backlog-pressure-summary/', views.GovernanceBacklogPressureSummaryView.as_view(), name='governance-backlog-pressure-summary'),
 ]

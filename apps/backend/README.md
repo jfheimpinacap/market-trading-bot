@@ -11,6 +11,30 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 - Make the demo dataset feel alive locally without real provider integrations, trading, or websockets.
 - Provide precedent-aware agent support via `memory_retrieval` with conservative and auditable influence on research/prediction/risk/signals/postmortem.
 
+## Mission control governance backlog pressure signal (new)
+
+`apps.mission_control` now includes a short backlog-pressure bridge (`governance_backlog_pressure/services/`) that transforms audited governance backlog state into an explicit conservative runtime input.
+
+- service split:
+  - `backlog_pressure.py` (snapshot aggregation + pressure classification)
+  - `decision.py` (pressure → decision type)
+  - `recommendation.py` (auditable recommendation)
+  - `run.py` (full review run + summary)
+- auditable entities:
+  - `GovernanceBacklogPressureRun`
+  - `GovernanceBacklogPressureSnapshot`
+  - `GovernanceBacklogPressureDecision`
+  - `GovernanceBacklogPressureRecommendation`
+- API:
+  - `POST /api/mission-control/run-governance-backlog-pressure-review/`
+  - `GET /api/mission-control/governance-backlog-pressure-runs/`
+  - `GET /api/mission-control/governance-backlog-pressure-snapshots/`
+  - `GET /api/mission-control/governance-backlog-pressure-decisions/`
+  - `GET /api/mission-control/governance-backlog-pressure-recommendations/`
+  - `GET /api/mission-control/governance-backlog-pressure-summary/`
+
+This layer is measurement/recommendation only: it does **not** resolve items or replace existing authorities. It remains local-first and paper-only.
+
 ## Runtime governor downstream mode enforcement (new)
 
 `apps.runtime_governor` now includes `mode_enforcement/` services to make global operating mode operational across downstream modules (instead of descriptive-only):

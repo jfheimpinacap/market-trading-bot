@@ -51,6 +51,11 @@ import type {
   GovernanceAutoResolutionRecord,
   GovernanceAutoResolutionRun,
   GovernanceAutoResolutionSummary,
+  GovernanceBacklogPressureDecision,
+  GovernanceBacklogPressureRecommendation,
+  GovernanceBacklogPressureRun,
+  GovernanceBacklogPressureSnapshot,
+  GovernanceBacklogPressureSummary,
   GovernanceReviewQueueRun,
   GovernanceReviewResolution,
   GovernanceReviewRecommendation,
@@ -460,4 +465,28 @@ export function getGovernanceAutoResolutionRecords() {
 
 export function getGovernanceAutoResolutionSummary() {
   return requestJson<GovernanceAutoResolutionSummary>('/api/mission-control/governance-auto-resolution-summary/');
+}
+
+export function runGovernanceBacklogPressureReview() {
+  return requestJson<GovernanceBacklogPressureRun>('/api/mission-control/run-governance-backlog-pressure-review/', { method: 'POST', body: '{}' });
+}
+
+export function getGovernanceBacklogPressureRuns() {
+  return requestJson<GovernanceBacklogPressureRun[]>('/api/mission-control/governance-backlog-pressure-runs/');
+}
+
+export function getGovernanceBacklogPressureSnapshots() {
+  return requestJson<GovernanceBacklogPressureSnapshot[]>('/api/mission-control/governance-backlog-pressure-snapshots/');
+}
+
+export function getGovernanceBacklogPressureDecisions() {
+  return requestJson<GovernanceBacklogPressureDecision[]>('/api/mission-control/governance-backlog-pressure-decisions/');
+}
+
+export function getGovernanceBacklogPressureRecommendations() {
+  return requestJson<GovernanceBacklogPressureRecommendation[]>('/api/mission-control/governance-backlog-pressure-recommendations/');
+}
+
+export function getGovernanceBacklogPressureSummary() {
+  return requestJson<GovernanceBacklogPressureSummary>('/api/mission-control/governance-backlog-pressure-summary/');
 }

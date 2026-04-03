@@ -903,3 +903,75 @@ export type GovernanceAutoResolutionSummary = {
   };
   decision_breakdown: Record<string, number>;
 };
+
+export type GovernanceBacklogPressureRun = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  considered_item_count: number;
+  high_priority_item_count: number;
+  overdue_item_count: number;
+  blocked_stale_count: number;
+  followup_due_count: number;
+  metadata: Record<string, unknown>;
+};
+
+export type GovernanceBacklogPressureSnapshot = {
+  id: number;
+  linked_pressure_run: number | null;
+  open_item_count: number;
+  in_review_count: number;
+  p1_count: number;
+  p2_count: number;
+  overdue_count: number;
+  stale_blocked_count: number;
+  followup_due_count: number;
+  pressure_state: 'NORMAL' | 'CAUTION' | 'HIGH' | 'CRITICAL';
+  snapshot_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type GovernanceBacklogPressureDecision = {
+  id: number;
+  linked_pressure_snapshot: number;
+  decision_type: 'KEEP_BACKLOG_PRESSURE_NORMAL' | 'ELEVATE_RUNTIME_CAUTION_SIGNAL' | 'ELEVATE_MONITOR_ONLY_BIAS' | 'REQUIRE_MANUAL_BACKLOG_REVIEW';
+  decision_status: 'PROPOSED' | 'APPLIED' | 'SKIPPED' | 'BLOCKED';
+  decision_summary: string;
+  reason_codes: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type GovernanceBacklogPressureRecommendation = {
+  id: number;
+  linked_pressure_snapshot: number | null;
+  linked_pressure_decision: number | null;
+  recommendation_type: 'KEEP_BACKLOG_STABLE' | 'REDUCE_RUNTIME_INTENSITY_FOR_BACKLOG' | 'INCREASE_MANUAL_REVIEW_URGENCY' | 'REQUIRE_BACKLOG_CLEARING';
+  rationale: string;
+  confidence: number;
+  blockers: string[];
+  created_at: string;
+};
+
+export type GovernanceBacklogPressureSummary = {
+  latest_run_id: number | null;
+  governance_backlog_pressure_state: 'NORMAL' | 'CAUTION' | 'HIGH' | 'CRITICAL';
+  latest_snapshot_id: number | null;
+  latest_decision_id: number | null;
+  latest_recommendation_id: number | null;
+  totals: {
+    runs: number;
+    snapshots: number;
+    decisions: number;
+    recommendations: number;
+  };
+  latest_counts: {
+    considered_item_count: number;
+    high_priority_item_count: number;
+    overdue_item_count: number;
+    blocked_stale_count: number;
+    followup_due_count: number;
+  };
+};

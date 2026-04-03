@@ -1,5 +1,21 @@
 # market-trading-bot
 
+## Governance backlog pressure bridge (new)
+
+`mission_control` now includes a compact **governance backlog pressure** layer that converts human governance queue load into a conservative runtime signal:
+
+`governance queue backlog → pressure snapshot → pressure decision → recommendation → runtime posture input`
+
+What it does:
+- measures OPEN/IN_REVIEW volume, P1/P2 concentration, overdue manual-review load, stale blocked persistence, and follow-up due backlog
+- emits auditable pressure artifacts (run, snapshot, decision, recommendation)
+- provides `governance_backlog_pressure_state` for conservative runtime posture input
+
+What it does **not** do:
+- does not auto-resolve queue items
+- does not replace `mission_control`, `runtime_governor`, `portfolio_governor`, `risk_agent`, or `autonomous_trader`
+- remains paper-only (no live trading, no real money, no LLM final authority)
+
 Professional initial scaffold for a modular prediction markets intelligence and paper-trading platform. This version is intentionally limited to project structure, local development tooling, a professional frontend shell, and a minimal backend healthcheck.
 
 ## Current scope

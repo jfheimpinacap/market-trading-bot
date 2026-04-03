@@ -2,6 +2,16 @@
 
 Frontend local-first para `market-trading-bot`, construido con React + Vite + TypeScript.
 
+## Mission control governance backlog pressure UX (new)
+
+La vista `/mission-control` ahora incluye la sección **Governance Backlog Pressure** (sin pantalla nueva):
+
+- acción manual: `Run backlog pressure review`
+- summary cards con `governance_backlog_pressure_state` y métricas de backlog (considered, high-priority, overdue, stale blocked, follow-up due)
+- listas auditables de snapshots, decisions y recommendations
+
+Esta capa convierte backlog humano en señal conservadora para runtime, sin resolver items ni reemplazar autoridades existentes. Se mantiene paper-only, sin live trading y sin dinero real.
+
 ## Mission control autonomous session UX (new)
 
 La vista `/mission-control` ahora incluye una sección explícita de **Autonomous Session Control** para operación persistente gobernada:
