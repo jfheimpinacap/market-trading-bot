@@ -56,6 +56,24 @@ La vista `/runtime` ahora incluye una sección técnica de **Runtime Feedback** 
 
 Esta capa visualiza performance agregada y recomendaciones de endurecer/relajar postura global sin reemplazar runtime_governor, mission_control ni portfolio/risk/safety/incident authorities.
 
+## Runtime feedback apply UX (new)
+
+La vista `/runtime` ahora incluye sección **Runtime Feedback Apply** para cerrar el loop de forma conservadora y auditable:
+
+- acción manual: `Run runtime feedback apply review`
+- acción por fila: `Apply feedback decision`
+- summary cards:
+  - apply runs / decisions / records / recommendations
+  - applied / manual review / blocked
+  - enforcement refresh count
+- paneles técnicos:
+  - apply decisions
+  - apply records
+  - apply recommendations
+  - apply runs
+
+Esta UI no habilita trading real ni reemplaza autoridades existentes; solo supervisa el puente feedback → mode → enforcement dentro del scope local-first, single-user, paper-only.
+
 ## Mission control autonomous runner UX (new)
 
 `/mission-control` ahora también expone una sección de **Autonomous Runner** para autoavance local de sesiones activas:

@@ -495,6 +495,125 @@ class RuntimeFeedbackRecommendation(TimeStampedModel):
         ordering = ['-created_at', '-id']
 
 
+class RuntimeFeedbackApplyType(models.TextChoices):
+    APPLY_KEEP_CURRENT_MODE = 'APPLY_KEEP_CURRENT_MODE', 'Apply keep current mode'
+    APPLY_SHIFT_TO_CAUTION = 'APPLY_SHIFT_TO_CAUTION', 'Apply shift to caution'
+    APPLY_SHIFT_TO_MONITOR_ONLY = 'APPLY_SHIFT_TO_MONITOR_ONLY', 'Apply shift to monitor only'
+    APPLY_ENTER_RECOVERY_MODE = 'APPLY_ENTER_RECOVERY_MODE', 'Apply enter recovery mode'
+    APPLY_RELAX_TO_CAUTION = 'APPLY_RELAX_TO_CAUTION', 'Apply relax to caution'
+    APPLY_MANUAL_REVIEW_ONLY = 'APPLY_MANUAL_REVIEW_ONLY', 'Apply manual review only'
+
+
+class RuntimeFeedbackApplyStatus(models.TextChoices):
+    PROPOSED = 'PROPOSED', 'Proposed'
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+
+
+class RuntimeFeedbackApplyRecordStatus(models.TextChoices):
+    APPLIED = 'APPLIED', 'Applied'
+    SKIPPED = 'SKIPPED', 'Skipped'
+    BLOCKED = 'BLOCKED', 'Blocked'
+    FAILED = 'FAILED', 'Failed'
+
+
+class RuntimeFeedbackApplyRecommendationType(models.TextChoices):
+    APPLY_FEEDBACK_NOW = 'APPLY_FEEDBACK_NOW', 'Apply feedback now'
+    KEEP_AS_ADVISORY_ONLY = 'KEEP_AS_ADVISORY_ONLY', 'Keep as advisory only'
+    REFRESH_ENFORCEMENT_AFTER_MODE_SWITCH = 'REFRESH_ENFORCEMENT_AFTER_MODE_SWITCH', 'Refresh enforcement after mode switch'
+    BLOCK_AUTOMATIC_FEEDBACK_APPLY = 'BLOCK_AUTOMATIC_FEEDBACK_APPLY', 'Block automatic feedback apply'
+    REQUIRE_MANUAL_FEEDBACK_APPLY_REVIEW = 'REQUIRE_MANUAL_FEEDBACK_APPLY_REVIEW', 'Require manual feedback apply review'
+
+
+class RuntimeFeedbackApplyRun(TimeStampedModel):
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    considered_feedback_decision_count = models.PositiveIntegerField(default=0)
+    applied_count = models.PositiveIntegerField(default=0)
+    manual_review_count = models.PositiveIntegerField(default=0)
+    blocked_count = models.PositiveIntegerField(default=0)
+    mode_switch_count = models.PositiveIntegerField(default=0)
+    enforcement_refresh_count = models.PositiveIntegerField(default=0)
+    recommendation_summary = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at', '-id']
+
+
+class RuntimeFeedbackApplyDecision(TimeStampedModel):
+    linked_feedback_decision = models.ForeignKey(
+        RuntimeFeedbackDecision,
+        on_delete=models.CASCADE,
+        related_name='apply_decisions',
+    )
+    linked_apply_run = models.ForeignKey(
+        RuntimeFeedbackApplyRun,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='apply_decisions',
+    )
+    current_mode = models.CharField(max_length=24, choices=GlobalOperatingMode.choices, null=True, blank=True)
+    target_mode = models.CharField(max_length=24, choices=GlobalOperatingMode.choices, null=True, blank=True)
+    apply_type = models.CharField(max_length=40, choices=RuntimeFeedbackApplyType.choices)
+    apply_status = models.CharField(max_length=12, choices=RuntimeFeedbackApplyStatus.choices, default=RuntimeFeedbackApplyStatus.PROPOSED)
+    auto_applicable = models.BooleanField(default=False)
+    apply_summary = models.CharField(max_length=255, blank=True)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class RuntimeFeedbackApplyRecord(TimeStampedModel):
+    linked_apply_decision = models.ForeignKey(
+        RuntimeFeedbackApplyDecision,
+        on_delete=models.CASCADE,
+        related_name='apply_records',
+    )
+    record_status = models.CharField(max_length=12, choices=RuntimeFeedbackApplyRecordStatus.choices)
+    previous_mode = models.CharField(max_length=24, choices=GlobalOperatingMode.choices, null=True, blank=True)
+    applied_mode = models.CharField(max_length=24, choices=GlobalOperatingMode.choices, null=True, blank=True)
+    enforcement_refreshed = models.BooleanField(default=False)
+    record_summary = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class RuntimeFeedbackApplyRecommendation(TimeStampedModel):
+    recommendation_type = models.CharField(max_length=56, choices=RuntimeFeedbackApplyRecommendationType.choices)
+    target_feedback_decision = models.ForeignKey(
+        RuntimeFeedbackDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='apply_recommendations',
+    )
+    target_apply_decision = models.ForeignKey(
+        RuntimeFeedbackApplyDecision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='recommendations',
+    )
+    rationale = models.CharField(max_length=255)
+    reason_codes = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.5)
+    blockers = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
 class GlobalModeEnforcementRun(TimeStampedModel):
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)

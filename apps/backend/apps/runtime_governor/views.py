@@ -17,6 +17,10 @@ from apps.runtime_governor.models import (
     GlobalModeEnforcementRecommendation,
     RuntimeDiagnosticReview,
     RuntimeFeedbackDecision,
+    RuntimeFeedbackApplyDecision,
+    RuntimeFeedbackApplyRecommendation,
+    RuntimeFeedbackApplyRecord,
+    RuntimeFeedbackApplyRun,
     RuntimeFeedbackRecommendation,
     RuntimeFeedbackRun,
     RuntimePerformanceSnapshot,
@@ -38,9 +42,14 @@ from apps.runtime_governor.serializers import (
     RunRuntimeFeedbackReviewSerializer,
     RuntimeDiagnosticReviewSerializer,
     RuntimeFeedbackDecisionSerializer,
+    RuntimeFeedbackApplyDecisionSerializer,
+    RuntimeFeedbackApplyRecommendationSerializer,
+    RuntimeFeedbackApplyRecordSerializer,
+    RuntimeFeedbackApplyRunSerializer,
     RuntimeFeedbackRecommendationSerializer,
     RuntimeFeedbackRunSerializer,
     RuntimePerformanceSnapshotSerializer,
+    RunRuntimeFeedbackApplyReviewSerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -53,9 +62,13 @@ from apps.runtime_governor.services import (
 )
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
-    apply_runtime_feedback_decision,
     get_runtime_feedback_summary,
     run_runtime_feedback_review,
+)
+from apps.runtime_governor.runtime_feedback_apply.services import (
+    apply_feedback_decision_by_id,
+    get_runtime_feedback_apply_summary,
+    run_runtime_feedback_apply_review,
 )
 
 
@@ -421,5 +434,78 @@ class ApplyRuntimeFeedbackDecisionView(APIView):
 
     def post(self, request, decision_id: int, *args, **kwargs):
         decision = get_object_or_404(RuntimeFeedbackDecision, pk=decision_id)
-        apply_runtime_feedback_decision(decision=decision)
-        return Response(RuntimeFeedbackDecisionSerializer(decision).data, status=status.HTTP_200_OK)
+        result = apply_feedback_decision_by_id(feedback_decision=decision, triggered_by='runtime-page-manual')
+        return Response(
+            {
+                'apply_decision': RuntimeFeedbackApplyDecisionSerializer(result['apply_decision']).data,
+                'apply_record': RuntimeFeedbackApplyRecordSerializer(result['apply_record']).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class RunRuntimeFeedbackApplyReviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RunRuntimeFeedbackApplyReviewSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = run_runtime_feedback_apply_review(
+            triggered_by=serializer.validated_data.get('triggered_by') or 'operator-ui',
+            auto_apply=serializer.validated_data.get('auto_apply', False),
+        )
+        return Response(
+            {
+                'run_id': result['run'].id,
+                'considered_feedback_decision_count': result['run'].considered_feedback_decision_count,
+                'apply_decision_count': len(result['apply_decisions']),
+                'apply_record_count': len(result['apply_records']),
+                'recommendation_count': len(result['recommendations']),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class RuntimeFeedbackApplyRunListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RuntimeFeedbackApplyRunSerializer
+
+    def get_queryset(self):
+        return RuntimeFeedbackApplyRun.objects.order_by('-started_at', '-id')[:200]
+
+
+class RuntimeFeedbackApplyDecisionListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RuntimeFeedbackApplyDecisionSerializer
+
+    def get_queryset(self):
+        return RuntimeFeedbackApplyDecision.objects.select_related('linked_feedback_decision').order_by('-created_at', '-id')[:300]
+
+
+class RuntimeFeedbackApplyRecordListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RuntimeFeedbackApplyRecordSerializer
+
+    def get_queryset(self):
+        return RuntimeFeedbackApplyRecord.objects.select_related('linked_apply_decision').order_by('-created_at', '-id')[:300]
+
+
+class RuntimeFeedbackApplyRecommendationListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RuntimeFeedbackApplyRecommendationSerializer
+
+    def get_queryset(self):
+        return RuntimeFeedbackApplyRecommendation.objects.select_related('target_feedback_decision', 'target_apply_decision').order_by('-created_at', '-id')[:300]
+
+
+class RuntimeFeedbackApplySummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        return Response(get_runtime_feedback_apply_summary(), status=status.HTTP_200_OK)

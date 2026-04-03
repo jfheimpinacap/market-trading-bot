@@ -11,6 +11,10 @@ from apps.runtime_governor.models import (
     GlobalModeEnforcementDecision,
     GlobalModeEnforcementRecommendation,
     RuntimeFeedbackDecision,
+    RuntimeFeedbackApplyDecision,
+    RuntimeFeedbackApplyRecommendation,
+    RuntimeFeedbackApplyRecord,
+    RuntimeFeedbackApplyRun,
     RuntimeFeedbackRecommendation,
     RuntimeFeedbackRun,
     RuntimePerformanceSnapshot,
@@ -142,4 +146,33 @@ class RuntimeFeedbackDecisionSerializer(serializers.ModelSerializer):
 class RuntimeFeedbackRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackRecommendation
+        fields = '__all__'
+
+
+class RunRuntimeFeedbackApplyReviewSerializer(serializers.Serializer):
+    triggered_by = serializers.CharField(required=False, allow_blank=True, default='operator-ui')
+    auto_apply = serializers.BooleanField(required=False, default=False)
+
+
+class RuntimeFeedbackApplyRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RuntimeFeedbackApplyRun
+        fields = '__all__'
+
+
+class RuntimeFeedbackApplyDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RuntimeFeedbackApplyDecision
+        fields = '__all__'
+
+
+class RuntimeFeedbackApplyRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RuntimeFeedbackApplyRecord
+        fields = '__all__'
+
+
+class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RuntimeFeedbackApplyRecommendation
         fields = '__all__'
