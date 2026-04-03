@@ -10,6 +10,7 @@ from apps.mission_control.models import (
     GovernanceReviewItemStatus,
     GovernanceReviewPriority,
 )
+from apps.runtime_governor.tuning_profiles import get_runtime_conservative_tuning_profile
 
 
 @dataclass
@@ -17,6 +18,7 @@ class BacklogPressureAssessment:
     open_item_count: int
     overdue_count: int
     overdue_p1_count: int
+    followup_due_count: int
     stale_blocked_count: int
     persistent_stale_blocked_count: int
     pressure_score: int
@@ -35,6 +37,7 @@ def _is_persistent_stale_blocked(*, item_id: int) -> bool:
 
 
 def assess_backlog_pressure() -> BacklogPressureAssessment:
+    tuning = get_runtime_conservative_tuning_profile()
     open_items = GovernanceReviewItem.objects.filter(
         item_status__in=[GovernanceReviewItemStatus.OPEN, GovernanceReviewItemStatus.IN_REVIEW],
     )
@@ -53,16 +56,26 @@ def assess_backlog_pressure() -> BacklogPressureAssessment:
         linked_review_item__in=open_items,
         aging_status='STALE_BLOCKED',
     )
+    followup_due_count = GovernanceQueueAgingReview.objects.filter(
+        linked_review_item__in=open_items,
+        aging_status='FOLLOWUP_DUE',
+    ).values('linked_review_item_id').distinct().count()
     stale_blocked_item_ids = set(stale_blocked_reviews.values_list('linked_review_item_id', flat=True))
     persistent_stale_blocked_count = sum(1 for item_id in stale_blocked_item_ids if _is_persistent_stale_blocked(item_id=item_id))
 
     overdue_count = overdue_items.count()
     stale_blocked_count = len(stale_blocked_item_ids)
-    pressure_score = (overdue_count * 2) + (overdue_p1_count * 3) + stale_blocked_count + (persistent_stale_blocked_count * 2)
+    pressure_score = (
+        (overdue_count * tuning.overdue_weight)
+        + (overdue_p1_count * tuning.overdue_p1_weight)
+        + (stale_blocked_count * tuning.stale_blocked_weight)
+        + (persistent_stale_blocked_count * tuning.persistent_stale_blocked_weight)
+        + (followup_due_count * tuning.followup_due_weight)
+    )
 
-    if overdue_p1_count >= 2 or overdue_count >= 6 or persistent_stale_blocked_count >= 2 or pressure_score >= 16:
+    if overdue_p1_count >= 2 or overdue_count >= 6 or persistent_stale_blocked_count >= 2 or pressure_score >= tuning.backlog_high_threshold:
         state = GovernanceBacklogPressureState.HIGH
-    elif overdue_p1_count >= 1 or overdue_count >= 2 or stale_blocked_count >= 1 or pressure_score >= 6:
+    elif overdue_p1_count >= 1 or overdue_count >= 2 or stale_blocked_count >= 1 or pressure_score >= tuning.backlog_caution_threshold:
         state = GovernanceBacklogPressureState.CAUTION
     else:
         state = GovernanceBacklogPressureState.NORMAL
@@ -72,6 +85,8 @@ def assess_backlog_pressure() -> BacklogPressureAssessment:
         reason_codes.append(f'OVERDUE_ITEMS:{overdue_count}')
     if overdue_p1_count:
         reason_codes.append(f'OVERDUE_P1:{overdue_p1_count}')
+    if followup_due_count:
+        reason_codes.append(f'FOLLOWUP_DUE:{followup_due_count}')
     if stale_blocked_count:
         reason_codes.append(f'STALE_BLOCKED:{stale_blocked_count}')
     if persistent_stale_blocked_count:
@@ -89,6 +104,7 @@ def assess_backlog_pressure() -> BacklogPressureAssessment:
         open_item_count=open_items.count(),
         overdue_count=overdue_count,
         overdue_p1_count=overdue_p1_count,
+        followup_due_count=followup_due_count,
         stale_blocked_count=stale_blocked_count,
         persistent_stale_blocked_count=persistent_stale_blocked_count,
         pressure_score=pressure_score,
@@ -96,11 +112,18 @@ def assess_backlog_pressure() -> BacklogPressureAssessment:
         snapshot_summary=summary,
         reason_codes=reason_codes,
         metadata={
+            'tuning_profile': tuning.profile_name,
+            'thresholds': {
+                'caution': tuning.backlog_caution_threshold,
+                'high': tuning.backlog_high_threshold,
+                'critical': tuning.backlog_critical_threshold,
+            },
             'weights': {
-                'overdue': 2,
-                'overdue_p1': 3,
-                'stale_blocked': 1,
-                'persistent_stale_blocked': 2,
+                'overdue': tuning.overdue_weight,
+                'overdue_p1': tuning.overdue_p1_weight,
+                'stale_blocked': tuning.stale_blocked_weight,
+                'persistent_stale_blocked': tuning.persistent_stale_blocked_weight,
+                'followup_due': tuning.followup_due_weight,
             },
         },
     )

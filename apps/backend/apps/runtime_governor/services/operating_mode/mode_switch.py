@@ -15,6 +15,7 @@ from apps.runtime_governor.models import (
     RuntimeModeState,
 )
 from apps.runtime_governor.services.state import get_runtime_state
+from apps.runtime_governor.tuning_profiles import get_runtime_conservative_tuning_profile
 
 GLOBAL_MODE_METADATA_KEY = 'global_operating_mode'
 
@@ -31,6 +32,7 @@ def get_active_global_operating_mode() -> str:
 
 
 def _with_hysteresis(*, current_mode: str, proposed_mode: str, snapshot: GlobalRuntimePostureSnapshot) -> str:
+    tuning = get_runtime_conservative_tuning_profile()
     governance_backlog_pressure_state = str(
         ((snapshot.metadata or {}).get('linked_models') or {}).get('governance_backlog_pressure_state') or 'NORMAL'
     ).upper()
@@ -48,12 +50,13 @@ def _with_hysteresis(*, current_mode: str, proposed_mode: str, snapshot: GlobalR
         GlobalOperatingMode.BALANCED,
         GlobalOperatingMode.MONITOR_ONLY,
     }:
-        if governance_backlog_pressure_state == 'CRITICAL':
+        if governance_backlog_pressure_state == 'CRITICAL' and tuning.critical_backlog_blocks_relax:
             return current_mode
     return proposed_mode
 
 
 def _derive_target_mode(snapshot: GlobalRuntimePostureSnapshot) -> tuple[str, str, bool, list[str]]:
+    tuning = get_runtime_conservative_tuning_profile()
     reason_codes = list(snapshot.reason_codes or [])
     governance_backlog_pressure_state = str(
         ((snapshot.metadata or {}).get('linked_models') or {}).get('governance_backlog_pressure_state') or 'NORMAL'
@@ -94,6 +97,8 @@ def _derive_target_mode(snapshot: GlobalRuntimePostureSnapshot) -> tuple[str, st
     if governance_backlog_pressure_state == 'CAUTION':
         return GlobalOperatingMode.CAUTION, GlobalOperatingModeDecisionType.SWITCH_TO_CAUTION, True, reason_codes + ['backlog_caution_bias']
     if governance_backlog_pressure_state == 'HIGH':
+        if tuning.high_backlog_manual_review_bias:
+            reason_codes.append('backlog_high_manual_review_bias')
         return (
             GlobalOperatingMode.THROTTLED,
             GlobalOperatingModeDecisionType.SWITCH_TO_THROTTLED,
@@ -101,6 +106,8 @@ def _derive_target_mode(snapshot: GlobalRuntimePostureSnapshot) -> tuple[str, st
             reason_codes + ['backlog_high_reduce_admission_and_cadence'],
         )
     if governance_backlog_pressure_state == 'CRITICAL':
+        if tuning.critical_backlog_monitor_only_bias:
+            reason_codes.append('backlog_critical_monitor_only_bias')
         return (
             GlobalOperatingMode.MONITOR_ONLY,
             GlobalOperatingModeDecisionType.REQUIRE_MANUAL_MODE_REVIEW,
@@ -135,6 +142,7 @@ def build_downstream_influence(*, mode: str) -> dict:
 
 @transaction.atomic
 def decide_and_optionally_apply_mode(*, snapshot: GlobalRuntimePostureSnapshot, auto_apply: bool = True) -> OperatingModeReviewResult:
+    tuning = get_runtime_conservative_tuning_profile()
     current_mode = get_active_global_operating_mode()
     target_mode, decision_type, auto_applicable, reason_codes = _derive_target_mode(snapshot)
     target_mode = _with_hysteresis(current_mode=current_mode, proposed_mode=target_mode, snapshot=snapshot)
@@ -164,6 +172,7 @@ def decide_and_optionally_apply_mode(*, snapshot: GlobalRuntimePostureSnapshot, 
         metadata={
             'downstream_influence': build_downstream_influence(mode=target_mode),
             'governance_backlog_pressure_state': governance_backlog_pressure_state,
+            'tuning_profile': tuning.profile_name,
         },
     )
 

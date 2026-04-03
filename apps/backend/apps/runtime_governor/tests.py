@@ -3,6 +3,8 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 from django.utils import timezone
 from datetime import timedelta
+from dataclasses import replace
+from unittest.mock import patch
 
 from apps.readiness_lab.models import ReadinessAssessmentRun, ReadinessProfile, ReadinessStatus
 from apps.runtime_governor.models import (
@@ -23,6 +25,7 @@ from apps.runtime_governor.models import (
 )
 from apps.runtime_governor.services import get_capabilities_for_current_mode, get_runtime_state, set_runtime_mode
 from apps.runtime_governor.services.operating_mode.mode_switch import GLOBAL_MODE_METADATA_KEY
+from apps.runtime_governor.tuning_profiles import DEFAULT_CONSERVATIVE_TUNING_PROFILE
 from apps.mission_control.models import AutonomousRuntimeSession, AutonomousRuntimeSessionStatus, AutonomousSessionHealthSnapshot, AutonomousSessionHealthStatus
 from apps.mission_control.models import GovernanceBacklogPressureSnapshot
 from apps.mission_control.services.session_timing.timing import evaluate_session_timing
@@ -363,6 +366,16 @@ class RuntimeGovernorTests(TestCase):
         self.assertEqual(decision.decision_type, 'REDUCE_ADMISSION_AND_CADENCE')
         self.assertIn('backlog_high_relaxation_guard', decision.reason_codes)
 
+    def test_runtime_feedback_high_manual_review_bias_uses_tuning_profile(self):
+        self._seed_governance_backlog_pressure('HIGH')
+        with patch(
+            'apps.runtime_governor.runtime_feedback.services.feedback.get_runtime_conservative_tuning_profile',
+            return_value=replace(DEFAULT_CONSERVATIVE_TUNING_PROFILE, high_backlog_manual_review_bias=False),
+        ):
+            self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        decision = RuntimeFeedbackDecision.objects.order_by('-created_at', '-id').first()
+        self.assertNotIn('backlog_high_manual_review_bias', decision.reason_codes)
+
     def test_runtime_feedback_backlog_critical_biases_manual_review_or_monitor_only(self):
         self._seed_governance_backlog_pressure('CRITICAL')
         self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
@@ -486,6 +499,36 @@ class RuntimeGovernorTests(TestCase):
         self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
         decision = RuntimeModeTransitionDecision.objects.order_by('-created_at', '-id').first()
         self.assertIn(decision.decision_type, {'DEFER_MODE_SWITCH', 'KEEP_CURRENT_MODE_FOR_DWELL'})
+
+    def test_mode_stabilization_high_dwell_multiplier_uses_tuning_profile(self):
+        self._seed_governance_backlog_pressure('HIGH')
+        state = get_runtime_state()
+        state.metadata = {**(state.metadata or {}), GLOBAL_MODE_METADATA_KEY: 'RECOVERY_MODE'}
+        state.save(update_fields=['metadata', 'updated_at'])
+        state.__class__.objects.filter(pk=state.pk).update(updated_at=timezone.now() - timedelta(minutes=31))
+        self._create_feedback_decision('RELAX_TO_CAUTION', backlog_pressure_state='HIGH')
+        with patch(
+            'apps.runtime_governor.services.stability_review.get_runtime_conservative_tuning_profile',
+            return_value=replace(DEFAULT_CONSERVATIVE_TUNING_PROFILE, high_backlog_relax_dwell_multiplier=1.0),
+        ):
+            self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
+        review = RuntimeModeStabilityReview.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(review.review_type, 'SAFE_RELAXATION_WINDOW')
+
+    def test_mode_stabilization_critical_relax_block_uses_tuning_profile(self):
+        self._seed_governance_backlog_pressure('CRITICAL')
+        state = get_runtime_state()
+        state.metadata = {**(state.metadata or {}), GLOBAL_MODE_METADATA_KEY: 'RECOVERY_MODE'}
+        state.save(update_fields=['metadata', 'updated_at'])
+        state.__class__.objects.filter(pk=state.pk).update(updated_at=timezone.now() - timedelta(hours=1))
+        self._create_feedback_decision('RELAX_TO_CAUTION', backlog_pressure_state='CRITICAL')
+        with patch(
+            'apps.runtime_governor.services.stability_review.get_runtime_conservative_tuning_profile',
+            return_value=replace(DEFAULT_CONSERVATIVE_TUNING_PROFILE, critical_backlog_blocks_relax=False),
+        ):
+            self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
+        review = RuntimeModeStabilityReview.objects.order_by('-created_at', '-id').first()
+        self.assertEqual(review.review_type, 'SAFE_RELAXATION_WINDOW')
 
     def test_mode_stabilization_flapping_risk_blocks_or_defers(self):
         from apps.runtime_governor.models import RuntimeFeedbackApplyDecision, RuntimeFeedbackApplyRecord

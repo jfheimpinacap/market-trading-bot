@@ -181,6 +181,8 @@ Backlog-pressure integration was tightened in this delta:
 
 This remains conservative, transparent, paper-only, and does not replace existing authorities.
 
+Runtime conservative tuning is now centralized in `apps/backend/apps/runtime_governor/tuning_profiles.py` so backlog-pressure thresholds/weights and backlog-driven relax/manual-review/monitor-only biases are explicit and adjustable without redesign. Default behavior remains conservative and paper-only; this is tuning readability, not live-trading scope expansion.
+
 ### Runtime feedback apply bridge / closed-loop tuning (new)
 
 `runtime_governor` now closes the loop from runtime feedback into conservative global posture adjustment:

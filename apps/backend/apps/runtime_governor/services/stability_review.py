@@ -6,6 +6,7 @@ from apps.runtime_governor.models import (
     RuntimeModeStabilityReviewType,
     RuntimeModeTransitionSnapshot,
 )
+from apps.runtime_governor.tuning_profiles import get_runtime_conservative_tuning_profile
 
 MIN_DWELL_SECONDS = 600
 RELAXATION_DWELL_SECONDS = 1800
@@ -25,14 +26,15 @@ def _is_relaxation(snapshot: RuntimeModeTransitionSnapshot) -> bool:
 
 
 def build_runtime_mode_stability_review(*, transition_snapshot: RuntimeModeTransitionSnapshot) -> RuntimeModeStabilityReview:
+    tuning = get_runtime_conservative_tuning_profile()
     reason_codes = list(transition_snapshot.reason_codes or [])
     is_relaxation = bool((transition_snapshot.metadata or {}).get('is_relaxation')) or _is_relaxation(transition_snapshot)
     governance_backlog_pressure_state = str((transition_snapshot.metadata or {}).get('governance_backlog_pressure_state') or 'NORMAL').upper()
     effective_relaxation_dwell_seconds = RELAXATION_DWELL_SECONDS
     if governance_backlog_pressure_state == 'HIGH':
-        effective_relaxation_dwell_seconds = RELAXATION_DWELL_SECONDS + 900
+        effective_relaxation_dwell_seconds = int(RELAXATION_DWELL_SECONDS * tuning.high_backlog_relax_dwell_multiplier)
     elif governance_backlog_pressure_state == 'CRITICAL':
-        effective_relaxation_dwell_seconds = RELAXATION_DWELL_SECONDS + 1800
+        effective_relaxation_dwell_seconds = int(RELAXATION_DWELL_SECONDS * tuning.critical_backlog_relax_dwell_multiplier)
 
     review_type = RuntimeModeStabilityReviewType.STABLE_TRANSITION
     severity = RuntimeModeStabilityReviewSeverity.INFO
@@ -48,7 +50,7 @@ def build_runtime_mode_stability_review(*, transition_snapshot: RuntimeModeTrans
         severity = RuntimeModeStabilityReviewSeverity.INFO
         reason_codes.append('safe_recovery_entry')
         review_summary = 'Escalation into protective mode is considered safe to allow quickly.'
-    elif governance_backlog_pressure_state == 'CRITICAL' and is_relaxation:
+    elif governance_backlog_pressure_state == 'CRITICAL' and is_relaxation and tuning.critical_backlog_blocks_relax:
         review_type = RuntimeModeStabilityReviewType.EARLY_RELAX_ATTEMPT
         severity = RuntimeModeStabilityReviewSeverity.CRITICAL
         reason_codes.append('backlog_critical_relaxation_block')
@@ -85,5 +87,6 @@ def build_runtime_mode_stability_review(*, transition_snapshot: RuntimeModeTrans
             'effective_relaxation_dwell_seconds': effective_relaxation_dwell_seconds,
             'is_relaxation': is_relaxation,
             'governance_backlog_pressure_state': governance_backlog_pressure_state,
+            'tuning_profile': tuning.profile_name,
         },
     )
