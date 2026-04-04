@@ -39,6 +39,8 @@ import type {
   RuntimeTuningContextDriftSummary,
   RuntimeTuningContextDiff,
   RuntimeTuningHistoryQuery,
+  RuntimeTuningRunCorrelation,
+  RuntimeTuningRunCorrelationQuery,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -255,4 +257,8 @@ export function getRuntimeTuningContextDriftSummary() {
 
 export function getRuntimeTuningContextDiffs(query: RuntimeTuningHistoryQuery = {}) {
   return requestJson<RuntimeTuningContextDiff[]>(`/api/runtime-governor/tuning-context-diffs/${buildQueryString(query)}`);
+}
+
+export function getRuntimeTuningRunCorrelations(query: RuntimeTuningRunCorrelationQuery = {}) {
+  return requestJson<RuntimeTuningRunCorrelation[]>(`/api/runtime-governor/tuning-run-correlations/${buildQueryString(query)}`);
 }

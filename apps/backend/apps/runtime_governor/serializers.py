@@ -243,6 +243,17 @@ class RuntimeTuningContextDiffSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField(required=False, allow_null=True)
 
 
+class RuntimeTuningRunCorrelationSerializer(serializers.Serializer):
+    source_scope = serializers.CharField()
+    source_run_id = serializers.IntegerField(allow_null=True)
+    tuning_snapshot_id = serializers.IntegerField()
+    tuning_profile_name = serializers.CharField()
+    tuning_profile_fingerprint = serializers.CharField()
+    drift_status = serializers.CharField()
+    run_created_at = serializers.DateTimeField(required=False, allow_null=True)
+    correlation_summary = serializers.CharField()
+
+
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecommendation

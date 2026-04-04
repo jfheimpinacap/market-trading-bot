@@ -12,10 +12,13 @@ from apps.runtime_governor.models import (
     GlobalModeEnforcementRun,
     GlobalModeModuleImpact,
     GlobalOperatingModeDecision,
+    GlobalRuntimePostureRun,
     RuntimeFeedbackApplyDecision,
     RuntimeFeedbackApplyRecord,
     RuntimeFeedbackDecision,
     RuntimeFeedbackRecommendation,
+    RuntimeFeedbackRun,
+    RuntimeModeStabilizationRun,
     RuntimeModeStabilityReview,
     RuntimeModeTransitionApplyRecord,
     RuntimeModeTransitionDecision,
@@ -611,6 +614,109 @@ class RuntimeGovernorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(len(payload), 2)
+
+    def test_tuning_run_correlation_supports_runtime_feedback_run(self):
+        feedback_run = RuntimeFeedbackRun.objects.create()
+        snapshot = RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=feedback_run.id,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-feedback',
+            tuning_profile_summary='feedback',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='first',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_run_correlations'), {'source_scope': 'runtime_feedback'})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]['source_scope'], 'runtime_feedback')
+        self.assertEqual(payload[0]['source_run_id'], feedback_run.id)
+        self.assertEqual(payload[0]['tuning_snapshot_id'], snapshot.id)
+        self.assertIsNotNone(payload[0]['run_created_at'])
+
+    def test_tuning_run_correlation_supports_operating_mode_run(self):
+        operating_run = GlobalRuntimePostureRun.objects.create()
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='operating_mode',
+            source_run_id=operating_run.id,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-operating',
+            tuning_profile_summary='operating',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='first',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_run_correlations'), {'source_scope': 'operating_mode'})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]['source_scope'], 'operating_mode')
+        self.assertEqual(payload[0]['source_run_id'], operating_run.id)
+
+    def test_tuning_run_correlation_supports_mode_stabilization_run(self):
+        stabilization_run = RuntimeModeStabilizationRun.objects.create()
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_stabilization',
+            source_run_id=stabilization_run.id,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-stabilization',
+            tuning_profile_summary='stabilization',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='first',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_run_correlations'), {'source_scope': 'mode_stabilization'})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]['source_scope'], 'mode_stabilization')
+        self.assertEqual(payload[0]['source_run_id'], stabilization_run.id)
+
+    def test_tuning_run_correlation_supports_mode_enforcement_run(self):
+        enforcement_run = GlobalModeEnforcementRun.objects.create()
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=enforcement_run.id,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-enforcement',
+            tuning_profile_summary='enforcement',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='first',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_run_correlations'), {'source_scope': 'mode_enforcement'})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]['source_scope'], 'mode_enforcement')
+        self.assertEqual(payload[0]['source_run_id'], enforcement_run.id)
+
+    def test_tuning_run_correlation_endpoint_returns_readable_structure(self):
+        feedback_run = RuntimeFeedbackRun.objects.create()
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=feedback_run.id,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-feedback-v1',
+            tuning_profile_summary='feedback',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='first',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_run_correlations'), {'latest_only': 'true', 'limit': 5})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertGreaterEqual(len(payload), 1)
+        self.assertIn('source_scope', payload[0])
+        self.assertIn('source_run_id', payload[0])
+        self.assertIn('tuning_snapshot_id', payload[0])
+        self.assertIn('tuning_profile_name', payload[0])
+        self.assertIn('tuning_profile_fingerprint', payload[0])
+        self.assertIn('drift_status', payload[0])
+        self.assertIn('run_created_at', payload[0])
+        self.assertIn('correlation_summary', payload[0])
 
     def test_mode_enforcement_propagates_to_timing_policy(self):
         session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')

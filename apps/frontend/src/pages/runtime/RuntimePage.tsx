@@ -48,6 +48,7 @@ import {
   getRuntimeTuningContextSnapshots,
   getRuntimeTuningContextDriftSummary,
   getRuntimeTuningContextDiffs,
+  getRuntimeTuningRunCorrelations,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -87,6 +88,7 @@ import type {
   RuntimeTuningContextDiff,
   RuntimeTuningHistoryQuery,
   RuntimeTuningDriftStatus,
+  RuntimeTuningRunCorrelation,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -162,6 +164,7 @@ export function RuntimePage() {
   const [tuningContextSnapshots, setTuningContextSnapshots] = useState<RuntimeTuningContextSnapshot[]>([]);
   const [tuningContextDriftSummary, setTuningContextDriftSummary] = useState<RuntimeTuningContextDriftSummary | null>(null);
   const [tuningContextDiffs, setTuningContextDiffs] = useState<RuntimeTuningContextDiff[]>([]);
+  const [tuningRunCorrelations, setTuningRunCorrelations] = useState<RuntimeTuningRunCorrelation[]>([]);
 
   const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -182,7 +185,7 @@ export function RuntimePage() {
         ...tuningQuery,
         ...(tuningDiffDriftFilter !== 'all' ? { drift_status: tuningDiffDriftFilter } : {}),
       };
-      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes, tuningContextSnapshotsRes, tuningContextDriftSummaryRes, tuningContextDiffsRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes, tuningContextSnapshotsRes, tuningContextDriftSummaryRes, tuningContextDiffsRes, tuningRunCorrelationsRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
@@ -218,6 +221,7 @@ export function RuntimePage() {
         getRuntimeTuningContextSnapshots(tuningQuery),
         getRuntimeTuningContextDriftSummary(),
         getRuntimeTuningContextDiffs(tuningDiffQuery),
+        getRuntimeTuningRunCorrelations(tuningQuery),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
@@ -254,6 +258,7 @@ export function RuntimePage() {
       setTuningContextSnapshots(tuningContextSnapshotsRes);
       setTuningContextDriftSummary(tuningContextDriftSummaryRes);
       setTuningContextDiffs(tuningContextDiffsRes);
+      setTuningRunCorrelations(tuningRunCorrelationsRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load runtime governance.');
     } finally {
@@ -480,6 +485,26 @@ export function RuntimePage() {
                     <td>{row.drift_status}</td>
                     <td>{row.drift_summary}</td>
                     <td>{new Date(row.created_at_snapshot).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <h4>Tuning Run Correlation</h4>
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead><tr><th>Scope</th><th>Run id</th><th>Snapshot id</th><th>Profile</th><th>Fingerprint</th><th>Drift</th><th>Run created</th><th>Summary</th></tr></thead>
+              <tbody>
+                {tuningRunCorrelations.map((row) => (
+                  <tr key={`${row.source_scope}-${row.tuning_snapshot_id}`}>
+                    <td>{row.source_scope}</td>
+                    <td>{row.source_run_id ?? '—'}</td>
+                    <td>{row.tuning_snapshot_id}</td>
+                    <td>{row.tuning_profile_name}</td>
+                    <td>{row.tuning_profile_fingerprint}</td>
+                    <td>{row.drift_status}</td>
+                    <td>{row.run_created_at ? new Date(row.run_created_at).toLocaleString() : '—'}</td>
+                    <td>{row.correlation_summary}</td>
                   </tr>
                 ))}
               </tbody>

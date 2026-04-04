@@ -132,6 +132,17 @@ export type RuntimeTuningContextDiff = {
   created_at?: string | null;
 };
 
+export type RuntimeTuningRunCorrelation = {
+  source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  source_run_id: number | null;
+  tuning_snapshot_id: number;
+  tuning_profile_name: string;
+  tuning_profile_fingerprint: string;
+  drift_status: RuntimeTuningDriftStatus;
+  run_created_at?: string | null;
+  correlation_summary: string;
+};
+
 export type RuntimeTuningHistoryQuery = {
   source_scope?: RuntimeTuningContextSnapshot['source_scope'];
   drift_status?: RuntimeTuningDriftStatus;
@@ -140,6 +151,8 @@ export type RuntimeTuningHistoryQuery = {
   created_after?: string;
   created_before?: string;
 };
+
+export type RuntimeTuningRunCorrelationQuery = Pick<RuntimeTuningHistoryQuery, 'source_scope' | 'latest_only' | 'limit'>;
 
 export type RuntimePostureRun = {
   id: number;

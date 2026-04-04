@@ -2588,3 +2588,14 @@ API:
 - Diff payload includes field-level `changed_fields`, optional `unchanged_fields`, and `diff_summary`.
 - Comparison is snapshot-to-previous-snapshot within the same `source_scope`.
 - Scope remains unchanged: paper-only, no live trading, no authority replacement, and no operational tuning behavior change.
+
+## Runtime tuning run correlation observability (Prompt 171)
+
+`runtime_governor` now adds a read-only correlation layer to link runtime runs with tuning context snapshots/fingerprints.
+
+- API: `GET /api/runtime-governor/tuning-run-correlations/`
+- Supports query params: `source_scope`, `latest_only`, `limit`
+- Correlates at least: runtime feedback, operating mode, mode stabilization, and mode enforcement runs
+- Returns readable summary rows with `source_scope`, `source_run_id`, tuning snapshot/profile/fingerprint, drift status, and optional run timestamp
+
+This is strictly observability/debugging for cross-run traceability. It does not modify operational logic, does not add live trading paths, and remains paper-only.
