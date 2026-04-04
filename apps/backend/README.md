@@ -3926,3 +3926,16 @@ Key behavior:
 No new persistent model, no mutative endpoint, no runtime/tuning operational behavior changes.
 
 Cockpit handoff now reuses this same packet inline from `/cockpit` (compact investigation view per scope) and keeps full handoff in `/runtime?tuningScope=<scope>&investigate=1`. Backend scope remains unchanged: same read-only endpoint, no new model, no mutative behavior.
+
+## Runtime tuning scope timeline API (Prompt 180)
+
+`apps.runtime_governor` now adds `services/tuning_scope_timeline.py` as a read-only temporal strip for a single tuning scope.
+
+- Endpoint: `GET /api/runtime-governor/tuning-scope-timeline/<source_scope>/`
+- Query params:
+  - `limit` (default `5`)
+  - `include_stable` (default `true`)
+- Reuses existing tuning snapshots, context diffs, alert mapping constants, latest-diff links, and run correlation services.
+- Contract includes compact per-entry labels/reason codes plus deterministic top-level summary + flags for recent stability/profile-shift/review-now signals.
+
+Scope/boundaries unchanged: no new model, no mutative endpoint, no operational logic change, paper-only observability.

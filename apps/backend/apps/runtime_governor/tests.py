@@ -978,7 +978,7 @@ class RuntimeGovernorTests(TestCase):
             tuning_profile_fingerprint='fp-old',
             tuning_profile_summary='seed',
             effective_values={'x': 1},
-            drift_status='INITIAL',
+            drift_status='NO_CHANGE',
             drift_summary='seed',
         )
         latest = RuntimeTuningContextSnapshot.objects.create(
@@ -2289,3 +2289,175 @@ class RuntimeGovernorTests(TestCase):
 
         not_found = self.client.get(reverse('runtime_governor_v2:tuning_cockpit_panel_detail', kwargs={'source_scope': 'unknown_scope'}))
         self.assertEqual(not_found.status_code, 404)
+
+    def test_tuning_scope_timeline_structure_and_order(self):
+        first = RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=4901,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-1',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        second = RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=4902,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-2',
+            tuning_profile_summary='minor',
+            effective_values={'x': 2},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='minor',
+        )
+        third = RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=4903,
+            tuning_profile_name='p2',
+            tuning_profile_fingerprint='fp-3',
+            tuning_profile_summary='profile',
+            effective_values={'x': 3},
+            drift_status='PROFILE_CHANGE',
+            drift_summary='profile',
+        )
+
+        response = self.client.get(reverse('runtime_governor_v2:tuning_scope_timeline_detail', kwargs={'source_scope': 'runtime_feedback'}))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['source_scope'], 'runtime_feedback')
+        self.assertEqual(payload['latest_snapshot_id'], third.id)
+        self.assertIn('timeline_summary', payload)
+        self.assertIn('is_recently_stable', payload)
+        self.assertIn('has_recent_profile_shift', payload)
+        self.assertIn('has_recent_review_now', payload)
+        self.assertGreaterEqual(payload['entry_count'], 3)
+        self.assertEqual(payload['entries'][0]['snapshot_id'], third.id)
+        self.assertEqual(payload['entries'][1]['snapshot_id'], second.id)
+        self.assertEqual(payload['entries'][2]['snapshot_id'], first.id)
+
+    def test_tuning_scope_timeline_limit_and_diff_counts(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='operating_mode',
+            source_run_id=4911,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-a',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1, 'tuning_guardrail_summary': {'g1': True}},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        latest = RuntimeTuningContextSnapshot.objects.create(
+            source_scope='operating_mode',
+            source_run_id=4912,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-b',
+            tuning_profile_summary='minor',
+            effective_values={'x': 2, 'y': 3, 'tuning_guardrail_summary': {'g1': False}},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='minor',
+        )
+
+        response = self.client.get(
+            reverse('runtime_governor_v2:tuning_scope_timeline_detail', kwargs={'source_scope': 'operating_mode'}),
+            {'limit': 1},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['entry_count'], 1)
+        self.assertEqual(payload['entries'][0]['snapshot_id'], latest.id)
+        self.assertTrue(payload['entries'][0]['has_comparable_diff'])
+        self.assertGreaterEqual(payload['entries'][0]['changed_field_count'], 2)
+        self.assertGreaterEqual(payload['entries'][0]['changed_guardrail_count'], 1)
+
+    def test_tuning_scope_timeline_include_stable_false_keeps_latest_if_all_stable(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_stabilization',
+            source_run_id=4921,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-z',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='NO_CHANGE',
+            drift_summary='seed',
+        )
+        latest = RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_stabilization',
+            source_run_id=4922,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-z',
+            tuning_profile_summary='same',
+            effective_values={'x': 1},
+            drift_status='NO_CHANGE',
+            drift_summary='same',
+        )
+        response = self.client.get(
+            reverse('runtime_governor_v2:tuning_scope_timeline_detail', kwargs={'source_scope': 'mode_stabilization'}),
+            {'include_stable': 'false'},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['entry_count'], 1)
+        self.assertEqual(payload['entries'][0]['snapshot_id'], latest.id)
+
+    def test_tuning_scope_timeline_flags_and_summary_with_profile_shift_and_review_now(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=4931,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-1',
+            tuning_profile_summary='seed',
+            effective_values={'a': 1, 'tuning_guardrail_summary': {'g1': True}},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=4932,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-2',
+            tuning_profile_summary='review',
+            effective_values={'a': 2, 'b': 2, 'c': 2, 'tuning_guardrail_summary': {'g1': False, 'g2': False}},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='review',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=4933,
+            tuning_profile_name='p2',
+            tuning_profile_fingerprint='fp-3',
+            tuning_profile_summary='profile',
+            effective_values={'a': 3},
+            drift_status='PROFILE_CHANGE',
+            drift_summary='profile',
+        )
+
+        response = self.client.get(reverse('runtime_governor_v2:tuning_scope_timeline_detail', kwargs={'source_scope': 'mode_enforcement'}))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload['has_recent_profile_shift'])
+        self.assertTrue(payload['has_recent_review_now'])
+        self.assertFalse(payload['is_recently_stable'])
+        self.assertIn('Recent timeline includes', payload['timeline_summary'])
+
+    def test_tuning_scope_timeline_single_snapshot_summary_is_stable_and_legible(self):
+        snapshot = RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=4941,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-single',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_scope_timeline_detail', kwargs={'source_scope': 'runtime_feedback'}))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['latest_snapshot_id'], snapshot.id)
+        self.assertEqual(payload['entry_count'], 1)
+        self.assertIn('Insufficient history', payload['timeline_summary'])
+
+    def test_tuning_scope_timeline_returns_404_for_missing_scope(self):
+        response = self.client.get(reverse('runtime_governor_v2:tuning_scope_timeline_detail', kwargs={'source_scope': 'unknown_scope'}))
+        self.assertEqual(response.status_code, 404)

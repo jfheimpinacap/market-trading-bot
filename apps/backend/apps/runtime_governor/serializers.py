@@ -351,6 +351,36 @@ class RuntimeTuningInvestigationPacketSerializer(serializers.Serializer):
     runtime_diff_deep_link = serializers.CharField()
 
 
+
+
+class RuntimeTuningScopeTimelineEntrySerializer(serializers.Serializer):
+    snapshot_id = serializers.IntegerField()
+    created_at = serializers.DateTimeField()
+    drift_status = serializers.CharField()
+    alert_status = serializers.CharField()
+    profile_name = serializers.CharField()
+    profile_fingerprint = serializers.CharField(allow_null=True)
+    diff_summary = serializers.CharField()
+    has_comparable_diff = serializers.BooleanField()
+    changed_field_count = serializers.IntegerField()
+    changed_guardrail_count = serializers.IntegerField()
+    correlated_run_id = serializers.IntegerField(allow_null=True)
+    correlated_run_timestamp = serializers.DateTimeField(required=False, allow_null=True)
+    timeline_reason_codes = serializers.ListField(child=serializers.CharField())
+    timeline_label = serializers.CharField()
+
+
+class RuntimeTuningScopeTimelineSerializer(serializers.Serializer):
+    source_scope = serializers.CharField()
+    entry_count = serializers.IntegerField()
+    latest_snapshot_id = serializers.IntegerField()
+    latest_snapshot_created_at = serializers.DateTimeField()
+    timeline_summary = serializers.CharField()
+    is_recently_stable = serializers.BooleanField()
+    has_recent_profile_shift = serializers.BooleanField()
+    has_recent_review_now = serializers.BooleanField()
+    entries = RuntimeTuningScopeTimelineEntrySerializer(many=True)
+
 class RuntimeTuningCockpitPanelItemSerializer(serializers.Serializer):
     source_scope = serializers.CharField()
     attention_priority = serializers.CharField()

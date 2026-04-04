@@ -50,6 +50,8 @@ import type {
   RuntimeTuningCockpitPanel,
   RuntimeTuningCockpitPanelDetail,
   RuntimeTuningInvestigationPacket,
+  RuntimeTuningScopeTimeline,
+  RuntimeTuningScopeTimelineQuery,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -308,6 +310,21 @@ export function getRuntimeTuningReviewBoardDetail(sourceScope: string) {
 
 export function getRuntimeTuningInvestigation(sourceScope: string) {
   return requestJson<RuntimeTuningInvestigationPacket>(`/api/runtime-governor/tuning-investigation/${encodeURIComponent(sourceScope)}/`);
+}
+
+
+function buildScopeTimelineQueryString(query: RuntimeTuningScopeTimelineQuery = {}) {
+  const params = new URLSearchParams();
+  if (typeof query.limit === 'number') params.set('limit', String(query.limit));
+  if (typeof query.include_stable === 'boolean') params.set('include_stable', String(query.include_stable));
+  const encoded = params.toString();
+  return encoded ? `?${encoded}` : '';
+}
+
+export function getRuntimeTuningScopeTimeline(sourceScope: string, query: RuntimeTuningScopeTimelineQuery = {}) {
+  return requestJson<RuntimeTuningScopeTimeline>(
+    `/api/runtime-governor/tuning-scope-timeline/${encodeURIComponent(sourceScope)}/${buildScopeTimelineQueryString(query)}`,
+  );
 }
 
 function buildCockpitPanelQueryString(query: RuntimeTuningCockpitPanelQuery = {}) {

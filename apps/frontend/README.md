@@ -2490,3 +2490,18 @@ This is observability-only and remains local-first, paper-only, and read-only (n
   - actions: `View full diff` (existing diff detail endpoint) and `Hide investigation`
 
 This UX remains read-only/paper-only and does not alter runtime operations.
+
+## Runtime tuning scope timeline UX en `/runtime` (Prompt 180)
+
+Dentro de la vista existente **Tuning Investigation** en `/runtime`, se agregó un bloque compacto **Recent Scope Timeline** (sin pantalla nueva):
+
+- consume `GET /api/runtime-governor/tuning-scope-timeline/<source_scope>/`
+- muestra:
+  - `timeline_summary`
+  - flags rápidos (`recently stable`, `recent profile shift`, `recent review now`)
+  - lista corta de entradas recientes (fecha, drift/alert, timeline label, diff summary, changed fields/guardrails, correlated run)
+- controles ligeros:
+  - `Show only non-stable`
+  - `Show more history` (limit corto/largo)
+
+Esta integración es solo lectura, paper-only, y complementa la investigación existente sin cambiar comportamiento operativo.
