@@ -48,6 +48,7 @@ import {
   getRuntimeTuningContextSnapshots,
   getRuntimeTuningContextDriftSummary,
   getRuntimeTuningContextDiffs,
+  getRuntimeTuningContextDiffDetail,
   getRuntimeTuningRunCorrelations,
   getRuntimeTuningScopeDigest,
   getRuntimeTuningChangeAlerts,
@@ -170,6 +171,8 @@ export function RuntimePage() {
   const [tuningContextSnapshots, setTuningContextSnapshots] = useState<RuntimeTuningContextSnapshot[]>([]);
   const [tuningContextDriftSummary, setTuningContextDriftSummary] = useState<RuntimeTuningContextDriftSummary | null>(null);
   const [tuningContextDiffs, setTuningContextDiffs] = useState<RuntimeTuningContextDiff[]>([]);
+  const [selectedLatestDiff, setSelectedLatestDiff] = useState<RuntimeTuningContextDiff | null>(null);
+  const [latestDiffLoading, setLatestDiffLoading] = useState(false);
   const [tuningRunCorrelations, setTuningRunCorrelations] = useState<RuntimeTuningRunCorrelation[]>([]);
   const [tuningScopeDigest, setTuningScopeDigest] = useState<RuntimeTuningScopeDigest[]>([]);
   const [tuningChangeAlerts, setTuningChangeAlerts] = useState<RuntimeTuningChangeAlert[]>([]);
@@ -270,6 +273,7 @@ export function RuntimePage() {
       setTuningContextSnapshots(tuningContextSnapshotsRes);
       setTuningContextDriftSummary(tuningContextDriftSummaryRes);
       setTuningContextDiffs(tuningContextDiffsRes);
+      setSelectedLatestDiff(null);
       setTuningRunCorrelations(tuningRunCorrelationsRes);
       setTuningScopeDigest(tuningScopeDigestRes);
       setTuningChangeAlerts(tuningChangeAlertsRes);
@@ -280,6 +284,23 @@ export function RuntimePage() {
       setLoading(false);
     }
   }, [tuningDiffDriftFilter, tuningLatestOnly, tuningLimit, tuningScopeFilter]);
+
+  async function onViewLatestDiff(snapshotId: number | null) {
+    if (!snapshotId) {
+      setSelectedLatestDiff(null);
+      return;
+    }
+    setLatestDiffLoading(true);
+    setError(null);
+    try {
+      const diff = await getRuntimeTuningContextDiffDetail(snapshotId);
+      setSelectedLatestDiff(diff);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load latest diff detail.');
+    } finally {
+      setLatestDiffLoading(false);
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -528,7 +549,7 @@ export function RuntimePage() {
           <h4>Tuning Scope Digest</h4>
           <div className="table-wrapper">
             <table className="data-table">
-              <thead><tr><th>Scope</th><th>Latest snapshot</th><th>Latest run</th><th>Profile</th><th>Fingerprint</th><th>Drift</th><th>Summary</th></tr></thead>
+              <thead><tr><th>Scope</th><th>Latest snapshot</th><th>Latest run</th><th>Profile</th><th>Fingerprint</th><th>Drift</th><th>Latest diff</th><th>Summary</th></tr></thead>
               <tbody>
                 {tuningScopeDigest.map((row) => (
                   <tr key={row.source_scope}>
@@ -538,6 +559,15 @@ export function RuntimePage() {
                     <td>{row.tuning_profile_name}</td>
                     <td>{row.tuning_profile_fingerprint}</td>
                     <td>{row.latest_drift_status}</td>
+                    <td>
+                      {row.latest_diff_snapshot_id ? (
+                        <button type="button" className="button-secondary" onClick={() => void onViewLatestDiff(row.latest_diff_snapshot_id)}>
+                          View latest diff
+                        </button>
+                      ) : (
+                        'No comparable diff'
+                      )}
+                    </td>
                     <td>{row.digest_summary}</td>
                   </tr>
                 ))}
@@ -547,19 +577,40 @@ export function RuntimePage() {
           <h4>Tuning Change Alerts</h4>
           <div className="table-wrapper">
             <table className="data-table">
-              <thead><tr><th>Scope</th><th>Drift</th><th>Alert</th><th>Summary</th></tr></thead>
+              <thead><tr><th>Scope</th><th>Drift</th><th>Alert</th><th>Latest diff</th><th>Summary</th></tr></thead>
               <tbody>
                 {tuningChangeAlerts.map((row) => (
                   <tr key={`${row.source_scope}-${row.latest_snapshot_id}`}>
                     <td>{row.source_scope}</td>
                     <td>{row.latest_drift_status}</td>
                     <td>{row.alert_status}</td>
+                    <td>
+                      {row.latest_diff_snapshot_id ? (
+                        <button type="button" className="button-secondary" onClick={() => void onViewLatestDiff(row.latest_diff_snapshot_id)}>
+                          View latest diff
+                        </button>
+                      ) : (
+                        'No comparable diff'
+                      )}
+                    </td>
                     <td>{row.alert_summary}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {latestDiffLoading ? <p>Loading latest diff…</p> : null}
+          {selectedLatestDiff ? (
+            <>
+              <h5>Latest diff quick view</h5>
+              <p>
+                <strong>
+                  Scope {selectedLatestDiff.source_scope}, snapshot #{selectedLatestDiff.current_snapshot_id}, drift {selectedLatestDiff.drift_status}
+                </strong>
+              </p>
+              <p>{selectedLatestDiff.diff_summary}</p>
+            </>
+          ) : null}
           <h4>Tuning Alert Summary</h4>
           <div className="system-metadata-grid">
             <div><strong>Total scopes:</strong> {tuningAlertSummary?.total_scope_count ?? 0}</div>

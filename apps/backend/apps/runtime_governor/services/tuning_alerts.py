@@ -103,6 +103,9 @@ def build_tuning_change_alerts(*, source_scope: str | None = None) -> list[dict[
                 'tuning_profile_name': digest['tuning_profile_name'],
                 'tuning_profile_fingerprint': digest['tuning_profile_fingerprint'],
                 'latest_drift_status': digest['latest_drift_status'],
+                'latest_diff_snapshot_id': digest['latest_diff_snapshot_id'],
+                'latest_diff_status': digest['latest_diff_status'],
+                'latest_diff_summary': digest['latest_diff_summary'],
                 'alert_status': alert_status,
                 'alert_summary': _build_alert_summary(
                     source_scope=digest['source_scope'],

@@ -262,6 +262,10 @@ export function getRuntimeTuningContextDiffs(query: RuntimeTuningHistoryQuery = 
   return requestJson<RuntimeTuningContextDiff[]>(`/api/runtime-governor/tuning-context-diffs/${buildQueryString(query)}`);
 }
 
+export function getRuntimeTuningContextDiffDetail(snapshotId: number) {
+  return requestJson<RuntimeTuningContextDiff>(`/api/runtime-governor/tuning-context-diffs/${snapshotId}/`);
+}
+
 export function getRuntimeTuningRunCorrelations(query: RuntimeTuningRunCorrelationQuery = {}) {
   return requestJson<RuntimeTuningRunCorrelation[]>(`/api/runtime-governor/tuning-run-correlations/${buildQueryString(query)}`);
 }

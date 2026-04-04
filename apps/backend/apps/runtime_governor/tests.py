@@ -793,6 +793,52 @@ class RuntimeGovernorTests(TestCase):
         self.assertEqual(payload[0]['latest_run_id'], feedback_run.id)
         self.assertIn(f'run #{feedback_run.id}', payload[0]['digest_summary'])
 
+    def test_tuning_scope_digest_includes_latest_diff_link_when_previous_snapshot_exists(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=1201,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-feedback-old',
+            tuning_profile_summary='old',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='old',
+        )
+        latest = RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=1202,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-feedback-new',
+            tuning_profile_summary='new',
+            effective_values={'x': 2},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='new',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_scope_digest'), {'source_scope': 'runtime_feedback'})
+        self.assertEqual(response.status_code, 200)
+        row = response.json()[0]
+        self.assertEqual(row['latest_diff_snapshot_id'], latest.id)
+        self.assertEqual(row['latest_diff_status'], 'MINOR_CONTEXT_CHANGE')
+        self.assertIn('changed', row['latest_diff_summary'])
+
+    def test_tuning_scope_digest_returns_null_latest_diff_fields_when_no_previous_snapshot(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_stabilization',
+            source_run_id=1211,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-stabilization',
+            tuning_profile_summary='first',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='first',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_scope_digest'), {'source_scope': 'mode_stabilization'})
+        self.assertEqual(response.status_code, 200)
+        row = response.json()[0]
+        self.assertIsNone(row['latest_diff_snapshot_id'])
+        self.assertIsNone(row['latest_diff_status'])
+        self.assertIsNone(row['latest_diff_summary'])
+
     def test_tuning_scope_digest_endpoint_returns_readable_structure(self):
         RuntimeTuningContextSnapshot.objects.create(
             source_scope='mode_stabilization',
@@ -816,6 +862,9 @@ class RuntimeGovernorTests(TestCase):
         self.assertIn('latest_drift_status', payload[0])
         self.assertIn('latest_snapshot_created_at', payload[0])
         self.assertIn('digest_summary', payload[0])
+        self.assertIn('latest_diff_snapshot_id', payload[0])
+        self.assertIn('latest_diff_status', payload[0])
+        self.assertIn('latest_diff_summary', payload[0])
 
     def test_tuning_change_alerts_no_change_is_stable(self):
         RuntimeTuningContextSnapshot.objects.create(
@@ -920,6 +969,52 @@ class RuntimeGovernorTests(TestCase):
         self.assertIn('alert_summary', payload[0])
         self.assertIn('latest_snapshot_id', payload[0])
         self.assertIn('latest_drift_status', payload[0])
+
+    def test_tuning_change_alerts_include_latest_diff_link_when_available(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='operating_mode',
+            source_run_id=1141,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-old',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        latest = RuntimeTuningContextSnapshot.objects.create(
+            source_scope='operating_mode',
+            source_run_id=1142,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-new',
+            tuning_profile_summary='changed',
+            effective_values={'x': 3},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='changed',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_change_alerts'), {'source_scope': 'operating_mode'})
+        self.assertEqual(response.status_code, 200)
+        row = response.json()[0]
+        self.assertEqual(row['latest_diff_snapshot_id'], latest.id)
+        self.assertEqual(row['latest_diff_status'], 'MINOR_CONTEXT_CHANGE')
+        self.assertIn('changed', row['latest_diff_summary'])
+
+    def test_tuning_change_alerts_return_null_latest_diff_fields_without_history(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=1151,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-only',
+            tuning_profile_summary='only',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='only',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_change_alerts'), {'source_scope': 'mode_enforcement'})
+        self.assertEqual(response.status_code, 200)
+        row = response.json()[0]
+        self.assertIsNone(row['latest_diff_snapshot_id'])
+        self.assertIsNone(row['latest_diff_status'])
+        self.assertIsNone(row['latest_diff_summary'])
 
     def test_tuning_change_alert_summary_counts_are_grouped_by_status(self):
         RuntimeTuningContextSnapshot.objects.create(
