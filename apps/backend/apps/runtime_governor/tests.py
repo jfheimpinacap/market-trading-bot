@@ -1,5 +1,6 @@
 from django.test import TestCase
 from django.urls import reverse
+from django.utils.dateparse import parse_datetime
 from rest_framework.test import APIClient
 from django.utils import timezone
 from datetime import timedelta
@@ -2682,4 +2683,127 @@ class RuntimeTuningReviewQueueTests(TestCase):
 
     def test_tuning_review_queue_detail_404_for_missing_scope(self):
         response = self.client.get(reverse('runtime_governor_v2:tuning_review_queue_detail', args=['runtime_feedback']))
+        self.assertEqual(response.status_code, 404)
+
+
+class RuntimeTuningReviewAgingTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.now = timezone.now()
+
+    def _snapshot(self, *, scope: str, run_id: int, age_days: int):
+        return RuntimeTuningContextSnapshot.objects.create(
+            source_scope=scope,
+            source_run_id=run_id,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint=f'{scope}-{run_id}',
+            tuning_profile_summary='summary',
+            effective_values={'age_days': age_days},
+            drift_status='PROFILE_CHANGE',
+            drift_summary='summary',
+            created_at_snapshot=self.now - timedelta(days=age_days),
+        )
+
+    def _set_last_action_days_ago(self, scope: str, days: int):
+        from apps.runtime_governor.models import RuntimeTuningReviewState
+
+        RuntimeTuningReviewState.objects.filter(source_scope=scope).update(last_action_at=self.now - timedelta(days=days))
+
+    def _seed_dataset(self):
+        self._snapshot(scope='runtime_feedback', run_id=1, age_days=10)
+        self.client.post(reverse('runtime_governor_v2:mark_tuning_scope_followup', args=['runtime_feedback']), {}, format='json')
+        self._set_last_action_days_ago('runtime_feedback', 9)
+
+        self._snapshot(scope='mode_enforcement', run_id=1, age_days=6)
+        self.client.post(reverse('runtime_governor_v2:acknowledge_tuning_scope', args=['mode_enforcement']), {}, format='json')
+        self._snapshot(scope='mode_enforcement', run_id=2, age_days=4)
+
+        self._snapshot(scope='mode_stabilization', run_id=1, age_days=1)
+        self._snapshot(scope='operating_mode', run_id=1, age_days=1)
+        self.client.post(reverse('runtime_governor_v2:acknowledge_tuning_scope', args=['operating_mode']), {}, format='json')
+        self._set_last_action_days_ago('operating_mode', 1)
+
+    def test_aging_list_payload_has_expected_fields(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_aging'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        for key in ['queue_count', 'fresh_count', 'aging_count', 'overdue_count', 'highest_urgency_scope', 'aging_summary', 'items']:
+            self.assertIn(key, payload)
+        self.assertEqual(payload['highest_urgency_scope'], 'runtime_feedback')
+
+    def test_age_bucket_calculation_is_deterministic(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_aging'))
+        items = {item['source_scope']: item for item in response.json()['items']}
+        self.assertEqual(items['runtime_feedback']['age_bucket'], 'OVERDUE')
+        self.assertEqual(items['mode_enforcement']['age_bucket'], 'AGING')
+        self.assertEqual(items['mode_stabilization']['age_bucket'], 'FRESH')
+
+    def test_age_reference_timestamp_follows_status_rules(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_aging'), {'unresolved_only': 'false'})
+        self.assertEqual(response.status_code, 200)
+        items = {item['source_scope']: item for item in response.json()['items']}
+        followup_ref = parse_datetime(items['runtime_feedback']['age_reference_timestamp'])
+        stale_ref = parse_datetime(items['mode_enforcement']['age_reference_timestamp'])
+        unreviewed_ref = parse_datetime(items['mode_stabilization']['age_reference_timestamp'])
+        self.assertIsNotNone(followup_ref)
+        self.assertIsNotNone(stale_ref)
+        self.assertIsNotNone(unreviewed_ref)
+        self.assertEqual((self.now - followup_ref).days, 9)
+        self.assertEqual((self.now - stale_ref).days, 4)
+        self.assertEqual((self.now - unreviewed_ref).days, 1)
+
+    def test_ordering_prioritizes_overdue_then_aging_then_fresh(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_aging'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item['source_scope'] for item in response.json()['items']],
+            ['runtime_feedback', 'mode_enforcement', 'mode_stabilization'],
+        )
+
+    def test_unresolved_only_true_excludes_acknowledged_current(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_aging'), {'unresolved_only': 'true'})
+        self.assertEqual(response.status_code, 200)
+        statuses = {item['effective_review_status'] for item in response.json()['items']}
+        self.assertNotIn('ACKNOWLEDGED_CURRENT', statuses)
+
+    def test_age_bucket_filter_returns_only_requested_bucket(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_aging'), {'age_bucket': 'OVERDUE'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()['items']), 1)
+        self.assertEqual(response.json()['items'][0]['source_scope'], 'runtime_feedback')
+
+    def test_summary_is_readable_and_stable(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_aging'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['aging_summary'], '1 follow-up is overdue and 1 scope is aging')
+
+    def test_detail_endpoint_returns_expected_payload(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_aging_detail', args=['runtime_feedback']))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        for key in [
+            'source_scope',
+            'age_bucket',
+            'age_days',
+            'overdue',
+            'age_reference_timestamp',
+            'aging_reason_codes',
+            'aging_summary',
+            'effective_review_status',
+            'attention_priority',
+            'review_summary',
+            'technical_summary',
+        ]:
+            self.assertIn(key, payload)
+
+    def test_detail_endpoint_returns_404_for_unknown_scope(self):
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_aging_detail', args=['runtime_feedback']))
         self.assertEqual(response.status_code, 404)

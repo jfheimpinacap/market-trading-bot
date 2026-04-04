@@ -58,6 +58,9 @@ import type {
   RuntimeTuningReviewQueue,
   RuntimeTuningReviewQueueDetail,
   RuntimeTuningReviewQueueQuery,
+  RuntimeTuningReviewAging,
+  RuntimeTuningReviewAgingDetail,
+  RuntimeTuningReviewAgingQuery,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -368,6 +371,23 @@ export function getRuntimeTuningReviewQueue(query: RuntimeTuningReviewQueueQuery
 
 export function getRuntimeTuningReviewQueueDetail(sourceScope: string) {
   return requestJson<RuntimeTuningReviewQueueDetail>(`/api/runtime-governor/tuning-review-queue/${encodeURIComponent(sourceScope)}/`);
+}
+
+function buildReviewAgingQueryString(query: RuntimeTuningReviewAgingQuery = {}) {
+  const params = new URLSearchParams();
+  if (typeof query.unresolved_only === 'boolean') params.set('unresolved_only', String(query.unresolved_only));
+  if (query.age_bucket) params.set('age_bucket', query.age_bucket);
+  if (typeof query.limit === 'number') params.set('limit', String(query.limit));
+  const encoded = params.toString();
+  return encoded ? `?${encoded}` : '';
+}
+
+export function getRuntimeTuningReviewAging(query: RuntimeTuningReviewAgingQuery = {}) {
+  return requestJson<RuntimeTuningReviewAging>(`/api/runtime-governor/tuning-review-aging/${buildReviewAgingQueryString(query)}`);
+}
+
+export function getRuntimeTuningReviewAgingDetail(sourceScope: string) {
+  return requestJson<RuntimeTuningReviewAgingDetail>(`/api/runtime-governor/tuning-review-aging/${encodeURIComponent(sourceScope)}/`);
 }
 
 function buildReviewStateQueryString(query: RuntimeTuningReviewStateQuery = {}) {

@@ -2563,3 +2563,17 @@ This addition is paper-only UX and does not change runtime/tuning operational lo
   - `Open in runtime` → `/runtime?tuningScope=<scope>&investigate=1`
 
 This is a read-only, paper-only operator entry queue layered over existing manual review state and technical attention; it does not change runtime operational behavior.
+
+## Cockpit Runtime Tuning Review Aging (Prompt 185)
+
+`/cockpit` now enriches the existing Runtime Tuning Review Queue with compact aging visibility:
+
+- new **Review Aging** subsection (fresh/aging/overdue counts, highest urgency scope, deterministic summary)
+- queue items now display `age_bucket` + `age_days` and explicit overdue visual hint
+- lightweight filter by `age_bucket` while preserving `unresolved_only`
+
+Frontend runtime clients added:
+- `getRuntimeTuningReviewAging(params?)`
+- `getRuntimeTuningReviewAgingDetail(sourceScope)`
+
+This complements the existing manual review queue/investigation flow and preserves runtime handoff `/runtime?tuningScope=<scope>&investigate=1`. No operational behavior change.

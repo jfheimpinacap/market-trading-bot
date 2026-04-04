@@ -15,6 +15,7 @@ import {
   getRuntimeTuningCockpitPanelDetail,
   getRuntimeTuningContextDiffDetail,
   getRuntimeTuningInvestigation,
+  getRuntimeTuningReviewAging,
   getRuntimeTuningReviewQueue,
   getRuntimeTuningReviewStateDetail,
   getRuntimeTuningScopeTimeline,
@@ -27,6 +28,8 @@ import type {
   RuntimeTuningCockpitPanelDetail,
   RuntimeTuningContextDiff,
   RuntimeTuningInvestigationPacket,
+  RuntimeTuningReviewAgingItem,
+  RuntimeTuningReviewAging,
   RuntimeTuningReviewQueue,
   RuntimeTuningReviewState,
   RuntimeTuningScopeTimeline,
@@ -61,6 +64,10 @@ const REVIEW_STATUS_HINTS: Record<RuntimeTuningReviewState['effective_review_sta
   STALE_REVIEW: 'Review stale',
 };
 
+function isAgingQueueItem(item: RuntimeTuningReviewQueue['items'][number] | RuntimeTuningReviewAgingItem): item is RuntimeTuningReviewAgingItem {
+  return 'age_bucket' in item && 'age_days' in item && 'aging_rank' in item;
+}
+
 function TraceButton({ item }: { item: CockpitAttentionItem }) {
   if (!item.traceRootType || !item.traceRootId) {
     return null;
@@ -87,8 +94,10 @@ export function CockpitPage() {
   const [scanSummary, setScanSummary] = useState<Awaited<ReturnType<typeof getScanSummary>> | null>(null);
   const [tuningPanel, setTuningPanel] = useState<RuntimeTuningCockpitPanel | null>(null);
   const [reviewQueue, setReviewQueue] = useState<RuntimeTuningReviewQueue | null>(null);
+  const [reviewAging, setReviewAging] = useState<RuntimeTuningReviewAging | null>(null);
   const [reviewQueueUnresolvedOnly, setReviewQueueUnresolvedOnly] = useState(true);
   const [reviewQueueStatusFilter, setReviewQueueStatusFilter] = useState<RuntimeTuningReviewState['effective_review_status'] | 'ALL'>('ALL');
+  const [reviewQueueAgeBucketFilter, setReviewQueueAgeBucketFilter] = useState<'ALL' | 'FRESH' | 'AGING' | 'OVERDUE'>('ALL');
   const [reviewQueueError, setReviewQueueError] = useState<string | null>(null);
   const [attentionOnly, setAttentionOnly] = useState(true);
   const [tuningPanelError, setTuningPanelError] = useState<string | null>(null);
@@ -115,7 +124,7 @@ export function CockpitPage() {
     setTuningPanelError(null);
     setReviewQueueError(null);
     try {
-      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse, reviewQueueResponse] = await Promise.all([
+      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse, reviewQueueResponse, reviewAgingResponse] = await Promise.all([
         getCockpitSummary(),
         getAutonomyScenarioSummary(),
         getScanSummary(),
@@ -125,12 +134,18 @@ export function CockpitPage() {
           effective_review_status: reviewQueueStatusFilter === 'ALL' ? undefined : reviewQueueStatusFilter,
           limit: 8,
         }),
+        getRuntimeTuningReviewAging({
+          unresolved_only: reviewQueueUnresolvedOnly,
+          age_bucket: reviewQueueAgeBucketFilter === 'ALL' ? undefined : reviewQueueAgeBucketFilter,
+          limit: 8,
+        }),
       ]);
       setSnapshot(response);
       setAutonomyScenarioSummary(scenarioSummary);
       setScanSummary(scanSummaryResponse);
       setTuningPanel(tuningPanelResponse);
       setReviewQueue(reviewQueueResponse);
+      setReviewAging(reviewAgingResponse);
       setReviewStateCache({});
       setReviewStateErrorCache({});
     } catch (loadError) {
@@ -141,7 +156,7 @@ export function CockpitPage() {
     } finally {
       setLoading(false);
     }
-  }, [attentionOnly, reviewQueueStatusFilter, reviewQueueUnresolvedOnly]);
+  }, [attentionOnly, reviewQueueAgeBucketFilter, reviewQueueStatusFilter, reviewQueueUnresolvedOnly]);
 
   useEffect(() => {
     void loadCockpit();
@@ -454,10 +469,31 @@ export function CockpitPage() {
                     <option value="ACKNOWLEDGED_CURRENT">ACKNOWLEDGED_CURRENT</option>
                   </select>
                 </label>
+                <label className="muted-text">
+                  Aging:{' '}
+                  <select value={reviewQueueAgeBucketFilter} onChange={(event) => setReviewQueueAgeBucketFilter(event.target.value as 'ALL' | 'FRESH' | 'AGING' | 'OVERDUE')}>
+                    <option value="ALL">All</option>
+                    <option value="OVERDUE">OVERDUE</option>
+                    <option value="AGING">AGING</option>
+                    <option value="FRESH">FRESH</option>
+                  </select>
+                </label>
               </div>
               {reviewQueueError ? <p className="warning-text">{reviewQueueError}</p> : null}
               {!reviewQueue ? null : (
                 <>
+                  {!reviewAging ? null : (
+                    <div className="subsection">
+                      <p className="section-label">Review Aging</p>
+                      <ul className="key-value-list">
+                        <li><span>Fresh</span><strong>{reviewAging.fresh_count}</strong></li>
+                        <li><span>Aging</span><strong>{reviewAging.aging_count}</strong></li>
+                        <li><span>Overdue</span><strong>{reviewAging.overdue_count}</strong></li>
+                        <li><span>Highest urgency scope</span><strong>{reviewAging.highest_urgency_scope ?? 'n/a'}</strong></li>
+                      </ul>
+                      <p className={reviewAging.overdue_count > 0 ? 'warning-text' : 'muted-text'}>{reviewAging.aging_summary}</p>
+                    </div>
+                  )}
                   <ul className="key-value-list">
                     <li><span>Queue scopes</span><strong>{reviewQueue.queue_count}</strong></li>
                     <li><span>Unreviewed</span><strong>{reviewQueue.unreviewed_count}</strong></li>
@@ -465,19 +501,25 @@ export function CockpitPage() {
                     <li><span>Stale</span><strong>{reviewQueue.stale_count}</strong></li>
                   </ul>
                   <p className="muted-text">{reviewQueue.queue_summary}</p>
-                  {reviewQueue.items.length === 0 ? (
+                  {(reviewAging?.items ?? reviewQueue.items).length === 0 ? (
                     <EmptyState eyebrow="Runtime tuning queue" title="No queue items" description="No scopes match the current unresolved/status filters." />
                   ) : (
                     <div className="cockpit-attention-list">
-                      {reviewQueue.items.map((item) => (
+                      {(reviewAging?.items ?? reviewQueue.items).map((item) => (
                         <article key={item.source_scope} className="cockpit-attention-item">
                           <div>
-                            <p className="section-label">#{item.queue_rank} · {item.effective_review_status}</p>
+                            <p className="section-label">
+                              #{isAgingQueueItem(item) ? item.aging_rank : item.queue_rank} · {item.effective_review_status}{' '}
+                              {isAgingQueueItem(item) ? `· ${item.age_bucket} (${item.age_days}d)` : null}
+                            </p>
                             <h3>{item.source_scope}</h3>
                             <p>
                               <strong>{item.attention_priority}</strong> · {item.review_summary || item.technical_summary}
                             </p>
                             <p className="muted-text">{item.technical_summary}</p>
+                            {isAgingQueueItem(item) && item.overdue ? (
+                              <p className="warning-text">Overdue review item. Prioritize manual action for this scope.</p>
+                            ) : null}
                             {(item.effective_review_status === 'FOLLOWUP_REQUIRED' || item.effective_review_status === 'STALE_REVIEW') ? (
                               <p className="warning-text">Requires explicit human follow-up before this scope is considered current.</p>
                             ) : null}

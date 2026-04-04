@@ -2735,3 +2735,18 @@ A new read-only runtime-governor queue composes existing manual review state wit
 - list filters: `unresolved_only=true|false` (default `true`), `effective_review_status=<status>`, `limit=<int>` (default `8`)
 
 `/cockpit` now consumes this queue in **Runtime Tuning Review Queue** and keeps deep investigation anchored in `/runtime?tuningScope=<scope>&investigate=1`. This remains paper-only/read-only and does not change runtime tuning operational logic.
+
+### Runtime Tuning Review Queue Aging (Prompt 185)
+
+A new read-only runtime-governor aging layer now complements the existing human review queue:
+
+- `GET /api/runtime-governor/tuning-review-aging/`
+- `GET /api/runtime-governor/tuning-review-aging/<source_scope>/`
+- list query params: `unresolved_only` (default `true`), `age_bucket` (`FRESH|AGING|OVERDUE`), `limit` (default `8`)
+
+Aging buckets are deterministic and paper-only:
+- `FRESH`: `< 2` full days
+- `AGING`: `2-6` full days
+- `OVERDUE`: `>= 7` full days
+
+Cockpit now adds a compact **Review Aging** subsection above Runtime Tuning Review Queue and shows per-item aging badges (`age_bucket`, `age_days`, overdue hint) while preserving existing manual review actions and runtime handoff (`/runtime?tuningScope=<scope>&investigate=1`). No runtime/tuning operational logic changed.

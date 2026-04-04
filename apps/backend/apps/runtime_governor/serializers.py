@@ -453,6 +453,29 @@ class RuntimeTuningReviewQueueSerializer(serializers.Serializer):
 class RuntimeTuningReviewQueueDetailSerializer(RuntimeTuningReviewQueueItemSerializer):
     stored_review_status = serializers.CharField(required=False)
     queue_summary = serializers.CharField()
+
+
+class RuntimeTuningReviewAgingItemSerializer(RuntimeTuningReviewQueueItemSerializer):
+    age_bucket = serializers.CharField()
+    age_days = serializers.IntegerField()
+    overdue = serializers.BooleanField()
+    aging_rank = serializers.IntegerField()
+    aging_reason_codes = serializers.ListField(child=serializers.CharField())
+    age_reference_timestamp = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class RuntimeTuningReviewAgingSerializer(serializers.Serializer):
+    queue_count = serializers.IntegerField()
+    fresh_count = serializers.IntegerField()
+    aging_count = serializers.IntegerField()
+    overdue_count = serializers.IntegerField()
+    highest_urgency_scope = serializers.CharField(required=False, allow_null=True)
+    aging_summary = serializers.CharField()
+    items = RuntimeTuningReviewAgingItemSerializer(many=True)
+
+
+class RuntimeTuningReviewAgingDetailSerializer(RuntimeTuningReviewAgingItemSerializer):
+    aging_summary = serializers.CharField()
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecommendation
