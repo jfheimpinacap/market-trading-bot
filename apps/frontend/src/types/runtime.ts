@@ -241,6 +241,46 @@ export type RuntimeTuningReviewBoardQuery = {
   limit?: number;
 };
 
+export type RuntimeTuningCockpitPanelItem = {
+  source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  attention_priority: RuntimeTuningReviewPriority;
+  attention_rank: number;
+  alert_status: RuntimeTuningAlertStatus;
+  drift_status: RuntimeTuningDriftStatus;
+  board_summary: string;
+  recommended_next_action: RuntimeTuningReviewNextAction;
+  latest_diff_snapshot_id: number | null;
+  latest_diff_status: RuntimeTuningDriftStatus | null;
+  latest_diff_summary: string | null;
+  correlated_run_id: number | null;
+  correlated_run_timestamp: string | null;
+  correlated_profile_name: string | null;
+  correlated_profile_fingerprint: string | null;
+  runtime_deep_link: string;
+};
+
+export type RuntimeTuningCockpitPanel = {
+  generated_at: string;
+  total_scope_count: number;
+  attention_scope_count: number;
+  highest_priority_scope: RuntimeTuningContextSnapshot['source_scope'] | null;
+  highest_priority_status: RuntimeTuningReviewPriority | null;
+  panel_summary: string;
+  items: RuntimeTuningCockpitPanelItem[];
+};
+
+export type RuntimeTuningCockpitPanelDetail = RuntimeTuningCockpitPanelItem & {
+  review_reason_codes: RuntimeTuningReviewReasonCode[];
+  changed_field_count: number;
+  changed_guardrail_count: number;
+};
+
+export type RuntimeTuningCockpitPanelQuery = {
+  source_scope?: RuntimeTuningContextSnapshot['source_scope'];
+  attention_only?: boolean;
+  limit?: number;
+};
+
 export type RuntimePostureRun = {
   id: number;
   started_at: string;

@@ -314,6 +314,40 @@ class RuntimeTuningReviewBoardRowSerializer(serializers.Serializer):
     board_summary = serializers.CharField()
 
 
+class RuntimeTuningCockpitPanelItemSerializer(serializers.Serializer):
+    source_scope = serializers.CharField()
+    attention_priority = serializers.CharField()
+    attention_rank = serializers.IntegerField()
+    alert_status = serializers.CharField()
+    drift_status = serializers.CharField()
+    board_summary = serializers.CharField()
+    recommended_next_action = serializers.CharField()
+    latest_diff_snapshot_id = serializers.IntegerField(allow_null=True)
+    latest_diff_status = serializers.CharField(allow_null=True)
+    latest_diff_summary = serializers.CharField(allow_null=True)
+    correlated_run_id = serializers.IntegerField(allow_null=True)
+    correlated_run_timestamp = serializers.DateTimeField(required=False, allow_null=True)
+    correlated_profile_name = serializers.CharField(allow_null=True)
+    correlated_profile_fingerprint = serializers.CharField(allow_null=True)
+    runtime_deep_link = serializers.CharField()
+
+
+class RuntimeTuningCockpitPanelSerializer(serializers.Serializer):
+    generated_at = serializers.DateTimeField()
+    total_scope_count = serializers.IntegerField()
+    attention_scope_count = serializers.IntegerField()
+    highest_priority_scope = serializers.CharField(required=False, allow_null=True)
+    highest_priority_status = serializers.CharField(required=False, allow_null=True)
+    panel_summary = serializers.CharField()
+    items = RuntimeTuningCockpitPanelItemSerializer(many=True)
+
+
+class RuntimeTuningCockpitPanelDetailSerializer(RuntimeTuningCockpitPanelItemSerializer):
+    review_reason_codes = serializers.ListField(child=serializers.CharField())
+    changed_field_count = serializers.IntegerField()
+    changed_guardrail_count = serializers.IntegerField()
+
+
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecommendation

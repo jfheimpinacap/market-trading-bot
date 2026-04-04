@@ -149,6 +149,17 @@ ahora muestran un bloque consistente de tuning contextual (`tuning_profile_name`
 
 Se mantienen límites: paper-only, sin trading real/dinero real, sin reemplazar authorities existentes.
 
+Delta UX adicional: `/cockpit` ahora muestra una sección compacta **Runtime Tuning Attention** para handoff operativo desde `runtime_governor`:
+
+- consume `GET /api/runtime-governor/tuning-cockpit-panel/` (default `attention_only=true`, `limit=5`)
+- puede abrir detalle por scope vía `GET /api/runtime-governor/tuning-cockpit-panel/<source_scope>/`
+- muestra prioridad/rank, drift/alert status, summary breve y acciones rápidas:
+  - `Open in runtime` → `/runtime?tuningScope=<scope>`
+  - `View diff` (quick view read-only con diff detail existente)
+  - `View run context` (quick view read-only de correlación)
+
+Esta integración no crea nueva pantalla ni mueve lógica de runtime a cockpit; solo consume y enlaza señal consolidada, manteniendo alcance paper-only y sin cambios operativos.
+
 Delta UX adicional: `/runtime` ahora incluye una sección **Tuning Context History** (sin pantalla nueva) para trazabilidad temporal ligera:
 - snapshots recientes de contexto de tuning por scope operativo
 - drift status (`INITIAL`, `NO_CHANGE`, `MINOR_CONTEXT_CHANGE`, `PROFILE_CHANGE`)

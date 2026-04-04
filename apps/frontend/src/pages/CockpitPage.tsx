@@ -8,8 +8,14 @@ import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
 import { getCockpitAttention, getCockpitQuickLinks, getCockpitSummary, runCockpitAction } from '../services/cockpit';
 import { getAutonomyScenarioSummary } from '../services/autonomyScenario';
+import {
+  getRuntimeTuningCockpitPanel,
+  getRuntimeTuningCockpitPanelDetail,
+  getRuntimeTuningContextDiffDetail,
+} from '../services/runtime';
 import { getScanSummary } from '../services/scanAgent';
 import type { CockpitAttentionItem, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
+import type { RuntimeTuningCockpitPanel, RuntimeTuningCockpitPanelDetail, RuntimeTuningContextDiff } from '../types/runtime';
 
 const formatDate = (value: string | null | undefined) => (value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'n/a');
 
@@ -49,22 +55,37 @@ export function CockpitPage() {
   const [runningAction, setRunningAction] = useState<CockpitQuickActionId | null>(null);
   const [autonomyScenarioSummary, setAutonomyScenarioSummary] = useState<Awaited<ReturnType<typeof getAutonomyScenarioSummary>> | null>(null);
   const [scanSummary, setScanSummary] = useState<Awaited<ReturnType<typeof getScanSummary>> | null>(null);
+  const [tuningPanel, setTuningPanel] = useState<RuntimeTuningCockpitPanel | null>(null);
+  const [attentionOnly, setAttentionOnly] = useState(true);
+  const [tuningPanelError, setTuningPanelError] = useState<string | null>(null);
+  const [openDiffScope, setOpenDiffScope] = useState<string | null>(null);
+  const [openRunContextScope, setOpenRunContextScope] = useState<string | null>(null);
+  const [diffCache, setDiffCache] = useState<Record<string, RuntimeTuningContextDiff | null>>({});
+  const [panelDetailCache, setPanelDetailCache] = useState<Record<string, RuntimeTuningCockpitPanelDetail | null>>({});
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setTuningPanelError(null);
     try {
-      const [response, scenarioSummary, scanSummaryResponse] = await Promise.all([getCockpitSummary(), getAutonomyScenarioSummary(), getScanSummary()]);
+      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse] = await Promise.all([
+        getCockpitSummary(),
+        getAutonomyScenarioSummary(),
+        getScanSummary(),
+        getRuntimeTuningCockpitPanel({ attention_only: attentionOnly, limit: 5 }),
+      ]);
       setSnapshot(response);
       setAutonomyScenarioSummary(scenarioSummary);
       setScanSummary(scanSummaryResponse);
+      setTuningPanel(tuningPanelResponse);
     } catch (loadError) {
       setError(getErrorMessage(loadError, 'Could not load cockpit data.'));
       setSnapshot(null);
+      setTuningPanelError(getErrorMessage(loadError, 'Could not load runtime tuning attention panel.'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [attentionOnly]);
 
   useEffect(() => {
     void loadCockpit();
@@ -91,6 +112,34 @@ export function CockpitPage() {
       }
     },
     [loadCockpit, snapshot],
+  );
+
+  const viewDiff = useCallback(
+    async (sourceScope: string, snapshotId: number | null) => {
+      setOpenDiffScope((current) => (current === sourceScope ? null : sourceScope));
+      if (!snapshotId || diffCache[sourceScope]) return;
+      try {
+        const diff = await getRuntimeTuningContextDiffDetail(snapshotId);
+        setDiffCache((current) => ({ ...current, [sourceScope]: diff }));
+      } catch {
+        setDiffCache((current) => ({ ...current, [sourceScope]: null }));
+      }
+    },
+    [diffCache],
+  );
+
+  const viewRunContext = useCallback(
+    async (sourceScope: string) => {
+      setOpenRunContextScope((current) => (current === sourceScope ? null : sourceScope));
+      if (panelDetailCache[sourceScope]) return;
+      try {
+        const detail = await getRuntimeTuningCockpitPanelDetail(sourceScope);
+        setPanelDetailCache((current) => ({ ...current, [sourceScope]: detail }));
+      } catch {
+        setPanelDetailCache((current) => ({ ...current, [sourceScope]: null }));
+      }
+    },
+    [panelDetailCache],
   );
 
   return (
@@ -221,6 +270,76 @@ export function CockpitPage() {
                     </article>
                   ))}
                 </div>
+              )}
+            </SectionCard>
+
+            <SectionCard
+              eyebrow="Runtime tuning"
+              title="Runtime Tuning Attention"
+              description="Read-only handoff from runtime_governor review board for high-signal tuning scopes needing operator attention."
+            >
+              <div className="button-row">
+                <label className="muted-text">
+                  <input type="checkbox" checked={attentionOnly} onChange={(event) => setAttentionOnly(event.target.checked)} /> Attention only
+                </label>
+                <button className="secondary-button" type="button" onClick={() => navigate('/runtime')}>Open full runtime view</button>
+              </div>
+              {tuningPanelError ? <p className="warning-text">{tuningPanelError}</p> : null}
+              {!tuningPanel ? null : (
+                <>
+                  <ul className="key-value-list">
+                    <li><span>Scopes needing attention</span><strong>{tuningPanel.attention_scope_count}</strong></li>
+                    <li><span>Highest priority scope</span><strong>{tuningPanel.highest_priority_scope ?? 'n/a'}</strong></li>
+                    <li><span>Highest priority status</span><strong>{tuningPanel.highest_priority_status ?? 'n/a'}</strong></li>
+                  </ul>
+                  <p className="muted-text">{tuningPanel.panel_summary}</p>
+                  {tuningPanel.items.length === 0 ? (
+                    <EmptyState eyebrow="Runtime tuning" title="No runtime tuning attention required" description="All currently tracked scopes are stable for cockpit attention filtering." />
+                  ) : (
+                    <div className="cockpit-attention-list">
+                      {tuningPanel.items.map((item) => {
+                        const detail = panelDetailCache[item.source_scope];
+                        const diff = diffCache[item.source_scope];
+                        const isDiffOpen = openDiffScope === item.source_scope;
+                        const isRunContextOpen = openRunContextScope === item.source_scope;
+                        return (
+                          <article key={item.source_scope} className="cockpit-attention-item">
+                            <div>
+                              <p className="section-label">{item.attention_priority}</p>
+                              <h3>{item.source_scope}</h3>
+                              <p>{item.board_summary}</p>
+                              <p className="muted-text"><strong>Drift:</strong> {item.drift_status} | <strong>Diff:</strong> {item.latest_diff_summary ?? 'No comparable diff'}</p>
+                            </div>
+                            <div className="button-row">
+                              <button className="secondary-button" type="button" onClick={() => navigate(item.runtime_deep_link)}>Open in runtime</button>
+                              <button className="ghost-button" type="button" onClick={() => void viewDiff(item.source_scope, item.latest_diff_snapshot_id)}>View diff</button>
+                              <button className="ghost-button" type="button" onClick={() => void viewRunContext(item.source_scope)}>View run context</button>
+                            </div>
+                            {isDiffOpen ? (
+                              <div className="subsection">
+                                <p className="section-label">Diff quick view</p>
+                                {!item.latest_diff_snapshot_id ? <p>No comparable diff.</p> : !diff ? <p>No comparable diff.</p> : <p>{diff.diff_summary}</p>}
+                              </div>
+                            ) : null}
+                            {isRunContextOpen ? (
+                              <div className="subsection">
+                                <p className="section-label">Run context quick view</p>
+                                {!item.correlated_run_id ? <p>No correlated run.</p> : (
+                                  <ul className="key-value-list">
+                                    <li><span>Run id</span><strong>{item.correlated_run_id}</strong></li>
+                                    <li><span>Timestamp</span><strong>{formatDate(item.correlated_run_timestamp)}</strong></li>
+                                    <li><span>Profile</span><strong>{item.correlated_profile_name ?? 'n/a'}</strong></li>
+                                    <li><span>Fingerprint</span><strong>{detail?.correlated_profile_fingerprint ?? item.correlated_profile_fingerprint ?? 'n/a'}</strong></li>
+                                  </ul>
+                                )}
+                              </div>
+                            ) : null}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
             </SectionCard>
 

@@ -218,6 +218,14 @@ On top of that observability, runtime governor now exposes a compact read-only t
 
 This addition is summary-only for faster technical review; it does not auto-apply changes and does not alter runtime behavior.
 
+Runtime governor now also exposes a **Cockpit Runtime Tuning Attention Panel** handoff so `/cockpit` can surface only the highest-signal tuning scopes without reimplementing runtime semantics:
+- `GET /api/runtime-governor/tuning-cockpit-panel/`
+- `GET /api/runtime-governor/tuning-cockpit-panel/<source_scope>/`
+- optional query params: `attention_only` (default `true`), `limit` (default `5`), `source_scope`
+- payload includes deep-link handoff (`/runtime?tuningScope=<scope>`), priority/rank, alert+drift status, compact diff/correlation context, and quick-view detail fields.
+
+This remains read-only, paper-only, and decision-neutral: cockpit consumes/summarizes runtime-governor review-board output but does not change operational logic or replace existing attention/operator queues.
+
 ### Runtime feedback apply bridge / closed-loop tuning (new)
 
 `runtime_governor` now closes the loop from runtime feedback into conservative global posture adjustment:
