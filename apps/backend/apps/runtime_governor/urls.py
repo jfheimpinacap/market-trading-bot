@@ -47,6 +47,8 @@ from apps.runtime_governor.views import (
     RuntimeTransitionListView,
     RuntimeTuningProfileSummaryView,
     RuntimeTuningProfileValuesView,
+    RuntimeTuningContextSnapshotListView,
+    RuntimeTuningContextDriftSummaryView,
     RunRuntimeFeedbackReviewView,
 )
 
@@ -58,6 +60,8 @@ urlpatterns = [
     path('capabilities/', RuntimeCapabilitiesView.as_view(), name='capabilities'),
     path('tuning-profile-summary/', RuntimeTuningProfileSummaryView.as_view(), name='tuning_profile_summary'),
     path('tuning-profile-values/', RuntimeTuningProfileValuesView.as_view(), name='tuning_profile_values'),
+    path('tuning-context-snapshots/', RuntimeTuningContextSnapshotListView.as_view(), name='tuning_context_snapshots'),
+    path('tuning-context-drift-summary/', RuntimeTuningContextDriftSummaryView.as_view(), name='tuning_context_drift_summary'),
     path('run-operating-mode-review/', RunOperatingModeReviewView.as_view(), name='run_operating_mode_review'),
     path('runtime-posture-runs/', RuntimePostureRunListView.as_view(), name='runtime_posture_runs'),
     path('runtime-posture-snapshots/', RuntimePostureSnapshotListView.as_view(), name='runtime_posture_snapshots'),

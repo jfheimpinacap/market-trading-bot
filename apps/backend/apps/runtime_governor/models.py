@@ -81,6 +81,39 @@ class RuntimeTransitionLog(TimeStampedModel):
         ]
 
 
+class RuntimeTuningContextSourceScope(models.TextChoices):
+    RUNTIME_FEEDBACK = 'runtime_feedback', 'Runtime feedback'
+    OPERATING_MODE = 'operating_mode', 'Operating mode'
+    MODE_STABILIZATION = 'mode_stabilization', 'Mode stabilization'
+    MODE_ENFORCEMENT = 'mode_enforcement', 'Mode enforcement'
+
+
+class RuntimeTuningContextDriftStatus(models.TextChoices):
+    INITIAL = 'INITIAL', 'Initial'
+    NO_CHANGE = 'NO_CHANGE', 'No change'
+    MINOR_CONTEXT_CHANGE = 'MINOR_CONTEXT_CHANGE', 'Minor context change'
+    PROFILE_CHANGE = 'PROFILE_CHANGE', 'Profile change'
+
+
+class RuntimeTuningContextSnapshot(TimeStampedModel):
+    source_scope = models.CharField(max_length=32, choices=RuntimeTuningContextSourceScope.choices)
+    source_run_id = models.PositiveIntegerField(null=True, blank=True)
+    tuning_profile_name = models.CharField(max_length=64)
+    tuning_profile_fingerprint = models.CharField(max_length=64)
+    tuning_profile_summary = models.CharField(max_length=255, blank=True)
+    effective_values = models.JSONField(default=dict, blank=True)
+    drift_status = models.CharField(max_length=24, choices=RuntimeTuningContextDriftStatus.choices)
+    drift_summary = models.CharField(max_length=255, blank=True)
+    created_at_snapshot = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at_snapshot', '-id']
+        indexes = [
+            models.Index(fields=['source_scope', '-created_at_snapshot']),
+            models.Index(fields=['source_scope', 'drift_status']),
+        ]
+
+
 class ExposurePressureState(models.TextChoices):
     NORMAL = 'NORMAL', 'Normal'
     CAUTION = 'CAUTION', 'Caution'

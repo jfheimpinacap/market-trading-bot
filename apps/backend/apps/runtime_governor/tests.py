@@ -21,9 +21,11 @@ from apps.runtime_governor.models import (
     RuntimeModeTransitionDecision,
     RuntimeMode,
     RuntimeSetBy,
+    RuntimeTuningContextSnapshot,
     RuntimeTransitionLog,
 )
 from apps.runtime_governor.services import get_capabilities_for_current_mode, get_runtime_state, set_runtime_mode
+from apps.runtime_governor.services.tuning_history import create_tuning_context_snapshot
 from apps.runtime_governor.services.operating_mode.mode_switch import GLOBAL_MODE_METADATA_KEY
 from apps.runtime_governor.tuning_profiles import DEFAULT_CONSERVATIVE_TUNING_PROFILE
 from apps.mission_control.models import AutonomousRuntimeSession, AutonomousRuntimeSessionStatus, AutonomousSessionHealthSnapshot, AutonomousSessionHealthStatus
@@ -257,6 +259,106 @@ class RuntimeGovernorTests(TestCase):
         self.assertIn('tuning_profile_name', payload)
         self.assertIn('tuning_effective_values', payload)
         self.assertIn('tuning_guardrail_summary', payload)
+
+    def test_tuning_context_snapshot_first_is_initial(self):
+        snapshot = create_tuning_context_snapshot(
+            source_scope='runtime_feedback',
+            source_run_id=101,
+            tuning_context={
+                'tuning_profile_name': 'runtime_conservative_v1',
+                'tuning_profile_fingerprint': 'abc111',
+                'tuning_profile_summary': 'test',
+                'tuning_effective_values': {'x': 1},
+            },
+        )
+        self.assertEqual(snapshot.drift_status, 'INITIAL')
+
+    def test_tuning_context_snapshot_same_fingerprint_is_no_change(self):
+        create_tuning_context_snapshot(
+            source_scope='runtime_feedback',
+            source_run_id=102,
+            tuning_context={
+                'tuning_profile_name': 'runtime_conservative_v1',
+                'tuning_profile_fingerprint': 'samefp',
+                'tuning_profile_summary': 'test',
+                'tuning_effective_values': {'x': 1},
+            },
+        )
+        snapshot = create_tuning_context_snapshot(
+            source_scope='runtime_feedback',
+            source_run_id=103,
+            tuning_context={
+                'tuning_profile_name': 'runtime_conservative_v1',
+                'tuning_profile_fingerprint': 'samefp',
+                'tuning_profile_summary': 'test',
+                'tuning_effective_values': {'x': 2},
+            },
+        )
+        self.assertEqual(snapshot.drift_status, 'NO_CHANGE')
+
+    def test_tuning_context_snapshot_same_profile_different_fingerprint_is_minor_change(self):
+        create_tuning_context_snapshot(
+            source_scope='operating_mode',
+            source_run_id=201,
+            tuning_context={
+                'tuning_profile_name': 'runtime_conservative_v1',
+                'tuning_profile_fingerprint': 'fp1',
+                'tuning_profile_summary': 'test',
+                'tuning_effective_values': {'x': 1},
+            },
+        )
+        snapshot = create_tuning_context_snapshot(
+            source_scope='operating_mode',
+            source_run_id=202,
+            tuning_context={
+                'tuning_profile_name': 'runtime_conservative_v1',
+                'tuning_profile_fingerprint': 'fp2',
+                'tuning_profile_summary': 'test',
+                'tuning_effective_values': {'x': 2},
+            },
+        )
+        self.assertEqual(snapshot.drift_status, 'MINOR_CONTEXT_CHANGE')
+
+    def test_tuning_context_snapshot_different_profile_is_profile_change(self):
+        create_tuning_context_snapshot(
+            source_scope='mode_stabilization',
+            source_run_id=301,
+            tuning_context={
+                'tuning_profile_name': 'runtime_conservative_v1',
+                'tuning_profile_fingerprint': 'fp1',
+                'tuning_profile_summary': 'test',
+                'tuning_effective_values': {'x': 1},
+            },
+        )
+        snapshot = create_tuning_context_snapshot(
+            source_scope='mode_stabilization',
+            source_run_id=302,
+            tuning_context={
+                'tuning_profile_name': 'runtime_conservative_v2',
+                'tuning_profile_fingerprint': 'fp2',
+                'tuning_profile_summary': 'test',
+                'tuning_effective_values': {'x': 2},
+            },
+        )
+        self.assertEqual(snapshot.drift_status, 'PROFILE_CHANGE')
+
+    def test_tuning_context_drift_summary_endpoint(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=401,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp1',
+            tuning_profile_summary='test',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='first',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_context_drift_summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('total_snapshots', payload)
+        self.assertIn('status_counts', payload)
+        self.assertIn('latest_by_scope', payload)
 
     def test_mode_enforcement_propagates_to_timing_policy(self):
         session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')

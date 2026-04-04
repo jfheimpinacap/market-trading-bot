@@ -30,6 +30,7 @@ from apps.runtime_governor.models import (
     RuntimeFeedbackRecommendation,
     RuntimeFeedbackRun,
     RuntimePerformanceSnapshot,
+    RuntimeTuningContextSnapshot,
 )
 from apps.runtime_governor.serializers import (
     GlobalOperatingModeDecisionSerializer,
@@ -65,6 +66,8 @@ from apps.runtime_governor.serializers import (
     RunModeStabilizationReviewSerializer,
     RuntimeTuningProfileSummarySerializer,
     RuntimeTuningProfileValuesSerializer,
+    RuntimeTuningContextSnapshotSerializer,
+    RuntimeTuningContextDriftSummarySerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -79,6 +82,7 @@ from apps.runtime_governor.services import (
     apply_stabilized_transition_decision,
 )
 from apps.runtime_governor.services.tuning_summary import build_runtime_tuning_profile_snapshot
+from apps.runtime_governor.services.tuning_history import build_tuning_context_drift_summary
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
     get_runtime_feedback_summary,
@@ -204,6 +208,24 @@ class RuntimeTuningProfileValuesView(APIView):
     def get(self, request, *args, **kwargs):
         snapshot = build_runtime_tuning_profile_snapshot()
         serializer = RuntimeTuningProfileValuesSerializer(snapshot)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningContextSnapshotListView(generics.ListAPIView):
+    authentication_classes = []
+    permission_classes = []
+    serializer_class = RuntimeTuningContextSnapshotSerializer
+
+    def get_queryset(self):
+        return RuntimeTuningContextSnapshot.objects.order_by('-created_at_snapshot', '-id')[:200]
+
+
+class RuntimeTuningContextDriftSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        serializer = RuntimeTuningContextDriftSummarySerializer(build_tuning_context_drift_summary())
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
