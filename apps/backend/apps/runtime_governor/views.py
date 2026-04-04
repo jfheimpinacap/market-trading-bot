@@ -84,6 +84,8 @@ from apps.runtime_governor.serializers import (
     RuntimeTuningReviewQueueDetailSerializer,
     RuntimeTuningReviewAgingSerializer,
     RuntimeTuningReviewAgingDetailSerializer,
+    RuntimeTuningReviewEscalationSerializer,
+    RuntimeTuningReviewEscalationDetailSerializer,
     RuntimeTuningReviewActionSerializer,
     RuntimeTuningReviewStateSerializer,
 )
@@ -117,6 +119,10 @@ from apps.runtime_governor.services.tuning_scope_timeline import build_tuning_sc
 from apps.runtime_governor.services.tuning_cockpit_panel import build_tuning_cockpit_panel, get_tuning_cockpit_panel_detail
 from apps.runtime_governor.services.tuning_review_queue import build_tuning_review_queue, get_tuning_review_queue_detail
 from apps.runtime_governor.services.tuning_review_aging import build_tuning_review_aging, get_tuning_review_aging_detail
+from apps.runtime_governor.services.tuning_review_escalation import (
+    build_tuning_review_escalation,
+    get_tuning_review_escalation_detail,
+)
 from apps.runtime_governor.services.tuning_review_state import (
     TuningScopeSnapshotNotFound,
     acknowledge_current_scope,
@@ -519,6 +525,44 @@ class RuntimeTuningReviewAgingDetailView(APIView):
         except TuningScopeSnapshotNotFound:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = RuntimeTuningReviewAgingDetailSerializer(payload)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningReviewEscalationListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        escalated_only = request.query_params.get('escalated_only', 'true').lower() == 'true'
+        escalation_level = request.query_params.get('escalation_level')
+        limit_raw = request.query_params.get('limit')
+        limit = 6
+        if limit_raw is not None:
+            try:
+                limit = int(limit_raw)
+            except (TypeError, ValueError):
+                limit = 6
+
+        serializer = RuntimeTuningReviewEscalationSerializer(
+            build_tuning_review_escalation(
+                escalated_only=escalated_only,
+                escalation_level=escalation_level,
+                limit=limit,
+            )
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningReviewEscalationDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, source_scope: str, *args, **kwargs):
+        try:
+            payload = get_tuning_review_escalation_detail(source_scope=source_scope)
+        except TuningScopeSnapshotNotFound:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = RuntimeTuningReviewEscalationDetailSerializer(payload)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

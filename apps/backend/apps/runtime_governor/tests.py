@@ -26,6 +26,7 @@ from apps.runtime_governor.models import (
     RuntimeMode,
     RuntimeSetBy,
     RuntimeTuningContextSnapshot,
+    RuntimeTuningReviewState,
     RuntimeTransitionLog,
 )
 from apps.runtime_governor.services import get_capabilities_for_current_mode, get_runtime_state, set_runtime_mode
@@ -2806,4 +2807,127 @@ class RuntimeTuningReviewAgingTests(TestCase):
 
     def test_detail_endpoint_returns_404_for_unknown_scope(self):
         response = self.client.get(reverse('runtime_governor_v2:tuning_review_aging_detail', args=['runtime_feedback']))
+        self.assertEqual(response.status_code, 404)
+
+
+class RuntimeTuningReviewEscalationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.now = timezone.now()
+
+    def _snapshot(self, *, scope: str, run_id: int, age_days: int, drift_status: str = 'PROFILE_CHANGE', values: dict | None = None):
+        return RuntimeTuningContextSnapshot.objects.create(
+            source_scope=scope,
+            source_run_id=run_id,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint=f'{scope}-{run_id}',
+            tuning_profile_summary='summary',
+            effective_values=values or {'age_days': age_days},
+            drift_status=drift_status,
+            drift_summary='summary',
+            created_at_snapshot=self.now - timedelta(days=age_days),
+        )
+
+    def _set_last_action_days_ago(self, scope: str, days: int):
+        RuntimeTuningReviewState.objects.filter(source_scope=scope).update(last_action_at=self.now - timedelta(days=days))
+
+    def _seed_dataset(self):
+        self._snapshot(scope='runtime_feedback', run_id=1, age_days=10, values={'p': 1})
+        self.client.post(reverse('runtime_governor_v2:mark_tuning_scope_followup', args=['runtime_feedback']), {}, format='json')
+        self._set_last_action_days_ago('runtime_feedback', 9)
+
+        self._snapshot(scope='mode_enforcement', run_id=11, age_days=8, drift_status='MINOR_CONTEXT_CHANGE', values={'p': 1})
+        self.client.post(reverse('runtime_governor_v2:acknowledge_tuning_scope', args=['mode_enforcement']), {}, format='json')
+        self._snapshot(scope='mode_enforcement', run_id=12, age_days=8, drift_status='MINOR_CONTEXT_CHANGE', values={'p': 2})
+
+        self._snapshot(scope='mode_stabilization', run_id=21, age_days=8, values={'p': 10, 'q': 20})
+        self._snapshot(scope='mode_stabilization', run_id=22, age_days=8, values={'p': 12, 'q': 24})
+
+        self._snapshot(scope='operating_mode', run_id=31, age_days=3, values={'p': 10, 'q': 20})
+        self._snapshot(scope='operating_mode', run_id=32, age_days=3, values={'p': 11, 'q': 22})
+
+        self._snapshot(scope='runtime_feedback', run_id=101, age_days=3, drift_status='NO_CHANGE', values={'stable': True})
+        self.client.post(reverse('runtime_governor_v2:acknowledge_tuning_scope', args=['runtime_feedback']), {}, format='json')
+        self._snapshot(scope='runtime_feedback', run_id=102, age_days=3, drift_status='NO_CHANGE', values={'stable': True})
+
+    def test_escalation_list_payload_shape(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_escalation'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        for key in [
+            'queue_count',
+            'escalated_count',
+            'urgent_count',
+            'elevated_count',
+            'monitor_count',
+            'highest_escalation_scope',
+            'escalation_summary',
+            'items',
+        ]:
+            self.assertIn(key, payload)
+
+    def test_escalation_level_and_requires_immediate_attention(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_escalation'), {'escalated_only': 'false'})
+        self.assertEqual(response.status_code, 200)
+        items = {row['source_scope']: row for row in response.json()['items']}
+        self.assertEqual(items['mode_enforcement']['escalation_level'], 'URGENT')
+        self.assertEqual(items['mode_stabilization']['escalation_level'], 'URGENT')
+        self.assertEqual(items['operating_mode']['escalation_level'], 'ELEVATED')
+        self.assertTrue(items['mode_enforcement']['requires_immediate_attention'])
+        self.assertFalse(items['operating_mode']['requires_immediate_attention'])
+
+    def test_escalated_only_true_excludes_monitor(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_escalation'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(all(item['escalation_level'] in {'URGENT', 'ELEVATED'} for item in response.json()['items']))
+
+    def test_escalation_level_filter_works(self):
+        self._seed_dataset()
+        response = self.client.get(
+            reverse('runtime_governor_v2:tuning_review_escalation'),
+            {'escalated_only': 'false', 'escalation_level': 'URGENT'},
+        )
+        self.assertEqual(response.status_code, 200)
+        levels = {item['escalation_level'] for item in response.json()['items']}
+        self.assertEqual(levels, {'URGENT'})
+
+    def test_ordering_matches_escalation_status_priority_and_age(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_escalation'), {'escalated_only': 'false'})
+        self.assertEqual(response.status_code, 200)
+        scopes = [item['source_scope'] for item in response.json()['items']]
+        self.assertEqual(scopes, ['mode_enforcement', 'mode_stabilization', 'runtime_feedback', 'operating_mode'])
+
+    def test_summary_is_readable_and_stable(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_escalation'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['escalation_summary'], '2 urgent and 2 elevated tuning reviews are pending')
+
+    def test_detail_endpoint_returns_expected_payload(self):
+        self._seed_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_escalation_detail', args=['mode_enforcement']))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        for key in [
+            'source_scope',
+            'escalation_level',
+            'escalation_rank',
+            'requires_immediate_attention',
+            'escalation_reason_codes',
+            'escalation_summary',
+            'effective_review_status',
+            'attention_priority',
+            'age_bucket',
+            'age_days',
+            'review_summary',
+            'technical_summary',
+        ]:
+            self.assertIn(key, payload)
+
+    def test_detail_endpoint_returns_404_for_unknown_scope(self):
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_escalation_detail', args=['unknown_scope']))
         self.assertEqual(response.status_code, 404)

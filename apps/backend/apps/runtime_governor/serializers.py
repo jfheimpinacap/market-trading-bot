@@ -476,6 +476,30 @@ class RuntimeTuningReviewAgingSerializer(serializers.Serializer):
 
 class RuntimeTuningReviewAgingDetailSerializer(RuntimeTuningReviewAgingItemSerializer):
     aging_summary = serializers.CharField()
+
+
+class RuntimeTuningReviewEscalationItemSerializer(RuntimeTuningReviewAgingItemSerializer):
+    escalation_level = serializers.CharField()
+    escalation_rank = serializers.IntegerField()
+    requires_immediate_attention = serializers.BooleanField()
+    escalation_reason_codes = serializers.ListField(child=serializers.CharField())
+
+
+class RuntimeTuningReviewEscalationSerializer(serializers.Serializer):
+    queue_count = serializers.IntegerField()
+    escalated_count = serializers.IntegerField()
+    urgent_count = serializers.IntegerField()
+    elevated_count = serializers.IntegerField()
+    monitor_count = serializers.IntegerField()
+    highest_escalation_scope = serializers.CharField(required=False, allow_null=True)
+    escalation_summary = serializers.CharField()
+    items = RuntimeTuningReviewEscalationItemSerializer(many=True)
+
+
+class RuntimeTuningReviewEscalationDetailSerializer(RuntimeTuningReviewEscalationItemSerializer):
+    escalation_summary = serializers.CharField()
+
+
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecommendation
