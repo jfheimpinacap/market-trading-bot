@@ -198,6 +198,15 @@ Runtime governor summaries now also propagate the active tuning context directly
 
 Added fields are traceability-only (`tuning_profile_name`, `tuning_effective_values`, `tuning_guardrail_summary`, plus profile summary/fingerprint metadata) so operators can audit what tuning influenced each cross-layer summary. This does not alter decision logic, remains paper-only, and improves debugging/auditability.
 
+Runtime governor now also persists a lightweight tuning-context history for temporal auditability:
+- `RuntimeTuningContextSnapshot` records per-scope snapshots (`runtime_feedback`, `operating_mode`, `mode_stabilization`, `mode_enforcement`) with run-id linkage, fingerprint, profile name, and drift annotation.
+- drift rules are explicit: `INITIAL`, `NO_CHANGE`, `MINOR_CONTEXT_CHANGE`, `PROFILE_CHANGE`.
+- API:
+  - `GET /api/runtime-governor/tuning-context-snapshots/`
+  - `GET /api/runtime-governor/tuning-context-drift-summary/`
+
+This history layer is observability-only, keeps paper-only boundaries, does not enable live trading/real money, and does not change operational decisions.
+
 ### Runtime feedback apply bridge / closed-loop tuning (new)
 
 `runtime_governor` now closes the loop from runtime feedback into conservative global posture adjustment:

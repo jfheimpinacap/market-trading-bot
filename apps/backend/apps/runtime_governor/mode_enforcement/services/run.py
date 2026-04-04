@@ -12,6 +12,7 @@ from apps.runtime_governor.mode_enforcement.services.rules import list_rules_for
 from apps.runtime_governor.services.operating_mode.mode_switch import get_active_global_operating_mode
 from apps.runtime_governor.services.state import get_runtime_state
 from apps.runtime_governor.services.tuning_context import build_runtime_tuning_context
+from apps.runtime_governor.services.tuning_history import create_tuning_context_snapshot
 
 
 def run_mode_enforcement_review(*, triggered_by: str = 'operator-ui') -> dict:
@@ -44,6 +45,7 @@ def run_mode_enforcement_review(*, triggered_by: str = 'operator-ui') -> dict:
     metadata['global_mode_enforcement_run_id'] = run.id
     state.metadata = metadata
     state.save(update_fields=['metadata', 'updated_at'])
+    create_tuning_context_snapshot(source_scope='mode_enforcement', source_run_id=run.id)
 
     return {
         'run': run,

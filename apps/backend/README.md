@@ -89,6 +89,20 @@ Cross-summary tuning traceability is now propagated into runtime-governor summar
 
 Each summary now includes read-only tuning context (`tuning_profile_name`, `tuning_effective_values`, `tuning_guardrail_summary`, with profile summary/fingerprint metadata). This is an observability-only alignment layer for audit/debug and does not change underlying runtime decisions. Scope stays paper-only.
 
+Runtime governor now adds a lightweight persisted history layer in `services/tuning_history.py`:
+- model: `RuntimeTuningContextSnapshot`
+- scopes: `runtime_feedback`, `operating_mode`, `mode_stabilization`, `mode_enforcement`
+- explicit drift statuses:
+  - `INITIAL`
+  - `NO_CHANGE`
+  - `MINOR_CONTEXT_CHANGE`
+  - `PROFILE_CHANGE`
+- API:
+  - `GET /api/runtime-governor/tuning-context-snapshots/`
+  - `GET /api/runtime-governor/tuning-context-drift-summary/`
+
+This layer is audit-trace only (historical observability), remains paper-only, and does not modify runtime_governor decision logic or authorities.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:

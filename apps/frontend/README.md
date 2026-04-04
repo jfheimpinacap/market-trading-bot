@@ -149,6 +149,13 @@ ahora muestran un bloque consistente de tuning contextual (`tuning_profile_name`
 
 Se mantienen límites: paper-only, sin trading real/dinero real, sin reemplazar authorities existentes.
 
+Delta UX adicional: `/runtime` ahora incluye una sección **Tuning Context History** (sin pantalla nueva) para trazabilidad temporal ligera:
+- snapshots recientes de contexto de tuning por scope operativo
+- drift status (`INITIAL`, `NO_CHANGE`, `MINOR_CONTEXT_CHANGE`, `PROFILE_CHANGE`)
+- fingerprint y resumen de drift
+
+Esta sección es solo lectura/audit trail, conserva límites paper-only y no altera comportamiento operativo.
+
 ## Runtime feedback apply UX (new)
 
 La vista `/runtime` ahora incluye sección **Runtime Feedback Apply** para cerrar el loop de forma conservadora y auditable:

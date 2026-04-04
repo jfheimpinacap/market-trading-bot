@@ -25,6 +25,7 @@ from apps.runtime_governor.models import (
     RuntimeFeedbackRun,
     RuntimePerformanceSnapshot,
     RuntimeDiagnosticReview,
+    RuntimeTuningContextSnapshot,
     RuntimeMode,
     RuntimeModeProfile,
     RuntimeModeState,
@@ -217,6 +218,18 @@ class RuntimeFeedbackApplyRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecord
         fields = '__all__'
+
+
+class RuntimeTuningContextSnapshotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RuntimeTuningContextSnapshot
+        fields = '__all__'
+
+
+class RuntimeTuningContextDriftSummarySerializer(serializers.Serializer):
+    total_snapshots = serializers.IntegerField()
+    status_counts = serializers.DictField(child=serializers.IntegerField())
+    latest_by_scope = serializers.DictField()
 
 
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):

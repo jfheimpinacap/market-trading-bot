@@ -18,6 +18,7 @@ from apps.runtime_governor.services.apply_transition import apply_stabilized_tra
 from apps.runtime_governor.services.recommendation import emit_runtime_mode_stabilization_recommendation
 from apps.runtime_governor.services.stability_review import build_runtime_mode_stability_review
 from apps.runtime_governor.services.tuning_context import build_runtime_tuning_context
+from apps.runtime_governor.services.tuning_history import create_tuning_context_snapshot
 from apps.runtime_governor.services.transition_decision import build_runtime_mode_transition_decision
 from apps.runtime_governor.services.transition_snapshot import build_runtime_mode_transition_snapshot
 
@@ -99,6 +100,7 @@ def run_mode_stabilization_review(*, triggered_by: str = 'operator-ui', auto_app
     }
     run.completed_at = timezone.now()
     run.save()
+    create_tuning_context_snapshot(source_scope='mode_stabilization', source_run_id=run.id)
 
     return {
         'run': run,

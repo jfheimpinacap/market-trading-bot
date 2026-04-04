@@ -87,6 +87,40 @@ export type RuntimeSummaryTuningContext = {
   tuning_guardrail_summary: Record<string, string | number | boolean>;
 };
 
+export type RuntimeTuningDriftStatus = 'INITIAL' | 'NO_CHANGE' | 'MINOR_CONTEXT_CHANGE' | 'PROFILE_CHANGE';
+
+export type RuntimeTuningContextSnapshot = {
+  id: number;
+  source_scope: 'runtime_feedback' | 'operating_mode' | 'mode_stabilization' | 'mode_enforcement';
+  source_run_id: number | null;
+  tuning_profile_name: string;
+  tuning_profile_fingerprint: string;
+  tuning_profile_summary: string;
+  effective_values: Record<string, string | number | boolean>;
+  drift_status: RuntimeTuningDriftStatus;
+  drift_summary: string;
+  created_at_snapshot: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RuntimeTuningContextDriftSummary = {
+  total_snapshots: number;
+  status_counts: Record<RuntimeTuningDriftStatus, number>;
+  latest_by_scope: Record<
+    RuntimeTuningContextSnapshot['source_scope'],
+    {
+      latest_snapshot_id: number | null;
+      source_run_id: number | null;
+      tuning_profile_name: string | null;
+      tuning_profile_fingerprint: string | null;
+      drift_status: RuntimeTuningDriftStatus | null;
+      drift_summary: string | null;
+      created_at: string | null;
+    }
+  >;
+};
+
 export type RuntimePostureRun = {
   id: number;
   started_at: string;

@@ -35,6 +35,8 @@ import type {
   RuntimeModeTransitionApplyRecord,
   RuntimeModeTransitionSnapshot,
   RuntimeTuningProfileSummary,
+  RuntimeTuningContextSnapshot,
+  RuntimeTuningContextDriftSummary,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -227,4 +229,12 @@ export function getModeStabilizationSummary() {
 
 export function getRuntimeTuningProfileSummary() {
   return requestJson<RuntimeTuningProfileSummary>('/api/runtime-governor/tuning-profile-summary/');
+}
+
+export function getRuntimeTuningContextSnapshots() {
+  return requestJson<RuntimeTuningContextSnapshot[]>('/api/runtime-governor/tuning-context-snapshots/');
+}
+
+export function getRuntimeTuningContextDriftSummary() {
+  return requestJson<RuntimeTuningContextDriftSummary>('/api/runtime-governor/tuning-context-drift-summary/');
 }

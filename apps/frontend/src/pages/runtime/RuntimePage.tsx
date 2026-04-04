@@ -45,6 +45,8 @@ import {
   getModeStabilizationRecommendations,
   getModeStabilizationSummary,
   getRuntimeTuningProfileSummary,
+  getRuntimeTuningContextSnapshots,
+  getRuntimeTuningContextDriftSummary,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -79,6 +81,8 @@ import type {
   RuntimeModeTransitionSnapshot,
   RuntimeTuningProfileSummary,
   RuntimeSummaryTuningContext,
+  RuntimeTuningContextSnapshot,
+  RuntimeTuningContextDriftSummary,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -147,6 +151,8 @@ export function RuntimePage() {
   const [modeStabilizationRecommendations, setModeStabilizationRecommendations] = useState<RuntimeModeStabilizationRecommendation[]>([]);
   const [modeStabilizationSummary, setModeStabilizationSummary] = useState<RuntimeModeStabilizationSummary | null>(null);
   const [tuningSummary, setTuningSummary] = useState<RuntimeTuningProfileSummary | null>(null);
+  const [tuningContextSnapshots, setTuningContextSnapshots] = useState<RuntimeTuningContextSnapshot[]>([]);
+  const [tuningContextDriftSummary, setTuningContextDriftSummary] = useState<RuntimeTuningContextDriftSummary | null>(null);
 
   const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -158,7 +164,7 @@ export function RuntimePage() {
     setLoading(true);
     setError(null);
     try {
-      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes, tuningContextSnapshotsRes, tuningContextDriftSummaryRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
@@ -191,6 +197,8 @@ export function RuntimePage() {
         getModeStabilizationRecommendations(),
         getModeStabilizationSummary(),
         getRuntimeTuningProfileSummary(),
+        getRuntimeTuningContextSnapshots(),
+        getRuntimeTuningContextDriftSummary(),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
@@ -224,6 +232,8 @@ export function RuntimePage() {
       setModeStabilizationRecommendations(stabilizationRecommendationsRes);
       setModeStabilizationSummary(stabilizationSummaryRes);
       setTuningSummary(tuningSummaryRes);
+      setTuningContextSnapshots(tuningContextSnapshotsRes);
+      setTuningContextDriftSummary(tuningContextDriftSummaryRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load runtime governance.');
     } finally {
@@ -368,6 +378,39 @@ export function RuntimePage() {
             <div><strong>Global influence:</strong> {Object.entries(status?.global_mode_influence ?? {}).map(([k, v]) => `${k}:${v}`).join(' · ') || '—'}</div>
             <div><strong>Active incidents:</strong> {incidentSummary?.active_incidents ?? 0}</div>
             <div><strong>Critical incidents:</strong> {incidentSummary?.critical_active ?? 0}</div>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          eyebrow="Tuning observability"
+          title="Tuning Context History"
+          description="Lightweight per-run snapshots for drift audit only. This does not change runtime decisions."
+        >
+          <div className="system-metadata-grid">
+            <div><strong>Total snapshots:</strong> {tuningContextDriftSummary?.total_snapshots ?? 0}</div>
+            <div><strong>INITIAL:</strong> {tuningContextDriftSummary?.status_counts.INITIAL ?? 0}</div>
+            <div><strong>NO_CHANGE:</strong> {tuningContextDriftSummary?.status_counts.NO_CHANGE ?? 0}</div>
+            <div><strong>MINOR_CONTEXT_CHANGE:</strong> {tuningContextDriftSummary?.status_counts.MINOR_CONTEXT_CHANGE ?? 0}</div>
+            <div><strong>PROFILE_CHANGE:</strong> {tuningContextDriftSummary?.status_counts.PROFILE_CHANGE ?? 0}</div>
+          </div>
+          <h4>Recent snapshots</h4>
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead><tr><th>Scope</th><th>Run</th><th>Profile</th><th>Fingerprint</th><th>Drift</th><th>Summary</th><th>Created</th></tr></thead>
+              <tbody>
+                {tuningContextSnapshots.slice(0, 20).map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.source_scope}</td>
+                    <td>{row.source_run_id ?? '—'}</td>
+                    <td>{row.tuning_profile_name}</td>
+                    <td>{row.tuning_profile_fingerprint}</td>
+                    <td>{row.drift_status}</td>
+                    <td>{row.drift_summary}</td>
+                    <td>{new Date(row.created_at_snapshot).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </SectionCard>
 

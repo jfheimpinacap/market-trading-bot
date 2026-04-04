@@ -16,6 +16,7 @@ from apps.runtime_governor.runtime_feedback.services.feedback import build_runti
 from apps.runtime_governor.runtime_feedback.services.performance import build_runtime_performance_snapshot
 from apps.runtime_governor.runtime_feedback.services.recommendation import emit_runtime_feedback_recommendation
 from apps.runtime_governor.services.tuning_context import build_runtime_tuning_context
+from apps.runtime_governor.services.tuning_history import create_tuning_context_snapshot
 
 
 def _apply_runtime_feedback_decision(*, decision: RuntimeFeedbackDecision):
@@ -80,6 +81,7 @@ def run_runtime_feedback_review(*, triggered_by: str = 'operator-ui', auto_apply
         'recommendation_id': recommendation.id,
     }
     feedback_run.save()
+    create_tuning_context_snapshot(source_scope='runtime_feedback', source_run_id=feedback_run.id)
 
     return {
         'run': feedback_run,

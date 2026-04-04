@@ -14,6 +14,7 @@ from apps.runtime_governor.services.operating_mode.mode_switch import decide_and
 from apps.runtime_governor.services.operating_mode.posture import build_posture_snapshot
 from apps.runtime_governor.services.operating_mode.recommendation import emit_mode_recommendation
 from apps.runtime_governor.services.tuning_context import build_runtime_tuning_context
+from apps.runtime_governor.services.tuning_history import create_tuning_context_snapshot
 
 
 def run_operating_mode_review(*, triggered_by: str = 'operator-ui', auto_apply: bool = True) -> dict:
@@ -43,6 +44,7 @@ def run_operating_mode_review(*, triggered_by: str = 'operator-ui', auto_apply: 
         'recommendation_id': recommendation.id,
     }
     posture_run.save()
+    create_tuning_context_snapshot(source_scope='operating_mode', source_run_id=posture_run.id)
 
     return {
         'run': posture_run,
