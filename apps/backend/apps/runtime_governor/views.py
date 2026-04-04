@@ -68,6 +68,7 @@ from apps.runtime_governor.serializers import (
     RuntimeTuningProfileValuesSerializer,
     RuntimeTuningContextSnapshotSerializer,
     RuntimeTuningContextDriftSummarySerializer,
+    RuntimeTuningContextDiffSerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -83,6 +84,7 @@ from apps.runtime_governor.services import (
 )
 from apps.runtime_governor.services.tuning_summary import build_runtime_tuning_profile_snapshot
 from apps.runtime_governor.services.tuning_history import build_tuning_context_drift_summary
+from apps.runtime_governor.services.tuning_diff import build_tuning_context_diffs
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
     get_runtime_feedback_summary,
@@ -226,6 +228,27 @@ class RuntimeTuningContextDriftSummaryView(APIView):
 
     def get(self, request, *args, **kwargs):
         serializer = RuntimeTuningContextDriftSummarySerializer(build_tuning_context_drift_summary())
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningContextDiffListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        serializer = RuntimeTuningContextDiffSerializer(build_tuning_context_diffs(), many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningContextDiffDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, snapshot_id: int, *args, **kwargs):
+        diffs = build_tuning_context_diffs(snapshot_id=snapshot_id)
+        if not diffs:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = RuntimeTuningContextDiffSerializer(diffs[0])
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

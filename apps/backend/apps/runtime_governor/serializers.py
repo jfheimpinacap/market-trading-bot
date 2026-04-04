@@ -232,6 +232,17 @@ class RuntimeTuningContextDriftSummarySerializer(serializers.Serializer):
     latest_by_scope = serializers.DictField()
 
 
+class RuntimeTuningContextDiffSerializer(serializers.Serializer):
+    source_scope = serializers.CharField()
+    current_snapshot_id = serializers.IntegerField()
+    previous_snapshot_id = serializers.IntegerField(allow_null=True)
+    drift_status = serializers.CharField()
+    changed_fields = serializers.JSONField()
+    unchanged_fields = serializers.JSONField(required=False)
+    diff_summary = serializers.CharField()
+    created_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecommendation

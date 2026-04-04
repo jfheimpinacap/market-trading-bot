@@ -121,6 +121,17 @@ export type RuntimeTuningContextDriftSummary = {
   >;
 };
 
+export type RuntimeTuningContextDiff = {
+  source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  current_snapshot_id: number;
+  previous_snapshot_id: number | null;
+  drift_status: RuntimeTuningDriftStatus;
+  changed_fields: Record<string, { previous: unknown; current: unknown }>;
+  unchanged_fields?: Record<string, unknown>;
+  diff_summary: string;
+  created_at?: string | null;
+};
+
 export type RuntimePostureRun = {
   id: number;
   started_at: string;

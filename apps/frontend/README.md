@@ -2334,3 +2334,13 @@ Esta capa coordina la postura operativa global del runtime sin reemplazar timing
 - `/runtime` now includes a **Mode Enforcement** section with module impacts, decisions, recommendations, and summary cards.
 - Includes `Run mode enforcement review` action to trigger auditable downstream enforcement propagation.
 - UI and backend remain paper-only/local-first; no live execution enablement.
+
+## Runtime UI: Tuning Drift Diff (Prompt 169)
+
+`/runtime` now adds a **Tuning Drift Diff** table inside the existing **Tuning Context History** section (no new screen):
+
+- shows `source_scope`, current/previous snapshot ids, `drift_status`, changed fields, and readable diff summary
+- consumes `GET /api/runtime-governor/tuning-context-diffs/`
+- keeps the module read-only (no edit controls, no apply controls)
+
+This improves tuning debugging/traceability only; it does not change runtime behavior and remains paper-only.
