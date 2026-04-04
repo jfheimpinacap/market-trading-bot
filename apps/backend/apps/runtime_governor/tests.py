@@ -185,6 +185,9 @@ class RuntimeGovernorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn('active_mode', payload)
+        self.assertIn('tuning_profile_name', payload)
+        self.assertIn('tuning_effective_values', payload)
+        self.assertIn('tuning_guardrail_summary', payload)
 
 
     def test_mode_enforcement_balanced_keeps_modules_unchanged(self):
@@ -251,6 +254,9 @@ class RuntimeGovernorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn('current_mode', payload)
+        self.assertIn('tuning_profile_name', payload)
+        self.assertIn('tuning_effective_values', payload)
+        self.assertIn('tuning_guardrail_summary', payload)
 
     def test_mode_enforcement_propagates_to_timing_policy(self):
         session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
@@ -437,7 +443,11 @@ class RuntimeGovernorTests(TestCase):
         self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
         response = self.client.get(reverse('runtime_governor_v2:runtime_feedback_summary'))
         self.assertEqual(response.status_code, 200)
-        self.assertIn('feedback_runs', response.json())
+        payload = response.json()
+        self.assertIn('feedback_runs', payload)
+        self.assertIn('tuning_profile_name', payload)
+        self.assertIn('tuning_effective_values', payload)
+        self.assertIn('tuning_guardrail_summary', payload)
 
     def test_runtime_feedback_apply_recovery_recommendation_switches_mode(self):
         session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
@@ -611,6 +621,25 @@ class RuntimeGovernorTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn('runs', payload)
+        self.assertIn('tuning_profile_name', payload)
+        self.assertIn('tuning_effective_values', payload)
+        self.assertIn('tuning_guardrail_summary', payload)
+
+    def test_summary_endpoints_keep_existing_fields_while_adding_tuning_context(self):
+        self.client.post(reverse('runtime_governor_v2:run_runtime_feedback_review'), {'triggered_by': 'test'}, format='json')
+        self.client.post(reverse('runtime_governor_v2:run_operating_mode_review'), {'triggered_by': 'test', 'auto_apply': True}, format='json')
+        self.client.post(reverse('runtime_governor_v2:run_mode_stabilization_review'), {'triggered_by': 'test'}, format='json')
+        self.client.post(reverse('runtime_governor_v2:run_mode_enforcement_review'), {'triggered_by': 'test'}, format='json')
+
+        feedback = self.client.get(reverse('runtime_governor_v2:runtime_feedback_summary')).json()
+        operating = self.client.get(reverse('runtime_governor_v2:operating_mode_summary')).json()
+        stabilization = self.client.get(reverse('runtime_governor_v2:mode_stabilization_summary')).json()
+        enforcement = self.client.get(reverse('runtime_governor_v2:mode_enforcement_summary')).json()
+
+        self.assertIn('feedback_runs', feedback)
+        self.assertIn('active_mode', operating)
+        self.assertIn('runs', stabilization)
+        self.assertIn('current_mode', enforcement)
 
     def test_apply_stabilized_transition_allows_mode_switch(self):
         self._create_feedback_decision('ENTER_RECOVERY_MODE')

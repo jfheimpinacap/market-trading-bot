@@ -81,6 +81,14 @@ Runtime governor now adds `services/tuning_summary.py` plus read-only API observ
 
 These endpoints expose active profile name, effective thresholds/weights, and runtime feedback / operating mode / stabilization guardrails for audit/debug visibility only. No behavior mutation is performed by these endpoints.
 
+Cross-summary tuning traceability is now propagated into runtime-governor summary endpoints:
+- `runtime-feedback-summary`
+- `operating-mode-summary`
+- `mode-stabilization-summary`
+- `mode-enforcement-summary`
+
+Each summary now includes read-only tuning context (`tuning_profile_name`, `tuning_effective_values`, `tuning_guardrail_summary`, with profile summary/fingerprint metadata). This is an observability-only alignment layer for audit/debug and does not change underlying runtime decisions. Scope stays paper-only.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:

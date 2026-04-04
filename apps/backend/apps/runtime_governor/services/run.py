@@ -17,6 +17,7 @@ from apps.runtime_governor.models import (
 from apps.runtime_governor.services.apply_transition import apply_stabilized_transition_decision
 from apps.runtime_governor.services.recommendation import emit_runtime_mode_stabilization_recommendation
 from apps.runtime_governor.services.stability_review import build_runtime_mode_stability_review
+from apps.runtime_governor.services.tuning_context import build_runtime_tuning_context
 from apps.runtime_governor.services.transition_decision import build_runtime_mode_transition_decision
 from apps.runtime_governor.services.transition_snapshot import build_runtime_mode_transition_snapshot
 
@@ -116,7 +117,7 @@ def get_mode_stabilization_summary() -> dict:
     latest_decision = RuntimeModeTransitionDecision.objects.order_by('-created_at', '-id').first()
     latest_apply_record = RuntimeModeTransitionApplyRecord.objects.order_by('-created_at', '-id').first()
 
-    return {
+    summary = {
         'latest_run_id': latest_run.id if latest_run else None,
         'latest_snapshot_id': latest_snapshot.id if latest_snapshot else None,
         'latest_review_id': latest_review.id if latest_review else None,
@@ -137,3 +138,5 @@ def get_mode_stabilization_summary() -> dict:
         'blocked_apply_count': RuntimeModeTransitionApplyRecord.objects.filter(apply_status='BLOCKED').count(),
         'recommendation_summary': latest_run.recommendation_summary if latest_run else {},
     }
+    summary.update(build_runtime_tuning_context(summary_scope='mode_stabilization_summary'))
+    return summary

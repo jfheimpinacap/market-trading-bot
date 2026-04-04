@@ -78,6 +78,7 @@ import type {
   RuntimeModeTransitionApplyRecord,
   RuntimeModeTransitionSnapshot,
   RuntimeTuningProfileSummary,
+  RuntimeSummaryTuningContext,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -86,6 +87,32 @@ function tone(value: string) {
   if (value === 'PAPER_SEMI_AUTO' || value === 'DEGRADED' || value === 'PAPER_ASSIST' || value === 'PAUSED') return 'pending';
   if (value === 'OBSERVE_ONLY' || value === 'STOPPED') return 'offline';
   return 'neutral';
+}
+
+function TuningContextBlock({ context }: { context: RuntimeSummaryTuningContext | null }) {
+  if (!context) return null;
+  return (
+    <>
+      <h4>Active tuning context</h4>
+      <div className="system-metadata-grid">
+        <div><strong>Profile:</strong> {context.tuning_profile_name}</div>
+        <div><strong>Fingerprint:</strong> {context.tuning_profile_fingerprint ?? '—'}</div>
+      </div>
+      {context.tuning_profile_summary ? <p><strong>Summary:</strong> {context.tuning_profile_summary}</p> : null}
+      <h5>Effective values</h5>
+      <ul>
+        {Object.entries(context.tuning_effective_values ?? {}).map(([key, value]) => (
+          <li key={key}><strong>{key}:</strong> {String(value)}</li>
+        ))}
+      </ul>
+      <h5>Guardrails</h5>
+      <ul>
+        {Object.entries(context.tuning_guardrail_summary ?? {}).map(([key, value]) => (
+          <li key={key}><strong>{key}:</strong> {String(value)}</li>
+        ))}
+      </ul>
+    </>
+  );
 }
 
 export function RuntimePage() {
@@ -480,6 +507,7 @@ export function RuntimePage() {
 
           <h4>Recommendations</h4>
           <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{recommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>
+          <TuningContextBlock context={operatingSummary} />
         </SectionCard>
 
 
@@ -511,6 +539,7 @@ export function RuntimePage() {
 
           <h4>Recommendations</h4>
           <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{runtimeFeedbackRecommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>
+          <TuningContextBlock context={runtimeFeedbackSummary} />
         </SectionCard>
 
         <SectionCard
@@ -583,6 +612,7 @@ export function RuntimePage() {
 
           <h4>Runs</h4>
           <div className="table-wrapper"><table className="data-table"><thead><tr><th>Started</th><th>Considered</th><th>Allowed</th><th>Deferred</th><th>Dwell hold</th><th>Blocked</th><th>Manual review</th></tr></thead><tbody>{modeStabilizationRuns.slice(0, 10).map((row) => <tr key={row.id}><td>{new Date(row.started_at).toLocaleString()}</td><td>{row.considered_transition_count}</td><td>{row.allowed_count}</td><td>{row.deferred_count}</td><td>{row.dwell_hold_count}</td><td>{row.blocked_count}</td><td>{row.manual_review_count}</td></tr>)}</tbody></table></div>
+          <TuningContextBlock context={modeStabilizationSummary} />
         </SectionCard>
 
         <SectionCard
@@ -608,6 +638,7 @@ export function RuntimePage() {
 
           <h4>Recommendations</h4>
           <div className="table-wrapper"><table className="data-table"><thead><tr><th>Type</th><th>Rationale</th><th>Blockers</th><th>Confidence</th></tr></thead><tbody>{scopedRecommendations.slice(0, 10).map((row) => <tr key={row.id}><td>{row.recommendation_type}</td><td>{row.rationale}</td><td>{row.blockers.join(', ') || '—'}</td><td>{row.confidence.toFixed(2)}</td></tr>)}</tbody></table></div>
+          <TuningContextBlock context={modeEnforcementSummary} />
         </SectionCard>
 
       </DataStateWrapper>

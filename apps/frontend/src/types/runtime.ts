@@ -79,6 +79,13 @@ export type SetRuntimeModePayload = {
 };
 
 export type GlobalOperatingMode = 'BALANCED' | 'CAUTION' | 'MONITOR_ONLY' | 'RECOVERY_MODE' | 'THROTTLED' | 'BLOCKED';
+export type RuntimeSummaryTuningContext = {
+  tuning_profile_name: string;
+  tuning_profile_summary?: string;
+  tuning_profile_fingerprint?: string;
+  tuning_effective_values: Record<string, string | number | boolean>;
+  tuning_guardrail_summary: Record<string, string | number | boolean>;
+};
 
 export type RuntimePostureRun = {
   id: number;
@@ -147,7 +154,7 @@ export type OperatingModeRecommendation = {
   created_at: string;
 };
 
-export type OperatingModeSummary = {
+export type OperatingModeSummary = RuntimeSummaryTuningContext & {
   latest_run_id: number | null;
   latest_decision_id: number | null;
   active_mode: GlobalOperatingMode;
@@ -216,7 +223,7 @@ export type ModeEnforcementRecommendation = {
   created_at: string;
 };
 
-export type ModeEnforcementSummary = {
+export type ModeEnforcementSummary = RuntimeSummaryTuningContext & {
   latest_run_id: number | null;
   current_mode: GlobalOperatingMode;
   modules_affected: number;
@@ -301,7 +308,7 @@ export type RuntimeFeedbackRecommendation = {
   created_at: string;
 };
 
-export type RuntimeFeedbackSummary = {
+export type RuntimeFeedbackSummary = RuntimeSummaryTuningContext & {
   latest_run_id: number | null;
   latest_snapshot_id: number | null;
   latest_decision_id: number | null;
@@ -470,7 +477,7 @@ export type RuntimeModeStabilizationRecommendation = {
   created_at: string;
 };
 
-export type RuntimeModeStabilizationSummary = {
+export type RuntimeModeStabilizationSummary = RuntimeSummaryTuningContext & {
   latest_run_id: number | null;
   latest_snapshot_id: number | null;
   latest_review_id: number | null;
