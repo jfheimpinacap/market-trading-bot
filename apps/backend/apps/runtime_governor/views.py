@@ -75,6 +75,7 @@ from apps.runtime_governor.serializers import (
     RuntimeTuningAlertSummarySerializer,
     RuntimeTuningReviewBoardRowSerializer,
     RuntimeTuningInvestigationPacketSerializer,
+    RuntimeTuningScopeTimelineSerializer,
     RuntimeTuningCockpitPanelSerializer,
     RuntimeTuningCockpitPanelDetailSerializer,
 )
@@ -104,6 +105,7 @@ from apps.runtime_governor.services.tuning_alerts import build_tuning_change_ale
 from apps.runtime_governor.services.tuning_alert_summary import build_tuning_alert_summary
 from apps.runtime_governor.services.tuning_review_board import build_tuning_review_board, get_tuning_review_board_detail
 from apps.runtime_governor.services.tuning_investigation import get_tuning_investigation_packet
+from apps.runtime_governor.services.tuning_scope_timeline import build_tuning_scope_timeline
 from apps.runtime_governor.services.tuning_cockpit_panel import build_tuning_cockpit_panel, get_tuning_cockpit_panel_detail
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
@@ -359,6 +361,27 @@ class RuntimeTuningInvestigationDetailView(APIView):
         if not packet:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = RuntimeTuningInvestigationPacketSerializer(packet)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningScopeTimelineDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, source_scope: str, *args, **kwargs):
+        limit_raw = request.query_params.get('limit')
+        include_stable = request.query_params.get('include_stable', 'true').lower() == 'true'
+        limit = 5
+        if limit_raw is not None:
+            try:
+                limit = int(limit_raw)
+            except (TypeError, ValueError):
+                limit = 5
+
+        timeline = build_tuning_scope_timeline(source_scope=source_scope, limit=limit, include_stable=include_stable)
+        if not timeline:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = RuntimeTuningScopeTimelineSerializer(timeline)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

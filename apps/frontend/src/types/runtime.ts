@@ -279,6 +279,41 @@ export type RuntimeTuningInvestigationPacket = {
 };
 
 
+
+export type RuntimeTuningScopeTimelineEntry = {
+  snapshot_id: number;
+  created_at: string;
+  drift_status: RuntimeTuningDriftStatus;
+  alert_status: RuntimeTuningAlertStatus;
+  profile_name: string;
+  profile_fingerprint: string | null;
+  diff_summary: string;
+  has_comparable_diff: boolean;
+  changed_field_count: number;
+  changed_guardrail_count: number;
+  correlated_run_id: number | null;
+  correlated_run_timestamp: string | null;
+  timeline_reason_codes: string[];
+  timeline_label: 'STABLE_BASELINE' | 'MINOR_CONTEXT_UPDATE' | 'PROFILE_SHIFT' | 'REVIEW_NOW' | 'INITIAL_SNAPSHOT';
+};
+
+export type RuntimeTuningScopeTimeline = {
+  source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  entry_count: number;
+  latest_snapshot_id: number;
+  latest_snapshot_created_at: string;
+  timeline_summary: string;
+  is_recently_stable: boolean;
+  has_recent_profile_shift: boolean;
+  has_recent_review_now: boolean;
+  entries: RuntimeTuningScopeTimelineEntry[];
+};
+
+export type RuntimeTuningScopeTimelineQuery = {
+  limit?: number;
+  include_stable?: boolean;
+};
+
 export type RuntimeTuningCockpitPanelItem = {
   source_scope: RuntimeTuningContextSnapshot['source_scope'];
   attention_priority: RuntimeTuningReviewPriority;

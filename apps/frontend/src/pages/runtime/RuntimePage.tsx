@@ -55,6 +55,7 @@ import {
   getRuntimeTuningChangeAlertSummary,
   getRuntimeTuningReviewBoard,
   getRuntimeTuningInvestigation,
+  getRuntimeTuningScopeTimeline,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -100,6 +101,7 @@ import type {
   RuntimeTuningAlertSummary,
   RuntimeTuningReviewBoardRow,
   RuntimeTuningInvestigationPacket,
+  RuntimeTuningScopeTimeline,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -198,6 +200,9 @@ export function RuntimePage() {
   const [tuningReviewScopeFilter, setTuningReviewScopeFilter] = useState('');
   const [focusedScope, setFocusedScope] = useState<RuntimeTuningContextSnapshot['source_scope'] | null>(getFocusedScopeFromQuery());
   const [tuningInvestigation, setTuningInvestigation] = useState<RuntimeTuningInvestigationPacket | null>(null);
+  const [tuningScopeTimeline, setTuningScopeTimeline] = useState<RuntimeTuningScopeTimeline | null>(null);
+  const [timelineNonStableOnly, setTimelineNonStableOnly] = useState(false);
+  const [timelineExpandedHistory, setTimelineExpandedHistory] = useState(false);
   const [investigationLoading, setInvestigationLoading] = useState(false);
   const [investigationError, setInvestigationError] = useState<string | null>(null);
   const [expandedCorrelatedScope, setExpandedCorrelatedScope] = useState<RuntimeTuningContextSnapshot['source_scope'] | null>(null);
@@ -374,10 +379,18 @@ export function RuntimePage() {
       navigate(`/runtime?tuningScope=${encodeURIComponent(scope)}&investigate=1`);
     }
     try {
-      const packet = await getRuntimeTuningInvestigation(scope);
+      const [packet, timeline] = await Promise.all([
+        getRuntimeTuningInvestigation(scope),
+        getRuntimeTuningScopeTimeline(scope, {
+          limit: timelineExpandedHistory ? 8 : 5,
+          include_stable: !timelineNonStableOnly,
+        }),
+      ]);
       setTuningInvestigation(packet);
+      setTuningScopeTimeline(timeline);
     } catch (err) {
       setTuningInvestigation(null);
+      setTuningScopeTimeline(null);
       setInvestigationError(err instanceof Error ? err.message : 'Could not load tuning investigation packet.');
     } finally {
       setInvestigationLoading(false);
@@ -386,6 +399,7 @@ export function RuntimePage() {
 
   function onHideInvestigation() {
     setTuningInvestigation(null);
+    setTuningScopeTimeline(null);
     setInvestigationError(null);
     if (focusedScope) {
       navigate(`/runtime?tuningScope=${encodeURIComponent(focusedScope)}`);
@@ -393,6 +407,21 @@ export function RuntimePage() {
       navigate('/runtime');
     }
   }
+
+  useEffect(() => {
+    if (!tuningInvestigation) return;
+    void (async () => {
+      try {
+        const timeline = await getRuntimeTuningScopeTimeline(tuningInvestigation.source_scope, {
+          limit: timelineExpandedHistory ? 8 : 5,
+          include_stable: !timelineNonStableOnly,
+        });
+        setTuningScopeTimeline(timeline);
+      } catch {
+        // Keep existing timeline if refresh fails.
+      }
+    })();
+  }, [timelineExpandedHistory, timelineNonStableOnly, tuningInvestigation]);
 
   async function onSetMode(mode: RuntimeModeOption['mode']) {
     setUpdating(mode);
@@ -664,6 +693,42 @@ export function RuntimePage() {
                 </p>
               ) : (
                 <p>No correlated run is available for this scope.</p>
+              )}
+              <h5>Recent Scope Timeline</h5>
+              {tuningScopeTimeline ? (
+                <>
+                  <p><strong>{tuningScopeTimeline.timeline_summary}</strong></p>
+                  <div className="system-metadata-grid">
+                    <div><strong>Recently stable:</strong> {tuningScopeTimeline.is_recently_stable ? 'yes' : 'no'}</div>
+                    <div><strong>Recent profile shift:</strong> {tuningScopeTimeline.has_recent_profile_shift ? 'yes' : 'no'}</div>
+                    <div><strong>Recent review now:</strong> {tuningScopeTimeline.has_recent_review_now ? 'yes' : 'no'}</div>
+                    <div><strong>Entries shown:</strong> {tuningScopeTimeline.entry_count}</div>
+                  </div>
+                  <div className="button-row">
+                    <label>
+                      <input type="checkbox" checked={timelineNonStableOnly} onChange={(event) => setTimelineNonStableOnly(event.target.checked)} />
+                      {' '}Show only non-stable
+                    </label>
+                    <label>
+                      <input type="checkbox" checked={timelineExpandedHistory} onChange={(event) => setTimelineExpandedHistory(event.target.checked)} />
+                      {' '}Show more history
+                    </label>
+                  </div>
+                  <ul>
+                    {tuningScopeTimeline.entries.map((entry) => (
+                      <li key={entry.snapshot_id}>
+                        <strong>{new Date(entry.created_at).toLocaleString()}</strong> · {entry.drift_status} · {entry.alert_status} · {entry.timeline_label}
+                        <br />
+                        {entry.diff_summary}
+                        <br />
+                        Changed fields/guardrails: {entry.changed_field_count}/{entry.changed_guardrail_count}
+                        {entry.correlated_run_id ? ` · Run #${entry.correlated_run_id}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p>No timeline history available yet for this scope.</p>
               )}
               <div className="button-row">
                 <button

@@ -2680,3 +2680,17 @@ Runtime governor now exposes a compact **read-only investigation packet** per `s
 - Packet includes summary, reason codes, compact diff preview (max 5 fields + remaining counts), correlated run context (or explicit nulls), and runtime deep links.
 
 This remains observability-only, paper-only, and does not change runtime/tuning operational logic.
+
+## Runtime tuning scope timeline (Prompt 180)
+
+`runtime_governor` now exposes a compact read-only **Runtime Tuning Scope Timeline** per `source_scope` to add short recent-history context on top of investigation.
+
+- Endpoint: `GET /api/runtime-governor/tuning-scope-timeline/<source_scope>/`
+- Query params:
+  - `limit` (default `5`)
+  - `include_stable` (default `true`)
+- Returns deterministic timeline summary + flags (`is_recently_stable`, `has_recent_profile_shift`, `has_recent_review_now`) and compact entries (snapshot metadata, drift/alert, label/reason codes, diff summary/counts, correlated run info).
+
+This is read-only/paper-only observability. No new persistent model, no mutative endpoint, and no runtime/tuning operational behavior changes.
+
+UI integration lives in `/runtime` inside existing **Tuning Investigation** as **Recent Scope Timeline** (with light toggles: non-stable only + short/long recent history). Cockpit was not expanded in this prompt.
