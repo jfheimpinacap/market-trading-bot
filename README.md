@@ -12,6 +12,24 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
 - **Precedent-aware decision support (new):** research, prediction, risk, signal-fusion, and postmortem now consume semantic precedents automatically in internal flows with conservative influence and explicit audit trails (`AgentPrecedentUse`).
 
+### Runtime Tuning Review Escalation (new)
+
+`runtime_governor` now exposes a compact read-only **Runtime Tuning Review Escalation** layer above existing tuning review queue + aging.
+
+- API:
+  - `GET /api/runtime-governor/tuning-review-escalation/`
+  - `GET /api/runtime-governor/tuning-review-escalation/<source_scope>/`
+- optional list query params:
+  - `escalated_only` (default `true`)
+  - `escalation_level` (`MONITOR` | `ELEVATED` | `URGENT`)
+  - `limit` (default compact list)
+- deterministic escalation levels:
+  - `URGENT`: overdue follow-up/stale items, or overdue unreviewed + `REVIEW_NOW`
+  - `ELEVATED`: aging follow-up/stale items, overdue unreviewed, or aging unreviewed with high technical priority
+  - `MONITOR`: remaining unresolved items
+
+This layer is paper-only/read-only and does not change runtime operation logic, manual-review actions, or `/runtime` authority paths. Cockpit uses it as a compact prioritization strip above existing review aging + review queue.
+
 ### Governance review queue (new)
 
 `mission_control` now includes a **unified governance review queue** to centralize pending manual triage from:

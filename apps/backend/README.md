@@ -115,6 +115,19 @@ Runtime governor now also provides a compact read-only handoff API for cockpit a
 
 Implementation lives in `services/tuning_cockpit_panel.py` and explicitly reuses tuning review board + tuning alert summary outputs, so cockpit ordering/priority remains runtime-authoritative. Endpoints are read-only and do not introduce new models or operational mutations.
 
+Runtime governor now also provides a compact read-only **tuning review escalation** layer:
+
+- service: `apps.runtime_governor.services.tuning_review_escalation`
+- endpoints:
+  - `GET /api/runtime-governor/tuning-review-escalation/`
+  - `GET /api/runtime-governor/tuning-review-escalation/<source_scope>/`
+- optional query params:
+  - `escalated_only` (default `true`)
+  - `escalation_level` (`MONITOR`, `ELEVATED`, `URGENT`)
+  - `limit`
+
+This layer is deterministic and derived from existing review queue + review aging state (including manual review state, stale detection, technical priority, and existing runtime deep links). It introduces no new models and no new mutative behavior.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:

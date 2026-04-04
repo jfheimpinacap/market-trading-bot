@@ -166,6 +166,22 @@ Delta UX adicional: `/cockpit` ahora muestra una sección compacta **Runtime Tun
 
 Esta integración no crea nueva pantalla ni mueve lógica de runtime a cockpit; solo consume y enlaza señal consolidada, manteniendo alcance paper-only y sin cambios operativos.
 
+Delta UX adicional: `/cockpit` ahora incluye una subsección **Review Escalation** encima de `Review Aging` + `Runtime Tuning Review Queue`:
+
+- consume:
+  - `GET /api/runtime-governor/tuning-review-escalation/`
+  - `GET /api/runtime-governor/tuning-review-escalation/<source_scope>/` (cliente disponible para drill-down)
+- muestra resumen compacto: `urgent_count`, `elevated_count`, `monitor_count`, `highest_escalation_scope`, `escalation_summary`
+- lista por item: `source_scope`, `escalation_level`, `effective_review_status`, `age_bucket/age_days`, `attention_priority`, resumen técnico/review
+- acciones existentes (sin nuevas mutaciones):
+  - `Open review` (compact investigation actual)
+  - `Open in runtime` (`/runtime?tuningScope=<scope>&investigate=1`)
+- controles livianos:
+  - toggle `Escalated only`
+  - filtro por `escalation_level`
+
+La capa sigue siendo read-only y paper-only: prioriza operativamente sobre queue+aging sin reemplazar ni modificar su lógica base.
+
 Delta UX adicional: `/runtime` ahora incluye una sección **Tuning Context History** (sin pantalla nueva) para trazabilidad temporal ligera:
 - snapshots recientes de contexto de tuning por scope operativo
 - drift status (`INITIAL`, `NO_CHANGE`, `MINOR_CONTEXT_CHANGE`, `PROFILE_CHANGE`)

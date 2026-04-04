@@ -892,6 +892,47 @@ export type RuntimeTuningReviewAgingQuery = {
   age_bucket?: RuntimeTuningReviewAgingBucket;
   limit?: number;
 };
+
+export type RuntimeTuningReviewEscalationLevel = 'MONITOR' | 'ELEVATED' | 'URGENT';
+
+export type RuntimeTuningReviewEscalationReasonCode =
+  | 'FOLLOWUP_OVERDUE'
+  | 'STALE_OVERDUE'
+  | 'UNREVIEWED_REVIEW_NOW_OVERDUE'
+  | 'FOLLOWUP_AGING'
+  | 'STALE_AGING'
+  | 'UNREVIEWED_OVERDUE'
+  | 'UNREVIEWED_PROFILE_SHIFT'
+  | 'MONITOR_ONLY';
+
+export type RuntimeTuningReviewEscalationItem = RuntimeTuningReviewAgingItem & {
+  escalation_level: RuntimeTuningReviewEscalationLevel;
+  escalation_rank: number;
+  requires_immediate_attention: boolean;
+  escalation_reason_codes: RuntimeTuningReviewEscalationReasonCode[];
+};
+
+export type RuntimeTuningReviewEscalation = {
+  queue_count: number;
+  escalated_count: number;
+  urgent_count: number;
+  elevated_count: number;
+  monitor_count: number;
+  highest_escalation_scope: RuntimeTuningContextSnapshot['source_scope'] | null;
+  escalation_summary: string;
+  items: RuntimeTuningReviewEscalationItem[];
+};
+
+export type RuntimeTuningReviewEscalationDetail = RuntimeTuningReviewEscalationItem & {
+  escalation_summary: string;
+};
+
+export type RuntimeTuningReviewEscalationQuery = {
+  escalated_only?: boolean;
+  escalation_level?: RuntimeTuningReviewEscalationLevel;
+  limit?: number;
+};
+
 export type RuntimeTuningReviewStateQuery = {
   source_scope?: RuntimeTuningContextSnapshot['source_scope'];
   effective_status?: RuntimeTuningManualReviewStatus;

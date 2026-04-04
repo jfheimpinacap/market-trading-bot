@@ -16,6 +16,7 @@ import {
   getRuntimeTuningContextDiffDetail,
   getRuntimeTuningInvestigation,
   getRuntimeTuningReviewAging,
+  getRuntimeTuningReviewEscalation,
   getRuntimeTuningReviewQueue,
   getRuntimeTuningReviewStateDetail,
   getRuntimeTuningScopeTimeline,
@@ -31,6 +32,7 @@ import type {
   RuntimeTuningReviewAgingItem,
   RuntimeTuningReviewAging,
   RuntimeTuningReviewQueue,
+  RuntimeTuningReviewEscalation,
   RuntimeTuningReviewState,
   RuntimeTuningScopeTimeline,
 } from '../types/runtime';
@@ -95,9 +97,12 @@ export function CockpitPage() {
   const [tuningPanel, setTuningPanel] = useState<RuntimeTuningCockpitPanel | null>(null);
   const [reviewQueue, setReviewQueue] = useState<RuntimeTuningReviewQueue | null>(null);
   const [reviewAging, setReviewAging] = useState<RuntimeTuningReviewAging | null>(null);
+  const [reviewEscalation, setReviewEscalation] = useState<RuntimeTuningReviewEscalation | null>(null);
   const [reviewQueueUnresolvedOnly, setReviewQueueUnresolvedOnly] = useState(true);
   const [reviewQueueStatusFilter, setReviewQueueStatusFilter] = useState<RuntimeTuningReviewState['effective_review_status'] | 'ALL'>('ALL');
   const [reviewQueueAgeBucketFilter, setReviewQueueAgeBucketFilter] = useState<'ALL' | 'FRESH' | 'AGING' | 'OVERDUE'>('ALL');
+  const [reviewEscalatedOnly, setReviewEscalatedOnly] = useState(true);
+  const [reviewEscalationLevelFilter, setReviewEscalationLevelFilter] = useState<'ALL' | 'MONITOR' | 'ELEVATED' | 'URGENT'>('ALL');
   const [reviewQueueError, setReviewQueueError] = useState<string | null>(null);
   const [attentionOnly, setAttentionOnly] = useState(true);
   const [tuningPanelError, setTuningPanelError] = useState<string | null>(null);
@@ -124,7 +129,7 @@ export function CockpitPage() {
     setTuningPanelError(null);
     setReviewQueueError(null);
     try {
-      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse, reviewQueueResponse, reviewAgingResponse] = await Promise.all([
+      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse, reviewQueueResponse, reviewAgingResponse, reviewEscalationResponse] = await Promise.all([
         getCockpitSummary(),
         getAutonomyScenarioSummary(),
         getScanSummary(),
@@ -139,6 +144,11 @@ export function CockpitPage() {
           age_bucket: reviewQueueAgeBucketFilter === 'ALL' ? undefined : reviewQueueAgeBucketFilter,
           limit: 8,
         }),
+        getRuntimeTuningReviewEscalation({
+          escalated_only: reviewEscalatedOnly,
+          escalation_level: reviewEscalationLevelFilter === 'ALL' ? undefined : reviewEscalationLevelFilter,
+          limit: 6,
+        }),
       ]);
       setSnapshot(response);
       setAutonomyScenarioSummary(scenarioSummary);
@@ -146,6 +156,7 @@ export function CockpitPage() {
       setTuningPanel(tuningPanelResponse);
       setReviewQueue(reviewQueueResponse);
       setReviewAging(reviewAgingResponse);
+      setReviewEscalation(reviewEscalationResponse);
       setReviewStateCache({});
       setReviewStateErrorCache({});
     } catch (loadError) {
@@ -156,7 +167,7 @@ export function CockpitPage() {
     } finally {
       setLoading(false);
     }
-  }, [attentionOnly, reviewQueueAgeBucketFilter, reviewQueueStatusFilter, reviewQueueUnresolvedOnly]);
+  }, [attentionOnly, reviewEscalatedOnly, reviewEscalationLevelFilter, reviewQueueAgeBucketFilter, reviewQueueStatusFilter, reviewQueueUnresolvedOnly]);
 
   useEffect(() => {
     void loadCockpit();
@@ -478,10 +489,76 @@ export function CockpitPage() {
                     <option value="FRESH">FRESH</option>
                   </select>
                 </label>
+                <label className="muted-text">
+                  <input
+                    type="checkbox"
+                    checked={reviewEscalatedOnly}
+                    onChange={(event) => setReviewEscalatedOnly(event.target.checked)}
+                  />{' '}
+                  Escalated only
+                </label>
+                <label className="muted-text">
+                  Escalation:{' '}
+                  <select value={reviewEscalationLevelFilter} onChange={(event) => setReviewEscalationLevelFilter(event.target.value as 'ALL' | 'MONITOR' | 'ELEVATED' | 'URGENT')}>
+                    <option value="ALL">All</option>
+                    <option value="URGENT">URGENT</option>
+                    <option value="ELEVATED">ELEVATED</option>
+                    <option value="MONITOR">MONITOR</option>
+                  </select>
+                </label>
               </div>
               {reviewQueueError ? <p className="warning-text">{reviewQueueError}</p> : null}
               {!reviewQueue ? null : (
                 <>
+                  {!reviewEscalation ? null : (
+                    <div className="subsection">
+                      <p className="section-label">Review Escalation</p>
+                      <ul className="key-value-list">
+                        <li><span>Urgent</span><strong>{reviewEscalation.urgent_count}</strong></li>
+                        <li><span>Elevated</span><strong>{reviewEscalation.elevated_count}</strong></li>
+                        <li><span>Monitor</span><strong>{reviewEscalation.monitor_count}</strong></li>
+                        <li><span>Highest escalation scope</span><strong>{reviewEscalation.highest_escalation_scope ?? 'n/a'}</strong></li>
+                      </ul>
+                      <p className={reviewEscalation.urgent_count > 0 ? 'warning-text' : 'muted-text'}>{reviewEscalation.escalation_summary}</p>
+                      {reviewEscalation.items.length === 0 ? (
+                        <p className="muted-text">No escalated items for the current filters.</p>
+                      ) : (
+                        <div className="cockpit-attention-list">
+                          {reviewEscalation.items.map((item) => (
+                            <article key={`escalation-${item.source_scope}`} className="cockpit-attention-item">
+                              <div>
+                                <p className="section-label">
+                                  #{item.escalation_rank} · {item.escalation_level} · {item.effective_review_status} · {item.age_bucket} ({item.age_days}d)
+                                </p>
+                                <h3>{item.source_scope}</h3>
+                                <p>
+                                  <strong>{item.attention_priority}</strong> · {item.review_summary || item.technical_summary}
+                                </p>
+                                {item.requires_immediate_attention ? <p className="warning-text">Requires immediate attention.</p> : null}
+                              </div>
+                              <div className="button-row">
+                                <button
+                                  className="secondary-button"
+                                  type="button"
+                                  onClick={() => {
+                                    if (tuningPanel?.items?.some((panelItem) => panelItem.source_scope === item.source_scope)) {
+                                      void investigateScope(item.source_scope);
+                                      return;
+                                    }
+                                    setAttentionOnly(false);
+                                    setQueuedInvestigationScope(item.source_scope);
+                                  }}
+                                >
+                                  Open review
+                                </button>
+                                <button className="ghost-button" type="button" onClick={() => navigate(item.runtime_investigation_deep_link)}>Open in runtime</button>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {!reviewAging ? null : (
                     <div className="subsection">
                       <p className="section-label">Review Aging</p>
