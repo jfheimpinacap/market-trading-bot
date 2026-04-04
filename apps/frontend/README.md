@@ -2393,3 +2393,16 @@ La tabla resume por `source_scope`:
 Fuente: `GET /api/runtime-governor/tuning-scope-digest/` (con filtro opcional `source_scope`).
 
 Objetivo: compactar observabilidad actual de tuning por scope sin cambiar decisiones operativas, manteniendo paper-only y sin edición.
+
+## Runtime tuning change alerts en `/runtime` (Prompt 173)
+
+Dentro de la sección existente **Tuning Context History** en `/runtime` se agregó una tabla read-only **Tuning Change Alerts** (sin pantalla nueva).
+
+Muestra por scope:
+- drift status
+- alert status (`STABLE`, `MINOR_CHANGE`, `PROFILE_SHIFT`, `REVIEW_NOW`)
+- summary compacto orientado a revisión rápida
+
+Fuente: `GET /api/runtime-governor/tuning-change-alerts/` (con filtro opcional `source_scope`).
+
+Esta mejora no agrega edición/CRUD, no auto-aplica tuning y no cambia el comportamiento operativo. Solo hace más accionable la observabilidad técnica existente en entorno paper-only.

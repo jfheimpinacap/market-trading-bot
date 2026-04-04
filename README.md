@@ -211,6 +211,13 @@ Runtime governor now also persists a lightweight tuning-context history for temp
 
 This history layer is observability-only, keeps paper-only boundaries, does not enable live trading/real money, and does not change operational decisions.
 
+On top of that observability, runtime governor now exposes a compact read-only tuning change alert signal per scope:
+- `GET /api/runtime-governor/tuning-change-alerts/` (`source_scope` optional).
+- Alert states are transparent and non-operational: `STABLE`, `MINOR_CHANGE`, `PROFILE_SHIFT`, `REVIEW_NOW`.
+- Rule mapping remains explicit (`NO_CHANGE` → `STABLE`, `MINOR_CONTEXT_CHANGE` → `MINOR_CHANGE`, `PROFILE_CHANGE` → `PROFILE_SHIFT`) with `REVIEW_NOW` escalation when relevant changes are broad or a recent profile shift exists.
+
+This addition is summary-only for faster technical review; it does not auto-apply changes and does not alter runtime behavior.
+
 ### Runtime feedback apply bridge / closed-loop tuning (new)
 
 `runtime_governor` now closes the loop from runtime feedback into conservative global posture adjustment:

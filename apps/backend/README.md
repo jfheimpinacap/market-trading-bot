@@ -3829,3 +3829,28 @@ This layer is observability-only for cross-run debugging; it does not alter runt
 
 Integra snapshots + drift + run correlation existentes sin agregar CRUD ni mutaciones.
 Mantiene límites explícitos: observabilidad técnica, paper-only, sin cambios de comportamiento operativo.
+
+## Runtime tuning change alerts API (Prompt 173)
+
+`apps.runtime_governor` ahora agrega una capa mínima read-only para marcar rápidamente scopes que merecen revisión técnica.
+
+- service: `apps/runtime_governor/services/tuning_alerts.py`
+- endpoint: `GET /api/runtime-governor/tuning-change-alerts/`
+  - query opcional: `source_scope`
+- insumos reutilizados: tuning scope digest + tuning diffs + drift status ya existentes
+- payload por scope:
+  - `source_scope`
+  - `latest_snapshot_id`
+  - `tuning_profile_name`
+  - `tuning_profile_fingerprint`
+  - `latest_drift_status`
+  - `alert_status` (`STABLE`, `MINOR_CHANGE`, `PROFILE_SHIFT`, `REVIEW_NOW`)
+  - `alert_summary`
+  - `created_at`
+- reglas transparentes:
+  - `NO_CHANGE` => `STABLE`
+  - `MINOR_CONTEXT_CHANGE` => `MINOR_CHANGE`
+  - `PROFILE_CHANGE` => `PROFILE_SHIFT`
+  - escalado a `REVIEW_NOW` cuando hay múltiples cambios relevantes o profile shift reciente
+
+Esta capa no crea CRUD, no aplica cambios automáticamente y no modifica la lógica operativa: solo mejora la revisión rápida en modo paper-only.
