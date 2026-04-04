@@ -92,14 +92,20 @@ def build_tuning_context_diff(
     }
 
 
-def build_tuning_context_diffs(*, snapshot_id: int | None = None) -> list[dict[str, Any]]:
-    queryset = RuntimeTuningContextSnapshot.objects.order_by('-created_at_snapshot', '-id')
-    if snapshot_id is not None:
-        queryset = queryset.filter(id=snapshot_id)
+def build_tuning_context_diffs(
+    *,
+    snapshot_id: int | None = None,
+    snapshots: list[RuntimeTuningContextSnapshot] | None = None,
+) -> list[dict[str, Any]]:
+    resolved_snapshots = snapshots
+    if resolved_snapshots is None:
+        queryset = RuntimeTuningContextSnapshot.objects.order_by('-created_at_snapshot', '-id')
+        if snapshot_id is not None:
+            queryset = queryset.filter(id=snapshot_id)
+        resolved_snapshots = list(queryset[:200])
 
-    snapshots = list(queryset[:200])
     diffs: list[dict[str, Any]] = []
-    for snapshot in snapshots:
+    for snapshot in resolved_snapshots:
         previous = (
             RuntimeTuningContextSnapshot.objects.filter(source_scope=snapshot.source_scope)
             .filter(

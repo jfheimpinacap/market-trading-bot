@@ -85,6 +85,11 @@ from apps.runtime_governor.services import (
 from apps.runtime_governor.services.tuning_summary import build_runtime_tuning_profile_snapshot
 from apps.runtime_governor.services.tuning_history import build_tuning_context_drift_summary
 from apps.runtime_governor.services.tuning_diff import build_tuning_context_diffs
+from apps.runtime_governor.services.tuning_history_query import (
+    parse_tuning_history_query,
+    query_tuning_diff_snapshots,
+    query_tuning_snapshots,
+)
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
     get_runtime_feedback_summary,
@@ -219,7 +224,8 @@ class RuntimeTuningContextSnapshotListView(generics.ListAPIView):
     serializer_class = RuntimeTuningContextSnapshotSerializer
 
     def get_queryset(self):
-        return RuntimeTuningContextSnapshot.objects.order_by('-created_at_snapshot', '-id')[:200]
+        query = parse_tuning_history_query(self.request.query_params, allow_drift_status=False)
+        return query_tuning_snapshots(query)
 
 
 class RuntimeTuningContextDriftSummaryView(APIView):
@@ -236,7 +242,9 @@ class RuntimeTuningContextDiffListView(APIView):
     permission_classes = []
 
     def get(self, request, *args, **kwargs):
-        serializer = RuntimeTuningContextDiffSerializer(build_tuning_context_diffs(), many=True)
+        query = parse_tuning_history_query(request.query_params, allow_drift_status=True, allow_time_range=True)
+        snapshots = query_tuning_diff_snapshots(query)
+        serializer = RuntimeTuningContextDiffSerializer(build_tuning_context_diffs(snapshots=snapshots), many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

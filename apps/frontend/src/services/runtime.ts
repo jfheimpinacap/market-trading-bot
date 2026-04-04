@@ -38,6 +38,7 @@ import type {
   RuntimeTuningContextSnapshot,
   RuntimeTuningContextDriftSummary,
   RuntimeTuningContextDiff,
+  RuntimeTuningHistoryQuery,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -232,14 +233,26 @@ export function getRuntimeTuningProfileSummary() {
   return requestJson<RuntimeTuningProfileSummary>('/api/runtime-governor/tuning-profile-summary/');
 }
 
-export function getRuntimeTuningContextSnapshots() {
-  return requestJson<RuntimeTuningContextSnapshot[]>('/api/runtime-governor/tuning-context-snapshots/');
+function buildQueryString(query: RuntimeTuningHistoryQuery = {}) {
+  const params = new URLSearchParams();
+  if (query.source_scope) params.set('source_scope', query.source_scope);
+  if (query.drift_status) params.set('drift_status', query.drift_status);
+  if (typeof query.latest_only === 'boolean') params.set('latest_only', String(query.latest_only));
+  if (typeof query.limit === 'number') params.set('limit', String(query.limit));
+  if (query.created_after) params.set('created_after', query.created_after);
+  if (query.created_before) params.set('created_before', query.created_before);
+  const encoded = params.toString();
+  return encoded ? `?${encoded}` : '';
+}
+
+export function getRuntimeTuningContextSnapshots(query: RuntimeTuningHistoryQuery = {}) {
+  return requestJson<RuntimeTuningContextSnapshot[]>(`/api/runtime-governor/tuning-context-snapshots/${buildQueryString(query)}`);
 }
 
 export function getRuntimeTuningContextDriftSummary() {
   return requestJson<RuntimeTuningContextDriftSummary>('/api/runtime-governor/tuning-context-drift-summary/');
 }
 
-export function getRuntimeTuningContextDiffs() {
-  return requestJson<RuntimeTuningContextDiff[]>('/api/runtime-governor/tuning-context-diffs/');
+export function getRuntimeTuningContextDiffs(query: RuntimeTuningHistoryQuery = {}) {
+  return requestJson<RuntimeTuningContextDiff[]>(`/api/runtime-governor/tuning-context-diffs/${buildQueryString(query)}`);
 }
