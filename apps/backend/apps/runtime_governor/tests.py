@@ -88,6 +88,43 @@ class RuntimeGovernorTests(TestCase):
         self.assertEqual(transitions_response.status_code, 200)
         self.assertEqual(capabilities_response.status_code, 200)
 
+    def test_tuning_profile_summary_endpoint_includes_active_profile(self):
+        response = self.client.get(reverse('runtime_governor_v2:tuning_profile_summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['profile_name'], DEFAULT_CONSERVATIVE_TUNING_PROFILE.profile_name)
+        self.assertIn('summary', payload)
+
+    def test_tuning_profile_summary_endpoint_includes_thresholds_weights_and_guardrails(self):
+        response = self.client.get(reverse('runtime_governor_v2:tuning_profile_summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertEqual(payload['backlog_thresholds']['high'], DEFAULT_CONSERVATIVE_TUNING_PROFILE.backlog_high_threshold)
+        self.assertEqual(payload['backlog_weights']['overdue_weight'], DEFAULT_CONSERVATIVE_TUNING_PROFILE.overdue_weight)
+        self.assertEqual(
+            payload['feedback_guardrails']['high_backlog_manual_review_bias'],
+            DEFAULT_CONSERVATIVE_TUNING_PROFILE.high_backlog_manual_review_bias,
+        )
+        self.assertEqual(
+            payload['operating_mode_guardrails']['critical_backlog_monitor_only_bias'],
+            DEFAULT_CONSERVATIVE_TUNING_PROFILE.critical_backlog_monitor_only_bias,
+        )
+        self.assertEqual(
+            payload['stabilization_guardrails']['critical_backlog_relax_dwell_multiplier'],
+            DEFAULT_CONSERVATIVE_TUNING_PROFILE.critical_backlog_relax_dwell_multiplier,
+        )
+
+    def test_tuning_profile_values_endpoint_returns_profile_values(self):
+        response = self.client.get(reverse('runtime_governor_v2:tuning_profile_values'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['profile_name'], DEFAULT_CONSERVATIVE_TUNING_PROFILE.profile_name)
+        self.assertEqual(
+            payload['profile_values']['critical_backlog_blocks_relax'],
+            DEFAULT_CONSERVATIVE_TUNING_PROFILE.critical_backlog_blocks_relax,
+        )
+
     def test_transition_log_created(self):
         set_runtime_mode(requested_mode=RuntimeMode.PAPER_ASSIST, set_by=RuntimeSetBy.OPERATOR, rationale='assist mode')
         self.assertGreaterEqual(RuntimeTransitionLog.objects.count(), 1)

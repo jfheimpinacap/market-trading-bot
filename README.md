@@ -184,6 +184,12 @@ This remains conservative, transparent, paper-only, and does not replace existin
 
 Runtime conservative tuning is now centralized in `apps/backend/apps/runtime_governor/tuning_profiles.py` so backlog-pressure thresholds/weights and backlog-driven relax/manual-review/monitor-only biases are explicit and adjustable without redesign. Default behavior remains conservative and paper-only; this is tuning readability, not live-trading scope expansion.
 
+Runtime governor now also exposes a read-only active tuning observability layer so operators can audit the currently active profile and its effective runtime-facing guardrails:
+- `GET /api/runtime-governor/tuning-profile-summary/`
+- `GET /api/runtime-governor/tuning-profile-values/`
+
+This layer is visibility-only (no CRUD, no edit path), remains paper-only, and does not change runtime behavior by itself.
+
 ### Runtime feedback apply bridge / closed-loop tuning (new)
 
 `runtime_governor` now closes the loop from runtime feedback into conservative global posture adjustment:

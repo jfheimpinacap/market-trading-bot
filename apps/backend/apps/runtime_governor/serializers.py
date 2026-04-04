@@ -223,3 +223,20 @@ class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecommendation
         fields = '__all__'
+
+
+class RuntimeTuningProfileSummarySerializer(serializers.Serializer):
+    profile_name = serializers.CharField()
+    backlog_thresholds = serializers.JSONField()
+    backlog_weights = serializers.JSONField()
+    feedback_guardrails = serializers.JSONField()
+    operating_mode_guardrails = serializers.JSONField()
+    stabilization_guardrails = serializers.JSONField()
+    effective_values = serializers.JSONField()
+    summary = serializers.CharField()
+    created_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class RuntimeTuningProfileValuesSerializer(serializers.Serializer):
+    profile_name = serializers.CharField()
+    profile_values = serializers.JSONField()

@@ -75,6 +75,12 @@ Boundaries remain unchanged: paper-only, conservative tuning, no replacement of 
 
 Conservative tuning parameters are now centralized in `apps.runtime_governor.tuning_profiles` (single code-level profile, no complex settings system). This includes backlog-pressure score thresholds/weights and runtime backlog bias knobs for relax gating, manual review bias, monitor-only bias, and dwell multipliers.
 
+Runtime governor now adds `services/tuning_summary.py` plus read-only API observability for the active profile:
+- `GET /api/runtime-governor/tuning-profile-summary/`
+- `GET /api/runtime-governor/tuning-profile-values/`
+
+These endpoints expose active profile name, effective thresholds/weights, and runtime feedback / operating mode / stabilization guardrails for audit/debug visibility only. No behavior mutation is performed by these endpoints.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:

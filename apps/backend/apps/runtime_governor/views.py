@@ -63,6 +63,8 @@ from apps.runtime_governor.serializers import (
     RuntimePerformanceSnapshotSerializer,
     RunRuntimeFeedbackApplyReviewSerializer,
     RunModeStabilizationReviewSerializer,
+    RuntimeTuningProfileSummarySerializer,
+    RuntimeTuningProfileValuesSerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -76,6 +78,7 @@ from apps.runtime_governor.services import (
     run_mode_stabilization_review,
     apply_stabilized_transition_decision,
 )
+from apps.runtime_governor.services.tuning_summary import build_runtime_tuning_profile_snapshot
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
     get_runtime_feedback_summary,
@@ -182,6 +185,26 @@ class RuntimeCapabilitiesView(APIView):
 
     def get(self, request, *args, **kwargs):
         return Response(get_capabilities_for_current_mode(), status=status.HTTP_200_OK)
+
+
+class RuntimeTuningProfileSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        snapshot = build_runtime_tuning_profile_snapshot()
+        serializer = RuntimeTuningProfileSummarySerializer(snapshot)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningProfileValuesView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        snapshot = build_runtime_tuning_profile_snapshot()
+        serializer = RuntimeTuningProfileValuesSerializer(snapshot)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class RunOperatingModeReviewView(APIView):
