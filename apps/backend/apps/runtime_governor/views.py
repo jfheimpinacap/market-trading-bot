@@ -74,6 +74,8 @@ from apps.runtime_governor.serializers import (
     RuntimeTuningChangeAlertSerializer,
     RuntimeTuningAlertSummarySerializer,
     RuntimeTuningReviewBoardRowSerializer,
+    RuntimeTuningCockpitPanelSerializer,
+    RuntimeTuningCockpitPanelDetailSerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -100,6 +102,7 @@ from apps.runtime_governor.services.tuning_digest import build_tuning_scope_dige
 from apps.runtime_governor.services.tuning_alerts import build_tuning_change_alerts
 from apps.runtime_governor.services.tuning_alert_summary import build_tuning_alert_summary
 from apps.runtime_governor.services.tuning_review_board import build_tuning_review_board, get_tuning_review_board_detail
+from apps.runtime_governor.services.tuning_cockpit_panel import build_tuning_cockpit_panel, get_tuning_cockpit_panel_detail
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
     get_runtime_feedback_summary,
@@ -342,6 +345,39 @@ class RuntimeTuningReviewBoardDetailView(APIView):
         if not row:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = RuntimeTuningReviewBoardRowSerializer(row)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningCockpitPanelListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        source_scope = request.query_params.get('source_scope')
+        attention_only = request.query_params.get('attention_only', 'true').lower() == 'true'
+        limit_raw = request.query_params.get('limit')
+        limit = 5
+        if limit_raw is not None:
+            try:
+                limit = int(limit_raw)
+            except (TypeError, ValueError):
+                limit = 5
+
+        serializer = RuntimeTuningCockpitPanelSerializer(
+            build_tuning_cockpit_panel(source_scope=source_scope, attention_only=attention_only, limit=limit)
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningCockpitPanelDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, source_scope: str, *args, **kwargs):
+        row = get_tuning_cockpit_panel_detail(source_scope=source_scope)
+        if not row:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = RuntimeTuningCockpitPanelDetailSerializer(row)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

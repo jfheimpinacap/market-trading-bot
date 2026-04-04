@@ -107,6 +107,14 @@ Runtime governor now adds a lightweight persisted history layer in `services/tun
 
 `latest_only=true` returns only the latest row per `source_scope` for fast scope-aware inspection. This layer is audit-trace only (historical observability), remains paper-only, and does not modify runtime_governor decision logic or authorities.
 
+Runtime governor now also provides a compact read-only handoff API for cockpit attention visibility:
+
+- `GET /api/runtime-governor/tuning-cockpit-panel/`
+- `GET /api/runtime-governor/tuning-cockpit-panel/<source_scope>/`
+- query params: `attention_only` (default `true`), `limit` (default `5`), optional `source_scope`
+
+Implementation lives in `services/tuning_cockpit_panel.py` and explicitly reuses tuning review board + tuning alert summary outputs, so cockpit ordering/priority remains runtime-authoritative. Endpoints are read-only and do not introduce new models or operational mutations.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:

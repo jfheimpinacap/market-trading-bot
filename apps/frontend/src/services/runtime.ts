@@ -46,6 +46,9 @@ import type {
   RuntimeTuningAlertSummary,
   RuntimeTuningReviewBoardQuery,
   RuntimeTuningReviewBoardRow,
+  RuntimeTuningCockpitPanelQuery,
+  RuntimeTuningCockpitPanel,
+  RuntimeTuningCockpitPanelDetail,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -299,4 +302,21 @@ export function getRuntimeTuningReviewBoard(query: RuntimeTuningReviewBoardQuery
 
 export function getRuntimeTuningReviewBoardDetail(sourceScope: string) {
   return requestJson<RuntimeTuningReviewBoardRow>(`/api/runtime-governor/tuning-review-board/${encodeURIComponent(sourceScope)}/`);
+}
+
+function buildCockpitPanelQueryString(query: RuntimeTuningCockpitPanelQuery = {}) {
+  const params = new URLSearchParams();
+  if (query.source_scope) params.set('source_scope', query.source_scope);
+  if (typeof query.attention_only === 'boolean') params.set('attention_only', String(query.attention_only));
+  if (typeof query.limit === 'number') params.set('limit', String(query.limit));
+  const encoded = params.toString();
+  return encoded ? `?${encoded}` : '';
+}
+
+export function getRuntimeTuningCockpitPanel(query: RuntimeTuningCockpitPanelQuery = {}) {
+  return requestJson<RuntimeTuningCockpitPanel>(`/api/runtime-governor/tuning-cockpit-panel/${buildCockpitPanelQueryString(query)}`);
+}
+
+export function getRuntimeTuningCockpitPanelDetail(sourceScope: string) {
+  return requestJson<RuntimeTuningCockpitPanelDetail>(`/api/runtime-governor/tuning-cockpit-panel/${encodeURIComponent(sourceScope)}/`);
 }

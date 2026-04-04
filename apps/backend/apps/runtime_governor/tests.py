@@ -1927,3 +1927,172 @@ class RuntimeGovernorTests(TestCase):
             self.assertIn(key, row)
         not_found = self.client.get(reverse('runtime_governor_v2:tuning_review_board_detail', kwargs={'source_scope': 'unknown_scope'}))
         self.assertEqual(not_found.status_code, 404)
+
+    def test_tuning_cockpit_panel_payload_includes_expected_fields(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=4801,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp1',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=4802,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp2',
+            tuning_profile_summary='minor',
+            effective_values={'x': 2},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='minor',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_cockpit_panel'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('generated_at', payload)
+        self.assertIn('total_scope_count', payload)
+        self.assertIn('attention_scope_count', payload)
+        self.assertIn('highest_priority_scope', payload)
+        self.assertIn('highest_priority_status', payload)
+        self.assertIn('panel_summary', payload)
+        self.assertIn('items', payload)
+        self.assertEqual(payload['items'][0]['runtime_deep_link'], '/runtime?tuningScope=mode_enforcement')
+
+    def test_tuning_cockpit_panel_attention_only_excludes_stable(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=4811,
+            tuning_profile_name='p',
+            tuning_profile_fingerprint='fp-stable',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=4812,
+            tuning_profile_name='p',
+            tuning_profile_fingerprint='fp-stable',
+            tuning_profile_summary='stable',
+            effective_values={'x': 1},
+            drift_status='NO_CHANGE',
+            drift_summary='stable',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_cockpit_panel'), {'attention_only': 'true'})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['items'], [])
+        self.assertIsNone(payload['highest_priority_scope'])
+        self.assertIsNone(payload['highest_priority_status'])
+        self.assertEqual(payload['panel_summary'], 'No runtime tuning attention required.')
+
+    def test_tuning_cockpit_panel_limit_applies(self):
+        for index, scope in enumerate(['operating_mode', 'mode_enforcement', 'mode_stabilization'], start=1):
+            RuntimeTuningContextSnapshot.objects.create(
+                source_scope=scope,
+                source_run_id=4820 + index,
+                tuning_profile_name='p1',
+                tuning_profile_fingerprint=f'fp-{scope}-1',
+                tuning_profile_summary='seed',
+                effective_values={'x': 1},
+                drift_status='INITIAL',
+                drift_summary='seed',
+            )
+            RuntimeTuningContextSnapshot.objects.create(
+                source_scope=scope,
+                source_run_id=4830 + index,
+                tuning_profile_name='p2',
+                tuning_profile_fingerprint=f'fp-{scope}-2',
+                tuning_profile_summary='profile',
+                effective_values={'x': 2},
+                drift_status='PROFILE_CHANGE',
+                drift_summary='profile',
+            )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_cockpit_panel'), {'attention_only': 'false', 'limit': 2})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()['items']), 2)
+
+    def test_tuning_cockpit_panel_highest_priority_matches_review_board_order(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=4841,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-e1',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=4842,
+            tuning_profile_name='p2',
+            tuning_profile_fingerprint='fp-e2',
+            tuning_profile_summary='profile',
+            effective_values={'x': 2},
+            drift_status='PROFILE_CHANGE',
+            drift_summary='profile',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='operating_mode',
+            source_run_id=4843,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-o1',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='operating_mode',
+            source_run_id=4844,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-o2',
+            tuning_profile_summary='minor',
+            effective_values={'x': 2},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='minor',
+        )
+
+        response = self.client.get(reverse('runtime_governor_v2:tuning_cockpit_panel'), {'attention_only': 'false'})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['highest_priority_scope'], 'mode_enforcement')
+        self.assertEqual(payload['highest_priority_status'], 'PROFILE_SHIFT')
+        self.assertEqual(payload['items'][0]['source_scope'], 'mode_enforcement')
+
+    def test_tuning_cockpit_panel_detail_endpoint_and_404(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_stabilization',
+            source_run_id=4851,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-s1',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_stabilization',
+            source_run_id=4852,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp-s2',
+            tuning_profile_summary='minor',
+            effective_values={'x': 2, 'tuning_guardrail_summary': {'g1': False}},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='minor',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_cockpit_panel_detail', kwargs={'source_scope': 'mode_stabilization'}))
+        self.assertEqual(response.status_code, 200)
+        detail = response.json()
+        self.assertEqual(detail['source_scope'], 'mode_stabilization')
+        self.assertIn('review_reason_codes', detail)
+        self.assertIn('changed_field_count', detail)
+        self.assertIn('changed_guardrail_count', detail)
+
+        not_found = self.client.get(reverse('runtime_governor_v2:tuning_cockpit_panel_detail', kwargs={'source_scope': 'unknown_scope'}))
+        self.assertEqual(not_found.status_code, 404)
