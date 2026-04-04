@@ -3944,3 +3944,27 @@ Scope/boundaries unchanged: no new model, no mutative endpoint, no operational l
 
 No backend redesign was needed. Cockpit now consumes the existing read-only timeline endpoint `GET /api/runtime-governor/tuning-scope-timeline/<source_scope>/` from the compact investigation flow and keeps full handoff in `/runtime?tuningScope=<scope>&investigate=1`. Boundaries remain unchanged: read-only, paper-only, no new models, no mutative operations.
 
+
+## Runtime tuning manual review state (new)
+
+`apps.runtime_governor` now adds a minimal persistent manual-review layer for tuning scopes:
+
+- models:
+  - `RuntimeTuningReviewState` (per-scope latest manual review state)
+  - `RuntimeTuningReviewAction` (append-only action log)
+- actions:
+  - acknowledge current snapshot
+  - mark follow-up required
+  - clear manual review state
+- effective stale detection:
+  - if `latest_snapshot_id` is newer than `last_reviewed_snapshot_id`, effective status becomes `STALE_REVIEW`
+  - no cron required, computed on read/service resolution
+- API:
+  - `GET /api/runtime-governor/tuning-review-state/`
+  - `GET /api/runtime-governor/tuning-review-state/<source_scope>/`
+  - `POST /api/runtime-governor/acknowledge-tuning-scope/<source_scope>/`
+  - `POST /api/runtime-governor/mark-tuning-scope-followup/<source_scope>/`
+  - `POST /api/runtime-governor/clear-tuning-scope-review/<source_scope>/`
+  - `GET /api/runtime-governor/tuning-review-actions/`
+
+This layer is human-operational metadata only and does not modify runtime governance/tuning operational logic. Paper-only constraints remain unchanged.

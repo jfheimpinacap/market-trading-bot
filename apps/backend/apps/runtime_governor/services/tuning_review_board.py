@@ -14,6 +14,7 @@ from apps.runtime_governor.services.tuning_alerts import (
 from apps.runtime_governor.services.tuning_correlation import build_tuning_run_correlations
 from apps.runtime_governor.services.tuning_diff import build_tuning_context_diffs
 from apps.runtime_governor.services.tuning_digest import build_tuning_scope_digest
+from apps.runtime_governor.services.tuning_review_state import list_tuning_review_states
 
 ATTENTION_PRIORITY_ORDER = {
     ALERT_STATUS_REVIEW_NOW: 4,
@@ -161,6 +162,10 @@ def _build_base_rows(*, source_scope: str | None = None) -> list[dict[str, Any]]
     diffs_by_snapshot_id = {row['current_snapshot_id']: row for row in build_tuning_context_diffs(snapshots=latest_snapshots)}
     correlations_by_scope = {row['source_scope']: row for row in build_tuning_run_correlations(snapshots=latest_snapshots)}
 
+    review_state_by_scope = {
+        row['source_scope']: row for row in list_tuning_review_states(source_scope=source_scope)
+    }
+
     rows: list[dict[str, Any]] = []
     for digest in digest_rows:
         scope = digest['source_scope']
@@ -200,6 +205,8 @@ def _build_base_rows(*, source_scope: str | None = None) -> list[dict[str, Any]]
                 'review_reason_codes': review.review_reason_codes,
                 'recommended_next_action': review.recommended_next_action,
                 'board_summary': review.board_summary,
+                'review_status': review_state_by_scope.get(scope, {}).get('effective_review_status', 'UNREVIEWED'),
+                'review_summary': review_state_by_scope.get(scope, {}).get('review_summary', 'No manual review recorded yet'),
                 '_sort_created_at': diff.get('created_at') or digest.get('latest_snapshot_created_at'),
             }
         )

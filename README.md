@@ -2699,3 +2699,21 @@ UI integration lives in `/runtime` inside existing **Tuning Investigation** as *
 
 `/cockpit` compact tuning investigation now also shows a compact **Recent Timeline** strip by reusing the existing read-only endpoint `GET /api/runtime-governor/tuning-scope-timeline/<source_scope>/` (small default limit, non-stable toggle, and show-more expansion). Full investigation stays in `/runtime?tuningScope=<scope>&investigate=1`. No new models/endpoints or operational logic changes were added (paper-only/read-only).
 
+
+### Runtime tuning manual review state (new)
+
+`runtime_governor` now includes a compact **manual review state** layer for tuning scopes (`source_scope`) to track operator review intent without changing operational runtime logic:
+
+- statuses: `UNREVIEWED`, `ACKNOWLEDGED_CURRENT`, `FOLLOWUP_REQUIRED`, `STALE_REVIEW`
+- manual actions:
+  - `POST /api/runtime-governor/acknowledge-tuning-scope/<source_scope>/`
+  - `POST /api/runtime-governor/mark-tuning-scope-followup/<source_scope>/`
+  - `POST /api/runtime-governor/clear-tuning-scope-review/<source_scope>/`
+- read/audit:
+  - `GET /api/runtime-governor/tuning-review-state/`
+  - `GET /api/runtime-governor/tuning-review-state/<source_scope>/`
+  - `GET /api/runtime-governor/tuning-review-actions/`
+
+Stale detection is automatic and non-destructive: if a newer tuning snapshot appears after a reviewed snapshot, the effective status is exposed as `STALE_REVIEW` at read time.
+
+Scope remains paper-only and observability-first; this does not alter runtime/tuning decision logic.

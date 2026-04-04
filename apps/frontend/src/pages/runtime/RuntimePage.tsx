@@ -56,6 +56,10 @@ import {
   getRuntimeTuningReviewBoard,
   getRuntimeTuningInvestigation,
   getRuntimeTuningScopeTimeline,
+  getRuntimeTuningReviewStateDetail,
+  acknowledgeRuntimeTuningScope,
+  markRuntimeTuningScopeFollowup,
+  clearRuntimeTuningScopeReview,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -102,6 +106,8 @@ import type {
   RuntimeTuningReviewBoardRow,
   RuntimeTuningInvestigationPacket,
   RuntimeTuningScopeTimeline,
+  RuntimeTuningReviewState,
+  RuntimeTuningManualReviewStatus,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -201,6 +207,8 @@ export function RuntimePage() {
   const [focusedScope, setFocusedScope] = useState<RuntimeTuningContextSnapshot['source_scope'] | null>(getFocusedScopeFromQuery());
   const [tuningInvestigation, setTuningInvestigation] = useState<RuntimeTuningInvestigationPacket | null>(null);
   const [tuningScopeTimeline, setTuningScopeTimeline] = useState<RuntimeTuningScopeTimeline | null>(null);
+  const [manualReviewState, setManualReviewState] = useState<RuntimeTuningReviewState | null>(null);
+  const [manualReviewUpdating, setManualReviewUpdating] = useState<RuntimeTuningManualReviewStatus | "CLEAR" | null>(null);
   const [timelineNonStableOnly, setTimelineNonStableOnly] = useState(false);
   const [timelineExpandedHistory, setTimelineExpandedHistory] = useState(false);
   const [investigationLoading, setInvestigationLoading] = useState(false);
@@ -375,22 +383,26 @@ export function RuntimePage() {
     setFocusedScope(scope);
     setInvestigationLoading(true);
     setInvestigationError(null);
+    setManualReviewState(null);
     if (updateUrl) {
       navigate(`/runtime?tuningScope=${encodeURIComponent(scope)}&investigate=1`);
     }
     try {
-      const [packet, timeline] = await Promise.all([
+      const [packet, timeline, reviewState] = await Promise.all([
         getRuntimeTuningInvestigation(scope),
         getRuntimeTuningScopeTimeline(scope, {
           limit: timelineExpandedHistory ? 8 : 5,
           include_stable: !timelineNonStableOnly,
         }),
+        getRuntimeTuningReviewStateDetail(scope),
       ]);
       setTuningInvestigation(packet);
       setTuningScopeTimeline(timeline);
+      setManualReviewState(reviewState);
     } catch (err) {
       setTuningInvestigation(null);
       setTuningScopeTimeline(null);
+      setManualReviewState(null);
       setInvestigationError(err instanceof Error ? err.message : 'Could not load tuning investigation packet.');
     } finally {
       setInvestigationLoading(false);
@@ -401,10 +413,42 @@ export function RuntimePage() {
     setTuningInvestigation(null);
     setTuningScopeTimeline(null);
     setInvestigationError(null);
+    setManualReviewState(null);
     if (focusedScope) {
       navigate(`/runtime?tuningScope=${encodeURIComponent(focusedScope)}`);
     } else {
       navigate('/runtime');
+    }
+  }
+
+
+  async function onUpdateManualReviewState(action: 'ACKNOWLEDGED_CURRENT' | 'FOLLOWUP_REQUIRED' | 'CLEAR') {
+    if (!tuningInvestigation) return;
+    setManualReviewUpdating(action);
+    setInvestigationError(null);
+    try {
+      const scope = tuningInvestigation.source_scope;
+      if (action === 'ACKNOWLEDGED_CURRENT') {
+        await acknowledgeRuntimeTuningScope(scope);
+      } else if (action === 'FOLLOWUP_REQUIRED') {
+        await markRuntimeTuningScopeFollowup(scope);
+      } else {
+        await clearRuntimeTuningScopeReview(scope);
+      }
+      const [reviewState, boardRows] = await Promise.all([
+        getRuntimeTuningReviewStateDetail(scope),
+        getRuntimeTuningReviewBoard({
+          ...(tuningScopeFilter !== 'all' ? { source_scope: tuningScopeFilter } : {}),
+          attention_only: tuningReviewAttentionOnly,
+          limit: tuningLimit,
+        }),
+      ]);
+      setManualReviewState(reviewState);
+      setTuningReviewBoard(boardRows);
+    } catch (err) {
+      setInvestigationError(err instanceof Error ? err.message : 'Could not update manual review state.');
+    } finally {
+      setManualReviewUpdating(null);
     }
   }
 
@@ -619,11 +663,12 @@ export function RuntimePage() {
           </div>
           <div className="table-wrapper">
             <table className="data-table">
-              <thead><tr><th>Scope</th><th>Priority</th><th>Drift</th><th>Latest diff summary</th><th>Board summary</th><th>Recommended action</th><th>Quick actions</th></tr></thead>
+              <thead><tr><th>Scope</th><th>Review</th><th>Priority</th><th>Drift</th><th>Latest diff summary</th><th>Board summary</th><th>Recommended action</th><th>Quick actions</th></tr></thead>
               <tbody>
                 {filteredReviewBoard.map((row) => (
                   <tr key={row.source_scope} style={focusedScope === row.source_scope ? { background: 'rgba(255, 214, 102, 0.2)' } : undefined}>
                     <td>{row.source_scope}</td>
+                    <td>{row.review_status}</td>
                     <td>{row.attention_priority} #{row.attention_rank}</td>
                     <td>{row.drift_status}</td>
                     <td>{row.latest_diff_summary ?? 'No comparable diff'}</td>
@@ -694,6 +739,26 @@ export function RuntimePage() {
               ) : (
                 <p>No correlated run is available for this scope.</p>
               )}
+              <h5>Manual Review State</h5>
+              {manualReviewState ? (
+                <>
+                  <div className="system-metadata-grid">
+                    <div><strong>Effective status:</strong> {manualReviewState.effective_review_status}</div>
+                    <div><strong>Stored status:</strong> {manualReviewState.stored_review_status}</div>
+                    <div><strong>Last action:</strong> {manualReviewState.last_action_type || '—'}</div>
+                    <div><strong>Last action at:</strong> {manualReviewState.last_action_at ? new Date(manualReviewState.last_action_at).toLocaleString() : '—'}</div>
+                    <div><strong>Newer snapshot than reviewed:</strong> {manualReviewState.has_newer_snapshot_than_reviewed ? 'yes' : 'no'}</div>
+                  </div>
+                  <p><strong>Summary:</strong> {manualReviewState.review_summary}</p>
+                  <div className="button-row">
+                    <button type="button" className="button-secondary" disabled={manualReviewUpdating !== null} onClick={() => void onUpdateManualReviewState('ACKNOWLEDGED_CURRENT')}>Acknowledge current</button>
+                    <button type="button" className="button-secondary" disabled={manualReviewUpdating !== null} onClick={() => void onUpdateManualReviewState('FOLLOWUP_REQUIRED')}>Mark follow-up</button>
+                    <button type="button" className="button-secondary" disabled={manualReviewUpdating !== null} onClick={() => void onUpdateManualReviewState('CLEAR')}>Clear review state</button>
+                  </div>
+                </>
+              ) : (
+                <p>No manual review state available.</p>
+              )}
               <h5>Recent Scope Timeline</h5>
               {tuningScopeTimeline ? (
                 <>
@@ -740,6 +805,7 @@ export function RuntimePage() {
                       return;
                     }
                     setInvestigationError(null);
+    setManualReviewState(null);
                     void onViewLatestDiff(tuningInvestigation.latest_diff_snapshot_id);
                   }}
                 >

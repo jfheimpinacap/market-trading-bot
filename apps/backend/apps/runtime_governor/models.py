@@ -114,6 +114,62 @@ class RuntimeTuningContextSnapshot(TimeStampedModel):
         ]
 
 
+class RuntimeTuningReviewStatus(models.TextChoices):
+    UNREVIEWED = 'UNREVIEWED', 'Unreviewed'
+    ACKNOWLEDGED_CURRENT = 'ACKNOWLEDGED_CURRENT', 'Acknowledged current'
+    FOLLOWUP_REQUIRED = 'FOLLOWUP_REQUIRED', 'Follow-up required'
+    STALE_REVIEW = 'STALE_REVIEW', 'Stale review'
+
+
+class RuntimeTuningReviewActionType(models.TextChoices):
+    ACKNOWLEDGE_CURRENT = 'ACKNOWLEDGE_CURRENT', 'Acknowledge current'
+    MARK_FOLLOWUP_REQUIRED = 'MARK_FOLLOWUP_REQUIRED', 'Mark follow-up required'
+    CLEAR_REVIEW_STATE = 'CLEAR_REVIEW_STATE', 'Clear review state'
+
+
+class RuntimeTuningReviewState(TimeStampedModel):
+    source_scope = models.CharField(max_length=32, choices=RuntimeTuningContextSourceScope.choices, unique=True)
+    last_reviewed_snapshot = models.ForeignKey(
+        RuntimeTuningContextSnapshot,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='manual_review_states',
+    )
+    last_reviewed_snapshot_id_value = models.PositiveIntegerField(null=True, blank=True)
+    review_status = models.CharField(
+        max_length=32,
+        choices=RuntimeTuningReviewStatus.choices,
+        default=RuntimeTuningReviewStatus.UNREVIEWED,
+    )
+    last_action_type = models.CharField(max_length=40, choices=RuntimeTuningReviewActionType.choices, blank=True)
+    last_action_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['source_scope']
+
+
+class RuntimeTuningReviewAction(TimeStampedModel):
+    source_scope = models.CharField(max_length=32, choices=RuntimeTuningContextSourceScope.choices)
+    action_type = models.CharField(max_length=40, choices=RuntimeTuningReviewActionType.choices)
+    snapshot = models.ForeignKey(
+        RuntimeTuningContextSnapshot,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='manual_review_actions',
+    )
+    snapshot_id_value = models.PositiveIntegerField(null=True, blank=True)
+    resulting_review_status = models.CharField(max_length=32, choices=RuntimeTuningReviewStatus.choices)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['source_scope', '-created_at']),
+            models.Index(fields=['action_type', '-created_at']),
+        ]
+
+
 class ExposurePressureState(models.TextChoices):
     NORMAL = 'NORMAL', 'Normal'
     CAUTION = 'CAUTION', 'Caution'

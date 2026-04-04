@@ -26,6 +26,8 @@ from apps.runtime_governor.models import (
     RuntimePerformanceSnapshot,
     RuntimeDiagnosticReview,
     RuntimeTuningContextSnapshot,
+    RuntimeTuningReviewAction,
+    RuntimeTuningReviewState,
     RuntimeMode,
     RuntimeModeProfile,
     RuntimeModeState,
@@ -296,6 +298,8 @@ class RuntimeTuningAlertSummarySerializer(serializers.Serializer):
 
 class RuntimeTuningReviewBoardRowSerializer(serializers.Serializer):
     source_scope = serializers.CharField()
+    review_status = serializers.CharField()
+    review_summary = serializers.CharField()
     alert_status = serializers.CharField()
     drift_status = serializers.CharField()
     attention_priority = serializers.CharField()
@@ -436,3 +440,32 @@ class RuntimeTuningProfileSummarySerializer(serializers.Serializer):
 class RuntimeTuningProfileValuesSerializer(serializers.Serializer):
     profile_name = serializers.CharField()
     profile_values = serializers.JSONField()
+
+
+class RuntimeTuningReviewStateSerializer(serializers.Serializer):
+    source_scope = serializers.CharField()
+    effective_review_status = serializers.CharField()
+    stored_review_status = serializers.CharField()
+    latest_snapshot_id = serializers.IntegerField()
+    last_reviewed_snapshot_id = serializers.IntegerField(allow_null=True)
+    has_newer_snapshot_than_reviewed = serializers.BooleanField()
+    last_action_type = serializers.CharField(allow_blank=True)
+    last_action_at = serializers.DateTimeField(required=False, allow_null=True)
+    review_summary = serializers.CharField()
+    runtime_deep_link = serializers.CharField()
+    runtime_investigation_deep_link = serializers.CharField()
+
+
+class RuntimeTuningReviewActionSerializer(serializers.ModelSerializer):
+    snapshot_id = serializers.IntegerField(source='snapshot_id_value', allow_null=True)
+
+    class Meta:
+        model = RuntimeTuningReviewAction
+        fields = [
+            'id',
+            'source_scope',
+            'action_type',
+            'snapshot_id',
+            'resulting_review_status',
+            'created_at',
+        ]

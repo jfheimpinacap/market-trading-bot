@@ -205,6 +205,7 @@ export type RuntimeTuningAlertSummary = {
 };
 
 export type RuntimeTuningReviewPriority = RuntimeTuningAlertStatus;
+export type RuntimeTuningManualReviewStatus = 'UNREVIEWED' | 'ACKNOWLEDGED_CURRENT' | 'FOLLOWUP_REQUIRED' | 'STALE_REVIEW';
 export type RuntimeTuningReviewReasonCode =
   | 'PROFILE_SHIFT'
   | 'GUARDRAIL_CHANGE'
@@ -217,6 +218,8 @@ export type RuntimeTuningReviewNextAction = 'OPEN_LATEST_DIFF' | 'CHECK_CORRELAT
 
 export type RuntimeTuningReviewBoardRow = {
   source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  review_status: RuntimeTuningManualReviewStatus;
+  review_summary: string;
   alert_status: RuntimeTuningAlertStatus;
   drift_status: RuntimeTuningDriftStatus;
   attention_priority: RuntimeTuningReviewPriority;
@@ -782,4 +785,34 @@ export type RuntimeTuningProfileSummary = {
   };
   summary: string;
   created_at: string | null;
+};
+
+
+export type RuntimeTuningReviewState = {
+  source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  effective_review_status: RuntimeTuningManualReviewStatus;
+  stored_review_status: RuntimeTuningManualReviewStatus;
+  latest_snapshot_id: number;
+  last_reviewed_snapshot_id: number | null;
+  has_newer_snapshot_than_reviewed: boolean;
+  last_action_type: string;
+  last_action_at: string | null;
+  review_summary: string;
+  runtime_deep_link: string;
+  runtime_investigation_deep_link: string;
+};
+
+export type RuntimeTuningReviewStateQuery = {
+  source_scope?: RuntimeTuningContextSnapshot['source_scope'];
+  effective_status?: RuntimeTuningManualReviewStatus;
+  needs_attention?: boolean;
+};
+
+export type RuntimeTuningReviewAction = {
+  id: number;
+  source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  action_type: 'ACKNOWLEDGE_CURRENT' | 'MARK_FOLLOWUP_REQUIRED' | 'CLEAR_REVIEW_STATE';
+  snapshot_id: number | null;
+  resulting_review_status: RuntimeTuningManualReviewStatus;
+  created_at: string;
 };
