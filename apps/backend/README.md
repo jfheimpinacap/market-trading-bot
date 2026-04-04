@@ -3768,3 +3768,20 @@ Strict boundaries remain unchanged: local-first, paper/sandbox only, no real-mon
 - Added mode-enforcement services (`rules`, `module_impacts`, `enforcement`, `recommendation`, `run`) under `runtime_governor`.
 - New endpoints expose mode enforcement runs, impacts, decisions, recommendations, and summary.
 - This layer propagates global operating mode into conservative downstream runtime restrictions without replacing timing/admission/exposure/safety authorities.
+
+## Runtime tuning context diff API (Prompt 169)
+
+`apps.runtime_governor` now includes a read-only tuning diff service for temporal debugging/auditability:
+
+- service: `apps/runtime_governor/services/tuning_diff.py`
+- endpoints:
+  - `GET /api/runtime-governor/tuning-context-diffs/`
+  - `GET /api/runtime-governor/tuning-context-diffs/<snapshot_id>/`
+- compares each snapshot against the previous snapshot in the same `source_scope`
+- reports field-level changed/unchanged values for:
+  - `tuning_profile_name`
+  - `tuning_profile_fingerprint`
+  - `effective_values`
+  - guardrails when present in snapshot payload
+
+This is observability-only and does not mutate runtime tuning or operational behavior. Paper-only boundaries remain unchanged.

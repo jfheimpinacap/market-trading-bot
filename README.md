@@ -2575,3 +2575,12 @@ API:
 - Runtime governor now runs an explicit downstream mode-enforcement review to make global mode operational (not only descriptive).
 - Enforcement remains local-first, single-user, paper/sandbox only (no real money, no live broker routing).
 - The bridge adds auditable run/module impact/decision/recommendation records and summary endpoints for runtime/mission-control visibility.
+
+## Runtime tuning drift diff observability (Prompt 169)
+
+`runtime_governor` now exposes a read-only tuning snapshot diff layer so operators can inspect exactly what changed per scope/snapshot.
+
+- API: `GET /api/runtime-governor/tuning-context-diffs/` and `GET /api/runtime-governor/tuning-context-diffs/<snapshot_id>/`
+- Diff payload includes field-level `changed_fields`, optional `unchanged_fields`, and `diff_summary`.
+- Comparison is snapshot-to-previous-snapshot within the same `source_scope`.
+- Scope remains unchanged: paper-only, no live trading, no authority replacement, and no operational tuning behavior change.

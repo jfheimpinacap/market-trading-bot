@@ -37,6 +37,7 @@ import type {
   RuntimeTuningProfileSummary,
   RuntimeTuningContextSnapshot,
   RuntimeTuningContextDriftSummary,
+  RuntimeTuningContextDiff,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -237,4 +238,8 @@ export function getRuntimeTuningContextSnapshots() {
 
 export function getRuntimeTuningContextDriftSummary() {
   return requestJson<RuntimeTuningContextDriftSummary>('/api/runtime-governor/tuning-context-drift-summary/');
+}
+
+export function getRuntimeTuningContextDiffs() {
+  return requestJson<RuntimeTuningContextDiff[]>('/api/runtime-governor/tuning-context-diffs/');
 }

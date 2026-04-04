@@ -47,6 +47,7 @@ import {
   getRuntimeTuningProfileSummary,
   getRuntimeTuningContextSnapshots,
   getRuntimeTuningContextDriftSummary,
+  getRuntimeTuningContextDiffs,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -83,6 +84,7 @@ import type {
   RuntimeSummaryTuningContext,
   RuntimeTuningContextSnapshot,
   RuntimeTuningContextDriftSummary,
+  RuntimeTuningContextDiff,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -153,6 +155,7 @@ export function RuntimePage() {
   const [tuningSummary, setTuningSummary] = useState<RuntimeTuningProfileSummary | null>(null);
   const [tuningContextSnapshots, setTuningContextSnapshots] = useState<RuntimeTuningContextSnapshot[]>([]);
   const [tuningContextDriftSummary, setTuningContextDriftSummary] = useState<RuntimeTuningContextDriftSummary | null>(null);
+  const [tuningContextDiffs, setTuningContextDiffs] = useState<RuntimeTuningContextDiff[]>([]);
 
   const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -164,7 +167,7 @@ export function RuntimePage() {
     setLoading(true);
     setError(null);
     try {
-      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes, tuningContextSnapshotsRes, tuningContextDriftSummaryRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes, tuningContextSnapshotsRes, tuningContextDriftSummaryRes, tuningContextDiffsRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
@@ -199,6 +202,7 @@ export function RuntimePage() {
         getRuntimeTuningProfileSummary(),
         getRuntimeTuningContextSnapshots(),
         getRuntimeTuningContextDriftSummary(),
+        getRuntimeTuningContextDiffs(),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
@@ -234,6 +238,7 @@ export function RuntimePage() {
       setTuningSummary(tuningSummaryRes);
       setTuningContextSnapshots(tuningContextSnapshotsRes);
       setTuningContextDriftSummary(tuningContextDriftSummaryRes);
+      setTuningContextDiffs(tuningContextDiffsRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load runtime governance.');
     } finally {
@@ -392,6 +397,24 @@ export function RuntimePage() {
             <div><strong>NO_CHANGE:</strong> {tuningContextDriftSummary?.status_counts.NO_CHANGE ?? 0}</div>
             <div><strong>MINOR_CONTEXT_CHANGE:</strong> {tuningContextDriftSummary?.status_counts.MINOR_CONTEXT_CHANGE ?? 0}</div>
             <div><strong>PROFILE_CHANGE:</strong> {tuningContextDriftSummary?.status_counts.PROFILE_CHANGE ?? 0}</div>
+          </div>
+          <h4>Tuning Drift Diff</h4>
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead><tr><th>Scope</th><th>Current snapshot</th><th>Previous snapshot</th><th>Drift</th><th>Changed fields</th><th>Summary</th></tr></thead>
+              <tbody>
+                {tuningContextDiffs.slice(0, 20).map((row) => (
+                  <tr key={`${row.source_scope}-${row.current_snapshot_id}`}>
+                    <td>{row.source_scope}</td>
+                    <td>{row.current_snapshot_id}</td>
+                    <td>{row.previous_snapshot_id ?? '—'}</td>
+                    <td>{row.drift_status}</td>
+                    <td>{Object.keys(row.changed_fields ?? {}).length === 0 ? '—' : Object.keys(row.changed_fields).join(', ')}</td>
+                    <td>{row.diff_summary}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
           <h4>Recent snapshots</h4>
           <div className="table-wrapper">
