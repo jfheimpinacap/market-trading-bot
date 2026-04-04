@@ -131,6 +131,14 @@ Delta UX: `/runtime` ahora muestra de forma más explícita la señal de `govern
 
 Nota técnica: los umbrales/pesos conservadores de backlog pressure y bias de relax/manual-review/monitor-only ahora se centralizan en backend (`runtime_governor/tuning_profiles.py`). La UI sigue consumiendo summaries existentes; no se agrega pantalla nueva ni se altera el alcance paper-only.
 
+Delta UX adicional: `/runtime` ahora incluye una sección **Active Tuning Profile** (read-only, sin botones de edición) que muestra:
+- profile activo
+- backlog thresholds + weights efectivos
+- guardrails de runtime feedback / operating mode / stabilization
+- resumen técnico para auditoría y debugging
+
+Esta sección solo mejora observabilidad del tuning activo; no cambia comportamiento por sí misma y mantiene scope paper-only.
+
 Se mantienen límites: paper-only, sin trading real/dinero real, sin reemplazar authorities existentes.
 
 ## Runtime feedback apply UX (new)

@@ -491,3 +491,21 @@ export type RuntimeModeStabilizationSummary = {
   blocked_apply_count: number;
   recommendation_summary: Record<string, unknown>;
 };
+
+export type RuntimeTuningProfileSummary = {
+  profile_name: string;
+  backlog_thresholds: Record<string, number>;
+  backlog_weights: Record<string, number>;
+  feedback_guardrails: Record<string, string | number | boolean>;
+  operating_mode_guardrails: Record<string, string | number | boolean>;
+  stabilization_guardrails: Record<string, string | number | boolean>;
+  effective_values: {
+    high_backlog_manual_review_bias: boolean;
+    critical_backlog_monitor_only_bias: boolean;
+    critical_backlog_blocks_relax: boolean;
+    high_backlog_relax_dwell_multiplier: number;
+    critical_backlog_relax_dwell_multiplier: number;
+  };
+  summary: string;
+  created_at: string | null;
+};

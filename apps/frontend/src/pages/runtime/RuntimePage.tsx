@@ -44,6 +44,7 @@ import {
   applyStabilizedModeTransition,
   getModeStabilizationRecommendations,
   getModeStabilizationSummary,
+  getRuntimeTuningProfileSummary,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -76,6 +77,7 @@ import type {
   RuntimeModeTransitionDecision,
   RuntimeModeTransitionApplyRecord,
   RuntimeModeTransitionSnapshot,
+  RuntimeTuningProfileSummary,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -117,6 +119,7 @@ export function RuntimePage() {
   const [modeTransitionApplyRecords, setModeTransitionApplyRecords] = useState<RuntimeModeTransitionApplyRecord[]>([]);
   const [modeStabilizationRecommendations, setModeStabilizationRecommendations] = useState<RuntimeModeStabilizationRecommendation[]>([]);
   const [modeStabilizationSummary, setModeStabilizationSummary] = useState<RuntimeModeStabilizationSummary | null>(null);
+  const [tuningSummary, setTuningSummary] = useState<RuntimeTuningProfileSummary | null>(null);
 
   const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,7 +131,7 @@ export function RuntimePage() {
     setLoading(true);
     setError(null);
     try {
-      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
@@ -160,6 +163,7 @@ export function RuntimePage() {
         getModeTransitionApplyRecords(),
         getModeStabilizationRecommendations(),
         getModeStabilizationSummary(),
+        getRuntimeTuningProfileSummary(),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
@@ -192,6 +196,7 @@ export function RuntimePage() {
       setModeTransitionApplyRecords(transitionApplyRecordsRes);
       setModeStabilizationRecommendations(stabilizationRecommendationsRes);
       setModeStabilizationSummary(stabilizationSummaryRes);
+      setTuningSummary(tuningSummaryRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load runtime governance.');
     } finally {
@@ -337,6 +342,57 @@ export function RuntimePage() {
             <div><strong>Active incidents:</strong> {incidentSummary?.active_incidents ?? 0}</div>
             <div><strong>Critical incidents:</strong> {incidentSummary?.critical_active ?? 0}</div>
           </div>
+        </SectionCard>
+
+        <SectionCard
+          eyebrow="Tuning observability"
+          title="Active Tuning Profile"
+          description="Read-only snapshot of the active runtime governor tuning profile and effective backlog guardrails. This section does not edit or auto-apply tuning."
+        >
+          <div className="system-metadata-grid">
+            <div><strong>Profile name:</strong> {tuningSummary?.profile_name ?? '—'}</div>
+            <div><strong>high_backlog_manual_review_bias:</strong> {String(tuningSummary?.effective_values.high_backlog_manual_review_bias ?? false)}</div>
+            <div><strong>critical_backlog_monitor_only_bias:</strong> {String(tuningSummary?.effective_values.critical_backlog_monitor_only_bias ?? false)}</div>
+            <div><strong>critical_backlog_blocks_relax:</strong> {String(tuningSummary?.effective_values.critical_backlog_blocks_relax ?? false)}</div>
+            <div><strong>high_backlog_relax_dwell_multiplier:</strong> {tuningSummary?.effective_values.high_backlog_relax_dwell_multiplier ?? '—'}</div>
+            <div><strong>critical_backlog_relax_dwell_multiplier:</strong> {tuningSummary?.effective_values.critical_backlog_relax_dwell_multiplier ?? '—'}</div>
+          </div>
+          <p><strong>Summary:</strong> {tuningSummary?.summary ?? 'No tuning snapshot available.'}</p>
+
+          <h4>Backlog thresholds</h4>
+          <ul>
+            {Object.entries(tuningSummary?.backlog_thresholds ?? {}).map(([key, value]) => (
+              <li key={key}><strong>{key}:</strong> {value}</li>
+            ))}
+          </ul>
+
+          <h4>Backlog weights</h4>
+          <ul>
+            {Object.entries(tuningSummary?.backlog_weights ?? {}).map(([key, value]) => (
+              <li key={key}><strong>{key}:</strong> {value}</li>
+            ))}
+          </ul>
+
+          <h4>Runtime feedback guardrails</h4>
+          <ul>
+            {Object.entries(tuningSummary?.feedback_guardrails ?? {}).map(([key, value]) => (
+              <li key={key}><strong>{key}:</strong> {String(value)}</li>
+            ))}
+          </ul>
+
+          <h4>Operating mode guardrails</h4>
+          <ul>
+            {Object.entries(tuningSummary?.operating_mode_guardrails ?? {}).map(([key, value]) => (
+              <li key={key}><strong>{key}:</strong> {String(value)}</li>
+            ))}
+          </ul>
+
+          <h4>Stabilization guardrails</h4>
+          <ul>
+            {Object.entries(tuningSummary?.stabilization_guardrails ?? {}).map(([key, value]) => (
+              <li key={key}><strong>{key}:</strong> {String(value)}</li>
+            ))}
+          </ul>
         </SectionCard>
 
         <SectionCard eyebrow="Mode selector" title="Allowed runtime modes" description="Select conservative or autonomous paper modes. Blocked options show explicit reasons.">
