@@ -51,6 +51,7 @@ import {
   getRuntimeTuningRunCorrelations,
   getRuntimeTuningScopeDigest,
   getRuntimeTuningChangeAlerts,
+  getRuntimeTuningChangeAlertSummary,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -93,6 +94,7 @@ import type {
   RuntimeTuningRunCorrelation,
   RuntimeTuningScopeDigest,
   RuntimeTuningChangeAlert,
+  RuntimeTuningAlertSummary,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -171,6 +173,7 @@ export function RuntimePage() {
   const [tuningRunCorrelations, setTuningRunCorrelations] = useState<RuntimeTuningRunCorrelation[]>([]);
   const [tuningScopeDigest, setTuningScopeDigest] = useState<RuntimeTuningScopeDigest[]>([]);
   const [tuningChangeAlerts, setTuningChangeAlerts] = useState<RuntimeTuningChangeAlert[]>([]);
+  const [tuningAlertSummary, setTuningAlertSummary] = useState<RuntimeTuningAlertSummary | null>(null);
 
   const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -191,7 +194,7 @@ export function RuntimePage() {
         ...tuningQuery,
         ...(tuningDiffDriftFilter !== 'all' ? { drift_status: tuningDiffDriftFilter } : {}),
       };
-      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes, tuningContextSnapshotsRes, tuningContextDriftSummaryRes, tuningContextDiffsRes, tuningRunCorrelationsRes, tuningScopeDigestRes, tuningChangeAlertsRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes, tuningContextSnapshotsRes, tuningContextDriftSummaryRes, tuningContextDiffsRes, tuningRunCorrelationsRes, tuningScopeDigestRes, tuningChangeAlertsRes, tuningChangeAlertSummaryRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
@@ -230,6 +233,7 @@ export function RuntimePage() {
         getRuntimeTuningRunCorrelations(tuningQuery),
         getRuntimeTuningScopeDigest(tuningQuery),
         getRuntimeTuningChangeAlerts(tuningQuery),
+        getRuntimeTuningChangeAlertSummary(tuningQuery),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
@@ -269,6 +273,7 @@ export function RuntimePage() {
       setTuningRunCorrelations(tuningRunCorrelationsRes);
       setTuningScopeDigest(tuningScopeDigestRes);
       setTuningChangeAlerts(tuningChangeAlertsRes);
+      setTuningAlertSummary(tuningChangeAlertSummaryRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load runtime governance.');
     } finally {
@@ -549,6 +554,33 @@ export function RuntimePage() {
                     <td>{row.source_scope}</td>
                     <td>{row.latest_drift_status}</td>
                     <td>{row.alert_status}</td>
+                    <td>{row.alert_summary}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <h4>Tuning Alert Summary</h4>
+          <div className="system-metadata-grid">
+            <div><strong>Total scopes:</strong> {tuningAlertSummary?.total_scope_count ?? 0}</div>
+            <div><strong>STABLE:</strong> {tuningAlertSummary?.stable_count ?? 0}</div>
+            <div><strong>MINOR_CHANGE:</strong> {tuningAlertSummary?.minor_change_count ?? 0}</div>
+            <div><strong>PROFILE_SHIFT:</strong> {tuningAlertSummary?.profile_shift_count ?? 0}</div>
+            <div><strong>REVIEW_NOW:</strong> {tuningAlertSummary?.review_now_count ?? 0}</div>
+            <div><strong>Highest priority scope:</strong> {tuningAlertSummary?.highest_priority_scope ?? '—'}</div>
+            <div><strong>Most recent changed scope:</strong> {tuningAlertSummary?.most_recent_changed_scope ?? '—'}</div>
+          </div>
+          <p><strong>What to review first:</strong> {tuningAlertSummary?.summary ?? 'No summary available.'}</p>
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead><tr><th>Scope</th><th>Alert</th><th>Snapshot</th><th>Updated</th><th>Summary</th></tr></thead>
+              <tbody>
+                {(tuningAlertSummary?.ordered_scopes ?? []).slice(0, 6).map((row) => (
+                  <tr key={`${row.source_scope}-${row.latest_snapshot_id}`}>
+                    <td>{row.source_scope}</td>
+                    <td>{row.alert_status}</td>
+                    <td>{row.latest_snapshot_id}</td>
+                    <td>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
                     <td>{row.alert_summary}</td>
                   </tr>
                 ))}

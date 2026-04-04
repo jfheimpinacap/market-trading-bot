@@ -2406,3 +2406,18 @@ Muestra por scope:
 Fuente: `GET /api/runtime-governor/tuning-change-alerts/` (con filtro opcional `source_scope`).
 
 Esta mejora no agrega edición/CRUD, no auto-aplica tuning y no cambia el comportamiento operativo. Solo hace más accionable la observabilidad técnica existente en entorno paper-only.
+
+## Runtime tuning alert summary en `/runtime` (Prompt 174)
+
+Dentro de la misma sección **Tuning Context History** en `/runtime` se agregó **Tuning Alert Summary** (sin pantalla nueva).
+
+Muestra en formato compacto:
+- cards de conteo por estado (`STABLE`, `MINOR_CHANGE`, `PROFILE_SHIFT`, `REVIEW_NOW`)
+- `highest_priority_scope`
+- `most_recent_changed_scope`
+- lista corta `ordered_scopes` ya ordenada por atención
+- summary legible tipo “qué mirar primero”
+
+Fuente: `GET /api/runtime-governor/tuning-change-alert-summary/` (con filtro opcional `source_scope`).
+
+Esta capa es read-only de priorización visual/técnica, mantiene scope paper-only y no cambia la lógica operativa.

@@ -2615,3 +2615,13 @@ Se agregó una capa compacta de observabilidad en `runtime_governor` para resumi
 - Campos clave por scope: snapshot más reciente, run correlacionado (si existe), profile/fingerprint, drift status y `digest_summary` legible.
 
 Esta capa es **solo lectura**, mantiene el sistema en **paper-only**, no cambia lógica operativa ni reemplaza authorities existentes.
+
+## Runtime tuning alert summary board (Prompt 174)
+
+`runtime_governor` now adds a compact, attention-first summary layer on top of existing tuning change alerts.
+
+- Endpoint: `GET /api/runtime-governor/tuning-change-alert-summary/` (optional `source_scope`)
+- Purpose: summarize counts (`STABLE`, `MINOR_CHANGE`, `PROFILE_SHIFT`, `REVIEW_NOW`), provide attention-first scope ordering, and show highest-priority / most-recent changed scope.
+- Runtime UI: `/runtime` now includes a **Tuning Alert Summary** section (cards + ordered review list) without creating a new page.
+
+This addition is read-only, paper-only, and does not auto-apply anything or alter operational runtime behavior.
