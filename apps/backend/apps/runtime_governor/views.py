@@ -31,6 +31,8 @@ from apps.runtime_governor.models import (
     RuntimeFeedbackRun,
     RuntimePerformanceSnapshot,
     RuntimeTuningContextSnapshot,
+    RuntimeTuningReviewAction,
+    RuntimeTuningReviewStatus,
 )
 from apps.runtime_governor.serializers import (
     GlobalOperatingModeDecisionSerializer,
@@ -78,6 +80,8 @@ from apps.runtime_governor.serializers import (
     RuntimeTuningScopeTimelineSerializer,
     RuntimeTuningCockpitPanelSerializer,
     RuntimeTuningCockpitPanelDetailSerializer,
+    RuntimeTuningReviewActionSerializer,
+    RuntimeTuningReviewStateSerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -107,6 +111,15 @@ from apps.runtime_governor.services.tuning_review_board import build_tuning_revi
 from apps.runtime_governor.services.tuning_investigation import get_tuning_investigation_packet
 from apps.runtime_governor.services.tuning_scope_timeline import build_tuning_scope_timeline
 from apps.runtime_governor.services.tuning_cockpit_panel import build_tuning_cockpit_panel, get_tuning_cockpit_panel_detail
+from apps.runtime_governor.services.tuning_review_state import (
+    TuningScopeSnapshotNotFound,
+    acknowledge_current_scope,
+    clear_review_state,
+    get_tuning_review_state_detail,
+    list_tuning_review_actions,
+    list_tuning_review_states,
+    mark_followup_required,
+)
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
     get_runtime_feedback_summary,
@@ -349,6 +362,102 @@ class RuntimeTuningReviewBoardDetailView(APIView):
         if not row:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = RuntimeTuningReviewBoardRowSerializer(row)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningReviewStateListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        source_scope = request.query_params.get('source_scope')
+        effective_status = request.query_params.get('effective_status')
+        needs_attention_raw = request.query_params.get('needs_attention')
+        needs_attention = None
+        if needs_attention_raw is not None:
+            needs_attention = needs_attention_raw.lower() == 'true'
+
+        serializer = RuntimeTuningReviewStateSerializer(
+            list_tuning_review_states(
+                source_scope=source_scope,
+                effective_status=effective_status,
+                needs_attention=needs_attention,
+            ),
+            many=True,
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningReviewStateDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, source_scope: str, *args, **kwargs):
+        try:
+            payload = get_tuning_review_state_detail(source_scope=source_scope)
+        except TuningScopeSnapshotNotFound:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = RuntimeTuningReviewStateSerializer(payload)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeAcknowledgeTuningScopeView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, source_scope: str, *args, **kwargs):
+        try:
+            payload = acknowledge_current_scope(source_scope=source_scope)
+        except TuningScopeSnapshotNotFound:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = RuntimeTuningReviewStateSerializer(payload)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeMarkTuningScopeFollowupView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, source_scope: str, *args, **kwargs):
+        try:
+            payload = mark_followup_required(source_scope=source_scope)
+        except TuningScopeSnapshotNotFound:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = RuntimeTuningReviewStateSerializer(payload)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeClearTuningScopeReviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, source_scope: str, *args, **kwargs):
+        try:
+            payload = clear_review_state(source_scope=source_scope)
+        except TuningScopeSnapshotNotFound:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = RuntimeTuningReviewStateSerializer(payload)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningReviewActionListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        source_scope = request.query_params.get('source_scope')
+        limit = None
+        limit_raw = request.query_params.get('limit')
+        if limit_raw is not None:
+            try:
+                limit = int(limit_raw)
+            except (TypeError, ValueError):
+                limit = None
+
+        serializer = RuntimeTuningReviewActionSerializer(
+            list_tuning_review_actions(source_scope=source_scope, limit=limit),
+            many=True,
+        )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

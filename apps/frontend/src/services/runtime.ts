@@ -52,6 +52,9 @@ import type {
   RuntimeTuningInvestigationPacket,
   RuntimeTuningScopeTimeline,
   RuntimeTuningScopeTimelineQuery,
+  RuntimeTuningReviewState,
+  RuntimeTuningReviewStateQuery,
+  RuntimeTuningReviewAction,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -342,4 +345,42 @@ export function getRuntimeTuningCockpitPanel(query: RuntimeTuningCockpitPanelQue
 
 export function getRuntimeTuningCockpitPanelDetail(sourceScope: string) {
   return requestJson<RuntimeTuningCockpitPanelDetail>(`/api/runtime-governor/tuning-cockpit-panel/${encodeURIComponent(sourceScope)}/`);
+}
+
+
+function buildReviewStateQueryString(query: RuntimeTuningReviewStateQuery = {}) {
+  const params = new URLSearchParams();
+  if (query.source_scope) params.set('source_scope', query.source_scope);
+  if (query.effective_status) params.set('effective_status', query.effective_status);
+  if (typeof query.needs_attention === 'boolean') params.set('needs_attention', String(query.needs_attention));
+  const encoded = params.toString();
+  return encoded ? `?${encoded}` : '';
+}
+
+export function getRuntimeTuningReviewStates(query: RuntimeTuningReviewStateQuery = {}) {
+  return requestJson<RuntimeTuningReviewState[]>(`/api/runtime-governor/tuning-review-state/${buildReviewStateQueryString(query)}`);
+}
+
+export function getRuntimeTuningReviewStateDetail(sourceScope: string) {
+  return requestJson<RuntimeTuningReviewState>(`/api/runtime-governor/tuning-review-state/${encodeURIComponent(sourceScope)}/`);
+}
+
+export function acknowledgeRuntimeTuningScope(sourceScope: string) {
+  return requestJson<RuntimeTuningReviewState>(`/api/runtime-governor/acknowledge-tuning-scope/${encodeURIComponent(sourceScope)}/`, { method: 'POST' });
+}
+
+export function markRuntimeTuningScopeFollowup(sourceScope: string) {
+  return requestJson<RuntimeTuningReviewState>(`/api/runtime-governor/mark-tuning-scope-followup/${encodeURIComponent(sourceScope)}/`, { method: 'POST' });
+}
+
+export function clearRuntimeTuningScopeReview(sourceScope: string) {
+  return requestJson<RuntimeTuningReviewState>(`/api/runtime-governor/clear-tuning-scope-review/${encodeURIComponent(sourceScope)}/`, { method: 'POST' });
+}
+
+export function getRuntimeTuningReviewActions(query: { source_scope?: string; limit?: number } = {}) {
+  const params = new URLSearchParams();
+  if (query.source_scope) params.set('source_scope', query.source_scope);
+  if (typeof query.limit === 'number') params.set('limit', String(query.limit));
+  const encoded = params.toString();
+  return requestJson<RuntimeTuningReviewAction[]>(`/api/runtime-governor/tuning-review-actions/${encoded ? `?${encoded}` : ''}`);
 }

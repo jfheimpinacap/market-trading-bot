@@ -2461,3 +2461,118 @@ class RuntimeGovernorTests(TestCase):
     def test_tuning_scope_timeline_returns_404_for_missing_scope(self):
         response = self.client.get(reverse('runtime_governor_v2:tuning_scope_timeline_detail', kwargs={'source_scope': 'unknown_scope'}))
         self.assertEqual(response.status_code, 404)
+
+
+class RuntimeTuningManualReviewStateTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.scope = 'runtime_feedback'
+
+    def _snapshot(self, scope='runtime_feedback', run_id=1, fingerprint='fp1'):
+        return RuntimeTuningContextSnapshot.objects.create(
+            source_scope=scope,
+            source_run_id=run_id,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint=fingerprint,
+            tuning_profile_summary='summary',
+            effective_values={'a': run_id},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='changed',
+        )
+
+    def test_acknowledge_creates_and_reads_review_state(self):
+        snap = self._snapshot()
+        response = self.client.post(reverse('runtime_governor_v2:acknowledge_tuning_scope', args=[self.scope]), {}, format='json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['effective_review_status'], 'ACKNOWLEDGED_CURRENT')
+        self.assertEqual(payload['last_reviewed_snapshot_id'], snap.id)
+
+    def test_mark_followup(self):
+        snap = self._snapshot()
+        response = self.client.post(reverse('runtime_governor_v2:mark_tuning_scope_followup', args=[self.scope]), {}, format='json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['effective_review_status'], 'FOLLOWUP_REQUIRED')
+        self.assertEqual(payload['last_reviewed_snapshot_id'], snap.id)
+
+    def test_clear_review_state(self):
+        self._snapshot()
+        self.client.post(reverse('runtime_governor_v2:acknowledge_tuning_scope', args=[self.scope]), {}, format='json')
+        response = self.client.post(reverse('runtime_governor_v2:clear_tuning_scope_review', args=[self.scope]), {}, format='json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['effective_review_status'], 'UNREVIEWED')
+        self.assertEqual(payload['last_reviewed_snapshot_id'], None)
+
+    def test_stale_detection_when_new_snapshot_arrives(self):
+        first = self._snapshot(run_id=1, fingerprint='fp1')
+        self.client.post(reverse('runtime_governor_v2:acknowledge_tuning_scope', args=[self.scope]), {}, format='json')
+        second = self._snapshot(run_id=2, fingerprint='fp2')
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_state_detail', args=[self.scope]))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['latest_snapshot_id'], second.id)
+        self.assertEqual(payload['last_reviewed_snapshot_id'], first.id)
+        self.assertEqual(payload['effective_review_status'], 'STALE_REVIEW')
+        self.assertTrue(payload['has_newer_snapshot_than_reviewed'])
+
+    def test_detail_payload_includes_required_fields(self):
+        self._snapshot()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_state_detail', args=[self.scope]))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        for key in [
+            'source_scope',
+            'effective_review_status',
+            'stored_review_status',
+            'latest_snapshot_id',
+            'last_reviewed_snapshot_id',
+            'has_newer_snapshot_than_reviewed',
+            'last_action_type',
+            'last_action_at',
+            'review_summary',
+            'runtime_deep_link',
+            'runtime_investigation_deep_link',
+        ]:
+            self.assertIn(key, payload)
+
+    def test_list_filters(self):
+        self._snapshot(scope='runtime_feedback', run_id=1)
+        self._snapshot(scope='operating_mode', run_id=2)
+        self.client.post(reverse('runtime_governor_v2:acknowledge_tuning_scope', args=['runtime_feedback']), {}, format='json')
+        self.client.post(reverse('runtime_governor_v2:mark_tuning_scope_followup', args=['operating_mode']), {}, format='json')
+
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_state_list'), {'effective_status': 'FOLLOWUP_REQUIRED'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)
+        self.assertEqual(response.json()[0]['source_scope'], 'operating_mode')
+
+        attention_response = self.client.get(reverse('runtime_governor_v2:tuning_review_state_list'), {'needs_attention': 'true'})
+        self.assertEqual(attention_response.status_code, 200)
+        self.assertTrue(all(row['effective_review_status'] != 'ACKNOWLEDGED_CURRENT' for row in attention_response.json()))
+
+    def test_action_log_records_entries(self):
+        self._snapshot()
+        self.client.post(reverse('runtime_governor_v2:acknowledge_tuning_scope', args=[self.scope]), {}, format='json')
+        self.client.post(reverse('runtime_governor_v2:clear_tuning_scope_review', args=[self.scope]), {}, format='json')
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_actions'), {'source_scope': self.scope, 'limit': 1})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]['action_type'], 'CLEAR_REVIEW_STATE')
+
+    def test_404_for_scope_without_snapshot(self):
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_state_detail', args=['mode_stabilization']))
+        self.assertEqual(response.status_code, 404)
+        action_response = self.client.post(reverse('runtime_governor_v2:acknowledge_tuning_scope', args=['mode_stabilization']), {}, format='json')
+        self.assertEqual(action_response.status_code, 404)
+
+    def test_review_summary_is_stable_and_readable(self):
+        self._snapshot()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_state_detail', args=[self.scope]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['review_summary'], 'No manual review recorded yet')
+        self.client.post(reverse('runtime_governor_v2:mark_tuning_scope_followup', args=[self.scope]), {}, format='json')
+        response2 = self.client.get(reverse('runtime_governor_v2:tuning_review_state_detail', args=[self.scope]))
+        self.assertEqual(response2.json()['review_summary'], 'Follow-up required for current tuning state')

@@ -9,6 +9,8 @@ from apps.runtime_governor.models import (
     RuntimeModeProfile,
     RuntimeModeState,
     RuntimeTransitionLog,
+    RuntimeTuningReviewAction,
+    RuntimeTuningReviewState,
 )
 
 admin.site.register(RuntimeModeProfile)
@@ -19,3 +21,6 @@ admin.site.register(GlobalRuntimePostureSnapshot)
 admin.site.register(GlobalOperatingModeDecision)
 admin.site.register(GlobalOperatingModeSwitchRecord)
 admin.site.register(GlobalOperatingModeRecommendation)
+
+admin.site.register(RuntimeTuningReviewState)
+admin.site.register(RuntimeTuningReviewAction)
