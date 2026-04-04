@@ -73,6 +73,7 @@ from apps.runtime_governor.serializers import (
     RuntimeTuningScopeDigestSerializer,
     RuntimeTuningChangeAlertSerializer,
     RuntimeTuningAlertSummarySerializer,
+    RuntimeTuningReviewBoardRowSerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -98,6 +99,7 @@ from apps.runtime_governor.services.tuning_correlation import build_tuning_run_c
 from apps.runtime_governor.services.tuning_digest import build_tuning_scope_digest
 from apps.runtime_governor.services.tuning_alerts import build_tuning_change_alerts
 from apps.runtime_governor.services.tuning_alert_summary import build_tuning_alert_summary
+from apps.runtime_governor.services.tuning_review_board import build_tuning_review_board, get_tuning_review_board_detail
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
     get_runtime_feedback_summary,
@@ -307,6 +309,39 @@ class RuntimeTuningChangeAlertSummaryView(APIView):
     def get(self, request, *args, **kwargs):
         source_scope = request.query_params.get('source_scope')
         serializer = RuntimeTuningAlertSummarySerializer(build_tuning_alert_summary(source_scope=source_scope))
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningReviewBoardListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        source_scope = request.query_params.get('source_scope')
+        attention_only = request.query_params.get('attention_only', 'false').lower() == 'true'
+        limit_raw = request.query_params.get('limit')
+        limit = None
+        if limit_raw is not None:
+            try:
+                limit = int(limit_raw)
+            except (TypeError, ValueError):
+                limit = None
+        serializer = RuntimeTuningReviewBoardRowSerializer(
+            build_tuning_review_board(source_scope=source_scope, attention_only=attention_only, limit=limit),
+            many=True,
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningReviewBoardDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, source_scope: str, *args, **kwargs):
+        row = get_tuning_review_board_detail(source_scope=source_scope)
+        if not row:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = RuntimeTuningReviewBoardRowSerializer(row)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

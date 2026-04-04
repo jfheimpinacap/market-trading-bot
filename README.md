@@ -2641,3 +2641,21 @@ This is navigation/read-only usability only: no new authority, no live trading, 
 - Runtime UI: `/runtime` now includes a **Tuning Alert Summary** section (cards + ordered review list) without creating a new page.
 
 This addition is read-only, paper-only, and does not auto-apply anything or alter operational runtime behavior.
+
+### Runtime Tuning Review Board (new)
+
+`runtime_governor` now includes a compact read-only **Runtime Tuning Review Board** in `/runtime` so operators can prioritize scope review quickly without changing operational logic.
+
+- API:
+  - `GET /api/runtime-governor/tuning-review-board/`
+    - optional query params: `source_scope`, `attention_only=true|false`, `limit`
+  - `GET /api/runtime-governor/tuning-review-board/<source_scope>/`
+- Behavior:
+  - deterministic priority order: `REVIEW_NOW > PROFILE_SHIFT > MINOR_CHANGE > STABLE`
+  - intra-priority ordering by guardrail changes, field changes, recency, and stable scope tiebreak
+  - fast navigation to latest diff and correlated run context
+  - runtime focus by query param: `/runtime?tuningScope=<source_scope>`
+- Boundaries:
+  - strictly read-only, paper-only, local-first
+  - no new operational mutations
+  - no authority changes

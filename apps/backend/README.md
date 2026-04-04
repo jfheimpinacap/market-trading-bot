@@ -3888,3 +3888,18 @@ Se agrega una mejora mínima de navegación read-only para enlazar digest/alerts
   - los tres campos se devuelven explícitamente en `null`
 
 Esta mejora no agrega modelos persistentes, no cambia authorities, no modifica lógica operativa y mantiene alcance paper-only.
+
+## Runtime tuning review board (new)
+
+`apps.runtime_governor` now exposes a read-only service layer `services/tuning_review_board.py` that aggregates digest/alerts/diff/correlation signals by `source_scope` into a compact operator review contract.
+
+Endpoints:
+- `GET /api/runtime-governor/tuning-review-board/`
+  - query params: `source_scope`, `attention_only=true|false`, `limit`
+- `GET /api/runtime-governor/tuning-review-board/<source_scope>/`
+
+Key behavior:
+- deterministic priority: `REVIEW_NOW > PROFILE_SHIFT > MINOR_CHANGE > STABLE`
+- tie-breaks: `changed_guardrail_count`, `changed_field_count`, latest change recency, `source_scope`
+- explicit reason codes and next actions (read-only guidance)
+- no persistent model additions, no runtime decision mutations, paper-only scope
