@@ -3924,3 +3924,5 @@ Key behavior:
   - navigation deep links for `/runtime?tuningScope=<scope>&investigate=1`
 
 No new persistent model, no mutative endpoint, no runtime/tuning operational behavior changes.
+
+Cockpit handoff now reuses this same packet inline from `/cockpit` (compact investigation view per scope) and keeps full handoff in `/runtime?tuningScope=<scope>&investigate=1`. Backend scope remains unchanged: same read-only endpoint, no new model, no mutative behavior.

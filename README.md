@@ -226,6 +226,8 @@ Runtime governor now also exposes a **Cockpit Runtime Tuning Attention Panel** h
 
 This remains read-only, paper-only, and decision-neutral: cockpit consumes/summarizes runtime-governor review-board output but does not change operational logic or replace existing attention/operator queues.
 
+Cockpit now also supports an inline compact `Investigate` drill-down per scope by reusing `GET /api/runtime-governor/tuning-investigation/<source_scope>/` directly inside **Runtime Tuning Attention**, with a clear handoff button to `/runtime?tuningScope=<scope>&investigate=1` for the full investigation workflow. This remains read-only/paper-only and does not introduce operational mutations.
+
 ### Runtime feedback apply bridge / closed-loop tuning (new)
 
 `runtime_governor` now closes the loop from runtime feedback into conservative global posture adjustment:
