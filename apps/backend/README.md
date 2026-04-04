@@ -100,8 +100,12 @@ Runtime governor now adds a lightweight persisted history layer in `services/tun
 - API:
   - `GET /api/runtime-governor/tuning-context-snapshots/`
   - `GET /api/runtime-governor/tuning-context-drift-summary/`
+  - `GET /api/runtime-governor/tuning-context-diffs/`
+    - query params: `source_scope`, `drift_status`, `latest_only`, `limit`, optional `created_after`, `created_before`
+  - `GET /api/runtime-governor/tuning-context-snapshots/`
+    - query params: `source_scope`, `latest_only`, `limit`
 
-This layer is audit-trace only (historical observability), remains paper-only, and does not modify runtime_governor decision logic or authorities.
+`latest_only=true` returns only the latest row per `source_scope` for fast scope-aware inspection. This layer is audit-trace only (historical observability), remains paper-only, and does not modify runtime_governor decision logic or authorities.
 
 ## Runtime feedback apply bridge (new)
 

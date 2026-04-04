@@ -132,6 +132,15 @@ export type RuntimeTuningContextDiff = {
   created_at?: string | null;
 };
 
+export type RuntimeTuningHistoryQuery = {
+  source_scope?: RuntimeTuningContextSnapshot['source_scope'];
+  drift_status?: RuntimeTuningDriftStatus;
+  latest_only?: boolean;
+  limit?: number;
+  created_after?: string;
+  created_before?: string;
+};
+
 export type RuntimePostureRun = {
   id: number;
   started_at: string;

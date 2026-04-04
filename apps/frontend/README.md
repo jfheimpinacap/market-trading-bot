@@ -2344,3 +2344,14 @@ Esta capa coordina la postura operativa global del runtime sin reemplazar timing
 - keeps the module read-only (no edit controls, no apply controls)
 
 This improves tuning debugging/traceability only; it does not change runtime behavior and remains paper-only.
+
+## Runtime UI: Tuning History Filters (Prompt 170)
+
+`/runtime` now extends the existing **Tuning Context History** block (no new screen) with lightweight query controls:
+
+- `source_scope` filter
+- `latest only` toggle
+- `drift_status` filter (diff table)
+- limit selector
+
+The UI calls the same read-only endpoints with query params for scope-aware and latest-only inspection, improving operator debugging speed while preserving paper-only boundaries and existing runtime/tuning behavior.

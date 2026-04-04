@@ -85,6 +85,8 @@ import type {
   RuntimeTuningContextSnapshot,
   RuntimeTuningContextDriftSummary,
   RuntimeTuningContextDiff,
+  RuntimeTuningHistoryQuery,
+  RuntimeTuningDriftStatus,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -122,6 +124,10 @@ function TuningContextBlock({ context }: { context: RuntimeSummaryTuningContext 
 }
 
 export function RuntimePage() {
+  const [tuningScopeFilter, setTuningScopeFilter] = useState<RuntimeTuningContextSnapshot['source_scope'] | 'all'>('all');
+  const [tuningDiffDriftFilter, setTuningDiffDriftFilter] = useState<RuntimeTuningDriftStatus | 'all'>('all');
+  const [tuningLatestOnly, setTuningLatestOnly] = useState(false);
+  const [tuningLimit, setTuningLimit] = useState(20);
   const [status, setStatus] = useState<RuntimeStatusResponse | null>(null);
   const [modes, setModes] = useState<RuntimeModeOption[]>([]);
   const [transitions, setTransitions] = useState<RuntimeTransition[]>([]);
@@ -167,6 +173,15 @@ export function RuntimePage() {
     setLoading(true);
     setError(null);
     try {
+      const tuningQuery: RuntimeTuningHistoryQuery = {
+        latest_only: tuningLatestOnly,
+        limit: tuningLimit,
+        ...(tuningScopeFilter !== 'all' ? { source_scope: tuningScopeFilter } : {}),
+      };
+      const tuningDiffQuery: RuntimeTuningHistoryQuery = {
+        ...tuningQuery,
+        ...(tuningDiffDriftFilter !== 'all' ? { drift_status: tuningDiffDriftFilter } : {}),
+      };
       const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes, tuningContextSnapshotsRes, tuningContextDriftSummaryRes, tuningContextDiffsRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
@@ -200,9 +215,9 @@ export function RuntimePage() {
         getModeStabilizationRecommendations(),
         getModeStabilizationSummary(),
         getRuntimeTuningProfileSummary(),
-        getRuntimeTuningContextSnapshots(),
+        getRuntimeTuningContextSnapshots(tuningQuery),
         getRuntimeTuningContextDriftSummary(),
-        getRuntimeTuningContextDiffs(),
+        getRuntimeTuningContextDiffs(tuningDiffQuery),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
@@ -244,7 +259,7 @@ export function RuntimePage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tuningDiffDriftFilter, tuningLatestOnly, tuningLimit, tuningScopeFilter]);
 
   useEffect(() => {
     void load();
@@ -391,6 +406,41 @@ export function RuntimePage() {
           title="Tuning Context History"
           description="Lightweight per-run snapshots for drift audit only. This does not change runtime decisions."
         >
+          <div className="button-row">
+            <label>
+              Scope:{' '}
+              <select value={tuningScopeFilter} onChange={(event) => setTuningScopeFilter(event.target.value as RuntimeTuningContextSnapshot['source_scope'] | 'all')}>
+                <option value="all">All scopes</option>
+                <option value="runtime_feedback">runtime_feedback</option>
+                <option value="operating_mode">operating_mode</option>
+                <option value="mode_stabilization">mode_stabilization</option>
+                <option value="mode_enforcement">mode_enforcement</option>
+              </select>
+            </label>
+            <label>
+              Diff drift:{' '}
+              <select value={tuningDiffDriftFilter} onChange={(event) => setTuningDiffDriftFilter(event.target.value as RuntimeTuningDriftStatus | 'all')}>
+                <option value="all">All drift statuses</option>
+                <option value="INITIAL">INITIAL</option>
+                <option value="NO_CHANGE">NO_CHANGE</option>
+                <option value="MINOR_CONTEXT_CHANGE">MINOR_CONTEXT_CHANGE</option>
+                <option value="PROFILE_CHANGE">PROFILE_CHANGE</option>
+              </select>
+            </label>
+            <label>
+              Limit:{' '}
+              <select value={tuningLimit} onChange={(event) => setTuningLimit(Number(event.target.value))}>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </label>
+            <label>
+              <input type="checkbox" checked={tuningLatestOnly} onChange={(event) => setTuningLatestOnly(event.target.checked)} />
+              {' '}Latest only
+            </label>
+          </div>
           <div className="system-metadata-grid">
             <div><strong>Total snapshots:</strong> {tuningContextDriftSummary?.total_snapshots ?? 0}</div>
             <div><strong>INITIAL:</strong> {tuningContextDriftSummary?.status_counts.INITIAL ?? 0}</div>
@@ -403,7 +453,7 @@ export function RuntimePage() {
             <table className="data-table">
               <thead><tr><th>Scope</th><th>Current snapshot</th><th>Previous snapshot</th><th>Drift</th><th>Changed fields</th><th>Summary</th></tr></thead>
               <tbody>
-                {tuningContextDiffs.slice(0, 20).map((row) => (
+                {tuningContextDiffs.map((row) => (
                   <tr key={`${row.source_scope}-${row.current_snapshot_id}`}>
                     <td>{row.source_scope}</td>
                     <td>{row.current_snapshot_id}</td>
@@ -421,7 +471,7 @@ export function RuntimePage() {
             <table className="data-table">
               <thead><tr><th>Scope</th><th>Run</th><th>Profile</th><th>Fingerprint</th><th>Drift</th><th>Summary</th><th>Created</th></tr></thead>
               <tbody>
-                {tuningContextSnapshots.slice(0, 20).map((row) => (
+                {tuningContextSnapshots.map((row) => (
                   <tr key={row.id}>
                     <td>{row.source_scope}</td>
                     <td>{row.source_run_id ?? '—'}</td>

@@ -204,6 +204,10 @@ Runtime governor now also persists a lightweight tuning-context history for temp
 - API:
   - `GET /api/runtime-governor/tuning-context-snapshots/`
   - `GET /api/runtime-governor/tuning-context-drift-summary/`
+  - `GET /api/runtime-governor/tuning-context-diffs/`
+    - query (read-only observability): `source_scope`, `drift_status`, `latest_only`, `limit`, optional `created_after` / `created_before`
+  - `GET /api/runtime-governor/tuning-context-snapshots/`
+    - query (read-only observability): `source_scope`, `latest_only`, `limit`
 
 This history layer is observability-only, keeps paper-only boundaries, does not enable live trading/real money, and does not change operational decisions.
 
