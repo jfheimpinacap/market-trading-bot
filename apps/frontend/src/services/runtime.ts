@@ -55,6 +55,9 @@ import type {
   RuntimeTuningReviewState,
   RuntimeTuningReviewStateQuery,
   RuntimeTuningReviewAction,
+  RuntimeTuningReviewQueue,
+  RuntimeTuningReviewQueueDetail,
+  RuntimeTuningReviewQueueQuery,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -347,6 +350,25 @@ export function getRuntimeTuningCockpitPanelDetail(sourceScope: string) {
   return requestJson<RuntimeTuningCockpitPanelDetail>(`/api/runtime-governor/tuning-cockpit-panel/${encodeURIComponent(sourceScope)}/`);
 }
 
+
+
+
+function buildReviewQueueQueryString(query: RuntimeTuningReviewQueueQuery = {}) {
+  const params = new URLSearchParams();
+  if (typeof query.unresolved_only === 'boolean') params.set('unresolved_only', String(query.unresolved_only));
+  if (query.effective_review_status) params.set('effective_review_status', query.effective_review_status);
+  if (typeof query.limit === 'number') params.set('limit', String(query.limit));
+  const encoded = params.toString();
+  return encoded ? `?${encoded}` : '';
+}
+
+export function getRuntimeTuningReviewQueue(query: RuntimeTuningReviewQueueQuery = {}) {
+  return requestJson<RuntimeTuningReviewQueue>(`/api/runtime-governor/tuning-review-queue/${buildReviewQueueQueryString(query)}`);
+}
+
+export function getRuntimeTuningReviewQueueDetail(sourceScope: string) {
+  return requestJson<RuntimeTuningReviewQueueDetail>(`/api/runtime-governor/tuning-review-queue/${encodeURIComponent(sourceScope)}/`);
+}
 
 function buildReviewStateQueryString(query: RuntimeTuningReviewStateQuery = {}) {
   const params = new URLSearchParams();

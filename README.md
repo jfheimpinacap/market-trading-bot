@@ -2725,3 +2725,13 @@ Scope remains paper-only and observability-first; this does not alter runtime/tu
 - full handoff remains `/runtime?tuningScope=<scope>&investigate=1`
 
 No operational runtime/tuning behavior changed; this is still paper-only operator UX.
+
+### Runtime Tuning Human Review Queue (Prompt 184)
+
+A new read-only runtime-governor queue composes existing manual review state with existing technical tuning attention so operators can triage scopes faster from cockpit:
+
+- `GET /api/runtime-governor/tuning-review-queue/`
+- `GET /api/runtime-governor/tuning-review-queue/<source_scope>/`
+- list filters: `unresolved_only=true|false` (default `true`), `effective_review_status=<status>`, `limit=<int>` (default `8`)
+
+`/cockpit` now consumes this queue in **Runtime Tuning Review Queue** and keeps deep investigation anchored in `/runtime?tuningScope=<scope>&investigate=1`. This remains paper-only/read-only and does not change runtime tuning operational logic.

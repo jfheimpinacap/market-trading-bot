@@ -802,6 +802,56 @@ export type RuntimeTuningReviewState = {
   runtime_investigation_deep_link: string;
 };
 
+
+
+export type RuntimeTuningReviewQueueReasonCode =
+  | 'FOLLOWUP_REQUIRED'
+  | 'STALE_REVIEW'
+  | 'UNREVIEWED_SCOPE'
+  | 'TECHNICAL_REVIEW_NOW'
+  | 'TECHNICAL_PROFILE_SHIFT'
+  | 'TECHNICAL_MINOR_CHANGE'
+  | 'ACKNOWLEDGED_CURRENT';
+
+export type RuntimeTuningReviewQueueItem = {
+  source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  effective_review_status: RuntimeTuningManualReviewStatus;
+  attention_priority: RuntimeTuningReviewPriority;
+  queue_rank: number;
+  requires_manual_attention: boolean;
+  queue_reason_codes: RuntimeTuningReviewQueueReasonCode[];
+  technical_summary: string;
+  review_summary: string;
+  last_action_type: string;
+  last_action_at: string | null;
+  has_newer_snapshot_than_reviewed: boolean;
+  runtime_deep_link: string;
+  runtime_investigation_deep_link: string;
+  latest_snapshot_id?: number | null;
+  last_reviewed_snapshot_id?: number | null;
+};
+
+export type RuntimeTuningReviewQueue = {
+  total_scope_count: number;
+  queue_count: number;
+  unreviewed_count: number;
+  followup_count: number;
+  stale_count: number;
+  highest_priority_scope: RuntimeTuningContextSnapshot['source_scope'] | null;
+  queue_summary: string;
+  items: RuntimeTuningReviewQueueItem[];
+};
+
+export type RuntimeTuningReviewQueueDetail = RuntimeTuningReviewQueueItem & {
+  stored_review_status: RuntimeTuningManualReviewStatus;
+  queue_summary: string;
+};
+
+export type RuntimeTuningReviewQueueQuery = {
+  unresolved_only?: boolean;
+  effective_review_status?: RuntimeTuningManualReviewStatus;
+  limit?: number;
+};
 export type RuntimeTuningReviewStateQuery = {
   source_scope?: RuntimeTuningContextSnapshot['source_scope'];
   effective_status?: RuntimeTuningManualReviewStatus;

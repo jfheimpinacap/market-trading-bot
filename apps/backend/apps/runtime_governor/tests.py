@@ -2576,3 +2576,110 @@ class RuntimeTuningManualReviewStateTests(TestCase):
         self.client.post(reverse('runtime_governor_v2:mark_tuning_scope_followup', args=[self.scope]), {}, format='json')
         response2 = self.client.get(reverse('runtime_governor_v2:tuning_review_state_detail', args=[self.scope]))
         self.assertEqual(response2.json()['review_summary'], 'Follow-up required for current tuning state')
+
+
+class RuntimeTuningReviewQueueTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def _snapshot(self, *, scope: str, run_id: int, fingerprint: str, drift_status: str, values: dict):
+        return RuntimeTuningContextSnapshot.objects.create(
+            source_scope=scope,
+            source_run_id=run_id,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint=fingerprint,
+            tuning_profile_summary='summary',
+            effective_values=values,
+            drift_status=drift_status,
+            drift_summary='summary',
+        )
+
+    def _seed_queue_dataset(self):
+        self._snapshot(scope='runtime_feedback', run_id=1, fingerprint='rf-a', drift_status='INITIAL', values={'a': 1})
+        self._snapshot(scope='runtime_feedback', run_id=2, fingerprint='rf-b', drift_status='PROFILE_CHANGE', values={'a': 2})
+        self._snapshot(
+            scope='runtime_feedback',
+            run_id=3,
+            fingerprint='rf-c',
+            drift_status='MINOR_CONTEXT_CHANGE',
+            values={'a': 3, 'tuning_guardrail_summary': {'g1': True}},
+        )
+
+        self._snapshot(scope='mode_enforcement', run_id=11, fingerprint='me-a', drift_status='INITIAL', values={'a': 1})
+        self._snapshot(scope='mode_enforcement', run_id=12, fingerprint='me-b', drift_status='PROFILE_CHANGE', values={'a': 2})
+
+        self._snapshot(scope='operating_mode', run_id=21, fingerprint='om-a', drift_status='INITIAL', values={'a': 1})
+        self._snapshot(scope='operating_mode', run_id=22, fingerprint='om-a', drift_status='NO_CHANGE', values={'a': 1})
+
+        self._snapshot(scope='mode_stabilization', run_id=31, fingerprint='ms-a', drift_status='INITIAL', values={'a': 1})
+        self._snapshot(scope='mode_stabilization', run_id=32, fingerprint='ms-b', drift_status='MINOR_CONTEXT_CHANGE', values={'a': 2})
+
+        self.client.post(reverse('runtime_governor_v2:mark_tuning_scope_followup', args=['runtime_feedback']), {}, format='json')
+        self.client.post(reverse('runtime_governor_v2:acknowledge_tuning_scope', args=['mode_enforcement']), {}, format='json')
+        self._snapshot(scope='mode_enforcement', run_id=13, fingerprint='me-c', drift_status='MINOR_CONTEXT_CHANGE', values={'a': 3})
+        self.client.post(reverse('runtime_governor_v2:acknowledge_tuning_scope', args=['operating_mode']), {}, format='json')
+
+    def test_tuning_review_queue_list_payload_and_counts(self):
+        self._seed_queue_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_queue'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        for key in [
+            'total_scope_count',
+            'queue_count',
+            'unreviewed_count',
+            'followup_count',
+            'stale_count',
+            'highest_priority_scope',
+            'queue_summary',
+            'items',
+        ]:
+            self.assertIn(key, payload)
+        self.assertEqual(payload['total_scope_count'], 4)
+        self.assertEqual(payload['queue_count'], 3)
+        self.assertEqual(payload['unreviewed_count'], 1)
+        self.assertEqual(payload['followup_count'], 1)
+        self.assertEqual(payload['stale_count'], 1)
+        self.assertIn('require human review', payload['queue_summary'])
+
+    def test_tuning_review_queue_ordering_follows_manual_then_technical_priority(self):
+        self._seed_queue_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_queue'), {'unresolved_only': 'false'})
+        self.assertEqual(response.status_code, 200)
+        items = response.json()['items']
+        self.assertEqual([row['source_scope'] for row in items], ['runtime_feedback', 'mode_enforcement', 'mode_stabilization', 'operating_mode'])
+        self.assertEqual([row['queue_rank'] for row in items], [1, 2, 3, 4])
+
+    def test_unresolved_only_excludes_acknowledged_current(self):
+        self._seed_queue_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_queue'), {'unresolved_only': 'true'})
+        self.assertEqual(response.status_code, 200)
+        statuses = {row['effective_review_status'] for row in response.json()['items']}
+        self.assertNotIn('ACKNOWLEDGED_CURRENT', statuses)
+
+    def test_tuning_review_queue_detail_and_deep_links(self):
+        self._seed_queue_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_queue_detail', args=['runtime_feedback']))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['source_scope'], 'runtime_feedback')
+        self.assertEqual(payload['effective_review_status'], 'FOLLOWUP_REQUIRED')
+        self.assertTrue(payload['requires_manual_attention'])
+        self.assertEqual(payload['runtime_deep_link'], '/runtime?tuningScope=runtime_feedback')
+        self.assertEqual(payload['runtime_investigation_deep_link'], '/runtime?tuningScope=runtime_feedback&investigate=1')
+        self.assertIn('queue_reason_codes', payload)
+        self.assertIn('queue_summary', payload)
+
+    def test_tuning_review_queue_manual_attention_flags(self):
+        self._seed_queue_dataset()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_queue'), {'unresolved_only': 'false'})
+        self.assertEqual(response.status_code, 200)
+        flags = {row['source_scope']: row['requires_manual_attention'] for row in response.json()['items']}
+        self.assertTrue(flags['runtime_feedback'])
+        self.assertTrue(flags['mode_enforcement'])
+        self.assertTrue(flags['mode_stabilization'])
+        self.assertFalse(flags['operating_mode'])
+
+    def test_tuning_review_queue_detail_404_for_missing_scope(self):
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_queue_detail', args=['runtime_feedback']))
+        self.assertEqual(response.status_code, 404)

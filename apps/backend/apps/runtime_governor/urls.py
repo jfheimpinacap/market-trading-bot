@@ -67,6 +67,8 @@ from apps.runtime_governor.views import (
     RuntimeTuningScopeTimelineDetailView,
     RuntimeTuningCockpitPanelListView,
     RuntimeTuningCockpitPanelDetailView,
+    RuntimeTuningReviewQueueListView,
+    RuntimeTuningReviewQueueDetailView,
     RunRuntimeFeedbackReviewView,
 )
 
@@ -96,6 +98,8 @@ urlpatterns = [
     path('tuning-review-board/<str:source_scope>/', RuntimeTuningReviewBoardDetailView.as_view(), name='tuning_review_board_detail'),
     path('tuning-investigation/<str:source_scope>/', RuntimeTuningInvestigationDetailView.as_view(), name='tuning_investigation_detail'),
     path('tuning-scope-timeline/<str:source_scope>/', RuntimeTuningScopeTimelineDetailView.as_view(), name='tuning_scope_timeline_detail'),
+    path('tuning-review-queue/', RuntimeTuningReviewQueueListView.as_view(), name='tuning_review_queue'),
+    path('tuning-review-queue/<str:source_scope>/', RuntimeTuningReviewQueueDetailView.as_view(), name='tuning_review_queue_detail'),
     path('tuning-cockpit-panel/', RuntimeTuningCockpitPanelListView.as_view(), name='tuning_cockpit_panel'),
     path('tuning-cockpit-panel/<str:source_scope>/', RuntimeTuningCockpitPanelDetailView.as_view(), name='tuning_cockpit_panel_detail'),
     path('run-operating-mode-review/', RunOperatingModeReviewView.as_view(), name='run_operating_mode_review'),

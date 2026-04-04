@@ -419,6 +419,40 @@ class RuntimeTuningCockpitPanelDetailSerializer(RuntimeTuningCockpitPanelItemSer
     changed_guardrail_count = serializers.IntegerField()
 
 
+
+
+class RuntimeTuningReviewQueueItemSerializer(serializers.Serializer):
+    source_scope = serializers.CharField()
+    effective_review_status = serializers.CharField()
+    attention_priority = serializers.CharField()
+    queue_rank = serializers.IntegerField()
+    requires_manual_attention = serializers.BooleanField()
+    queue_reason_codes = serializers.ListField(child=serializers.CharField())
+    technical_summary = serializers.CharField()
+    review_summary = serializers.CharField()
+    last_action_type = serializers.CharField(allow_blank=True)
+    last_action_at = serializers.DateTimeField(required=False, allow_null=True)
+    has_newer_snapshot_than_reviewed = serializers.BooleanField()
+    runtime_deep_link = serializers.CharField()
+    runtime_investigation_deep_link = serializers.CharField()
+    latest_snapshot_id = serializers.IntegerField(allow_null=True, required=False)
+    last_reviewed_snapshot_id = serializers.IntegerField(allow_null=True, required=False)
+
+
+class RuntimeTuningReviewQueueSerializer(serializers.Serializer):
+    total_scope_count = serializers.IntegerField()
+    queue_count = serializers.IntegerField()
+    unreviewed_count = serializers.IntegerField()
+    followup_count = serializers.IntegerField()
+    stale_count = serializers.IntegerField()
+    highest_priority_scope = serializers.CharField(required=False, allow_null=True)
+    queue_summary = serializers.CharField()
+    items = RuntimeTuningReviewQueueItemSerializer(many=True)
+
+
+class RuntimeTuningReviewQueueDetailSerializer(RuntimeTuningReviewQueueItemSerializer):
+    stored_review_status = serializers.CharField(required=False)
+    queue_summary = serializers.CharField()
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecommendation
