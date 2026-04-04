@@ -817,6 +817,110 @@ class RuntimeGovernorTests(TestCase):
         self.assertIn('latest_snapshot_created_at', payload[0])
         self.assertIn('digest_summary', payload[0])
 
+    def test_tuning_change_alerts_no_change_is_stable(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=1101,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-stable',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='first',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=1102,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-stable',
+            tuning_profile_summary='same',
+            effective_values={'x': 1},
+            drift_status='NO_CHANGE',
+            drift_summary='same',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_change_alerts'), {'source_scope': 'runtime_feedback'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]['alert_status'], 'STABLE')
+
+    def test_tuning_change_alerts_minor_context_change_is_minor_change(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='operating_mode',
+            source_run_id=1111,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-old',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='first',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='operating_mode',
+            source_run_id=1112,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-new',
+            tuning_profile_summary='changed',
+            effective_values={'x': 2},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='changed',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_change_alerts'), {'source_scope': 'operating_mode'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]['alert_status'], 'MINOR_CHANGE')
+
+    def test_tuning_change_alerts_profile_change_is_profile_shift(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_stabilization',
+            source_run_id=1121,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-old',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='first',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_stabilization',
+            source_run_id=1122,
+            tuning_profile_name='runtime_conservative_v2',
+            tuning_profile_fingerprint='fp-new',
+            tuning_profile_summary='changed',
+            effective_values={'x': 2},
+            drift_status='PROFILE_CHANGE',
+            drift_summary='profile changed',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_change_alerts'), {'source_scope': 'mode_stabilization'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]['alert_status'], 'PROFILE_SHIFT')
+
+    def test_tuning_change_alerts_escalates_to_review_now_with_multiple_relevant_changes(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=1131,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-old',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1, 'y': 1, 'z': 1},
+            drift_status='INITIAL',
+            drift_summary='first',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=1132,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-new',
+            tuning_profile_summary='changed',
+            effective_values={'x': 2, 'y': 2, 'z': 2},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='many changed',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_change_alerts'), {'source_scope': 'mode_enforcement'})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload[0]['alert_status'], 'REVIEW_NOW')
+        self.assertIn('alert_summary', payload[0])
+        self.assertIn('latest_snapshot_id', payload[0])
+        self.assertIn('latest_drift_status', payload[0])
+
     def test_mode_enforcement_propagates_to_timing_policy(self):
         session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
         self._seed_exposure_decision(PortfolioExposureDecisionType.PARK_WEAKER_SESSION)

@@ -50,6 +50,7 @@ import {
   getRuntimeTuningContextDiffs,
   getRuntimeTuningRunCorrelations,
   getRuntimeTuningScopeDigest,
+  getRuntimeTuningChangeAlerts,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -91,6 +92,7 @@ import type {
   RuntimeTuningDriftStatus,
   RuntimeTuningRunCorrelation,
   RuntimeTuningScopeDigest,
+  RuntimeTuningChangeAlert,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -168,6 +170,7 @@ export function RuntimePage() {
   const [tuningContextDiffs, setTuningContextDiffs] = useState<RuntimeTuningContextDiff[]>([]);
   const [tuningRunCorrelations, setTuningRunCorrelations] = useState<RuntimeTuningRunCorrelation[]>([]);
   const [tuningScopeDigest, setTuningScopeDigest] = useState<RuntimeTuningScopeDigest[]>([]);
+  const [tuningChangeAlerts, setTuningChangeAlerts] = useState<RuntimeTuningChangeAlert[]>([]);
 
   const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -188,7 +191,7 @@ export function RuntimePage() {
         ...tuningQuery,
         ...(tuningDiffDriftFilter !== 'all' ? { drift_status: tuningDiffDriftFilter } : {}),
       };
-      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes, tuningContextSnapshotsRes, tuningContextDriftSummaryRes, tuningContextDiffsRes, tuningRunCorrelationsRes, tuningScopeDigestRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes, tuningContextSnapshotsRes, tuningContextDriftSummaryRes, tuningContextDiffsRes, tuningRunCorrelationsRes, tuningScopeDigestRes, tuningChangeAlertsRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
@@ -226,6 +229,7 @@ export function RuntimePage() {
         getRuntimeTuningContextDiffs(tuningDiffQuery),
         getRuntimeTuningRunCorrelations(tuningQuery),
         getRuntimeTuningScopeDigest(tuningQuery),
+        getRuntimeTuningChangeAlerts(tuningQuery),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
@@ -264,6 +268,7 @@ export function RuntimePage() {
       setTuningContextDiffs(tuningContextDiffsRes);
       setTuningRunCorrelations(tuningRunCorrelationsRes);
       setTuningScopeDigest(tuningScopeDigestRes);
+      setTuningChangeAlerts(tuningChangeAlertsRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load runtime governance.');
     } finally {
@@ -529,6 +534,22 @@ export function RuntimePage() {
                     <td>{row.tuning_profile_fingerprint}</td>
                     <td>{row.latest_drift_status}</td>
                     <td>{row.digest_summary}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <h4>Tuning Change Alerts</h4>
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead><tr><th>Scope</th><th>Drift</th><th>Alert</th><th>Summary</th></tr></thead>
+              <tbody>
+                {tuningChangeAlerts.map((row) => (
+                  <tr key={`${row.source_scope}-${row.latest_snapshot_id}`}>
+                    <td>{row.source_scope}</td>
+                    <td>{row.latest_drift_status}</td>
+                    <td>{row.alert_status}</td>
+                    <td>{row.alert_summary}</td>
                   </tr>
                 ))}
               </tbody>

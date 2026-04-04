@@ -265,6 +265,17 @@ class RuntimeTuningScopeDigestSerializer(serializers.Serializer):
     digest_summary = serializers.CharField()
 
 
+class RuntimeTuningChangeAlertSerializer(serializers.Serializer):
+    source_scope = serializers.CharField()
+    latest_snapshot_id = serializers.IntegerField()
+    tuning_profile_name = serializers.CharField()
+    tuning_profile_fingerprint = serializers.CharField()
+    latest_drift_status = serializers.CharField()
+    alert_status = serializers.CharField()
+    alert_summary = serializers.CharField()
+    created_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecommendation
