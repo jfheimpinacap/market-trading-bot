@@ -3854,3 +3854,19 @@ Mantiene límites explícitos: observabilidad técnica, paper-only, sin cambios 
   - escalado a `REVIEW_NOW` cuando hay múltiples cambios relevantes o profile shift reciente
 
 Esta capa no crea CRUD, no aplica cambios automáticamente y no modifica la lógica operativa: solo mejora la revisión rápida en modo paper-only.
+
+## Runtime tuning alert summary API (Prompt 174)
+
+Se agrega una capa compacta de priorización read-only para pasar de alertas por scope a una vista de revisión por atención.
+
+- service: `apps/runtime_governor/services/tuning_alert_summary.py`
+- endpoint: `GET /api/runtime-governor/tuning-change-alert-summary/`
+  - query opcional: `source_scope`
+- salida:
+  - conteos (`total_scope_count`, `stable_count`, `minor_change_count`, `profile_shift_count`, `review_now_count`)
+  - `highest_priority_scope`
+  - `most_recent_changed_scope`
+  - `ordered_scopes` ya ordenado por atención (`REVIEW_NOW` → `PROFILE_SHIFT` → `MINOR_CHANGE` → `STABLE`)
+  - `summary` legible de “qué mirar primero”
+
+Integra exclusivamente `tuning-change-alerts` existentes, no crea modelos nuevos, no cambia decisiones operativas y mantiene límites paper-only.

@@ -178,6 +178,26 @@ export type RuntimeTuningChangeAlert = {
   created_at?: string | null;
 };
 
+export type RuntimeTuningAlertSummaryScope = {
+  source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  alert_status: RuntimeTuningAlertStatus;
+  latest_snapshot_id: number;
+  created_at?: string | null;
+  alert_summary: string;
+};
+
+export type RuntimeTuningAlertSummary = {
+  total_scope_count: number;
+  stable_count: number;
+  minor_change_count: number;
+  profile_shift_count: number;
+  review_now_count: number;
+  highest_priority_scope?: RuntimeTuningContextSnapshot['source_scope'] | null;
+  most_recent_changed_scope?: RuntimeTuningContextSnapshot['source_scope'] | null;
+  ordered_scopes: RuntimeTuningAlertSummaryScope[];
+  summary: string;
+};
+
 export type RuntimePostureRun = {
   id: number;
   started_at: string;

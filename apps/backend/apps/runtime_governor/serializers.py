@@ -276,6 +276,18 @@ class RuntimeTuningChangeAlertSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField(required=False, allow_null=True)
 
 
+class RuntimeTuningAlertSummarySerializer(serializers.Serializer):
+    total_scope_count = serializers.IntegerField()
+    stable_count = serializers.IntegerField()
+    minor_change_count = serializers.IntegerField()
+    profile_shift_count = serializers.IntegerField()
+    review_now_count = serializers.IntegerField()
+    highest_priority_scope = serializers.CharField(required=False, allow_null=True)
+    most_recent_changed_scope = serializers.CharField(required=False, allow_null=True)
+    ordered_scopes = serializers.JSONField()
+    summary = serializers.CharField()
+
+
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecommendation

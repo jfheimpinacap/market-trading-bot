@@ -54,6 +54,7 @@ from apps.runtime_governor.views import (
     RuntimeTuningRunCorrelationListView,
     RuntimeTuningScopeDigestListView,
     RuntimeTuningChangeAlertListView,
+    RuntimeTuningChangeAlertSummaryView,
     RunRuntimeFeedbackReviewView,
 )
 
@@ -72,6 +73,7 @@ urlpatterns = [
     path('tuning-run-correlations/', RuntimeTuningRunCorrelationListView.as_view(), name='tuning_run_correlations'),
     path('tuning-scope-digest/', RuntimeTuningScopeDigestListView.as_view(), name='tuning_scope_digest'),
     path('tuning-change-alerts/', RuntimeTuningChangeAlertListView.as_view(), name='tuning_change_alerts'),
+    path('tuning-change-alert-summary/', RuntimeTuningChangeAlertSummaryView.as_view(), name='tuning_change_alert_summary'),
     path('run-operating-mode-review/', RunOperatingModeReviewView.as_view(), name='run_operating_mode_review'),
     path('runtime-posture-runs/', RuntimePostureRunListView.as_view(), name='runtime_posture_runs'),
     path('runtime-posture-snapshots/', RuntimePostureSnapshotListView.as_view(), name='runtime_posture_snapshots'),
