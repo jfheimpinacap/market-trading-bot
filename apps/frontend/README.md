@@ -2466,3 +2466,21 @@ Esta mejora solo optimiza drill-down de observabilidad; no agrega edición, no c
   - preloads latest diff quick view when comparable diff exists
 
 This is observability-only and remains local-first, paper-only, and read-only (no operational mutations).
+
+## Runtime tuning investigation UX (new)
+
+`/runtime` now includes a compact **Tuning Investigation** drill-down inside the existing page (no new screen):
+
+- new action in Tuning Review Board: `Investigate`
+- opens packet detail from:
+  - `GET /api/runtime-governor/tuning-investigation/<source_scope>/`
+- supports URL auto-open:
+  - `/runtime?tuningScope=<source_scope>&investigate=1`
+- investigation panel shows:
+  - summary + priority/alert/drift
+  - reason codes
+  - compact diff preview + remaining counts
+  - correlated run context preview
+  - actions: `View full diff` (existing diff detail endpoint) and `Hide investigation`
+
+This UX remains read-only/paper-only and does not alter runtime operations.

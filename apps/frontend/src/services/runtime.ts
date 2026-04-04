@@ -49,6 +49,7 @@ import type {
   RuntimeTuningCockpitPanelQuery,
   RuntimeTuningCockpitPanel,
   RuntimeTuningCockpitPanelDetail,
+  RuntimeTuningInvestigationPacket,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -302,6 +303,11 @@ export function getRuntimeTuningReviewBoard(query: RuntimeTuningReviewBoardQuery
 
 export function getRuntimeTuningReviewBoardDetail(sourceScope: string) {
   return requestJson<RuntimeTuningReviewBoardRow>(`/api/runtime-governor/tuning-review-board/${encodeURIComponent(sourceScope)}/`);
+}
+
+
+export function getRuntimeTuningInvestigation(sourceScope: string) {
+  return requestJson<RuntimeTuningInvestigationPacket>(`/api/runtime-governor/tuning-investigation/${encodeURIComponent(sourceScope)}/`);
 }
 
 function buildCockpitPanelQueryString(query: RuntimeTuningCockpitPanelQuery = {}) {

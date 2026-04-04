@@ -2667,3 +2667,14 @@ This addition is read-only, paper-only, and does not auto-apply anything or alte
   - strictly read-only, paper-only, local-first
   - no new operational mutations
   - no authority changes
+
+## Runtime Tuning Investigation Packet (new)
+
+Runtime governor now exposes a compact **read-only investigation packet** per `source_scope` to unify review board priority, diff preview, and correlated run context in one reusable payload:
+
+- Endpoint: `GET /api/runtime-governor/tuning-investigation/<source_scope>/`
+- Runtime handoff link supports auto-open investigation view:
+  - `/runtime?tuningScope=<source_scope>&investigate=1`
+- Packet includes summary, reason codes, compact diff preview (max 5 fields + remaining counts), correlated run context (or explicit nulls), and runtime deep links.
+
+This remains observability-only, paper-only, and does not change runtime/tuning operational logic.

@@ -54,6 +54,7 @@ import {
   getRuntimeTuningChangeAlerts,
   getRuntimeTuningChangeAlertSummary,
   getRuntimeTuningReviewBoard,
+  getRuntimeTuningInvestigation,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -98,6 +99,7 @@ import type {
   RuntimeTuningChangeAlert,
   RuntimeTuningAlertSummary,
   RuntimeTuningReviewBoardRow,
+  RuntimeTuningInvestigationPacket,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -114,6 +116,10 @@ function getFocusedScopeFromQuery(): RuntimeTuningContextSnapshot['source_scope'
     return value;
   }
   return null;
+}
+
+function shouldOpenInvestigationFromQuery(): boolean {
+  return new URLSearchParams(window.location.search).get('investigate') === '1';
 }
 
 function TuningContextBlock({ context }: { context: RuntimeSummaryTuningContext | null }) {
@@ -191,6 +197,9 @@ export function RuntimePage() {
   const [tuningReviewAttentionOnly, setTuningReviewAttentionOnly] = useState(false);
   const [tuningReviewScopeFilter, setTuningReviewScopeFilter] = useState('');
   const [focusedScope, setFocusedScope] = useState<RuntimeTuningContextSnapshot['source_scope'] | null>(getFocusedScopeFromQuery());
+  const [tuningInvestigation, setTuningInvestigation] = useState<RuntimeTuningInvestigationPacket | null>(null);
+  const [investigationLoading, setInvestigationLoading] = useState(false);
+  const [investigationError, setInvestigationError] = useState<string | null>(null);
   const [expandedCorrelatedScope, setExpandedCorrelatedScope] = useState<RuntimeTuningContextSnapshot['source_scope'] | null>(null);
 
   const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
@@ -332,6 +341,12 @@ export function RuntimePage() {
   }, []);
 
   useEffect(() => {
+    const scope = getFocusedScopeFromQuery();
+    if (!scope || !shouldOpenInvestigationFromQuery()) return;
+    void onInvestigateScope(scope, false);
+  }, []);
+
+  useEffect(() => {
     if (!focusedScope) return;
     const focusedRow = tuningReviewBoard.find((row) => row.source_scope === focusedScope);
     if (focusedRow?.latest_diff_snapshot_id) {
@@ -349,6 +364,34 @@ export function RuntimePage() {
     window.requestAnimationFrame(() => {
       document.getElementById('tuning-review-board')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+  }
+
+  async function onInvestigateScope(scope: RuntimeTuningContextSnapshot['source_scope'], updateUrl = true) {
+    setFocusedScope(scope);
+    setInvestigationLoading(true);
+    setInvestigationError(null);
+    if (updateUrl) {
+      navigate(`/runtime?tuningScope=${encodeURIComponent(scope)}&investigate=1`);
+    }
+    try {
+      const packet = await getRuntimeTuningInvestigation(scope);
+      setTuningInvestigation(packet);
+    } catch (err) {
+      setTuningInvestigation(null);
+      setInvestigationError(err instanceof Error ? err.message : 'Could not load tuning investigation packet.');
+    } finally {
+      setInvestigationLoading(false);
+    }
+  }
+
+  function onHideInvestigation() {
+    setTuningInvestigation(null);
+    setInvestigationError(null);
+    if (focusedScope) {
+      navigate(`/runtime?tuningScope=${encodeURIComponent(focusedScope)}`);
+    } else {
+      navigate('/runtime');
+    }
   }
 
   async function onSetMode(mode: RuntimeModeOption['mode']) {
@@ -560,6 +603,7 @@ export function RuntimePage() {
                     <td>
                       <div className="button-row">
                         <button type="button" className="button-secondary" onClick={() => onFocusScope(row.source_scope)}>Focus scope</button>
+                        <button type="button" className="button-secondary" onClick={() => void onInvestigateScope(row.source_scope)}>Investigate</button>
                         <button type="button" className="button-secondary" onClick={() => void onViewLatestDiff(row.latest_diff_snapshot_id)}>{row.latest_diff_snapshot_id ? 'View latest diff' : 'No comparable diff'}</button>
                         <button type="button" className="button-secondary" onClick={() => setExpandedCorrelatedScope(expandedCorrelatedScope === row.source_scope ? null : row.source_scope)}>View correlated run context</button>
                       </div>
@@ -578,6 +622,70 @@ export function RuntimePage() {
               </tbody>
             </table>
           </div>
+          {investigationLoading ? <p>Loading tuning investigation…</p> : null}
+          {investigationError ? <p>{investigationError}</p> : null}
+          {tuningInvestigation ? (
+            <>
+              <h4>Tuning Investigation</h4>
+              <p><strong>{tuningInvestigation.investigation_summary}</strong></p>
+              <div className="system-metadata-grid">
+                <div><strong>Scope:</strong> {tuningInvestigation.source_scope}</div>
+                <div><strong>Priority:</strong> {tuningInvestigation.attention_priority} #{tuningInvestigation.attention_rank}</div>
+                <div><strong>Alert:</strong> {tuningInvestigation.alert_status}</div>
+                <div><strong>Drift:</strong> {tuningInvestigation.drift_status}</div>
+                <div><strong>Snapshot:</strong> #{tuningInvestigation.latest_snapshot_id} ({new Date(tuningInvestigation.latest_snapshot_created_at).toLocaleString()})</div>
+                <div><strong>Previous snapshot:</strong> {tuningInvestigation.previous_snapshot_id ?? '—'}</div>
+              </div>
+              <p><strong>Board summary:</strong> {tuningInvestigation.board_summary}</p>
+              <p><strong>Review reason codes:</strong> {tuningInvestigation.review_reason_codes.join(', ') || '—'}</p>
+              <h5>Diff preview</h5>
+              {tuningInvestigation.has_comparable_diff ? (
+                <>
+                  <p>{tuningInvestigation.latest_diff_summary ?? 'No diff summary available.'}</p>
+                  <p>
+                    <strong>Changed fields ({tuningInvestigation.changed_field_count}):</strong>{' '}
+                    {tuningInvestigation.changed_fields_preview.join(', ') || '—'}
+                    {tuningInvestigation.changed_fields_remaining_count > 0 ? ` (+${tuningInvestigation.changed_fields_remaining_count} more)` : ''}
+                  </p>
+                  <p>
+                    <strong>Guardrail fields ({tuningInvestigation.changed_guardrail_count}):</strong>{' '}
+                    {tuningInvestigation.changed_guardrail_fields_preview.join(', ') || '—'}
+                    {tuningInvestigation.changed_guardrail_remaining_count > 0 ? ` (+${tuningInvestigation.changed_guardrail_remaining_count} more)` : ''}
+                  </p>
+                </>
+              ) : (
+                <p>No comparable diff is available for this scope yet.</p>
+              )}
+              <h5>Run context preview</h5>
+              {tuningInvestigation.has_correlated_run ? (
+                <p>
+                  Run #{tuningInvestigation.correlated_run_id} · {tuningInvestigation.correlated_run_timestamp ? new Date(tuningInvestigation.correlated_run_timestamp).toLocaleString() : '—'} · {tuningInvestigation.correlated_profile_name ?? '—'} ({tuningInvestigation.correlated_profile_fingerprint ?? '—'})
+                  {tuningInvestigation.correlated_run_summary ? ` · ${tuningInvestigation.correlated_run_summary}` : ''}
+                </p>
+              ) : (
+                <p>No correlated run is available for this scope.</p>
+              )}
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => {
+                    if (!tuningInvestigation.latest_diff_snapshot_id) {
+                      setInvestigationError('No comparable diff available for this scope.');
+                      return;
+                    }
+                    setInvestigationError(null);
+                    void onViewLatestDiff(tuningInvestigation.latest_diff_snapshot_id);
+                  }}
+                >
+                  View full diff
+                </button>
+                <button type="button" className="button-secondary" onClick={() => onHideInvestigation()}>
+                  Hide investigation
+                </button>
+              </div>
+            </>
+          ) : null}
           <h4>Tuning Drift Diff</h4>
           <div className="table-wrapper">
             <table className="data-table">
