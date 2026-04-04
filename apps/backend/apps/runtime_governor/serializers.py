@@ -294,6 +294,26 @@ class RuntimeTuningAlertSummarySerializer(serializers.Serializer):
     summary = serializers.CharField()
 
 
+class RuntimeTuningReviewBoardRowSerializer(serializers.Serializer):
+    source_scope = serializers.CharField()
+    alert_status = serializers.CharField()
+    drift_status = serializers.CharField()
+    attention_priority = serializers.CharField()
+    attention_rank = serializers.IntegerField()
+    latest_diff_snapshot_id = serializers.IntegerField(allow_null=True)
+    latest_diff_status = serializers.CharField(allow_null=True)
+    latest_diff_summary = serializers.CharField(allow_null=True)
+    correlated_run_id = serializers.IntegerField(allow_null=True)
+    correlated_run_timestamp = serializers.DateTimeField(required=False, allow_null=True)
+    correlated_profile_name = serializers.CharField(allow_null=True)
+    correlated_profile_fingerprint = serializers.CharField(allow_null=True)
+    changed_field_count = serializers.IntegerField()
+    changed_guardrail_count = serializers.IntegerField()
+    review_reason_codes = serializers.ListField(child=serializers.CharField())
+    recommended_next_action = serializers.CharField()
+    board_summary = serializers.CharField()
+
+
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecommendation

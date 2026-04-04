@@ -53,6 +53,7 @@ import {
   getRuntimeTuningScopeDigest,
   getRuntimeTuningChangeAlerts,
   getRuntimeTuningChangeAlertSummary,
+  getRuntimeTuningReviewBoard,
 } from '../../services/runtime';
 import type {
   OperatingModeDecision,
@@ -96,6 +97,7 @@ import type {
   RuntimeTuningScopeDigest,
   RuntimeTuningChangeAlert,
   RuntimeTuningAlertSummary,
+  RuntimeTuningReviewBoardRow,
 } from '../../types/runtime';
 import type { IncidentSummary } from '../../types/incidents';
 
@@ -104,6 +106,14 @@ function tone(value: string) {
   if (value === 'PAPER_SEMI_AUTO' || value === 'DEGRADED' || value === 'PAPER_ASSIST' || value === 'PAUSED') return 'pending';
   if (value === 'OBSERVE_ONLY' || value === 'STOPPED') return 'offline';
   return 'neutral';
+}
+
+function getFocusedScopeFromQuery(): RuntimeTuningContextSnapshot['source_scope'] | null {
+  const value = new URLSearchParams(window.location.search).get('tuningScope');
+  if (value === 'runtime_feedback' || value === 'operating_mode' || value === 'mode_stabilization' || value === 'mode_enforcement') {
+    return value;
+  }
+  return null;
 }
 
 function TuningContextBlock({ context }: { context: RuntimeSummaryTuningContext | null }) {
@@ -177,6 +187,11 @@ export function RuntimePage() {
   const [tuningScopeDigest, setTuningScopeDigest] = useState<RuntimeTuningScopeDigest[]>([]);
   const [tuningChangeAlerts, setTuningChangeAlerts] = useState<RuntimeTuningChangeAlert[]>([]);
   const [tuningAlertSummary, setTuningAlertSummary] = useState<RuntimeTuningAlertSummary | null>(null);
+  const [tuningReviewBoard, setTuningReviewBoard] = useState<RuntimeTuningReviewBoardRow[]>([]);
+  const [tuningReviewAttentionOnly, setTuningReviewAttentionOnly] = useState(false);
+  const [tuningReviewScopeFilter, setTuningReviewScopeFilter] = useState('');
+  const [focusedScope, setFocusedScope] = useState<RuntimeTuningContextSnapshot['source_scope'] | null>(getFocusedScopeFromQuery());
+  const [expandedCorrelatedScope, setExpandedCorrelatedScope] = useState<RuntimeTuningContextSnapshot['source_scope'] | null>(null);
 
   const [incidentSummary, setIncidentSummary] = useState<IncidentSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -197,7 +212,7 @@ export function RuntimePage() {
         ...tuningQuery,
         ...(tuningDiffDriftFilter !== 'all' ? { drift_status: tuningDiffDriftFilter } : {}),
       };
-      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes, tuningContextSnapshotsRes, tuningContextDriftSummaryRes, tuningContextDiffsRes, tuningRunCorrelationsRes, tuningScopeDigestRes, tuningChangeAlertsRes, tuningChangeAlertSummaryRes] = await Promise.all([
+      const [statusRes, modesRes, transitionsRes, capsRes, incidentSummaryRes, postureRes, decisionRes, switchRes, recommendationRes, summaryRes, impactsRes, enforcementDecisionRes, enforcementRecommendationRes, enforcementSummaryRes, feedbackSnapshotsRes, diagnosticReviewsRes, feedbackDecisionRes, feedbackRecommendationRes, feedbackSummaryRes, feedbackApplyRunsRes, feedbackApplyDecisionsRes, feedbackApplyRecordsRes, feedbackApplyRecommendationsRes, feedbackApplySummaryRes, stabilizationRunsRes, transitionSnapshotsRes, stabilityReviewsRes, transitionDecisionsRes, transitionApplyRecordsRes, stabilizationRecommendationsRes, stabilizationSummaryRes, tuningSummaryRes, tuningContextSnapshotsRes, tuningContextDriftSummaryRes, tuningContextDiffsRes, tuningRunCorrelationsRes, tuningScopeDigestRes, tuningChangeAlertsRes, tuningChangeAlertSummaryRes, tuningReviewBoardRes] = await Promise.all([
         getRuntimeStatus(),
         getRuntimeModes(),
         getRuntimeTransitions(),
@@ -237,6 +252,11 @@ export function RuntimePage() {
         getRuntimeTuningScopeDigest(tuningQuery),
         getRuntimeTuningChangeAlerts(tuningQuery),
         getRuntimeTuningChangeAlertSummary(tuningQuery),
+        getRuntimeTuningReviewBoard({
+          ...(tuningScopeFilter !== 'all' ? { source_scope: tuningScopeFilter } : {}),
+          attention_only: tuningReviewAttentionOnly,
+          limit: tuningLimit,
+        }),
       ]);
       setStatus(statusRes);
       setModes(modesRes);
@@ -278,12 +298,13 @@ export function RuntimePage() {
       setTuningScopeDigest(tuningScopeDigestRes);
       setTuningChangeAlerts(tuningChangeAlertsRes);
       setTuningAlertSummary(tuningChangeAlertSummaryRes);
+      setTuningReviewBoard(tuningReviewBoardRes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load runtime governance.');
     } finally {
       setLoading(false);
     }
-  }, [tuningDiffDriftFilter, tuningLatestOnly, tuningLimit, tuningScopeFilter]);
+  }, [tuningDiffDriftFilter, tuningLatestOnly, tuningLimit, tuningScopeFilter, tuningReviewAttentionOnly]);
 
   async function onViewLatestDiff(snapshotId: number | null) {
     if (!snapshotId) {
@@ -305,6 +326,30 @@ export function RuntimePage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setFocusedScope(getFocusedScopeFromQuery());
+  }, []);
+
+  useEffect(() => {
+    if (!focusedScope) return;
+    const focusedRow = tuningReviewBoard.find((row) => row.source_scope === focusedScope);
+    if (focusedRow?.latest_diff_snapshot_id) {
+      void onViewLatestDiff(focusedRow.latest_diff_snapshot_id);
+    }
+  }, [focusedScope, tuningReviewBoard]);
+
+  const filteredReviewBoard = tuningReviewScopeFilter
+    ? tuningReviewBoard.filter((row) => row.source_scope.includes(tuningReviewScopeFilter.trim()))
+    : tuningReviewBoard;
+
+  function onFocusScope(scope: RuntimeTuningContextSnapshot['source_scope']) {
+    setFocusedScope(scope);
+    navigate(`/runtime?tuningScope=${encodeURIComponent(scope)}`);
+    window.requestAnimationFrame(() => {
+      document.getElementById('tuning-review-board')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
 
   async function onSetMode(mode: RuntimeModeOption['mode']) {
     setUpdating(mode);
@@ -489,6 +534,50 @@ export function RuntimePage() {
             <div><strong>MINOR_CONTEXT_CHANGE:</strong> {tuningContextDriftSummary?.status_counts.MINOR_CONTEXT_CHANGE ?? 0}</div>
             <div><strong>PROFILE_CHANGE:</strong> {tuningContextDriftSummary?.status_counts.PROFILE_CHANGE ?? 0}</div>
           </div>
+          <h4 id="tuning-review-board">Tuning Review Board</h4>
+          <div className="button-row">
+            <label>
+              <input type="checkbox" checked={tuningReviewAttentionOnly} onChange={(event) => setTuningReviewAttentionOnly(event.target.checked)} />
+              {' '}Attention only
+            </label>
+            <label>
+              Scope contains:{' '}
+              <input value={tuningReviewScopeFilter} onChange={(event) => setTuningReviewScopeFilter(event.target.value)} placeholder="mode_enforcement" />
+            </label>
+          </div>
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead><tr><th>Scope</th><th>Priority</th><th>Drift</th><th>Latest diff summary</th><th>Board summary</th><th>Recommended action</th><th>Quick actions</th></tr></thead>
+              <tbody>
+                {filteredReviewBoard.map((row) => (
+                  <tr key={row.source_scope} style={focusedScope === row.source_scope ? { background: 'rgba(255, 214, 102, 0.2)' } : undefined}>
+                    <td>{row.source_scope}</td>
+                    <td>{row.attention_priority} #{row.attention_rank}</td>
+                    <td>{row.drift_status}</td>
+                    <td>{row.latest_diff_summary ?? 'No comparable diff'}</td>
+                    <td>{row.board_summary}</td>
+                    <td>{row.recommended_next_action}</td>
+                    <td>
+                      <div className="button-row">
+                        <button type="button" className="button-secondary" onClick={() => onFocusScope(row.source_scope)}>Focus scope</button>
+                        <button type="button" className="button-secondary" onClick={() => void onViewLatestDiff(row.latest_diff_snapshot_id)}>{row.latest_diff_snapshot_id ? 'View latest diff' : 'No comparable diff'}</button>
+                        <button type="button" className="button-secondary" onClick={() => setExpandedCorrelatedScope(expandedCorrelatedScope === row.source_scope ? null : row.source_scope)}>View correlated run context</button>
+                      </div>
+                      {expandedCorrelatedScope === row.source_scope ? (
+                        <p>
+                          {row.correlated_run_id ? (
+                            <>Run #{row.correlated_run_id} · {row.correlated_run_timestamp ? new Date(row.correlated_run_timestamp).toLocaleString() : '—'} · {row.correlated_profile_name ?? '—'} ({row.correlated_profile_fingerprint ?? '—'})</>
+                          ) : (
+                            'No correlated run'
+                          )}
+                        </p>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <h4>Tuning Drift Diff</h4>
           <div className="table-wrapper">
             <table className="data-table">
@@ -552,7 +641,7 @@ export function RuntimePage() {
               <thead><tr><th>Scope</th><th>Latest snapshot</th><th>Latest run</th><th>Profile</th><th>Fingerprint</th><th>Drift</th><th>Latest diff</th><th>Summary</th></tr></thead>
               <tbody>
                 {tuningScopeDigest.map((row) => (
-                  <tr key={row.source_scope}>
+                  <tr key={row.source_scope} style={focusedScope === row.source_scope ? { background: 'rgba(255, 214, 102, 0.2)' } : undefined}>
                     <td>{row.source_scope}</td>
                     <td>{row.latest_snapshot_id}</td>
                     <td>{row.latest_run_id ?? '—'}</td>
@@ -580,7 +669,7 @@ export function RuntimePage() {
               <thead><tr><th>Scope</th><th>Drift</th><th>Alert</th><th>Latest diff</th><th>Summary</th></tr></thead>
               <tbody>
                 {tuningChangeAlerts.map((row) => (
-                  <tr key={`${row.source_scope}-${row.latest_snapshot_id}`}>
+                  <tr key={`${row.source_scope}-${row.latest_snapshot_id}`} style={focusedScope === row.source_scope ? { background: 'rgba(255, 214, 102, 0.2)' } : undefined}>
                     <td>{row.source_scope}</td>
                     <td>{row.latest_drift_status}</td>
                     <td>{row.alert_status}</td>

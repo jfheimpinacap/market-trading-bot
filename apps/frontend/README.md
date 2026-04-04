@@ -2436,3 +2436,22 @@ Cada fila ahora puede mostrar acción **View latest diff**:
 Si no existe diff comparable todavía para el scope, la UI muestra estado explícito (`No comparable diff`).
 
 Esta mejora solo optimiza drill-down de observabilidad; no agrega edición, no cambia comportamiento operativo y mantiene paper-only.
+
+## Runtime tuning review board UX (new)
+
+`/runtime` now includes a **Tuning Review Board** section (without creating a new page):
+
+- compact per-scope rows with priority, drift, latest diff summary, board summary, and recommended next action
+- quick actions:
+  - `Focus scope`
+  - `View latest diff`
+  - `View correlated run context`
+- lightweight filters:
+  - `Attention only`
+  - simple scope text filter
+- query-param focus support:
+  - `/runtime?tuningScope=<source_scope>`
+  - highlights matching rows in Review Board, Tuning Scope Digest, and Tuning Change Alerts
+  - preloads latest diff quick view when comparable diff exists
+
+This is observability-only and remains local-first, paper-only, and read-only (no operational mutations).
