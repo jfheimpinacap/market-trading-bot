@@ -2529,3 +2529,24 @@ The compact tuning investigation view in `/cockpit` now includes a small **Recen
 After each action, the investigation state and board badges are refreshed while keeping investigation context open.
 
 This is paper-only operator support UX and does not change runtime decision logic.
+
+## Cockpit runtime tuning manual review handoff (Prompt 183)
+
+`/cockpit` now surfaces the existing runtime-governor manual review layer directly in **Runtime Tuning Attention**:
+
+- each scope row shows a short manual-review badge/summary sourced from `effective_review_status`:
+  - `UNREVIEWED`, `ACKNOWLEDGED`, `FOLLOWUP`, `STALE`
+- compact investigation now includes a **Manual Review** block with:
+  - `effective_review_status`
+  - `review_summary`
+  - `last_action_type`
+  - `last_action_at`
+  - `has_newer_snapshot_than_reviewed`
+- inline actions reuse existing mutative endpoints:
+  - `Acknowledge current`
+  - `Mark follow-up`
+  - `Clear review state`
+- after each action, cockpit refreshes review state badges/summary and keeps compact investigation open
+- full workflow handoff remains `/runtime?tuningScope=<scope>&investigate=1`
+
+This addition is paper-only UX and does not change runtime/tuning operational logic.

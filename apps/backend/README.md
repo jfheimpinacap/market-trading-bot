@@ -3968,3 +3968,5 @@ No backend redesign was needed. Cockpit now consumes the existing read-only time
   - `GET /api/runtime-governor/tuning-review-actions/`
 
 This layer is human-operational metadata only and does not modify runtime governance/tuning operational logic. Paper-only constraints remain unchanged.
+
+Cockpit handoff now also consumes the same existing manual-review endpoints inside its Runtime Tuning Attention compact investigation flow (badge + summary + acknowledge/follow-up/clear actions) and preserves full handoff to `/runtime?tuningScope=<scope>&investigate=1`. No backend contract changes were required in this step.

@@ -9,11 +9,15 @@ import { navigate } from '../lib/router';
 import { getCockpitAttention, getCockpitQuickLinks, getCockpitSummary, runCockpitAction } from '../services/cockpit';
 import { getAutonomyScenarioSummary } from '../services/autonomyScenario';
 import {
+  acknowledgeRuntimeTuningScope,
+  clearRuntimeTuningScopeReview,
   getRuntimeTuningCockpitPanel,
   getRuntimeTuningCockpitPanelDetail,
   getRuntimeTuningContextDiffDetail,
   getRuntimeTuningInvestigation,
+  getRuntimeTuningReviewStateDetail,
   getRuntimeTuningScopeTimeline,
+  markRuntimeTuningScopeFollowup,
 } from '../services/runtime';
 import { getScanSummary } from '../services/scanAgent';
 import type { CockpitAttentionItem, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
@@ -22,6 +26,7 @@ import type {
   RuntimeTuningCockpitPanelDetail,
   RuntimeTuningContextDiff,
   RuntimeTuningInvestigationPacket,
+  RuntimeTuningReviewState,
   RuntimeTuningScopeTimeline,
 } from '../types/runtime';
 
@@ -29,8 +34,8 @@ const formatDate = (value: string | null | undefined) => (value ? new Intl.DateT
 
 const toneFromStatus = (status: string | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
   const normalized = (status ?? '').toUpperCase();
-  if (['ACTIVE', 'READY', 'RUNNING', 'SUCCESS', 'PARITY_OK', 'COMPLETED', 'NORMAL'].includes(normalized)) return 'ready';
-  if (['DEGRADED', 'PAUSED', 'WARNING', 'THROTTLED', 'BLOCK_NEW_ENTRIES', 'PARTIAL', 'CAUTION'].includes(normalized)) return 'pending';
+  if (['ACTIVE', 'READY', 'RUNNING', 'SUCCESS', 'PARITY_OK', 'COMPLETED', 'NORMAL', 'ACKNOWLEDGED'].includes(normalized)) return 'ready';
+  if (['DEGRADED', 'PAUSED', 'WARNING', 'THROTTLED', 'BLOCK_NEW_ENTRIES', 'PARTIAL', 'CAUTION', 'FOLLOWUP', 'STALE', 'UNREVIEWED'].includes(normalized)) return 'pending';
   if (['FAILED', 'STOPPED', 'ROLLED_BACK', 'REJECTED', 'REMEDIATION_REQUIRED', 'RECERTIFICATION_REQUIRED'].includes(normalized)) return 'offline';
   return 'neutral';
 };
@@ -40,6 +45,19 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 const DEFAULT_TIMELINE_LIMIT = 3;
+const REVIEW_STATUS_LABELS: Record<RuntimeTuningReviewState['effective_review_status'], string> = {
+  UNREVIEWED: 'UNREVIEWED',
+  ACKNOWLEDGED_CURRENT: 'ACKNOWLEDGED',
+  FOLLOWUP_REQUIRED: 'FOLLOWUP',
+  STALE_REVIEW: 'STALE',
+};
+
+const REVIEW_STATUS_HINTS: Record<RuntimeTuningReviewState['effective_review_status'], string> = {
+  UNREVIEWED: 'No manual review yet',
+  ACKNOWLEDGED_CURRENT: 'Current state acknowledged',
+  FOLLOWUP_REQUIRED: 'Follow-up required',
+  STALE_REVIEW: 'Review stale',
+};
 
 function TraceButton({ item }: { item: CockpitAttentionItem }) {
   if (!item.traceRootType || !item.traceRootId) {
@@ -79,6 +97,10 @@ export function CockpitPage() {
   const [timelineLoadingCache, setTimelineLoadingCache] = useState<Record<string, boolean>>({});
   const [timelineLimitByScope, setTimelineLimitByScope] = useState<Record<string, number>>({});
   const [timelineOnlyNonStableByScope, setTimelineOnlyNonStableByScope] = useState<Record<string, boolean>>({});
+  const [reviewStateCache, setReviewStateCache] = useState<Record<string, RuntimeTuningReviewState | null>>({});
+  const [reviewStateErrorCache, setReviewStateErrorCache] = useState<Record<string, string | null>>({});
+  const [reviewActionLoadingByScope, setReviewActionLoadingByScope] = useState<Record<string, boolean>>({});
+  const [reviewActionErrorByScope, setReviewActionErrorByScope] = useState<Record<string, string | null>>({});
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -95,6 +117,8 @@ export function CockpitPage() {
       setAutonomyScenarioSummary(scenarioSummary);
       setScanSummary(scanSummaryResponse);
       setTuningPanel(tuningPanelResponse);
+      setReviewStateCache({});
+      setReviewStateErrorCache({});
     } catch (loadError) {
       setError(getErrorMessage(loadError, 'Could not load cockpit data.'));
       setSnapshot(null);
@@ -107,6 +131,29 @@ export function CockpitPage() {
   useEffect(() => {
     void loadCockpit();
   }, [loadCockpit]);
+
+  useEffect(() => {
+    if (!tuningPanel?.items?.length) return;
+    const missingScopes = tuningPanel.items
+      .map((item) => item.source_scope)
+      .filter((scope) => reviewStateCache[scope] === undefined && reviewStateErrorCache[scope] === undefined);
+    if (missingScopes.length === 0) return;
+    void Promise.all(
+      missingScopes.map(async (scope) => {
+        try {
+          const reviewState = await getRuntimeTuningReviewStateDetail(scope);
+          setReviewStateCache((current) => ({ ...current, [scope]: reviewState }));
+          setReviewStateErrorCache((current) => ({ ...current, [scope]: null }));
+        } catch (reviewError) {
+          setReviewStateCache((current) => ({ ...current, [scope]: null }));
+          setReviewStateErrorCache((current) => ({
+            ...current,
+            [scope]: getErrorMessage(reviewError, 'Could not load manual review state.'),
+          }));
+        }
+      }),
+    );
+  }, [reviewStateCache, reviewStateErrorCache, tuningPanel]);
 
   const attention = useMemo(() => (snapshot ? getCockpitAttention(snapshot) : []), [snapshot]);
   const quickLinks = useMemo(() => getCockpitQuickLinks(), []);
@@ -202,6 +249,33 @@ export function CockpitPage() {
       void loadScopeTimeline(sourceScope, { limit: DEFAULT_TIMELINE_LIMIT, onlyNonStable: false });
     }
   }, [investigationCache, loadScopeTimeline, timelineCache, timelineLoadingCache]);
+
+  const runManualReviewAction = useCallback(
+    async (sourceScope: string, action: 'ACKNOWLEDGE' | 'FOLLOWUP' | 'CLEAR') => {
+      setReviewActionLoadingByScope((current) => ({ ...current, [sourceScope]: true }));
+      setReviewActionErrorByScope((current) => ({ ...current, [sourceScope]: null }));
+      try {
+        if (action === 'ACKNOWLEDGE') {
+          await acknowledgeRuntimeTuningScope(sourceScope);
+        } else if (action === 'FOLLOWUP') {
+          await markRuntimeTuningScopeFollowup(sourceScope);
+        } else {
+          await clearRuntimeTuningScopeReview(sourceScope);
+        }
+        const refreshedReviewState = await getRuntimeTuningReviewStateDetail(sourceScope);
+        setReviewStateCache((current) => ({ ...current, [sourceScope]: refreshedReviewState }));
+        setReviewStateErrorCache((current) => ({ ...current, [sourceScope]: null }));
+      } catch (reviewActionError) {
+        setReviewActionErrorByScope((current) => ({
+          ...current,
+          [sourceScope]: getErrorMessage(reviewActionError, 'Manual review action failed.'),
+        }));
+      } finally {
+        setReviewActionLoadingByScope((current) => ({ ...current, [sourceScope]: false }));
+      }
+    },
+    [],
+  );
 
   return (
     <div className="page-stack">
@@ -370,13 +444,24 @@ export function CockpitPage() {
                         const timelineError = timelineErrorCache[item.source_scope] ?? null;
                         const timelineOnlyNonStable = timelineOnlyNonStableByScope[item.source_scope] ?? false;
                         const timelineLimit = timelineLimitByScope[item.source_scope] ?? DEFAULT_TIMELINE_LIMIT;
+                        const reviewState = reviewStateCache[item.source_scope];
+                        const reviewStateError = reviewStateErrorCache[item.source_scope] ?? null;
+                        const reviewStatus = reviewState?.effective_review_status ?? 'UNREVIEWED';
+                        const reviewActionLoading = reviewActionLoadingByScope[item.source_scope] ?? false;
+                        const reviewActionError = reviewActionErrorByScope[item.source_scope] ?? null;
                         return (
                           <article key={item.source_scope} className="cockpit-attention-item">
                             <div>
                               <p className="section-label">{item.attention_priority}</p>
                               <h3>{item.source_scope}</h3>
                               <p>{item.board_summary}</p>
+                              <p className="muted-text">
+                                <strong>Manual review:</strong>{' '}
+                                <StatusBadge tone={toneFromStatus(reviewStatus)}>{REVIEW_STATUS_LABELS[reviewStatus]}</StatusBadge>{' '}
+                                · {reviewState?.review_summary ?? REVIEW_STATUS_HINTS[reviewStatus]}
+                              </p>
                               <p className="muted-text"><strong>Drift:</strong> {item.drift_status} | <strong>Diff:</strong> {item.latest_diff_summary ?? 'No comparable diff'}</p>
+                              {reviewStateError ? <p className="warning-text">{reviewStateError}</p> : null}
                             </div>
                             <div className="button-row">
                               <button className="secondary-button" type="button" onClick={() => navigate(item.runtime_deep_link)}>Open in runtime</button>
@@ -451,6 +536,22 @@ export function CockpitPage() {
                                           </ul>
                                         </>
                                       ) : null}
+                                    </div>
+                                    <div className="subsection">
+                                      <p className="section-label">Manual Review</p>
+                                      <ul className="key-value-list">
+                                        <li><span>effective_review_status</span><strong>{reviewState?.effective_review_status ?? 'UNREVIEWED'}</strong></li>
+                                        <li><span>review_summary</span><strong>{reviewState?.review_summary ?? REVIEW_STATUS_HINTS.UNREVIEWED}</strong></li>
+                                        <li><span>last_action_type</span><strong>{reviewState?.last_action_type ?? 'n/a'}</strong></li>
+                                        <li><span>last_action_at</span><strong>{formatDate(reviewState?.last_action_at)}</strong></li>
+                                        <li><span>has_newer_snapshot_than_reviewed</span><strong>{reviewState?.has_newer_snapshot_than_reviewed ? 'Yes' : 'No'}</strong></li>
+                                      </ul>
+                                      <div className="button-row">
+                                        <button className="secondary-button" type="button" disabled={reviewActionLoading} onClick={() => void runManualReviewAction(item.source_scope, 'ACKNOWLEDGE')}>Acknowledge current</button>
+                                        <button className="secondary-button" type="button" disabled={reviewActionLoading} onClick={() => void runManualReviewAction(item.source_scope, 'FOLLOWUP')}>Mark follow-up</button>
+                                        <button className="ghost-button" type="button" disabled={reviewActionLoading} onClick={() => void runManualReviewAction(item.source_scope, 'CLEAR')}>Clear review state</button>
+                                      </div>
+                                      {reviewActionError ? <p className="warning-text">{reviewActionError}</p> : null}
                                     </div>
                                     <div className="subsection">
                                       <p className="section-label">Diff preview</p>
