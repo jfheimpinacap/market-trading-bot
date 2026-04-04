@@ -139,6 +139,14 @@ Delta UX adicional: `/runtime` ahora incluye una sección **Active Tuning Profil
 
 Esta sección solo mejora observabilidad del tuning activo; no cambia comportamiento por sí misma y mantiene scope paper-only.
 
+Delta UX adicional (traceabilidad cross-summary): en `/runtime` las secciones existentes de:
+- Runtime Feedback
+- Global Operating Mode
+- Mode Stabilization
+- Mode Enforcement
+
+ahora muestran un bloque consistente de tuning contextual (`tuning_profile_name`, `tuning_effective_values`, `tuning_guardrail_summary`, más summary/fingerprint) sin crear pantallas nuevas ni habilitar edición. Es solo lectura para auditabilidad/debugging y no cambia decisiones de fondo.
+
 Se mantienen límites: paper-only, sin trading real/dinero real, sin reemplazar authorities existentes.
 
 ## Runtime feedback apply UX (new)

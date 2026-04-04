@@ -11,6 +11,7 @@ from apps.runtime_governor.mode_enforcement.services.recommendation import emit_
 from apps.runtime_governor.mode_enforcement.services.rules import list_rules_for_mode
 from apps.runtime_governor.services.operating_mode.mode_switch import get_active_global_operating_mode
 from apps.runtime_governor.services.state import get_runtime_state
+from apps.runtime_governor.services.tuning_context import build_runtime_tuning_context
 
 
 def run_mode_enforcement_review(*, triggered_by: str = 'operator-ui') -> dict:
@@ -55,7 +56,7 @@ def run_mode_enforcement_review(*, triggered_by: str = 'operator-ui') -> dict:
 def get_mode_enforcement_summary() -> dict:
     latest = GlobalModeEnforcementRun.objects.order_by('-started_at', '-id').first()
     if not latest:
-        return {
+        summary = {
             'latest_run_id': None,
             'current_mode': get_active_global_operating_mode(),
             'modules_affected': 0,
@@ -65,7 +66,9 @@ def get_mode_enforcement_summary() -> dict:
             'blocked_count': 0,
             'recommendation_summary': {},
         }
-    return {
+        summary.update(build_runtime_tuning_context(summary_scope='mode_enforcement_summary'))
+        return summary
+    summary = {
         'latest_run_id': latest.id,
         'current_mode': latest.current_mode,
         'modules_affected': latest.affected_module_count,
@@ -75,3 +78,5 @@ def get_mode_enforcement_summary() -> dict:
         'blocked_count': latest.blocked_module_count,
         'recommendation_summary': latest.recommendation_summary,
     }
+    summary.update(build_runtime_tuning_context(summary_scope='mode_enforcement_summary'))
+    return summary

@@ -15,6 +15,7 @@ from apps.runtime_governor.runtime_feedback.services.diagnostics import build_ru
 from apps.runtime_governor.runtime_feedback.services.feedback import build_runtime_feedback_decision
 from apps.runtime_governor.runtime_feedback.services.performance import build_runtime_performance_snapshot
 from apps.runtime_governor.runtime_feedback.services.recommendation import emit_runtime_feedback_recommendation
+from apps.runtime_governor.services.tuning_context import build_runtime_tuning_context
 
 
 def _apply_runtime_feedback_decision(*, decision: RuntimeFeedbackDecision):
@@ -97,7 +98,7 @@ def get_runtime_feedback_summary() -> dict:
     decision_counts = Counter(RuntimeFeedbackDecision.objects.values_list('decision_type', flat=True))
     status_counts = Counter(RuntimeFeedbackDecision.objects.values_list('decision_status', flat=True))
 
-    return {
+    summary = {
         'latest_run_id': latest_run.id if latest_run else None,
         'latest_snapshot_id': latest_snapshot.id if latest_snapshot else None,
         'latest_decision_id': latest_decision.id if latest_decision else None,
@@ -116,6 +117,8 @@ def get_runtime_feedback_summary() -> dict:
         'manual_review_required': decision_counts.get(RuntimeFeedbackDecisionType.REQUIRE_MANUAL_RUNTIME_REVIEW, 0),
         'recommendation_summary': latest_run.recommendation_summary if latest_run else {},
     }
+    summary.update(build_runtime_tuning_context(summary_scope='runtime_feedback_summary'))
+    return summary
 
 
 def apply_runtime_feedback_decision(*, decision: RuntimeFeedbackDecision):

@@ -190,6 +190,14 @@ Runtime governor now also exposes a read-only active tuning observability layer 
 
 This layer is visibility-only (no CRUD, no edit path), remains paper-only, and does not change runtime behavior by itself.
 
+Runtime governor summaries now also propagate the active tuning context directly in:
+- `GET /api/runtime-governor/runtime-feedback-summary/`
+- `GET /api/runtime-governor/operating-mode-summary/`
+- `GET /api/runtime-governor/mode-stabilization-summary/`
+- `GET /api/runtime-governor/mode-enforcement-summary/`
+
+Added fields are traceability-only (`tuning_profile_name`, `tuning_effective_values`, `tuning_guardrail_summary`, plus profile summary/fingerprint metadata) so operators can audit what tuning influenced each cross-layer summary. This does not alter decision logic, remains paper-only, and improves debugging/auditability.
+
 ### Runtime feedback apply bridge / closed-loop tuning (new)
 
 `runtime_governor` now closes the loop from runtime feedback into conservative global posture adjustment:

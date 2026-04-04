@@ -13,6 +13,7 @@ from apps.runtime_governor.models import (
 from apps.runtime_governor.services.operating_mode.mode_switch import decide_and_optionally_apply_mode
 from apps.runtime_governor.services.operating_mode.posture import build_posture_snapshot
 from apps.runtime_governor.services.operating_mode.recommendation import emit_mode_recommendation
+from apps.runtime_governor.services.tuning_context import build_runtime_tuning_context
 
 
 def run_operating_mode_review(*, triggered_by: str = 'operator-ui', auto_apply: bool = True) -> dict:
@@ -69,7 +70,7 @@ def get_operating_mode_summary() -> dict:
         GlobalOperatingModeDecision.objects.values_list('decision_status', flat=True)
     )
 
-    return {
+    summary = {
         'latest_run_id': latest_run.id if latest_run else None,
         'latest_decision_id': latest_decision.id if latest_decision else None,
         'active_mode': latest_decision.target_mode if latest_decision else GlobalOperatingMode.BALANCED,
@@ -84,3 +85,5 @@ def get_operating_mode_summary() -> dict:
         'governance_backlog_pressure_state': latest_backlog_pressure,
         'recommendation_summary': latest_run.recommendation_summary if latest_run else {},
     }
+    summary.update(build_runtime_tuning_context(summary_scope='operating_mode_summary'))
+    return summary
