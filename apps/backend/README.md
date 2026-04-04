@@ -3789,3 +3789,23 @@ Strict boundaries remain unchanged: local-first, paper/sandbox only, no real-mon
   - guardrails when present in snapshot payload
 
 This is observability-only and does not mutate runtime tuning or operational behavior. Paper-only boundaries remain unchanged.
+
+## Runtime tuning run correlation API (Prompt 171)
+
+`apps.runtime_governor` now includes a small read-only correlation layer that links important runtime runs with tuning snapshots/fingerprints:
+
+- service: `apps/runtime_governor/services/tuning_correlation.py`
+- endpoint:
+  - `GET /api/runtime-governor/tuning-run-correlations/`
+  - query params: `source_scope`, `latest_only`, `limit`
+- correlates scopes:
+  - `runtime_feedback`
+  - `operating_mode`
+  - `mode_stabilization`
+  - `mode_enforcement`
+- payload fields:
+  - `source_scope`, `source_run_id`, `tuning_snapshot_id`
+  - `tuning_profile_name`, `tuning_profile_fingerprint`
+  - `drift_status`, optional `run_created_at`, and readable `correlation_summary`
+
+This layer is observability-only for cross-run debugging; it does not alter runtime decisions, does not introduce CRUD/edit flows, and keeps paper-only operational boundaries unchanged.

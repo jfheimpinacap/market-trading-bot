@@ -69,6 +69,7 @@ from apps.runtime_governor.serializers import (
     RuntimeTuningContextSnapshotSerializer,
     RuntimeTuningContextDriftSummarySerializer,
     RuntimeTuningContextDiffSerializer,
+    RuntimeTuningRunCorrelationSerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -90,6 +91,7 @@ from apps.runtime_governor.services.tuning_history_query import (
     query_tuning_diff_snapshots,
     query_tuning_snapshots,
 )
+from apps.runtime_governor.services.tuning_correlation import build_tuning_run_correlations
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
     get_runtime_feedback_summary,
@@ -257,6 +259,18 @@ class RuntimeTuningContextDiffDetailView(APIView):
         if not diffs:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = RuntimeTuningContextDiffSerializer(diffs[0])
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningRunCorrelationListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        query = parse_tuning_history_query(request.query_params, allow_drift_status=False)
+        snapshots = query_tuning_snapshots(query)
+        correlations = build_tuning_run_correlations(snapshots=snapshots)
+        serializer = RuntimeTuningRunCorrelationSerializer(correlations, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

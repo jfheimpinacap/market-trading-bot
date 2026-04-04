@@ -2355,3 +2355,25 @@ This improves tuning debugging/traceability only; it does not change runtime beh
 - limit selector
 
 The UI calls the same read-only endpoints with query params for scope-aware and latest-only inspection, improving operator debugging speed while preserving paper-only boundaries and existing runtime/tuning behavior.
+
+## Runtime UI: Tuning Run Correlation (Prompt 171)
+
+`/runtime` now extends the existing **Tuning Context History** section (no new screen) with a read-only **Tuning Run Correlation** table.
+
+- shows correlation rows for:
+  - `runtime_feedback`
+  - `operating_mode`
+  - `mode_stabilization`
+  - `mode_enforcement`
+- columns:
+  - `source_scope`
+  - `source_run_id`
+  - `tuning_snapshot_id`
+  - `tuning_profile_name`
+  - `tuning_profile_fingerprint`
+  - `drift_status`
+  - optional `run_created_at`
+  - readable correlation summary
+- consumes `GET /api/runtime-governor/tuning-run-correlations/` with existing query controls (`source_scope`, `latest_only`, `limit`)
+
+This is observability-only and improves technical cross-run debugging. It does not add edit/apply controls, does not change runtime operational behavior, and remains paper-only.
