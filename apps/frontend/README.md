@@ -2505,3 +2505,8 @@ Dentro de la vista existente **Tuning Investigation** en `/runtime`, se agregó 
   - `Show more history` (limit corto/largo)
 
 Esta integración es solo lectura, paper-only, y complementa la investigación existente sin cambiar comportamiento operativo.
+
+## Cockpit compact Recent Timeline strip (Prompt 181)
+
+The compact tuning investigation view in `/cockpit` now includes a small **Recent Timeline** strip that reuses `GET /api/runtime-governor/tuning-scope-timeline/<source_scope>/` (default compact limit, `Show only non-stable`, and `Show more timeline`). The complete investigation workflow remains available at `/runtime?tuningScope=<scope>&investigate=1`. This is a read-only/paper-only observability addition; no operational behavior was changed.
+

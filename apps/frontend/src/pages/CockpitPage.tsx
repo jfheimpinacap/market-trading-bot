@@ -13,6 +13,7 @@ import {
   getRuntimeTuningCockpitPanelDetail,
   getRuntimeTuningContextDiffDetail,
   getRuntimeTuningInvestigation,
+  getRuntimeTuningScopeTimeline,
 } from '../services/runtime';
 import { getScanSummary } from '../services/scanAgent';
 import type { CockpitAttentionItem, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
@@ -21,6 +22,7 @@ import type {
   RuntimeTuningCockpitPanelDetail,
   RuntimeTuningContextDiff,
   RuntimeTuningInvestigationPacket,
+  RuntimeTuningScopeTimeline,
 } from '../types/runtime';
 
 const formatDate = (value: string | null | undefined) => (value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'n/a');
@@ -36,6 +38,8 @@ const toneFromStatus = (status: string | null | undefined): 'ready' | 'pending' 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
+
+const DEFAULT_TIMELINE_LIMIT = 3;
 
 function TraceButton({ item }: { item: CockpitAttentionItem }) {
   if (!item.traceRootType || !item.traceRootId) {
@@ -70,6 +74,11 @@ export function CockpitPage() {
   const [diffCache, setDiffCache] = useState<Record<string, RuntimeTuningContextDiff | null>>({});
   const [panelDetailCache, setPanelDetailCache] = useState<Record<string, RuntimeTuningCockpitPanelDetail | null>>({});
   const [investigationCache, setInvestigationCache] = useState<Record<string, RuntimeTuningInvestigationPacket | null>>({});
+  const [timelineCache, setTimelineCache] = useState<Record<string, RuntimeTuningScopeTimeline | null>>({});
+  const [timelineErrorCache, setTimelineErrorCache] = useState<Record<string, string | null>>({});
+  const [timelineLoadingCache, setTimelineLoadingCache] = useState<Record<string, boolean>>({});
+  const [timelineLimitByScope, setTimelineLimitByScope] = useState<Record<string, number>>({});
+  const [timelineOnlyNonStableByScope, setTimelineOnlyNonStableByScope] = useState<Record<string, boolean>>({});
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -150,16 +159,49 @@ export function CockpitPage() {
     [panelDetailCache],
   );
 
+  const loadScopeTimeline = useCallback(
+    async (sourceScope: string, overrides?: { limit?: number; onlyNonStable?: boolean }) => {
+      const limit = overrides?.limit ?? timelineLimitByScope[sourceScope] ?? DEFAULT_TIMELINE_LIMIT;
+      const onlyNonStable = overrides?.onlyNonStable ?? timelineOnlyNonStableByScope[sourceScope] ?? false;
+
+      setTimelineLimitByScope((current) => ({ ...current, [sourceScope]: limit }));
+      setTimelineOnlyNonStableByScope((current) => ({ ...current, [sourceScope]: onlyNonStable }));
+      setTimelineLoadingCache((current) => ({ ...current, [sourceScope]: true }));
+      setTimelineErrorCache((current) => ({ ...current, [sourceScope]: null }));
+      try {
+        const timeline = await getRuntimeTuningScopeTimeline(sourceScope, {
+          limit,
+          include_stable: !onlyNonStable,
+        });
+        setTimelineCache((current) => ({ ...current, [sourceScope]: timeline }));
+      } catch (timelineError) {
+        setTimelineCache((current) => ({ ...current, [sourceScope]: null }));
+        setTimelineErrorCache((current) => ({
+          ...current,
+          [sourceScope]: getErrorMessage(timelineError, 'Could not load recent timeline.'),
+        }));
+      } finally {
+        setTimelineLoadingCache((current) => ({ ...current, [sourceScope]: false }));
+      }
+    },
+    [timelineLimitByScope, timelineOnlyNonStableByScope],
+  );
+
   const investigateScope = useCallback(async (sourceScope: string) => {
     setOpenInvestigationScope(sourceScope);
-    if (investigationCache[sourceScope]) return;
-    try {
-      const packet = await getRuntimeTuningInvestigation(sourceScope);
-      setInvestigationCache((current) => ({ ...current, [sourceScope]: packet }));
-    } catch {
-      setInvestigationCache((current) => ({ ...current, [sourceScope]: null }));
+    if (!investigationCache[sourceScope]) {
+      try {
+        const packet = await getRuntimeTuningInvestigation(sourceScope);
+        setInvestigationCache((current) => ({ ...current, [sourceScope]: packet }));
+      } catch {
+        setInvestigationCache((current) => ({ ...current, [sourceScope]: null }));
+      }
     }
-  }, [investigationCache]);
+
+    if (!timelineCache[sourceScope] && !timelineLoadingCache[sourceScope]) {
+      void loadScopeTimeline(sourceScope, { limit: DEFAULT_TIMELINE_LIMIT, onlyNonStable: false });
+    }
+  }, [investigationCache, loadScopeTimeline, timelineCache, timelineLoadingCache]);
 
   return (
     <div className="page-stack">
@@ -323,6 +365,11 @@ export function CockpitPage() {
                         const isRunContextOpen = openRunContextScope === item.source_scope;
                         const isInvestigationOpen = openInvestigationScope === item.source_scope;
                         const investigation = investigationCache[item.source_scope];
+                        const timeline = timelineCache[item.source_scope];
+                        const timelineLoading = timelineLoadingCache[item.source_scope] ?? false;
+                        const timelineError = timelineErrorCache[item.source_scope] ?? null;
+                        const timelineOnlyNonStable = timelineOnlyNonStableByScope[item.source_scope] ?? false;
+                        const timelineLimit = timelineLimitByScope[item.source_scope] ?? DEFAULT_TIMELINE_LIMIT;
                         return (
                           <article key={item.source_scope} className="cockpit-attention-item">
                             <div>
@@ -352,6 +399,59 @@ export function CockpitPage() {
                                       <li><span>Drift status</span><strong>{investigation.drift_status}</strong></li>
                                       <li><span>Review reason codes</span><strong>{investigation.review_reason_codes.join(', ') || 'n/a'}</strong></li>
                                     </ul>
+                                    <div className="subsection">
+                                      <p className="section-label">Recent Timeline</p>
+                                      <div className="button-row">
+                                        <label className="muted-text">
+                                          <input
+                                            type="checkbox"
+                                            checked={timelineOnlyNonStable}
+                                            onChange={(event) => {
+                                              void loadScopeTimeline(item.source_scope, {
+                                                limit: timelineLimit,
+                                                onlyNonStable: event.target.checked,
+                                              });
+                                            }}
+                                          />{' '}
+                                          Show only non-stable
+                                        </label>
+                                        <button
+                                          className="ghost-button"
+                                          type="button"
+                                          onClick={() => void loadScopeTimeline(item.source_scope, {
+                                            limit: timelineLimit * 2,
+                                            onlyNonStable: timelineOnlyNonStable,
+                                          })}
+                                        >
+                                          Show more timeline
+                                        </button>
+                                      </div>
+                                      {timelineLoading ? <p className="muted-text">Loading recent timeline...</p> : null}
+                                      {timelineError ? <p className="warning-text">{timelineError}</p> : null}
+                                      {!timelineLoading && !timelineError && timeline ? (
+                                        <>
+                                          <p className="muted-text">{timeline.timeline_summary}</p>
+                                          <ul className="key-value-list">
+                                            <li><span>Recently stable</span><strong>{timeline.is_recently_stable ? 'Yes' : 'No'}</strong></li>
+                                            <li><span>Recent profile shift</span><strong>{timeline.has_recent_profile_shift ? 'Yes' : 'No'}</strong></li>
+                                            <li><span>Recent review now</span><strong>{timeline.has_recent_review_now ? 'Yes' : 'No'}</strong></li>
+                                          </ul>
+                                          <ul className="key-value-list">
+                                            {timeline.entries.map((entry) => (
+                                              <li key={entry.snapshot_id}>
+                                                <span>
+                                                  {formatDate(entry.created_at)} · {entry.timeline_label} · {entry.drift_status} / {entry.alert_status}
+                                                </span>
+                                                <strong>
+                                                  {entry.diff_summary || 'No comparable diff summary.'} · Fields {entry.changed_field_count} · Guardrails {entry.changed_guardrail_count}
+                                                  {entry.correlated_run_id ? ` · Run ${entry.correlated_run_id}` : ''}
+                                                </strong>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </>
+                                      ) : null}
+                                    </div>
                                     <div className="subsection">
                                       <p className="section-label">Diff preview</p>
                                       {!investigation.has_comparable_diff ? (

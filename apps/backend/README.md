@@ -3939,3 +3939,8 @@ Cockpit handoff now reuses this same packet inline from `/cockpit` (compact inve
 - Contract includes compact per-entry labels/reason codes plus deterministic top-level summary + flags for recent stability/profile-shift/review-now signals.
 
 Scope/boundaries unchanged: no new model, no mutative endpoint, no operational logic change, paper-only observability.
+
+## Cockpit compact investigation timeline handoff (Prompt 181)
+
+No backend redesign was needed. Cockpit now consumes the existing read-only timeline endpoint `GET /api/runtime-governor/tuning-scope-timeline/<source_scope>/` from the compact investigation flow and keeps full handoff in `/runtime?tuningScope=<scope>&investigate=1`. Boundaries remain unchanged: read-only, paper-only, no new models, no mutative operations.
+
