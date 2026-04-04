@@ -3870,3 +3870,21 @@ Se agrega una capa compacta de priorización read-only para pasar de alertas por
   - `summary` legible de “qué mirar primero”
 
 Integra exclusivamente `tuning-change-alerts` existentes, no crea modelos nuevos, no cambia decisiones operativas y mantiene límites paper-only.
+
+## Runtime tuning latest diff links (Prompt 175)
+
+Se agrega una mejora mínima de navegación read-only para enlazar digest/alerts con el último diff comparable por scope.
+
+- nuevo servicio: `apps/runtime_governor/services/tuning_links.py`
+  - resuelve por `source_scope` el latest diff relevante usando snapshots + diff service existentes
+- endpoints extendidos (sin crear endpoints grandes nuevos):
+  - `GET /api/runtime-governor/tuning-scope-digest/`
+  - `GET /api/runtime-governor/tuning-change-alerts/`
+- campos opcionales añadidos en ambos payloads:
+  - `latest_diff_snapshot_id`
+  - `latest_diff_status`
+  - `latest_diff_summary`
+- cuando no hay snapshot previo comparable para ese scope:
+  - los tres campos se devuelven explícitamente en `null`
+
+Esta mejora no agrega modelos persistentes, no cambia authorities, no modifica lógica operativa y mantiene alcance paper-only.

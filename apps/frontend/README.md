@@ -2421,3 +2421,18 @@ Muestra en formato compacto:
 Fuente: `GET /api/runtime-governor/tuning-change-alert-summary/` (con filtro opcional `source_scope`).
 
 Esta capa es read-only de priorización visual/técnica, mantiene scope paper-only y no cambia la lógica operativa.
+
+## Runtime latest-diff quick navigation en `/runtime` (Prompt 175)
+
+Sin crear pantalla nueva, dentro de **Tuning Context History** se mejora la navegación en:
+- **Tuning Scope Digest**
+- **Tuning Change Alerts**
+
+Cada fila ahora puede mostrar acción **View latest diff**:
+- usa `latest_diff_snapshot_id` desde digest/alerts extendidos
+- consulta el detalle existente `GET /api/runtime-governor/tuning-context-diffs/<snapshot_id>/`
+- muestra quick view read-only del diff relevante más reciente para ese scope
+
+Si no existe diff comparable todavía para el scope, la UI muestra estado explícito (`No comparable diff`).
+
+Esta mejora solo optimiza drill-down de observabilidad; no agrega edición, no cambia comportamiento operativo y mantiene paper-only.

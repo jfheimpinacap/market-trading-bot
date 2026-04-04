@@ -263,6 +263,9 @@ class RuntimeTuningScopeDigestSerializer(serializers.Serializer):
     latest_drift_status = serializers.CharField()
     latest_snapshot_created_at = serializers.DateTimeField()
     digest_summary = serializers.CharField()
+    latest_diff_snapshot_id = serializers.IntegerField(allow_null=True)
+    latest_diff_status = serializers.CharField(allow_null=True)
+    latest_diff_summary = serializers.CharField(allow_null=True)
 
 
 class RuntimeTuningChangeAlertSerializer(serializers.Serializer):
@@ -271,6 +274,9 @@ class RuntimeTuningChangeAlertSerializer(serializers.Serializer):
     tuning_profile_name = serializers.CharField()
     tuning_profile_fingerprint = serializers.CharField()
     latest_drift_status = serializers.CharField()
+    latest_diff_snapshot_id = serializers.IntegerField(allow_null=True)
+    latest_diff_status = serializers.CharField(allow_null=True)
+    latest_diff_summary = serializers.CharField(allow_null=True)
     alert_status = serializers.CharField()
     alert_summary = serializers.CharField()
     created_at = serializers.DateTimeField(required=False, allow_null=True)

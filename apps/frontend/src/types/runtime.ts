@@ -163,6 +163,9 @@ export type RuntimeTuningScopeDigest = {
   latest_drift_status: RuntimeTuningDriftStatus;
   latest_snapshot_created_at: string;
   digest_summary: string;
+  latest_diff_snapshot_id: number | null;
+  latest_diff_status: RuntimeTuningDriftStatus | null;
+  latest_diff_summary: string | null;
 };
 
 export type RuntimeTuningAlertStatus = 'STABLE' | 'MINOR_CHANGE' | 'PROFILE_SHIFT' | 'REVIEW_NOW';
@@ -173,6 +176,9 @@ export type RuntimeTuningChangeAlert = {
   tuning_profile_name: string;
   tuning_profile_fingerprint: string;
   latest_drift_status: RuntimeTuningDriftStatus;
+  latest_diff_snapshot_id: number | null;
+  latest_diff_status: RuntimeTuningDriftStatus | null;
+  latest_diff_summary: string | null;
   alert_status: RuntimeTuningAlertStatus;
   alert_summary: string;
   created_at?: string | null;

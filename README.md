@@ -2616,6 +2616,22 @@ Se agregó una capa compacta de observabilidad en `runtime_governor` para resumi
 
 Esta capa es **solo lectura**, mantiene el sistema en **paper-only**, no cambia lógica operativa ni reemplaza authorities existentes.
 
+## Runtime tuning latest-diff quick navigation (Prompt 175)
+
+`runtime_governor` now exposes explicit per-scope links to the latest comparable tuning diff so operators can jump from digest/alerts to drill-down faster.
+
+- Extended endpoints:
+  - `GET /api/runtime-governor/tuning-scope-digest/`
+  - `GET /api/runtime-governor/tuning-change-alerts/`
+- New optional fields:
+  - `latest_diff_snapshot_id`
+  - `latest_diff_status`
+  - `latest_diff_summary`
+- If a scope has no previous snapshot to compare against, these fields return explicit `null`.
+- Runtime UI `/runtime` adds a simple **View latest diff** action in Scope Digest and Change Alerts, reusing existing diff detail API.
+
+This is navigation/read-only usability only: no new authority, no live trading, no real money, no operational logic changes.
+
 ## Runtime tuning alert summary board (Prompt 174)
 
 `runtime_governor` now adds a compact, attention-first summary layer on top of existing tuning change alerts.
