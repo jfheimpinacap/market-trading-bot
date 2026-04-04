@@ -2694,3 +2694,8 @@ This remains observability-only, paper-only, and does not change runtime/tuning 
 This is read-only/paper-only observability. No new persistent model, no mutative endpoint, and no runtime/tuning operational behavior changes.
 
 UI integration lives in `/runtime` inside existing **Tuning Investigation** as **Recent Scope Timeline** (with light toggles: non-stable only + short/long recent history). Cockpit was not expanded in this prompt.
+
+### Cockpit recent scope timeline strip (Prompt 181)
+
+`/cockpit` compact tuning investigation now also shows a compact **Recent Timeline** strip by reusing the existing read-only endpoint `GET /api/runtime-governor/tuning-scope-timeline/<source_scope>/` (small default limit, non-stable toggle, and show-more expansion). Full investigation stays in `/runtime?tuningScope=<scope>&investigate=1`. No new models/endpoints or operational logic changes were added (paper-only/read-only).
+
