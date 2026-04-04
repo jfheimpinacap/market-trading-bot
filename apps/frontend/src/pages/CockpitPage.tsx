@@ -15,6 +15,7 @@ import {
   getRuntimeTuningCockpitPanelDetail,
   getRuntimeTuningContextDiffDetail,
   getRuntimeTuningInvestigation,
+  getRuntimeTuningReviewQueue,
   getRuntimeTuningReviewStateDetail,
   getRuntimeTuningScopeTimeline,
   markRuntimeTuningScopeFollowup,
@@ -26,6 +27,7 @@ import type {
   RuntimeTuningCockpitPanelDetail,
   RuntimeTuningContextDiff,
   RuntimeTuningInvestigationPacket,
+  RuntimeTuningReviewQueue,
   RuntimeTuningReviewState,
   RuntimeTuningScopeTimeline,
 } from '../types/runtime';
@@ -84,11 +86,16 @@ export function CockpitPage() {
   const [autonomyScenarioSummary, setAutonomyScenarioSummary] = useState<Awaited<ReturnType<typeof getAutonomyScenarioSummary>> | null>(null);
   const [scanSummary, setScanSummary] = useState<Awaited<ReturnType<typeof getScanSummary>> | null>(null);
   const [tuningPanel, setTuningPanel] = useState<RuntimeTuningCockpitPanel | null>(null);
+  const [reviewQueue, setReviewQueue] = useState<RuntimeTuningReviewQueue | null>(null);
+  const [reviewQueueUnresolvedOnly, setReviewQueueUnresolvedOnly] = useState(true);
+  const [reviewQueueStatusFilter, setReviewQueueStatusFilter] = useState<RuntimeTuningReviewState['effective_review_status'] | 'ALL'>('ALL');
+  const [reviewQueueError, setReviewQueueError] = useState<string | null>(null);
   const [attentionOnly, setAttentionOnly] = useState(true);
   const [tuningPanelError, setTuningPanelError] = useState<string | null>(null);
   const [openDiffScope, setOpenDiffScope] = useState<string | null>(null);
   const [openRunContextScope, setOpenRunContextScope] = useState<string | null>(null);
   const [openInvestigationScope, setOpenInvestigationScope] = useState<string | null>(null);
+  const [queuedInvestigationScope, setQueuedInvestigationScope] = useState<string | null>(null);
   const [diffCache, setDiffCache] = useState<Record<string, RuntimeTuningContextDiff | null>>({});
   const [panelDetailCache, setPanelDetailCache] = useState<Record<string, RuntimeTuningCockpitPanelDetail | null>>({});
   const [investigationCache, setInvestigationCache] = useState<Record<string, RuntimeTuningInvestigationPacket | null>>({});
@@ -106,27 +113,35 @@ export function CockpitPage() {
     setLoading(true);
     setError(null);
     setTuningPanelError(null);
+    setReviewQueueError(null);
     try {
-      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse] = await Promise.all([
+      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse, reviewQueueResponse] = await Promise.all([
         getCockpitSummary(),
         getAutonomyScenarioSummary(),
         getScanSummary(),
         getRuntimeTuningCockpitPanel({ attention_only: attentionOnly, limit: 5 }),
+        getRuntimeTuningReviewQueue({
+          unresolved_only: reviewQueueUnresolvedOnly,
+          effective_review_status: reviewQueueStatusFilter === 'ALL' ? undefined : reviewQueueStatusFilter,
+          limit: 8,
+        }),
       ]);
       setSnapshot(response);
       setAutonomyScenarioSummary(scenarioSummary);
       setScanSummary(scanSummaryResponse);
       setTuningPanel(tuningPanelResponse);
+      setReviewQueue(reviewQueueResponse);
       setReviewStateCache({});
       setReviewStateErrorCache({});
     } catch (loadError) {
       setError(getErrorMessage(loadError, 'Could not load cockpit data.'));
       setSnapshot(null);
       setTuningPanelError(getErrorMessage(loadError, 'Could not load runtime tuning attention panel.'));
+      setReviewQueueError(getErrorMessage(loadError, 'Could not load runtime tuning review queue.'));
     } finally {
       setLoading(false);
     }
-  }, [attentionOnly]);
+  }, [attentionOnly, reviewQueueStatusFilter, reviewQueueUnresolvedOnly]);
 
   useEffect(() => {
     void loadCockpit();
@@ -277,6 +292,13 @@ export function CockpitPage() {
     [],
   );
 
+  useEffect(() => {
+    if (!queuedInvestigationScope || !tuningPanel?.items?.length) return;
+    if (!tuningPanel.items.some((item) => item.source_scope === queuedInvestigationScope)) return;
+    void investigateScope(queuedInvestigationScope);
+    setQueuedInvestigationScope(null);
+  }, [investigateScope, queuedInvestigationScope, tuningPanel]);
+
   return (
     <div className="page-stack">
       <PageHeader
@@ -405,6 +427,83 @@ export function CockpitPage() {
                     </article>
                   ))}
                 </div>
+              )}
+            </SectionCard>
+
+            <SectionCard
+              eyebrow="Runtime tuning"
+              title="Runtime Tuning Review Queue"
+              description="Compact human-review queue combining manual review state with existing technical attention priority."
+            >
+              <div className="button-row">
+                <label className="muted-text">
+                  <input
+                    type="checkbox"
+                    checked={reviewQueueUnresolvedOnly}
+                    onChange={(event) => setReviewQueueUnresolvedOnly(event.target.checked)}
+                  />{' '}
+                  Unresolved only
+                </label>
+                <label className="muted-text">
+                  Status:{' '}
+                  <select value={reviewQueueStatusFilter} onChange={(event) => setReviewQueueStatusFilter(event.target.value as RuntimeTuningReviewState['effective_review_status'] | 'ALL')}>
+                    <option value="ALL">All</option>
+                    <option value="UNREVIEWED">UNREVIEWED</option>
+                    <option value="FOLLOWUP_REQUIRED">FOLLOWUP_REQUIRED</option>
+                    <option value="STALE_REVIEW">STALE_REVIEW</option>
+                    <option value="ACKNOWLEDGED_CURRENT">ACKNOWLEDGED_CURRENT</option>
+                  </select>
+                </label>
+              </div>
+              {reviewQueueError ? <p className="warning-text">{reviewQueueError}</p> : null}
+              {!reviewQueue ? null : (
+                <>
+                  <ul className="key-value-list">
+                    <li><span>Queue scopes</span><strong>{reviewQueue.queue_count}</strong></li>
+                    <li><span>Unreviewed</span><strong>{reviewQueue.unreviewed_count}</strong></li>
+                    <li><span>Follow-up</span><strong>{reviewQueue.followup_count}</strong></li>
+                    <li><span>Stale</span><strong>{reviewQueue.stale_count}</strong></li>
+                  </ul>
+                  <p className="muted-text">{reviewQueue.queue_summary}</p>
+                  {reviewQueue.items.length === 0 ? (
+                    <EmptyState eyebrow="Runtime tuning queue" title="No queue items" description="No scopes match the current unresolved/status filters." />
+                  ) : (
+                    <div className="cockpit-attention-list">
+                      {reviewQueue.items.map((item) => (
+                        <article key={item.source_scope} className="cockpit-attention-item">
+                          <div>
+                            <p className="section-label">#{item.queue_rank} · {item.effective_review_status}</p>
+                            <h3>{item.source_scope}</h3>
+                            <p>
+                              <strong>{item.attention_priority}</strong> · {item.review_summary || item.technical_summary}
+                            </p>
+                            <p className="muted-text">{item.technical_summary}</p>
+                            {(item.effective_review_status === 'FOLLOWUP_REQUIRED' || item.effective_review_status === 'STALE_REVIEW') ? (
+                              <p className="warning-text">Requires explicit human follow-up before this scope is considered current.</p>
+                            ) : null}
+                          </div>
+                            <div className="button-row">
+                            <button
+                              className="secondary-button"
+                              type="button"
+                              onClick={() => {
+                                if (tuningPanel?.items?.some((panelItem) => panelItem.source_scope === item.source_scope)) {
+                                  void investigateScope(item.source_scope);
+                                  return;
+                                }
+                                setAttentionOnly(false);
+                                setQueuedInvestigationScope(item.source_scope);
+                              }}
+                            >
+                              Open review
+                            </button>
+                            <button className="ghost-button" type="button" onClick={() => navigate(item.runtime_investigation_deep_link)}>Open in runtime</button>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </SectionCard>
 

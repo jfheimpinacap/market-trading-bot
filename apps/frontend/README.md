@@ -2550,3 +2550,16 @@ This is paper-only operator support UX and does not change runtime decision logi
 - full workflow handoff remains `/runtime?tuningScope=<scope>&investigate=1`
 
 This addition is paper-only UX and does not change runtime/tuning operational logic.
+
+## Cockpit Runtime Tuning Review Queue (Prompt 184)
+
+`/cockpit` now includes a compact **Runtime Tuning Review Queue** section above Runtime Tuning Attention:
+
+- consumes `GET /api/runtime-governor/tuning-review-queue/`
+- shows queue_count + human-review counts (`unreviewed`, `followup`, `stale`) + deterministic `queue_summary`
+- supports lightweight controls (`Unresolved only`, status filter)
+- per item actions:
+  - `Open review` → opens existing compact investigation flow in cockpit
+  - `Open in runtime` → `/runtime?tuningScope=<scope>&investigate=1`
+
+This is a read-only, paper-only operator entry queue layered over existing manual review state and technical attention; it does not change runtime operational behavior.

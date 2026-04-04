@@ -3970,3 +3970,13 @@ No backend redesign was needed. Cockpit now consumes the existing read-only time
 This layer is human-operational metadata only and does not modify runtime governance/tuning operational logic. Paper-only constraints remain unchanged.
 
 Cockpit handoff now also consumes the same existing manual-review endpoints inside its Runtime Tuning Attention compact investigation flow (badge + summary + acknowledge/follow-up/clear actions) and preserves full handoff to `/runtime?tuningScope=<scope>&investigate=1`. No backend contract changes were required in this step.
+
+## Runtime Tuning Human Review Queue (Prompt 184)
+
+`runtime_governor` now provides a compact read-only **human review queue** for cockpit that composes existing manual-review state + technical attention priority (no new persistent models, no mutative API):
+
+- `GET /api/runtime-governor/tuning-review-queue/`
+- `GET /api/runtime-governor/tuning-review-queue/<source_scope>/`
+- list query params: `unresolved_only` (default `true`), `effective_review_status`, `limit` (default `8`)
+
+Implementation lives in `apps/runtime_governor/services/tuning_review_queue.py` and explicitly reuses `tuning_review_state` + `tuning_review_board` semantics (including stale detection and runtime deep links). The queue is deterministic and paper-only, and does not alter runtime tuning operational logic.
