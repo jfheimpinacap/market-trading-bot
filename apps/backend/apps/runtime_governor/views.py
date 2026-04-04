@@ -74,6 +74,7 @@ from apps.runtime_governor.serializers import (
     RuntimeTuningChangeAlertSerializer,
     RuntimeTuningAlertSummarySerializer,
     RuntimeTuningReviewBoardRowSerializer,
+    RuntimeTuningInvestigationPacketSerializer,
     RuntimeTuningCockpitPanelSerializer,
     RuntimeTuningCockpitPanelDetailSerializer,
 )
@@ -102,6 +103,7 @@ from apps.runtime_governor.services.tuning_digest import build_tuning_scope_dige
 from apps.runtime_governor.services.tuning_alerts import build_tuning_change_alerts
 from apps.runtime_governor.services.tuning_alert_summary import build_tuning_alert_summary
 from apps.runtime_governor.services.tuning_review_board import build_tuning_review_board, get_tuning_review_board_detail
+from apps.runtime_governor.services.tuning_investigation import get_tuning_investigation_packet
 from apps.runtime_governor.services.tuning_cockpit_panel import build_tuning_cockpit_panel, get_tuning_cockpit_panel_detail
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
@@ -345,6 +347,18 @@ class RuntimeTuningReviewBoardDetailView(APIView):
         if not row:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = RuntimeTuningReviewBoardRowSerializer(row)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningInvestigationDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, source_scope: str, *args, **kwargs):
+        packet = get_tuning_investigation_packet(source_scope=source_scope)
+        if not packet:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = RuntimeTuningInvestigationPacketSerializer(packet)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

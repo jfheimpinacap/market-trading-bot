@@ -1928,6 +1928,199 @@ class RuntimeGovernorTests(TestCase):
         not_found = self.client.get(reverse('runtime_governor_v2:tuning_review_board_detail', kwargs={'source_scope': 'unknown_scope'}))
         self.assertEqual(not_found.status_code, 404)
 
+    def test_tuning_investigation_packet_structure_complete(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=4751,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp1',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_investigation_detail', kwargs={'source_scope': 'mode_enforcement'}))
+        self.assertEqual(response.status_code, 200)
+        row = response.json()
+        for key in (
+            'source_scope', 'attention_priority', 'attention_rank', 'alert_status', 'drift_status',
+            'board_summary', 'review_reason_codes', 'recommended_next_action', 'investigation_summary',
+            'latest_diff_snapshot_id', 'latest_diff_status', 'latest_diff_summary', 'changed_field_count',
+            'changed_guardrail_count', 'changed_fields_preview', 'changed_guardrail_fields_preview',
+            'changed_fields_remaining_count', 'changed_guardrail_remaining_count',
+            'correlated_run_id', 'correlated_run_timestamp', 'correlated_profile_name',
+            'correlated_profile_fingerprint', 'correlated_run_summary', 'latest_snapshot_id',
+            'latest_snapshot_created_at', 'previous_snapshot_id', 'has_comparable_diff',
+            'has_correlated_run', 'runtime_deep_link', 'runtime_diff_deep_link',
+        ):
+            self.assertIn(key, row)
+
+    def test_tuning_investigation_with_diff_and_correlated_run(self):
+        run = RuntimeFeedbackRun.objects.create()
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=run.id,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp1',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1, 'tuning_guardrail_summary': {'g1': True}},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=run.id,
+            tuning_profile_name='p2',
+            tuning_profile_fingerprint='fp2',
+            tuning_profile_summary='changed',
+            effective_values={'x': 2, 'y': 3, 'tuning_guardrail_summary': {'g1': False, 'g2': True}},
+            drift_status='PROFILE_CHANGE',
+            drift_summary='changed',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_investigation_detail', kwargs={'source_scope': 'runtime_feedback'}))
+        self.assertEqual(response.status_code, 200)
+        row = response.json()
+        self.assertTrue(row['has_comparable_diff'])
+        self.assertTrue(row['has_correlated_run'])
+        self.assertIsNotNone(row['latest_diff_snapshot_id'])
+        self.assertEqual(row['correlated_run_id'], run.id)
+        self.assertIsNotNone(row['correlated_run_summary'])
+
+    def test_tuning_investigation_without_comparable_diff_uses_nulls_and_zeros(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_stabilization',
+            source_run_id=4761,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp1',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_investigation_detail', kwargs={'source_scope': 'mode_stabilization'}))
+        self.assertEqual(response.status_code, 200)
+        row = response.json()
+        self.assertFalse(row['has_comparable_diff'])
+        self.assertIsNone(row['latest_diff_snapshot_id'])
+        self.assertEqual(row['changed_field_count'], 0)
+        self.assertEqual(row['changed_guardrail_count'], 0)
+        self.assertEqual(row['changed_fields_preview'], [])
+        self.assertEqual(row['changed_guardrail_fields_preview'], [])
+        self.assertEqual(row['changed_fields_remaining_count'], 0)
+        self.assertEqual(row['changed_guardrail_remaining_count'], 0)
+
+    def test_tuning_investigation_without_correlated_run_uses_explicit_nulls(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=977001,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp1',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=977002,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp2',
+            tuning_profile_summary='changed',
+            effective_values={'x': 2},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='changed',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_investigation_detail', kwargs={'source_scope': 'runtime_feedback'}))
+        self.assertEqual(response.status_code, 200)
+        row = response.json()
+        self.assertFalse(row['has_correlated_run'])
+        self.assertIsNone(row['correlated_run_id'])
+        self.assertIsNone(row['correlated_run_timestamp'])
+        self.assertIsNone(row['correlated_profile_name'])
+        self.assertIsNone(row['correlated_profile_fingerprint'])
+        self.assertIsNone(row['correlated_run_summary'])
+
+    def test_tuning_investigation_previews_are_capped_and_remaining_count_is_correct(self):
+        run = RuntimeFeedbackRun.objects.create()
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=run.id,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp1',
+            tuning_profile_summary='seed',
+            effective_values={'a': 1, 'tuning_guardrail_summary': {'g1': True}},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=run.id,
+            tuning_profile_name='p2',
+            tuning_profile_fingerprint='fp2',
+            tuning_profile_summary='changed',
+            effective_values={
+                'a': 2, 'b': 2, 'c': 3, 'd': 4, 'e': 5, 'f': 6, 'z': 7,
+                'tuning_guardrail_summary': {'g1': False, 'g2': True, 'g3': True, 'g4': True, 'g5': True, 'g6': True},
+            },
+            drift_status='PROFILE_CHANGE',
+            drift_summary='changed',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_investigation_detail', kwargs={'source_scope': 'runtime_feedback'}))
+        self.assertEqual(response.status_code, 200)
+        row = response.json()
+        self.assertLessEqual(len(row['changed_fields_preview']), 5)
+        self.assertLessEqual(len(row['changed_guardrail_fields_preview']), 5)
+        self.assertGreater(row['changed_fields_remaining_count'], 0)
+        self.assertGreater(row['changed_guardrail_remaining_count'], 0)
+
+    def test_tuning_investigation_deep_links_are_correct(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=4781,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp1',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=4782,
+            tuning_profile_name='p2',
+            tuning_profile_fingerprint='fp2',
+            tuning_profile_summary='changed',
+            effective_values={'x': 2},
+            drift_status='PROFILE_CHANGE',
+            drift_summary='changed',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_investigation_detail', kwargs={'source_scope': 'mode_enforcement'}))
+        self.assertEqual(response.status_code, 200)
+        row = response.json()
+        self.assertEqual(row['runtime_deep_link'], '/runtime?tuningScope=mode_enforcement&investigate=1')
+        self.assertIn('/runtime?tuningScope=mode_enforcement&investigate=1', row['runtime_diff_deep_link'])
+
+    def test_tuning_investigation_summary_is_legible_and_stable(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='operating_mode',
+            source_run_id=4791,
+            tuning_profile_name='p1',
+            tuning_profile_fingerprint='fp1',
+            tuning_profile_summary='seed',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='seed',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_investigation_detail', kwargs={'source_scope': 'operating_mode'}))
+        self.assertEqual(response.status_code, 200)
+        summary = response.json()['investigation_summary']
+        self.assertIn('operating_mode:', summary)
+        self.assertIn('Next action:', summary)
+
+    def test_tuning_investigation_returns_404_for_unknown_scope(self):
+        response = self.client.get(reverse('runtime_governor_v2:tuning_investigation_detail', kwargs={'source_scope': 'unknown_scope'}))
+        self.assertEqual(response.status_code, 404)
+
     def test_tuning_cockpit_panel_payload_includes_expected_fields(self):
         RuntimeTuningContextSnapshot.objects.create(
             source_scope='mode_enforcement',

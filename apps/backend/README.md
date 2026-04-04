@@ -3911,3 +3911,16 @@ Key behavior:
 - tie-breaks: `changed_guardrail_count`, `changed_field_count`, latest change recency, `source_scope`
 - explicit reason codes and next actions (read-only guidance)
 - no persistent model additions, no runtime decision mutations, paper-only scope
+
+## Runtime tuning investigation packet (new)
+
+`apps.runtime_governor` now includes `services/tuning_investigation.py` for a compact read-only per-scope investigation packet that explicitly reuses existing digest/alerts/review-board/diff/correlation/link services.
+
+- Endpoint: `GET /api/runtime-governor/tuning-investigation/<source_scope>/`
+- Payload focus:
+  - review priority + reason codes + board summary
+  - compact diff preview (max 5 fields + remaining counters)
+  - correlated run context preview (or explicit nulls)
+  - navigation deep links for `/runtime?tuningScope=<scope>&investigate=1`
+
+No new persistent model, no mutative endpoint, no runtime/tuning operational behavior changes.

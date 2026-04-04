@@ -314,6 +314,43 @@ class RuntimeTuningReviewBoardRowSerializer(serializers.Serializer):
     board_summary = serializers.CharField()
 
 
+class RuntimeTuningInvestigationPacketSerializer(serializers.Serializer):
+    source_scope = serializers.CharField()
+    attention_priority = serializers.CharField()
+    attention_rank = serializers.IntegerField()
+    alert_status = serializers.CharField()
+    drift_status = serializers.CharField()
+    board_summary = serializers.CharField()
+    review_reason_codes = serializers.ListField(child=serializers.CharField())
+    recommended_next_action = serializers.CharField()
+    investigation_summary = serializers.CharField()
+
+    latest_diff_snapshot_id = serializers.IntegerField(allow_null=True)
+    latest_diff_status = serializers.CharField(allow_null=True)
+    latest_diff_summary = serializers.CharField(allow_null=True)
+    changed_field_count = serializers.IntegerField()
+    changed_guardrail_count = serializers.IntegerField()
+    changed_fields_preview = serializers.ListField(child=serializers.CharField())
+    changed_guardrail_fields_preview = serializers.ListField(child=serializers.CharField())
+    changed_fields_remaining_count = serializers.IntegerField()
+    changed_guardrail_remaining_count = serializers.IntegerField()
+
+    correlated_run_id = serializers.IntegerField(allow_null=True)
+    correlated_run_timestamp = serializers.DateTimeField(required=False, allow_null=True)
+    correlated_profile_name = serializers.CharField(allow_null=True)
+    correlated_profile_fingerprint = serializers.CharField(allow_null=True)
+    correlated_run_summary = serializers.CharField(allow_null=True)
+
+    latest_snapshot_id = serializers.IntegerField()
+    latest_snapshot_created_at = serializers.DateTimeField()
+    previous_snapshot_id = serializers.IntegerField(allow_null=True)
+    has_comparable_diff = serializers.BooleanField()
+    has_correlated_run = serializers.BooleanField()
+
+    runtime_deep_link = serializers.CharField()
+    runtime_diff_deep_link = serializers.CharField()
+
+
 class RuntimeTuningCockpitPanelItemSerializer(serializers.Serializer):
     source_scope = serializers.CharField()
     attention_priority = serializers.CharField()

@@ -241,6 +241,44 @@ export type RuntimeTuningReviewBoardQuery = {
   limit?: number;
 };
 
+export type RuntimeTuningInvestigationPacket = {
+  source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  attention_priority: RuntimeTuningReviewPriority;
+  attention_rank: number;
+  alert_status: RuntimeTuningAlertStatus;
+  drift_status: RuntimeTuningDriftStatus;
+  board_summary: string;
+  review_reason_codes: RuntimeTuningReviewReasonCode[];
+  recommended_next_action: RuntimeTuningReviewNextAction;
+  investigation_summary: string;
+
+  latest_diff_snapshot_id: number | null;
+  latest_diff_status: RuntimeTuningDriftStatus | null;
+  latest_diff_summary: string | null;
+  changed_field_count: number;
+  changed_guardrail_count: number;
+  changed_fields_preview: string[];
+  changed_guardrail_fields_preview: string[];
+  changed_fields_remaining_count: number;
+  changed_guardrail_remaining_count: number;
+
+  correlated_run_id: number | null;
+  correlated_run_timestamp: string | null;
+  correlated_profile_name: string | null;
+  correlated_profile_fingerprint: string | null;
+  correlated_run_summary: string | null;
+
+  latest_snapshot_id: number;
+  latest_snapshot_created_at: string;
+  previous_snapshot_id: number | null;
+  has_comparable_diff: boolean;
+  has_correlated_run: boolean;
+
+  runtime_deep_link: string;
+  runtime_diff_deep_link: string;
+};
+
+
 export type RuntimeTuningCockpitPanelItem = {
   source_scope: RuntimeTuningContextSnapshot['source_scope'];
   attention_priority: RuntimeTuningReviewPriority;
