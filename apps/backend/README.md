@@ -3980,3 +3980,23 @@ Cockpit handoff now also consumes the same existing manual-review endpoints insi
 - list query params: `unresolved_only` (default `true`), `effective_review_status`, `limit` (default `8`)
 
 Implementation lives in `apps/runtime_governor/services/tuning_review_queue.py` and explicitly reuses `tuning_review_state` + `tuning_review_board` semantics (including stale detection and runtime deep links). The queue is deterministic and paper-only, and does not alter runtime tuning operational logic.
+
+## Runtime Tuning Review Queue Aging (Prompt 185)
+
+`apps.runtime_governor` now includes `services/tuning_review_aging.py`, a read-only composition layer that reuses existing review queue/review state semantics and derives deterministic queue aging metadata.
+
+New endpoints:
+- `GET /api/runtime-governor/tuning-review-aging/`
+- `GET /api/runtime-governor/tuning-review-aging/<source_scope>/`
+
+List query params:
+- `unresolved_only` (default `true`)
+- `age_bucket` (`FRESH`, `AGING`, `OVERDUE`)
+- `limit` (default `8`)
+
+Bucket rules:
+- `FRESH` `< 2` days
+- `AGING` `2-6` days
+- `OVERDUE` `>= 7` days
+
+This remains read-only/paper-only and does not modify runtime tuning operational behavior or add new persistent models.

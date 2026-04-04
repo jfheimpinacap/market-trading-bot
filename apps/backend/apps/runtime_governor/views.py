@@ -82,6 +82,8 @@ from apps.runtime_governor.serializers import (
     RuntimeTuningCockpitPanelDetailSerializer,
     RuntimeTuningReviewQueueSerializer,
     RuntimeTuningReviewQueueDetailSerializer,
+    RuntimeTuningReviewAgingSerializer,
+    RuntimeTuningReviewAgingDetailSerializer,
     RuntimeTuningReviewActionSerializer,
     RuntimeTuningReviewStateSerializer,
 )
@@ -114,6 +116,7 @@ from apps.runtime_governor.services.tuning_investigation import get_tuning_inves
 from apps.runtime_governor.services.tuning_scope_timeline import build_tuning_scope_timeline
 from apps.runtime_governor.services.tuning_cockpit_panel import build_tuning_cockpit_panel, get_tuning_cockpit_panel_detail
 from apps.runtime_governor.services.tuning_review_queue import build_tuning_review_queue, get_tuning_review_queue_detail
+from apps.runtime_governor.services.tuning_review_aging import build_tuning_review_aging, get_tuning_review_aging_detail
 from apps.runtime_governor.services.tuning_review_state import (
     TuningScopeSnapshotNotFound,
     acknowledge_current_scope,
@@ -478,6 +481,44 @@ class RuntimeTuningReviewQueueDetailView(APIView):
         except TuningScopeSnapshotNotFound:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = RuntimeTuningReviewQueueDetailSerializer(payload)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningReviewAgingListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        unresolved_only = request.query_params.get('unresolved_only', 'true').lower() == 'true'
+        age_bucket = request.query_params.get('age_bucket')
+        limit_raw = request.query_params.get('limit')
+        limit = 8
+        if limit_raw is not None:
+            try:
+                limit = int(limit_raw)
+            except (TypeError, ValueError):
+                limit = 8
+
+        serializer = RuntimeTuningReviewAgingSerializer(
+            build_tuning_review_aging(
+                unresolved_only=unresolved_only,
+                age_bucket=age_bucket,
+                limit=limit,
+            )
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningReviewAgingDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, source_scope: str, *args, **kwargs):
+        try:
+            payload = get_tuning_review_aging_detail(source_scope=source_scope)
+        except TuningScopeSnapshotNotFound:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = RuntimeTuningReviewAgingDetailSerializer(payload)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
