@@ -2377,3 +2377,19 @@ The UI calls the same read-only endpoints with query params for scope-aware and 
 - consumes `GET /api/runtime-governor/tuning-run-correlations/` with existing query controls (`source_scope`, `latest_only`, `limit`)
 
 This is observability-only and improves technical cross-run debugging. It does not add edit/apply controls, does not change runtime operational behavior, and remains paper-only.
+
+## Runtime tuning scope digest en `/runtime` (Prompt 172)
+
+Se agregó dentro de la pantalla existente `/runtime` una sección read-only **Tuning Scope Digest** (sin crear vista nueva).
+
+La tabla resume por `source_scope`:
+- latest snapshot
+- latest run (si existe)
+- profile name
+- fingerprint
+- drift status
+- summary técnico legible
+
+Fuente: `GET /api/runtime-governor/tuning-scope-digest/` (con filtro opcional `source_scope`).
+
+Objetivo: compactar observabilidad actual de tuning por scope sin cambiar decisiones operativas, manteniendo paper-only y sin edición.

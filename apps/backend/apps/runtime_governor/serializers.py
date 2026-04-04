@@ -254,6 +254,17 @@ class RuntimeTuningRunCorrelationSerializer(serializers.Serializer):
     correlation_summary = serializers.CharField()
 
 
+class RuntimeTuningScopeDigestSerializer(serializers.Serializer):
+    source_scope = serializers.CharField()
+    latest_snapshot_id = serializers.IntegerField()
+    latest_run_id = serializers.IntegerField(allow_null=True)
+    tuning_profile_name = serializers.CharField()
+    tuning_profile_fingerprint = serializers.CharField()
+    latest_drift_status = serializers.CharField()
+    latest_snapshot_created_at = serializers.DateTimeField()
+    digest_summary = serializers.CharField()
+
+
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecommendation
