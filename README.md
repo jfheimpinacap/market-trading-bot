@@ -2599,3 +2599,12 @@ API:
 - Returns readable summary rows with `source_scope`, `source_run_id`, tuning snapshot/profile/fingerprint, drift status, and optional run timestamp
 
 This is strictly observability/debugging for cross-run traceability. It does not modify operational logic, does not add live trading paths, and remains paper-only.
+
+## Runtime tuning scope digest (read-only)
+
+Se agregó una capa compacta de observabilidad en `runtime_governor` para resumir el estado actual de tuning por `source_scope` usando los últimos snapshots, drift y correlación de run disponibles.
+
+- Endpoint: `GET /api/runtime-governor/tuning-scope-digest/` (opcional `source_scope`)
+- Campos clave por scope: snapshot más reciente, run correlacionado (si existe), profile/fingerprint, drift status y `digest_summary` legible.
+
+Esta capa es **solo lectura**, mantiene el sistema en **paper-only**, no cambia lógica operativa ni reemplaza authorities existentes.

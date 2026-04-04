@@ -718,6 +718,105 @@ class RuntimeGovernorTests(TestCase):
         self.assertIn('run_created_at', payload[0])
         self.assertIn('correlation_summary', payload[0])
 
+    def test_tuning_scope_digest_returns_one_latest_row_per_scope(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=1001,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-old',
+            tuning_profile_summary='old',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='old',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_enforcement',
+            source_run_id=1002,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-new',
+            tuning_profile_summary='new',
+            effective_values={'x': 2},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='new',
+        )
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=1003,
+            tuning_profile_name='runtime_conservative_v2',
+            tuning_profile_fingerprint='fp-feedback',
+            tuning_profile_summary='feedback',
+            effective_values={'x': 3},
+            drift_status='PROFILE_CHANGE',
+            drift_summary='feedback',
+        )
+
+        response = self.client.get(reverse('runtime_governor_v2:tuning_scope_digest'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload), 2)
+        rows_by_scope = {row['source_scope']: row for row in payload}
+        self.assertEqual(rows_by_scope['mode_enforcement']['latest_run_id'], 1002)
+        self.assertEqual(rows_by_scope['mode_enforcement']['tuning_profile_fingerprint'], 'fp-new')
+
+    def test_tuning_scope_digest_includes_latest_drift_status(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='operating_mode',
+            source_run_id=1010,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-operating',
+            tuning_profile_summary='operating',
+            effective_values={'x': 1},
+            drift_status='PROFILE_CHANGE',
+            drift_summary='changed',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_scope_digest'), {'source_scope': 'operating_mode'})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]['latest_drift_status'], 'PROFILE_CHANGE')
+
+    def test_tuning_scope_digest_includes_correlated_run_when_available(self):
+        feedback_run = RuntimeFeedbackRun.objects.create()
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='runtime_feedback',
+            source_run_id=feedback_run.id,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-feedback',
+            tuning_profile_summary='feedback',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='first',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_scope_digest'), {'source_scope': 'runtime_feedback'})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload[0]['latest_run_id'], feedback_run.id)
+        self.assertIn(f'run #{feedback_run.id}', payload[0]['digest_summary'])
+
+    def test_tuning_scope_digest_endpoint_returns_readable_structure(self):
+        RuntimeTuningContextSnapshot.objects.create(
+            source_scope='mode_stabilization',
+            source_run_id=1020,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint='fp-stabilization',
+            tuning_profile_summary='stabilization',
+            effective_values={'x': 1},
+            drift_status='INITIAL',
+            drift_summary='first',
+        )
+        response = self.client.get(reverse('runtime_governor_v2:tuning_scope_digest'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertGreaterEqual(len(payload), 1)
+        self.assertIn('source_scope', payload[0])
+        self.assertIn('latest_snapshot_id', payload[0])
+        self.assertIn('latest_run_id', payload[0])
+        self.assertIn('tuning_profile_name', payload[0])
+        self.assertIn('tuning_profile_fingerprint', payload[0])
+        self.assertIn('latest_drift_status', payload[0])
+        self.assertIn('latest_snapshot_created_at', payload[0])
+        self.assertIn('digest_summary', payload[0])
+
     def test_mode_enforcement_propagates_to_timing_policy(self):
         session = AutonomousRuntimeSession.objects.create(session_status=AutonomousRuntimeSessionStatus.RUNNING, runtime_mode='PAPER_AUTO')
         self._seed_exposure_decision(PortfolioExposureDecisionType.PARK_WEAKER_SESSION)

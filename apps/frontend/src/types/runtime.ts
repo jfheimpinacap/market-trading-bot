@@ -154,6 +154,17 @@ export type RuntimeTuningHistoryQuery = {
 
 export type RuntimeTuningRunCorrelationQuery = Pick<RuntimeTuningHistoryQuery, 'source_scope' | 'latest_only' | 'limit'>;
 
+export type RuntimeTuningScopeDigest = {
+  source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  latest_snapshot_id: number;
+  latest_run_id: number | null;
+  tuning_profile_name: string;
+  tuning_profile_fingerprint: string;
+  latest_drift_status: RuntimeTuningDriftStatus;
+  latest_snapshot_created_at: string;
+  digest_summary: string;
+};
+
 export type RuntimePostureRun = {
   id: number;
   started_at: string;

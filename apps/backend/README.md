@@ -3809,3 +3809,23 @@ This is observability-only and does not mutate runtime tuning or operational beh
   - `drift_status`, optional `run_created_at`, and readable `correlation_summary`
 
 This layer is observability-only for cross-run debugging; it does not alter runtime decisions, does not introduce CRUD/edit flows, and keeps paper-only operational boundaries unchanged.
+
+## Runtime tuning scope digest API (Prompt 172)
+
+`apps.runtime_governor` ahora incluye una capa read-only de resumen técnico por scope para consumo operativo compacto.
+
+- service: `apps/runtime_governor/services/tuning_digest.py`
+- endpoint: `GET /api/runtime-governor/tuning-scope-digest/`
+  - query opcional: `source_scope`
+- payload por scope:
+  - `source_scope`
+  - `latest_snapshot_id`
+  - `latest_run_id` (nullable)
+  - `tuning_profile_name`
+  - `tuning_profile_fingerprint`
+  - `latest_drift_status`
+  - `latest_snapshot_created_at`
+  - `digest_summary`
+
+Integra snapshots + drift + run correlation existentes sin agregar CRUD ni mutaciones.
+Mantiene límites explícitos: observabilidad técnica, paper-only, sin cambios de comportamiento operativo.

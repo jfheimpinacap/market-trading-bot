@@ -52,6 +52,7 @@ from apps.runtime_governor.views import (
     RuntimeTuningContextDiffListView,
     RuntimeTuningContextDiffDetailView,
     RuntimeTuningRunCorrelationListView,
+    RuntimeTuningScopeDigestListView,
     RunRuntimeFeedbackReviewView,
 )
 
@@ -68,6 +69,7 @@ urlpatterns = [
     path('tuning-context-diffs/', RuntimeTuningContextDiffListView.as_view(), name='tuning_context_diffs'),
     path('tuning-context-diffs/<int:snapshot_id>/', RuntimeTuningContextDiffDetailView.as_view(), name='tuning_context_diff_detail'),
     path('tuning-run-correlations/', RuntimeTuningRunCorrelationListView.as_view(), name='tuning_run_correlations'),
+    path('tuning-scope-digest/', RuntimeTuningScopeDigestListView.as_view(), name='tuning_scope_digest'),
     path('run-operating-mode-review/', RunOperatingModeReviewView.as_view(), name='run_operating_mode_review'),
     path('runtime-posture-runs/', RuntimePostureRunListView.as_view(), name='runtime_posture_runs'),
     path('runtime-posture-snapshots/', RuntimePostureSnapshotListView.as_view(), name='runtime_posture_snapshots'),

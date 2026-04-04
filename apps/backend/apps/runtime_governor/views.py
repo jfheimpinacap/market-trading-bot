@@ -70,6 +70,7 @@ from apps.runtime_governor.serializers import (
     RuntimeTuningContextDriftSummarySerializer,
     RuntimeTuningContextDiffSerializer,
     RuntimeTuningRunCorrelationSerializer,
+    RuntimeTuningScopeDigestSerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -92,6 +93,7 @@ from apps.runtime_governor.services.tuning_history_query import (
     query_tuning_snapshots,
 )
 from apps.runtime_governor.services.tuning_correlation import build_tuning_run_correlations
+from apps.runtime_governor.services.tuning_digest import build_tuning_scope_digest
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
     get_runtime_feedback_summary,
@@ -271,6 +273,16 @@ class RuntimeTuningRunCorrelationListView(APIView):
         snapshots = query_tuning_snapshots(query)
         correlations = build_tuning_run_correlations(snapshots=snapshots)
         serializer = RuntimeTuningRunCorrelationSerializer(correlations, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningScopeDigestListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        source_scope = request.query_params.get('source_scope')
+        serializer = RuntimeTuningScopeDigestSerializer(build_tuning_scope_digest(source_scope=source_scope), many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
