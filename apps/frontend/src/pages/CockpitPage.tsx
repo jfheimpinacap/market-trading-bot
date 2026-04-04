@@ -12,10 +12,16 @@ import {
   getRuntimeTuningCockpitPanel,
   getRuntimeTuningCockpitPanelDetail,
   getRuntimeTuningContextDiffDetail,
+  getRuntimeTuningInvestigation,
 } from '../services/runtime';
 import { getScanSummary } from '../services/scanAgent';
 import type { CockpitAttentionItem, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
-import type { RuntimeTuningCockpitPanel, RuntimeTuningCockpitPanelDetail, RuntimeTuningContextDiff } from '../types/runtime';
+import type {
+  RuntimeTuningCockpitPanel,
+  RuntimeTuningCockpitPanelDetail,
+  RuntimeTuningContextDiff,
+  RuntimeTuningInvestigationPacket,
+} from '../types/runtime';
 
 const formatDate = (value: string | null | undefined) => (value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'n/a');
 
@@ -60,8 +66,10 @@ export function CockpitPage() {
   const [tuningPanelError, setTuningPanelError] = useState<string | null>(null);
   const [openDiffScope, setOpenDiffScope] = useState<string | null>(null);
   const [openRunContextScope, setOpenRunContextScope] = useState<string | null>(null);
+  const [openInvestigationScope, setOpenInvestigationScope] = useState<string | null>(null);
   const [diffCache, setDiffCache] = useState<Record<string, RuntimeTuningContextDiff | null>>({});
   const [panelDetailCache, setPanelDetailCache] = useState<Record<string, RuntimeTuningCockpitPanelDetail | null>>({});
+  const [investigationCache, setInvestigationCache] = useState<Record<string, RuntimeTuningInvestigationPacket | null>>({});
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -141,6 +149,17 @@ export function CockpitPage() {
     },
     [panelDetailCache],
   );
+
+  const investigateScope = useCallback(async (sourceScope: string) => {
+    setOpenInvestigationScope(sourceScope);
+    if (investigationCache[sourceScope]) return;
+    try {
+      const packet = await getRuntimeTuningInvestigation(sourceScope);
+      setInvestigationCache((current) => ({ ...current, [sourceScope]: packet }));
+    } catch {
+      setInvestigationCache((current) => ({ ...current, [sourceScope]: null }));
+    }
+  }, [investigationCache]);
 
   return (
     <div className="page-stack">
@@ -302,6 +321,8 @@ export function CockpitPage() {
                         const diff = diffCache[item.source_scope];
                         const isDiffOpen = openDiffScope === item.source_scope;
                         const isRunContextOpen = openRunContextScope === item.source_scope;
+                        const isInvestigationOpen = openInvestigationScope === item.source_scope;
+                        const investigation = investigationCache[item.source_scope];
                         return (
                           <article key={item.source_scope} className="cockpit-attention-item">
                             <div>
@@ -312,9 +333,60 @@ export function CockpitPage() {
                             </div>
                             <div className="button-row">
                               <button className="secondary-button" type="button" onClick={() => navigate(item.runtime_deep_link)}>Open in runtime</button>
+                              <button className="secondary-button" type="button" onClick={() => void investigateScope(item.source_scope)}>Investigate</button>
                               <button className="ghost-button" type="button" onClick={() => void viewDiff(item.source_scope, item.latest_diff_snapshot_id)}>View diff</button>
                               <button className="ghost-button" type="button" onClick={() => void viewRunContext(item.source_scope)}>View run context</button>
                             </div>
+                            {isInvestigationOpen ? (
+                              <div className="subsection">
+                                <p className="section-label">Compact investigation</p>
+                                {!investigation ? (
+                                  <p className="warning-text">Could not load investigation packet.</p>
+                                ) : (
+                                  <>
+                                    <ul className="key-value-list">
+                                      <li><span>Scope</span><strong>{investigation.source_scope}</strong></li>
+                                      <li><span>Summary</span><strong>{investigation.investigation_summary}</strong></li>
+                                      <li><span>Priority</span><strong>{investigation.attention_priority}</strong></li>
+                                      <li><span>Alert status</span><strong>{investigation.alert_status}</strong></li>
+                                      <li><span>Drift status</span><strong>{investigation.drift_status}</strong></li>
+                                      <li><span>Review reason codes</span><strong>{investigation.review_reason_codes.join(', ') || 'n/a'}</strong></li>
+                                    </ul>
+                                    <div className="subsection">
+                                      <p className="section-label">Diff preview</p>
+                                      {!investigation.has_comparable_diff ? (
+                                        <p>No comparable diff.</p>
+                                      ) : (
+                                        <ul className="key-value-list">
+                                          <li><span>Latest diff summary</span><strong>{investigation.latest_diff_summary ?? 'n/a'}</strong></li>
+                                          <li><span>Changed fields</span><strong>{investigation.changed_field_count}</strong></li>
+                                          <li><span>Changed guardrails</span><strong>{investigation.changed_guardrail_count}</strong></li>
+                                          <li><span>Fields preview</span><strong>{investigation.changed_fields_preview.join(', ') || 'n/a'}</strong></li>
+                                          <li><span>Guardrail preview</span><strong>{investigation.changed_guardrail_fields_preview.join(', ') || 'n/a'}</strong></li>
+                                        </ul>
+                                      )}
+                                    </div>
+                                    <div className="subsection">
+                                      <p className="section-label">Run context preview</p>
+                                      {!investigation.has_correlated_run ? (
+                                        <p>No correlated run.</p>
+                                      ) : (
+                                        <ul className="key-value-list">
+                                          <li><span>Run id</span><strong>{investigation.correlated_run_id}</strong></li>
+                                          <li><span>Timestamp</span><strong>{formatDate(investigation.correlated_run_timestamp)}</strong></li>
+                                          <li><span>Profile</span><strong>{investigation.correlated_profile_name ?? 'n/a'}</strong></li>
+                                          <li><span>Fingerprint</span><strong>{investigation.correlated_profile_fingerprint ?? 'n/a'}</strong></li>
+                                        </ul>
+                                      )}
+                                    </div>
+                                    <div className="button-row">
+                                      <button className="secondary-button" type="button" onClick={() => navigate(`/runtime?tuningScope=${encodeURIComponent(investigation.source_scope)}&investigate=1`)}>Open full runtime investigation</button>
+                                      <button className="ghost-button" type="button" onClick={() => setOpenInvestigationScope(null)}>Hide investigation</button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            ) : null}
                             {isDiffOpen ? (
                               <div className="subsection">
                                 <p className="section-label">Diff quick view</p>

@@ -155,8 +155,14 @@ Delta UX adicional: `/cockpit` ahora muestra una sección compacta **Runtime Tun
 - puede abrir detalle por scope vía `GET /api/runtime-governor/tuning-cockpit-panel/<source_scope>/`
 - muestra prioridad/rank, drift/alert status, summary breve y acciones rápidas:
   - `Open in runtime` → `/runtime?tuningScope=<scope>`
+  - `Investigate` (compact inline investigation packet, read-only)
   - `View diff` (quick view read-only con diff detail existente)
   - `View run context` (quick view read-only de correlación)
+- la vista compacta de investigación en `/cockpit` reutiliza `GET /api/runtime-governor/tuning-investigation/<source_scope>/` y expone:
+  - summary + priority + alert/drift + reason codes
+  - diff preview compacto (o “No comparable diff”)
+  - correlated run preview (o “No correlated run”)
+  - acciones: `Open full runtime investigation` → `/runtime?tuningScope=<scope>&investigate=1`, `Hide investigation`
 
 Esta integración no crea nueva pantalla ni mueve lógica de runtime a cockpit; solo consume y enlaza señal consolidada, manteniendo alcance paper-only y sin cambios operativos.
 
