@@ -2717,3 +2717,11 @@ UI integration lives in `/runtime` inside existing **Tuning Investigation** as *
 Stale detection is automatic and non-destructive: if a newer tuning snapshot appears after a reviewed snapshot, the effective status is exposed as `STALE_REVIEW` at read time.
 
 Scope remains paper-only and observability-first; this does not alter runtime/tuning decision logic.
+
+`/cockpit` now also consumes this layer inside **Runtime Tuning Attention**:
+- per-scope manual-review badge/summary based on `effective_review_status` (`UNREVIEWED`, `ACKNOWLEDGED`, `FOLLOWUP`, `STALE`)
+- compact investigation block **Manual Review** (status, summary, last action, stale indicator)
+- inline manual actions that reuse existing endpoints (`Acknowledge current`, `Mark follow-up`, `Clear review state`)
+- full handoff remains `/runtime?tuningScope=<scope>&investigate=1`
+
+No operational runtime/tuning behavior changed; this is still paper-only operator UX.
