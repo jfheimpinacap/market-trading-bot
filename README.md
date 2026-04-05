@@ -102,6 +102,30 @@ It now also auto-syncs once per local mission-control heartbeat pass (reusing th
 
 Scope remains unchanged: real-market read-only signals + paper-money-only execution (`REAL_READ_ONLY`, `PAPER_ONLY`), no live trading enablement, no new scheduler, and no new persistent models.
 
+### Live Paper Smoke Test cockpit card (frontend, new)
+
+`/cockpit` now includes a compact **Live Paper Smoke Test** card near existing live-paper cards for quick V1 verification without creating a new screen.
+
+- consumes existing backend endpoints:
+  - `GET /api/mission-control/live-paper-smoke-test-status/` on cockpit load and manual refresh
+  - `POST /api/mission-control/run-live-paper-smoke-test/` from a single action button
+- default run payload sent by UI:
+  - `preset = live_read_only_paper_conservative`
+  - `heartbeat_passes = 1`
+- compact card output:
+  - strong `PASS` / `WARN` / `FAIL` badge
+  - `smoke_test_summary` + `next_action_hint`
+  - validation before/after and heartbeat completed counters
+  - `recent_activity_detected` + `recent_trades_detected`
+  - compact checks list (`check_name`, status, summary) from the most recent run executed in cockpit
+- compact actions:
+  - `Run smoke test`
+  - `Refresh smoke result`
+
+Fallback behavior is explicit and non-breaking: if no run exists yet it shows `No smoke test result yet`; on endpoint errors it shows `Live paper smoke test unavailable`.
+
+Scope remains strictly real-market read-only + fake-money paper execution and does not enable live trading.
+
 ### Live Paper V1 Validation Digest (backend, new)
 
 `mission_control` now includes a compact read-only validation digest that answers, in one backend response, whether the live read-only paper V1 loop is operational right now.

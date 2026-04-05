@@ -13,7 +13,9 @@ import {
   getAutonomousHeartbeatSummary,
   getLivePaperAttentionAlertStatus,
   getLivePaperBootstrapStatus,
+  getLivePaperSmokeTestStatus,
   getLivePaperValidation,
+  runLivePaperSmokeTest,
   syncLivePaperAttentionAlert,
 } from '../services/missionControl';
 import { getPaperAccount, getPaperSnapshots, getPaperSummary } from '../services/paperTrading';
@@ -44,6 +46,8 @@ import type {
   LivePaperAttentionAlertStatusResponse,
   LivePaperBootstrapResponse,
   LivePaperBootstrapStatusResponse,
+  LivePaperSmokeTestResultResponse,
+  LivePaperSmokeTestStatusResponse,
   LivePaperValidationDigestResponse,
 } from '../types/missionControl';
 import type {
@@ -97,6 +101,13 @@ const toneFromValidationStatus = (status: LivePaperValidationDigestResponse['val
 };
 
 const toneFromValidationCheck = (status: 'PASS' | 'WARN' | 'FAIL'): 'ready' | 'pending' | 'offline' | 'neutral' => {
+  if (status === 'PASS') return 'ready';
+  if (status === 'WARN') return 'pending';
+  if (status === 'FAIL') return 'offline';
+  return 'neutral';
+};
+
+const toneFromSmokeStatus = (status: 'PASS' | 'WARN' | 'FAIL' | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
   if (status === 'PASS') return 'ready';
   if (status === 'WARN') return 'pending';
   if (status === 'FAIL') return 'offline';
@@ -192,6 +203,12 @@ export function CockpitPage() {
   const [livePaperValidation, setLivePaperValidation] = useState<LivePaperValidationDigestResponse | null>(null);
   const [livePaperValidationLoading, setLivePaperValidationLoading] = useState(true);
   const [livePaperValidationError, setLivePaperValidationError] = useState<string | null>(null);
+  const [livePaperSmokeStatus, setLivePaperSmokeStatus] = useState<LivePaperSmokeTestStatusResponse | null>(null);
+  const [livePaperSmokeStatusLoading, setLivePaperSmokeStatusLoading] = useState(true);
+  const [livePaperSmokeStatusError, setLivePaperSmokeStatusError] = useState<string | null>(null);
+  const [livePaperSmokeRunLoading, setLivePaperSmokeRunLoading] = useState(false);
+  const [livePaperSmokeRunError, setLivePaperSmokeRunError] = useState<string | null>(null);
+  const [livePaperSmokeRunResult, setLivePaperSmokeRunResult] = useState<LivePaperSmokeTestResultResponse | null>(null);
   const [livePaperStartLoading, setLivePaperStartLoading] = useState(false);
   const [livePaperStartError, setLivePaperStartError] = useState<string | null>(null);
   const [livePaperStartResult, setLivePaperStartResult] = useState<LivePaperBootstrapResponse | null>(null);
@@ -250,6 +267,25 @@ export function CockpitPage() {
       setLivePaperValidationError(getErrorMessage(validationError, 'Live paper validation unavailable'));
     } finally {
       setLivePaperValidationLoading(false);
+    }
+  }, []);
+
+  const loadLivePaperSmokeTestStatus = useCallback(async () => {
+    setLivePaperSmokeStatusLoading(true);
+    setLivePaperSmokeStatusError(null);
+    try {
+      const payload = await getLivePaperSmokeTestStatus();
+      setLivePaperSmokeStatus(payload);
+    } catch (smokeStatusError) {
+      setLivePaperSmokeStatus(null);
+      const message = getErrorMessage(smokeStatusError, 'Live paper smoke test unavailable');
+      if (message.toLowerCase().includes('no smoke test has been executed yet')) {
+        setLivePaperSmokeStatusError('No smoke test result yet');
+      } else {
+        setLivePaperSmokeStatusError('Live paper smoke test unavailable');
+      }
+    } finally {
+      setLivePaperSmokeStatusLoading(false);
     }
   }, []);
 
@@ -344,6 +380,33 @@ export function CockpitPage() {
     }
   }, [loadLivePaperOperationalSnapshot, loadLivePaperStatus, loadPaperPortfolioSnapshot, loadLivePaperValidation]);
 
+  const runLivePaperSmokeTestFromCockpit = useCallback(async () => {
+    setLivePaperSmokeRunLoading(true);
+    setLivePaperSmokeRunError(null);
+    setLivePaperSmokeRunResult(null);
+    try {
+      const payload = await runLivePaperSmokeTest({
+        preset: 'live_read_only_paper_conservative',
+        heartbeat_passes: 1,
+      });
+      setLivePaperSmokeRunResult(payload);
+      setLivePaperSmokeStatus({
+        preset_name: payload.preset_name,
+        smoke_test_status: payload.smoke_test_status,
+        executed_at: payload.executed_at,
+        validation_status_after: payload.validation_status_after,
+        heartbeat_passes_completed: payload.heartbeat_passes_completed,
+        smoke_test_summary: payload.smoke_test_summary,
+        next_action_hint: payload.next_action_hint,
+      });
+      await Promise.all([loadLivePaperSmokeTestStatus(), loadLivePaperValidation()]);
+    } catch (smokeRunError) {
+      setLivePaperSmokeRunError(getErrorMessage(smokeRunError, 'Live paper smoke test unavailable'));
+    } finally {
+      setLivePaperSmokeRunLoading(false);
+    }
+  }, [loadLivePaperSmokeTestStatus, loadLivePaperValidation]);
+
   const loadCockpit = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -425,6 +488,10 @@ export function CockpitPage() {
   useEffect(() => {
     void loadLivePaperValidation();
   }, [loadLivePaperValidation]);
+
+  useEffect(() => {
+    void loadLivePaperSmokeTestStatus();
+  }, [loadLivePaperSmokeTestStatus]);
 
   useEffect(() => {
     void loadPaperPortfolioSnapshot();
@@ -790,6 +857,75 @@ export function CockpitPage() {
                   </div>
                 </SectionCard>
                 <SectionCard
+                  eyebrow="V1 smoke runner"
+                  title="Live Paper Smoke Test"
+                  description="Short, repeatable V1 paper validation run (real market data read-only + fake money only)."
+                >
+                  {livePaperSmokeStatusLoading ? <p>Loading smoke test status…</p> : null}
+                  {!livePaperSmokeStatusLoading && livePaperSmokeStatusError === 'No smoke test result yet' ? (
+                    <p className="muted-text">No smoke test result yet.</p>
+                  ) : null}
+                  {!livePaperSmokeStatusLoading && livePaperSmokeStatusError && livePaperSmokeStatusError !== 'No smoke test result yet' ? (
+                    <p className="warning-text">Live paper smoke test unavailable.</p>
+                  ) : null}
+                  {livePaperSmokeStatus ? (
+                    <>
+                      <div className="button-row">
+                        <StatusBadge tone={toneFromSmokeStatus(livePaperSmokeStatus.smoke_test_status)}>
+                          {livePaperSmokeStatus.smoke_test_status}
+                        </StatusBadge>
+                        <StatusBadge tone={toneFromValidationStatus(livePaperSmokeStatus.validation_status_after)}>
+                          Validation after {livePaperSmokeStatus.validation_status_after}
+                        </StatusBadge>
+                        <StatusBadge tone="neutral">
+                          Heartbeat passes {livePaperSmokeStatus.heartbeat_passes_completed}
+                        </StatusBadge>
+                      </div>
+                      <ul className="key-value-list">
+                        <li><span>Executed at</span><strong>{formatDate(livePaperSmokeStatus.executed_at)}</strong></li>
+                        <li><span>Smoke summary</span><strong>{livePaperSmokeStatus.smoke_test_summary}</strong></li>
+                        <li><span>Next action hint</span><strong>{livePaperSmokeStatus.next_action_hint}</strong></li>
+                        <li><span>Validation status before</span><strong>{livePaperSmokeRunResult?.validation_status_before ?? 'n/a (available after running from cockpit)'}</strong></li>
+                        <li><span>Validation status after</span><strong>{livePaperSmokeRunResult?.validation_status_after ?? livePaperSmokeStatus.validation_status_after}</strong></li>
+                        <li><span>Heartbeat passes completed</span><strong>{livePaperSmokeRunResult?.heartbeat_passes_completed ?? livePaperSmokeStatus.heartbeat_passes_completed}</strong></li>
+                        <li><span>Recent activity detected</span><strong>{livePaperSmokeRunResult ? String(livePaperSmokeRunResult.recent_activity_detected) : 'n/a (available after running from cockpit)'}</strong></li>
+                        <li><span>Recent trades detected</span><strong>{livePaperSmokeRunResult ? String(livePaperSmokeRunResult.recent_trades_detected) : 'n/a (available after running from cockpit)'}</strong></li>
+                      </ul>
+                      <div className="subsection">
+                        <p className="section-label">Checks</p>
+                        {livePaperSmokeRunResult?.checks.length ? (
+                          <ul className="key-value-list">
+                            {livePaperSmokeRunResult.checks.map((check) => (
+                              <li key={check.check_name}>
+                                <span>{check.check_name}</span>
+                                <strong>
+                                  <StatusBadge tone={toneFromSmokeStatus(check.status)}>{check.status}</StatusBadge> {check.summary}
+                                </strong>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="muted-text">Checks will appear after running smoke test from cockpit.</p>
+                        )}
+                      </div>
+                    </>
+                  ) : null}
+                  {livePaperSmokeRunResult ? (
+                    <p className={livePaperSmokeRunResult.smoke_test_status === 'FAIL' ? 'error-text' : livePaperSmokeRunResult.smoke_test_status === 'WARN' ? 'warning-text' : 'success-text'}>
+                      {livePaperSmokeRunResult.smoke_test_status}: {livePaperSmokeRunResult.smoke_test_summary}
+                    </p>
+                  ) : null}
+                  {livePaperSmokeRunError ? <p className="warning-text">{livePaperSmokeRunError}</p> : null}
+                  <div className="button-row">
+                    <button className="secondary-button" type="button" disabled={livePaperSmokeRunLoading} onClick={() => void runLivePaperSmokeTestFromCockpit()}>
+                      {livePaperSmokeRunLoading ? 'Running…' : 'Run smoke test'}
+                    </button>
+                    <button className="ghost-button" type="button" disabled={livePaperSmokeStatusLoading || livePaperSmokeRunLoading} onClick={() => void loadLivePaperSmokeTestStatus()}>
+                      Refresh smoke result
+                    </button>
+                  </div>
+                </SectionCard>
+                <SectionCard
                   eyebrow="Operational snapshot"
                   title="Operational Snapshot"
                   description="Compact live view of autonomous heartbeat, operator attention, and tuning alert bridge hints."
@@ -889,7 +1025,13 @@ export function CockpitPage() {
                     type="button"
                     disabled={livePaperStatusLoading || livePaperOperationalSnapshotLoading || livePaperValidationLoading}
                     onClick={() => {
-                      void Promise.all([loadLivePaperStatus(), loadLivePaperOperationalSnapshot(), loadPaperPortfolioSnapshot(), loadLivePaperValidation()]);
+                      void Promise.all([
+                        loadLivePaperStatus(),
+                        loadLivePaperOperationalSnapshot(),
+                        loadPaperPortfolioSnapshot(),
+                        loadLivePaperValidation(),
+                        loadLivePaperSmokeTestStatus(),
+                      ]);
                     }}
                   >
                     Refresh status

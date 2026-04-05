@@ -218,6 +218,48 @@ export type LivePaperValidationDigestResponse = {
   validation_summary: string;
   checks: LivePaperValidationCheck[];
 };
+
+export type LivePaperSmokeTestStatus = 'PASS' | 'WARN' | 'FAIL';
+
+export type LivePaperSmokeTestCheck = {
+  check_name: string;
+  status: LivePaperSmokeTestStatus;
+  summary: string;
+};
+
+export type LivePaperSmokeTestRequest = {
+  preset?: string;
+  heartbeat_passes?: 1 | 2;
+};
+
+export type LivePaperSmokeTestResultResponse = {
+  preset_name: string;
+  smoke_test_status: LivePaperSmokeTestStatus;
+  executed_at: string;
+  bootstrap_action: string;
+  session_active_after: boolean;
+  heartbeat_active_after: boolean;
+  validation_status_before: 'READY' | 'WARNING' | 'BLOCKED';
+  validation_status_after: 'READY' | 'WARNING' | 'BLOCKED';
+  heartbeat_passes_requested: number;
+  heartbeat_passes_completed: number;
+  recent_activity_detected: boolean;
+  recent_trades_detected: boolean;
+  next_action_hint: string;
+  smoke_test_summary: string;
+  checks: LivePaperSmokeTestCheck[];
+};
+
+export type LivePaperSmokeTestStatusResponse = {
+  preset_name: string;
+  smoke_test_status: LivePaperSmokeTestStatus;
+  executed_at: string;
+  validation_status_after: 'READY' | 'WARNING' | 'BLOCKED';
+  heartbeat_passes_completed: number;
+  smoke_test_summary: string;
+  next_action_hint: string;
+};
+
 export type LivePaperAttentionAlertSyncResponse = {
   attention_needed: boolean;
   attention_mode: LivePaperAttentionMode;
