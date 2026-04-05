@@ -83,6 +83,25 @@ This bridge reuses mission-control bootstrap/heartbeat/health/recovery summaries
 
 It now also auto-syncs once per local mission-control heartbeat pass (reusing the existing local loop; no new scheduler). Heartbeat summary exposes compact `live_paper_attention_sync` (`attempted`, `success`, `alert_action`, `attention_mode`, `session_active`, `heartbeat_active`, `current_session_status`, `sync_summary`), and manual `POST /api/mission-control/sync-live-paper-attention-alert/` remains intact as fallback.
 
+
+### Live Paper V1 Smoke Test Runner (backend, new)
+
+`mission_control` now exposes a compact backend-only smoke test runner that chains existing live-paper bootstrap + heartbeat + validation services for a short deterministic V1 check.
+
+- service: `apps/backend/apps/mission_control/services/live_paper_smoke_test.py`
+- API:
+  - `POST /api/mission-control/run-live-paper-smoke-test/`
+    - optional body: `preset` (default `live_read_only_paper_conservative`), `heartbeat_passes` (default `1`, max `2`)
+  - `GET /api/mission-control/live-paper-smoke-test-status/`
+- run order (reused components only):
+  1. read validation digest (before)
+  2. run/reuse live paper bootstrap session
+  3. run 1–2 heartbeat passes
+  4. read validation digest (after)
+  5. emit compact `PASS` / `WARN` / `FAIL` result + deterministic checks summary
+
+Scope remains unchanged: real-market read-only signals + paper-money-only execution (`REAL_READ_ONLY`, `PAPER_ONLY`), no live trading enablement, no new scheduler, and no new persistent models.
+
 ### Live Paper V1 Validation Digest (backend, new)
 
 `mission_control` now includes a compact read-only validation digest that answers, in one backend response, whether the live read-only paper V1 loop is operational right now.

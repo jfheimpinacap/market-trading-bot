@@ -186,6 +186,23 @@ The bridge reuses existing mission-control bootstrap status, heartbeat summaries
 
 Automatic sync is now wired to the existing mission-control local heartbeat pass via `mission_control/services/live_paper_attention_auto_sync.py` (no new scheduler, no new persistent models). The heartbeat run metadata and `autonomous-heartbeat-summary` include compact `live_paper_attention_sync` (`attempted`, `success`, `alert_action`, `attention_mode`, `session_active`, `heartbeat_active`, `current_session_status`, `sync_summary`). Manual `sync-live-paper-attention-alert` remains available as fallback.
 
+
+## Live Paper V1 smoke test runner (new)
+
+`apps.mission_control` now includes a backend-only smoke test runner that reuses existing live-paper bootstrap, heartbeat pass, and validation digest logic for a short repeatable V1 paper readiness check.
+
+- service: `apps/mission_control/services/live_paper_smoke_test.py`
+- endpoints:
+  - `POST /api/mission-control/run-live-paper-smoke-test/`
+    - optional body: `preset` (`live_read_only_paper_conservative` default), `heartbeat_passes` (`1` default, `2` max)
+  - `GET /api/mission-control/live-paper-smoke-test-status/`
+- status output:
+  - deterministic `PASS` / `WARN` / `FAIL`
+  - compact checks (`bootstrap`, `heartbeat`, `validation_before`, `validation_after`, `activity_signal`, `paper_snapshot`)
+  - concise `next_action_hint` + `smoke_test_summary`
+
+This remains strictly real-market read-only + paper-only money simulation, introduces no new persistent models or schedulers, and is designed as a quick backend pre-check before longer manual cockpit observation.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:
