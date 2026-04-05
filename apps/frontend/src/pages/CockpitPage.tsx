@@ -20,9 +20,11 @@ import {
   getRuntimeTuningReviewActivity,
   getRuntimeTuningReviewQueue,
   getRuntimeTuningAutotriage,
+  getRuntimeTuningAutotriageAlertStatus,
   getRuntimeTuningReviewStateDetail,
   getRuntimeTuningScopeTimeline,
   markRuntimeTuningScopeFollowup,
+  syncRuntimeTuningAutotriageAlert,
 } from '../services/runtime';
 import { getScanSummary } from '../services/scanAgent';
 import type { CockpitAttentionItem, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
@@ -38,6 +40,7 @@ import type {
   RuntimeTuningReviewActivity,
   RuntimeTuningReviewAction,
   RuntimeTuningAutotriageDigest,
+  RuntimeTuningAutotriageAlertStatus,
   RuntimeTuningReviewState,
   RuntimeTuningScopeTimeline,
 } from '../types/runtime';
@@ -102,6 +105,10 @@ export function CockpitPage() {
   const [tuningPanel, setTuningPanel] = useState<RuntimeTuningCockpitPanel | null>(null);
   const [reviewQueue, setReviewQueue] = useState<RuntimeTuningReviewQueue | null>(null);
   const [autotriageDigest, setAutotriageDigest] = useState<RuntimeTuningAutotriageDigest | null>(null);
+  const [autotriageAlertStatus, setAutotriageAlertStatus] = useState<RuntimeTuningAutotriageAlertStatus | null>(null);
+  const [autotriageAlertSyncMessage, setAutotriageAlertSyncMessage] = useState<string | null>(null);
+  const [autotriageAlertSyncError, setAutotriageAlertSyncError] = useState<string | null>(null);
+  const [autotriageAlertSyncLoading, setAutotriageAlertSyncLoading] = useState(false);
   const [reviewAging, setReviewAging] = useState<RuntimeTuningReviewAging | null>(null);
   const [reviewEscalation, setReviewEscalation] = useState<RuntimeTuningReviewEscalation | null>(null);
   const [reviewActivity, setReviewActivity] = useState<RuntimeTuningReviewActivity | null>(null);
@@ -138,7 +145,7 @@ export function CockpitPage() {
     setTuningPanelError(null);
     setReviewQueueError(null);
     try {
-      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse, reviewQueueResponse, reviewAgingResponse, reviewEscalationResponse, reviewActivityResponse, autotriageResponse] = await Promise.all([
+      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse, reviewQueueResponse, reviewAgingResponse, reviewEscalationResponse, reviewActivityResponse, autotriageResponse, autotriageAlertStatusResponse] = await Promise.all([
         getCockpitSummary(),
         getAutonomyScenarioSummary(),
         getScanSummary(),
@@ -163,6 +170,7 @@ export function CockpitPage() {
           limit: reviewActivityLimit,
         }),
         getRuntimeTuningAutotriage({ top_n: 3, include_monitor: false }),
+        getRuntimeTuningAutotriageAlertStatus(),
       ]);
       setSnapshot(response);
       setAutonomyScenarioSummary(scenarioSummary);
@@ -173,6 +181,7 @@ export function CockpitPage() {
       setReviewEscalation(reviewEscalationResponse);
       setReviewActivity(reviewActivityResponse);
       setAutotriageDigest(autotriageResponse);
+      setAutotriageAlertStatus(autotriageAlertStatusResponse);
       setReviewStateCache({});
       setReviewStateErrorCache({});
     } catch (loadError) {
@@ -181,6 +190,7 @@ export function CockpitPage() {
       setTuningPanelError(getErrorMessage(loadError, 'Could not load runtime tuning attention panel.'));
       setReviewQueueError(getErrorMessage(loadError, 'Could not load runtime tuning review queue.'));
       setAutotriageDigest(null);
+      setAutotriageAlertStatus(null);
     } finally {
       setLoading(false);
     }
@@ -343,6 +353,22 @@ export function CockpitPage() {
     },
     [],
   );
+
+  const syncAutotriageAttentionAlert = useCallback(async () => {
+    setAutotriageAlertSyncLoading(true);
+    setAutotriageAlertSyncMessage(null);
+    setAutotriageAlertSyncError(null);
+    try {
+      const payload = await syncRuntimeTuningAutotriageAlert();
+      const refreshedStatus = await getRuntimeTuningAutotriageAlertStatus();
+      setAutotriageAlertStatus(refreshedStatus);
+      setAutotriageAlertSyncMessage(`Attention alert sync: ${payload.alert_action}.`);
+    } catch (syncError) {
+      setAutotriageAlertSyncError(getErrorMessage(syncError, 'Could not sync runtime tuning attention alert.'));
+    } finally {
+      setAutotriageAlertSyncLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!queuedInvestigationScope || !tuningPanel?.items?.length) return;
@@ -570,6 +596,24 @@ export function CockpitPage() {
                         <li><span>Next recommended scope</span><strong>{autotriageDigest.next_recommended_scope ?? 'n/a'}</strong></li>
                       </ul>
                       <p className={autotriageDigest.requires_human_now ? 'warning-text' : 'muted-text'}>{autotriageDigest.autotriage_summary}</p>
+                      {!autotriageAlertStatus ? null : (
+                        <div className="subsection">
+                          <p className="section-label">Attention alert bridge</p>
+                          <ul className="key-value-list">
+                            <li><span>Signal</span><strong>{autotriageAlertStatus.active_alert_present ? 'Alert active' : 'No active alert'}</strong></li>
+                            <li><span>Severity</span><strong>{autotriageAlertStatus.active_alert_severity ?? 'n/a'}</strong></li>
+                            <li><span>Next recommended scope</span><strong>{autotriageAlertStatus.next_recommended_scope ?? 'n/a'}</strong></li>
+                            <li><span>Status summary</span><strong>{autotriageAlertStatus.status_summary}</strong></li>
+                          </ul>
+                          <div className="button-row">
+                            <button className="secondary-button" type="button" disabled={autotriageAlertSyncLoading} onClick={() => void syncAutotriageAttentionAlert()}>
+                              Sync attention alert
+                            </button>
+                          </div>
+                          {autotriageAlertSyncMessage ? <p className="success-text">{autotriageAlertSyncMessage}</p> : null}
+                          {autotriageAlertSyncError ? <p className="warning-text">{autotriageAlertSyncError}</p> : null}
+                        </div>
+                      )}
                       <div className="button-row">
                         <button
                           className="secondary-button"

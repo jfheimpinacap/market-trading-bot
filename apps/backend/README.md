@@ -141,6 +141,20 @@ Runtime governor now also provides a compact read-only **tuning review activity 
 
 This feed is derived from existing `RuntimeTuningReviewAction` + current review state summaries/deep links, and is intentionally read-only. It complements manual review state, queue, aging, and escalation without changing runtime/tuning mutation logic.
 
+Runtime governor now also provides a compact **tuning autotriage alert bridge** service:
+
+- service: `apps.runtime_governor.services.tuning_autotriage_alert_bridge`
+- endpoints:
+  - `POST /api/runtime-governor/sync-tuning-autotriage-alert/`
+  - `GET /api/runtime-governor/tuning-autotriage-alert-status/`
+- global dedupe key: `runtime_tuning_autotriage_global`
+- deterministic mapping:
+  - `REVIEW_NOW` → `high` active operator alert
+  - `REVIEW_SOON` → `warning` active operator alert
+  - `MONITOR_ONLY` / `NO_ACTION` → resolve bridge alert (history preserved)
+
+This bridge only transforms existing `tuning_autotriage` output into low-noise operator alerts, without changing runtime operating logic, autotriage semantics, or paper-only boundaries.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:

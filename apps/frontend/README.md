@@ -206,6 +206,17 @@ Delta UX adicional: `/cockpit` ahora incluye una subsección **Recent Review Act
 
 Esta capa agrega contexto humano reciente y trazable, complementando manual review state + queue + aging + escalation, sin reemplazar flujos ni cambiar lógica operativa (paper-only/read-only).
 
+Delta UX adicional: `/cockpit` ahora incluye una mini-franja **Attention alert bridge** dentro de **Autotriage Digest**:
+
+- muestra estado de señal operativa (`Alert active` / `No active alert`)
+- muestra severidad activa, `next_recommended_scope` y `status_summary`
+- botón manual `Sync attention alert` para ejecutar:
+  - `POST /api/runtime-governor/sync-tuning-autotriage-alert/`
+- lectura compacta de estado vía:
+  - `GET /api/runtime-governor/tuning-autotriage-alert-status/`
+
+Este bridge reduce necesidad de revisión manual constante del cockpit, mantiene dedupe global (`runtime_tuning_autotriage_global`), no crea pantallas nuevas y no modifica lógica operativa (paper-only).
+
 Delta UX adicional: `/runtime` ahora incluye una sección **Tuning Context History** (sin pantalla nueva) para trazabilidad temporal ligera:
 - snapshots recientes de contexto de tuning por scope operativo
 - drift status (`INITIAL`, `NO_CHANGE`, `MINOR_CONTEXT_CHANGE`, `PROFILE_CHANGE`)

@@ -92,6 +92,8 @@ from apps.runtime_governor.serializers import (
     RuntimeTuningReviewActivityDetailSerializer,
     RuntimeTuningAutotriageSerializer,
     RuntimeTuningAutotriageDetailSerializer,
+    RuntimeTuningAutotriageAlertSyncSerializer,
+    RuntimeTuningAutotriageAlertStatusSerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -145,6 +147,10 @@ from apps.runtime_governor.services.tuning_autotriage import (
     DEFAULT_AUTOTRIAGE_TOP_N,
     build_tuning_autotriage_digest,
     get_tuning_autotriage_digest_detail,
+)
+from apps.runtime_governor.services.tuning_autotriage_alert_bridge import (
+    get_tuning_autotriage_attention_alert_status,
+    sync_tuning_autotriage_attention_alert,
 )
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
@@ -673,6 +679,24 @@ class RuntimeTuningAutotriageDetailView(APIView):
         except TuningScopeSnapshotNotFound:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = RuntimeTuningAutotriageDetailSerializer(payload)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningAutotriageAlertSyncView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = RuntimeTuningAutotriageAlertSyncSerializer(sync_tuning_autotriage_attention_alert())
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningAutotriageAlertStatusView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        serializer = RuntimeTuningAutotriageAlertStatusSerializer(get_tuning_autotriage_attention_alert_status())
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

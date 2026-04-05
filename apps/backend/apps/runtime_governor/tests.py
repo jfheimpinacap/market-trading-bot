@@ -31,6 +31,7 @@ from apps.runtime_governor.models import (
     RuntimeTransitionLog,
 )
 from apps.runtime_governor.services import get_capabilities_for_current_mode, get_runtime_state, set_runtime_mode
+from apps.operator_alerts.models import OperatorAlert, OperatorAlertSeverity, OperatorAlertSource, OperatorAlertStatus, OperatorAlertType
 from apps.runtime_governor.services.tuning_history import create_tuning_context_snapshot
 from apps.runtime_governor.services.tuning_diff import build_tuning_context_diff
 from apps.runtime_governor.services.operating_mode.mode_switch import GLOBAL_MODE_METADATA_KEY
@@ -3282,3 +3283,227 @@ class RuntimeTuningAutotriageDigestTests(TestCase):
         self.assertEqual(response.json()['source_scope'], 'runtime_feedback')
         self.assertEqual(response.json()['runtime_investigation_deep_link'], '/runtime?tuningScope=runtime_feedback&investigate=1')
         self.assertEqual(response_404.status_code, 404)
+
+
+class RuntimeTuningAutotriageAlertBridgeTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def _digest(self, *, mode: str, scope: str | None = 'mode_enforcement', summary: str = 'Digest summary'):
+        return {
+            'human_attention_mode': mode,
+            'next_recommended_scope': scope,
+            'autotriage_summary': summary,
+        }
+
+    def _create_other_source_alert(self):
+        return OperatorAlert.objects.create(
+            alert_type=OperatorAlertType.SAFETY,
+            severity=OperatorAlertSeverity.HIGH,
+            status=OperatorAlertStatus.OPEN,
+            title='Safety alert',
+            summary='Other source should be preserved',
+            source=OperatorAlertSource.SAFETY,
+            dedupe_key='safety_other_source',
+            first_seen_at=timezone.now(),
+            last_seen_at=timezone.now(),
+            metadata={},
+        )
+
+    def test_review_now_creates_active_high_alert(self):
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='REVIEW_NOW', scope='mode_enforcement', summary='Immediate runtime tuning attention needed'),
+        ):
+            response = self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['alert_action'], 'CREATED')
+        self.assertTrue(payload['alert_needed'])
+        self.assertEqual(payload['alert_severity'], 'high')
+        self.assertEqual(payload['next_recommended_scope'], 'mode_enforcement')
+
+        alert = OperatorAlert.objects.get(dedupe_key='runtime_tuning_autotriage_global', status=OperatorAlertStatus.OPEN)
+        self.assertEqual(alert.severity, OperatorAlertSeverity.HIGH)
+        self.assertEqual(alert.source, OperatorAlertSource.RUNTIME)
+
+    def test_review_soon_updates_existing_alert_to_warning(self):
+        OperatorAlert.objects.create(
+            alert_type=OperatorAlertType.RUNTIME,
+            severity=OperatorAlertSeverity.HIGH,
+            status=OperatorAlertStatus.OPEN,
+            title='Runtime tuning human attention',
+            summary='Stale summary',
+            source=OperatorAlertSource.RUNTIME,
+            dedupe_key='runtime_tuning_autotriage_global',
+            first_seen_at=timezone.now(),
+            last_seen_at=timezone.now(),
+            metadata={},
+        )
+
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='REVIEW_SOON', scope='operating_mode', summary='Follow-up soon'),
+        ):
+            response = self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['alert_action'], 'UPDATED')
+        self.assertEqual(payload['alert_severity'], 'warning')
+
+        alert = OperatorAlert.objects.get(dedupe_key='runtime_tuning_autotriage_global')
+        self.assertEqual(alert.severity, OperatorAlertSeverity.WARNING)
+        self.assertEqual(alert.status, OperatorAlertStatus.OPEN)
+
+    def test_monitor_only_resolves_existing_or_noop_without_alert(self):
+        OperatorAlert.objects.create(
+            alert_type=OperatorAlertType.RUNTIME,
+            severity=OperatorAlertSeverity.WARNING,
+            status=OperatorAlertStatus.OPEN,
+            title='Runtime tuning human attention',
+            summary='Needs soon attention',
+            source=OperatorAlertSource.RUNTIME,
+            dedupe_key='runtime_tuning_autotriage_global',
+            first_seen_at=timezone.now(),
+            last_seen_at=timezone.now(),
+            metadata={},
+        )
+
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='MONITOR_ONLY', scope='runtime_feedback', summary='Monitor only'),
+        ):
+            response = self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['alert_action'], 'RESOLVED')
+        self.assertEqual(OperatorAlert.objects.filter(dedupe_key='runtime_tuning_autotriage_global', status=OperatorAlertStatus.OPEN).count(), 0)
+
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='MONITOR_ONLY', scope='runtime_feedback', summary='Monitor only'),
+        ):
+            second_response = self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+        self.assertEqual(second_response.json()['alert_action'], 'NOOP')
+
+    def test_no_action_resolves_existing_or_noop_without_alert(self):
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='REVIEW_NOW', scope='mode_enforcement', summary='Immediate runtime tuning attention needed'),
+        ):
+            self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='NO_ACTION', scope=None, summary='No runtime tuning review action required now'),
+        ):
+            response = self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['alert_action'], 'RESOLVED')
+
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='NO_ACTION', scope=None, summary='No runtime tuning review action required now'),
+        ):
+            noop_response = self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+        self.assertEqual(noop_response.json()['alert_action'], 'NOOP')
+
+    def test_dedupe_global_avoids_multiple_active_bridge_alerts(self):
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='REVIEW_NOW', scope='mode_enforcement', summary='Immediate runtime tuning attention needed'),
+        ):
+            self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='REVIEW_SOON', scope='operating_mode', summary='Follow-up soon'),
+        ):
+            self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        active_alerts = OperatorAlert.objects.filter(
+            dedupe_key='runtime_tuning_autotriage_global',
+            status__in=[OperatorAlertStatus.OPEN, OperatorAlertStatus.ACKNOWLEDGED],
+        )
+        self.assertEqual(active_alerts.count(), 1)
+
+    def test_sync_payload_contains_required_fields(self):
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='REVIEW_NOW', scope='mode_enforcement', summary='Immediate runtime tuning attention needed'),
+        ):
+            response = self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        payload = response.json()
+        for key in [
+            'human_attention_mode',
+            'alert_needed',
+            'alert_action',
+            'alert_severity',
+            'next_recommended_scope',
+            'autotriage_summary',
+            'alert_status_summary',
+        ]:
+            self.assertIn(key, payload)
+
+    def test_status_payload_contains_required_fields(self):
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='REVIEW_NOW', scope='mode_enforcement', summary='Immediate runtime tuning attention needed'),
+        ):
+            self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='REVIEW_NOW', scope='mode_enforcement', summary='Immediate runtime tuning attention needed'),
+        ):
+            response = self.client.get(reverse('runtime_governor_v2:tuning_autotriage_alert_status'))
+
+        payload = response.json()
+        for key in [
+            'human_attention_mode',
+            'alert_needed',
+            'active_alert_present',
+            'active_alert_severity',
+            'next_recommended_scope',
+            'autotriage_summary',
+            'status_summary',
+        ]:
+            self.assertIn(key, payload)
+        self.assertTrue(payload['active_alert_present'])
+
+    def test_summary_is_legible_and_stable(self):
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='NO_ACTION', scope=None, summary='No runtime tuning review action required now'),
+        ):
+            sync_payload = self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json').json()
+
+        self.assertEqual(sync_payload['alert_status_summary'], 'NO_ACTION: no active runtime tuning attention alert')
+
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='NO_ACTION', scope=None, summary='No runtime tuning review action required now'),
+        ):
+            status_payload = self.client.get(reverse('runtime_governor_v2:tuning_autotriage_alert_status')).json()
+        self.assertEqual(status_payload['status_summary'], 'NO_ACTION: no active runtime tuning attention alert')
+
+    def test_bridge_does_not_affect_alerts_from_other_sources(self):
+        other_alert = self._create_other_source_alert()
+
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='REVIEW_NOW', scope='mode_enforcement', summary='Immediate runtime tuning attention needed'),
+        ):
+            self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='NO_ACTION', scope=None, summary='No runtime tuning review action required now'),
+        ):
+            self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        other_alert.refresh_from_db()
+        self.assertEqual(other_alert.status, OperatorAlertStatus.OPEN)

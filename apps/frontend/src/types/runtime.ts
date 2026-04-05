@@ -1044,3 +1044,26 @@ export type RuntimeTuningAutotriageQuery = {
   top_n?: number;
   include_monitor?: boolean;
 };
+
+export type RuntimeTuningAutotriageAlertAction = 'CREATED' | 'UPDATED' | 'RESOLVED' | 'NOOP';
+export type RuntimeTuningAutotriageAlertSeverity = 'info' | 'warning' | 'high' | 'critical' | null;
+
+export type RuntimeTuningAutotriageAlertSyncResponse = {
+  human_attention_mode: RuntimeTuningAutotriageHumanAttentionMode;
+  alert_needed: boolean;
+  alert_action: RuntimeTuningAutotriageAlertAction;
+  alert_severity: RuntimeTuningAutotriageAlertSeverity;
+  next_recommended_scope: RuntimeTuningContextSnapshot['source_scope'] | null;
+  autotriage_summary: string;
+  alert_status_summary: string;
+};
+
+export type RuntimeTuningAutotriageAlertStatus = {
+  human_attention_mode: RuntimeTuningAutotriageHumanAttentionMode;
+  alert_needed: boolean;
+  active_alert_present: boolean;
+  active_alert_severity: RuntimeTuningAutotriageAlertSeverity;
+  next_recommended_scope: RuntimeTuningContextSnapshot['source_scope'] | null;
+  autotriage_summary: string;
+  status_summary: string;
+};
