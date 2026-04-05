@@ -527,6 +527,79 @@ class AutonomousHeartbeatRunnerTests(TestCase):
         self.assertFalse(sync_payload.get('success'))
 
 
+    @patch(
+        'apps.mission_control.services.session_heartbeat.run.run_live_paper_attention_auto_sync',
+        return_value={
+            'attempted': True,
+            'success': True,
+            'alert_action': 'UPDATED',
+            'attention_mode': 'REVIEW_NOW',
+            'session_active': True,
+            'heartbeat_active': True,
+            'current_session_status': 'RUNNING',
+            'sync_summary': 'REVIEW_NOW: active high operator alert',
+        },
+    )
+    def test_heartbeat_runs_live_paper_attention_sync_once_per_pass(self, mock_auto_sync):
+        AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        response = self.client.post(reverse('mission_control:run-autonomous-heartbeat'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_auto_sync.call_count, 1)
+
+        payload = response.json()
+        sync_payload = (payload.get('metadata') or {}).get('live_paper_attention_sync') or {}
+        self.assertEqual(sync_payload.get('alert_action'), 'UPDATED')
+        self.assertTrue(sync_payload.get('success'))
+
+    @patch(
+        'apps.mission_control.services.session_heartbeat.run.run_live_paper_attention_auto_sync',
+        return_value={
+            'attempted': True,
+            'success': True,
+            'alert_action': 'NOOP',
+            'attention_mode': 'HEALTHY',
+            'session_active': False,
+            'heartbeat_active': False,
+            'current_session_status': 'MISSING',
+            'sync_summary': 'HEALTHY: no attention required',
+        },
+    )
+    def test_heartbeat_summary_exposes_live_paper_attention_sync_contract(self, _mock_auto_sync):
+        AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-autonomous-heartbeat'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:autonomous-heartbeat-summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('live_paper_attention_sync', payload)
+        self.assertEqual(payload['live_paper_attention_sync']['alert_action'], 'NOOP')
+        self.assertEqual(payload['live_paper_attention_sync']['attention_mode'], 'HEALTHY')
+        self.assertFalse(payload['live_paper_attention_sync']['heartbeat_active'])
+
+    @patch(
+        'apps.mission_control.services.session_heartbeat.run.run_live_paper_attention_auto_sync',
+        return_value={
+            'attempted': True,
+            'success': False,
+            'alert_action': 'ERROR',
+            'attention_mode': None,
+            'session_active': False,
+            'heartbeat_active': False,
+            'current_session_status': None,
+            'sync_summary': 'auto-sync failed: RuntimeError',
+        },
+    )
+    def test_heartbeat_continues_when_live_paper_attention_sync_fails(self, _mock_auto_sync):
+        AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        response = self.client.post(reverse('mission_control:run-autonomous-heartbeat'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['runner_status'], 'COMPLETED')
+        sync_payload = (payload.get('metadata') or {}).get('live_paper_attention_sync') or {}
+        self.assertEqual(sync_payload.get('alert_action'), 'ERROR')
+        self.assertFalse(sync_payload.get('success'))
+
+
+
 class LivePaperAttentionBridgeTests(TestCase):
     def _sync(self) -> dict:
         response = self.client.post(reverse('mission_control:sync-live-paper-attention-alert'), data='{}', content_type='application/json')
@@ -750,6 +823,30 @@ class LivePaperAttentionBridgeTests(TestCase):
             'status_summary': 'review now state',
         },
     )
+
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary',
+        return_value={'runtime_tuning_attention_sync': {}, 'live_paper_attention_sync': {'attempted': True, 'success': True, 'alert_action': 'NOOP'}},
+    )
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': False,
+            'heartbeat_active': False,
+            'current_session_status': 'MISSING',
+            'operator_attention_hint': 'none',
+            'status_summary': 'healthy',
+        },
+    )
+    def test_status_includes_last_auto_sync_hint(self, *_mocks):
+        response = self.client.get(reverse('mission_control:live-paper-attention-alert-status'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('last_auto_sync', payload)
+        self.assertIn(payload['last_auto_sync'].get('alert_action'), {None, 'NOOP'})
+
     def test_sync_does_not_affect_alerts_from_other_sources(self, *_mocks):
         other = OperatorAlert.objects.create(
             alert_type=OperatorAlertType.SAFETY,

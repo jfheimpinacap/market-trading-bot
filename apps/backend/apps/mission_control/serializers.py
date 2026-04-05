@@ -203,6 +203,7 @@ class LivePaperAttentionAlertStatusSerializer(serializers.Serializer):
     status_summary = serializers.CharField()
     last_alert_action = serializers.CharField(required=False, allow_null=True)
     last_sync_summary = serializers.CharField(required=False, allow_null=True)
+    last_auto_sync = serializers.DictField(required=False)
 
 
 class AutonomousRunnerStateSerializer(serializers.ModelSerializer):

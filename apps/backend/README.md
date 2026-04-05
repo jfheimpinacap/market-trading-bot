@@ -184,6 +184,8 @@ Mission control now also provides a compact **live paper autopilot operational a
 
 The bridge reuses existing mission-control bootstrap status, heartbeat summaries, and health/recovery hints plus the existing `operator_alerts` services. It introduces no new scheduler/models, remains paper-only, and does not modify runtime/trading logic.
 
+Automatic sync is now wired to the existing mission-control local heartbeat pass via `mission_control/services/live_paper_attention_auto_sync.py` (no new scheduler, no new persistent models). The heartbeat run metadata and `autonomous-heartbeat-summary` include compact `live_paper_attention_sync` (`attempted`, `success`, `alert_action`, `attention_mode`, `session_active`, `heartbeat_active`, `current_session_status`, `sync_summary`). Manual `sync-live-paper-attention-alert` remains available as fallback.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:
@@ -320,7 +322,7 @@ Guardrails:
 
 This layer only automates due-tick progression of existing autonomous sessions and preserves paper-only, local-first boundaries.
 
-Each heartbeat pass now also performs one Runtime Tuning Attention auto-sync attempt (through the existing autotriage alert bridge), records compact outcome in run metadata, and mirrors it in `autonomous-heartbeat-summary`.
+Each heartbeat pass now also performs one Runtime Tuning Attention auto-sync attempt and one Live Paper Operational Attention auto-sync attempt (both through existing bridges), records compact outcomes in run metadata, and mirrors them in `autonomous-heartbeat-summary`.
 
 ## Mission control governance review queue (new)
 

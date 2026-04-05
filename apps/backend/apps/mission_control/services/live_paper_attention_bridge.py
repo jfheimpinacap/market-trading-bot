@@ -305,4 +305,5 @@ def get_live_paper_attention_alert_status() -> dict[str, Any]:
         'status_summary': status_summary,
         'last_alert_action': last_alert_action,
         'last_sync_summary': last_sync_summary,
+        'last_auto_sync': (heartbeat_summary.get('live_paper_attention_sync') or {}) if isinstance(heartbeat_summary, dict) else {},
     }
