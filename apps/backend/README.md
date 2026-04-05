@@ -256,6 +256,25 @@ This does not replace operating mode, runtime feedback apply, or mode enforcemen
 
 This layer extends existing mission control and autonomous trader orchestration; it does not replace runtime/policy/safety/portfolio authorities.
 
+## Mission control live read-only paper autopilot bootstrap (new)
+
+`apps.mission_control` now includes a small backend bootstrap/preset layer for V1 autonomous paper startup:
+
+- service: `apps/mission_control/services/live_paper_bootstrap.py`
+- preset: `live_read_only_paper_conservative`
+  - `market_data_mode = REAL_READ_ONLY`
+  - `paper_execution_mode = PAPER_ONLY`
+  - conservative posture and existing mission-control session stack reuse
+  - no live execution / no real money
+- API:
+  - `POST /api/mission-control/bootstrap-live-paper-session/`
+  - `GET /api/mission-control/live-paper-bootstrap-status/`
+
+Guardrails:
+- no new scheduler
+- no parallel architecture to mission_control
+- reuses existing runtime_governor, portfolio_governor, profile_manager, real_market_ops, autonomous_trader, and paper_trading integrations
+
 ## Mission control local heartbeat runner (new)
 
 `apps.mission_control` now also includes a local autonomous heartbeat runner sublayer:

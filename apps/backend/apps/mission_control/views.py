@@ -106,6 +106,7 @@ from apps.mission_control.serializers import (
     ApplySessionResumeRequestSerializer,
     AutonomousSessionRecommendationSerializer,
     AutonomousSessionStartRequestSerializer,
+    LivePaperBootstrapRequestSerializer,
     AutonomousTickDispatchAttemptSerializer,
     MissionControlCycleSerializer,
     MissionControlSessionSerializer,
@@ -184,6 +185,10 @@ from apps.mission_control.governance_backlog_pressure.services.run import (
     run_governance_backlog_pressure_review,
 )
 from apps.mission_control.governance_auto_resolution.services.auto_resolve import apply_auto_resolution_decision
+from apps.mission_control.services.live_paper_bootstrap import (
+    bootstrap_live_read_only_paper_session,
+    get_live_paper_bootstrap_status,
+)
 
 
 class MissionControlStatusView(APIView):
@@ -375,6 +380,25 @@ class AutonomousSessionRecommendationListView(generics.ListAPIView):
 class AutonomousSessionSummaryView(APIView):
     def get(self, request, *args, **kwargs):
         return Response(build_session_summary(), status=status.HTTP_200_OK)
+
+
+class BootstrapLivePaperSessionView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = LivePaperBootstrapRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        response_payload = bootstrap_live_read_only_paper_session(
+            preset_name=payload.get('preset'),
+            auto_start_heartbeat=payload.get('auto_start_heartbeat', True),
+            start_now=payload.get('start_now', True),
+        )
+        return Response(response_payload, status=status.HTTP_200_OK)
+
+
+class LivePaperBootstrapStatusView(APIView):
+    def get(self, request, *args, **kwargs):
+        preset_name = request.query_params.get('preset') or request.query_params.get('preset_name')
+        return Response(get_live_paper_bootstrap_status(preset_name=preset_name), status=status.HTTP_200_OK)
 
 
 class StartAutonomousRunnerView(APIView):

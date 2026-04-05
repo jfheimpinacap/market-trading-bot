@@ -168,6 +168,12 @@ class AutonomousSessionStartRequestSerializer(serializers.Serializer):
     runtime_mode = serializers.CharField(required=False, allow_blank=True)
 
 
+class LivePaperBootstrapRequestSerializer(serializers.Serializer):
+    preset = serializers.CharField(required=False, allow_blank=True, default='live_read_only_paper_conservative')
+    auto_start_heartbeat = serializers.BooleanField(required=False, default=True)
+    start_now = serializers.BooleanField(required=False, default=True)
+
+
 class AutonomousRunnerStateSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousRunnerState
