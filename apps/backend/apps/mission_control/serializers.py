@@ -206,6 +206,30 @@ class LivePaperAttentionAlertStatusSerializer(serializers.Serializer):
     last_auto_sync = serializers.DictField(required=False)
 
 
+class LivePaperValidationCheckSerializer(serializers.Serializer):
+    check_name = serializers.CharField()
+    status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])
+    summary = serializers.CharField()
+
+
+class LivePaperValidationDigestSerializer(serializers.Serializer):
+    preset_name = serializers.CharField()
+    validation_status = serializers.ChoiceField(choices=['READY', 'WARNING', 'BLOCKED'])
+    session_active = serializers.BooleanField()
+    heartbeat_active = serializers.BooleanField()
+    attention_mode = serializers.ChoiceField(choices=['HEALTHY', 'DEGRADED', 'REVIEW_NOW', 'BLOCKED'])
+    paper_account_ready = serializers.BooleanField()
+    market_data_ready = serializers.BooleanField()
+    portfolio_snapshot_ready = serializers.BooleanField()
+    recent_activity_present = serializers.BooleanField()
+    recent_trades_present = serializers.BooleanField()
+    cash_available = serializers.FloatField(allow_null=True)
+    equity_available = serializers.FloatField(allow_null=True)
+    next_action_hint = serializers.CharField()
+    validation_summary = serializers.CharField()
+    checks = LivePaperValidationCheckSerializer(many=True)
+
+
 class AutonomousRunnerStateSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousRunnerState

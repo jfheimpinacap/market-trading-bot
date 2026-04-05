@@ -864,6 +864,136 @@ class LivePaperAttentionBridgeTests(TestCase):
         other.refresh_from_db()
         self.assertEqual(other.status, OperatorAlertStatus.OPEN)
 
+
+class LivePaperValidationDigestTests(TestCase):
+    def _mock_snapshot(self, *, cash_balance=10000, equity=10100):
+        class MockSnapshot:
+            pass
+
+        snapshot = MockSnapshot()
+        snapshot.cash_balance = cash_balance
+        snapshot.equity = equity
+        return snapshot
+
+    def _mock_account(self, *, is_active=True, cash_balance=10000, equity=10100):
+        class MockAccount:
+            pass
+
+        account = MockAccount()
+        account.is_active = is_active
+        account.cash_balance = cash_balance
+        account.equity = equity
+        return account
+
+    def _payload(self, **overrides):
+        base = {
+            'bootstrap': {
+                'preset_name': 'live_read_only_paper_conservative',
+                'session_active': True,
+                'heartbeat_active': True,
+                'market_data_mode': 'REAL_READ_ONLY',
+            },
+            'attention': {'attention_mode': 'HEALTHY'},
+            'heartbeat': {'latest_run': 123},
+            'summary': {'recent_trades': [{'id': 1}]},
+            'snapshot': self._mock_snapshot(),
+            'account': self._mock_account(),
+        }
+        for key, value in overrides.items():
+            base[key] = value
+        return base
+
+    def _call_endpoint(self, payload):
+        with patch('apps.mission_control.services.live_paper_validation.get_live_paper_bootstrap_status', return_value=payload['bootstrap']):
+            with patch('apps.mission_control.services.live_paper_validation.get_live_paper_attention_alert_status', return_value=payload['attention']):
+                with patch('apps.mission_control.services.live_paper_validation.build_heartbeat_summary', return_value=payload['heartbeat']):
+                    with patch('apps.mission_control.services.live_paper_validation.get_active_account', return_value=payload['account']):
+                        with patch('apps.mission_control.services.live_paper_validation.build_account_summary', return_value=payload['summary']):
+                            with patch(
+                                'apps.mission_control.services.live_paper_validation.PaperPortfolioSnapshot.objects.filter'
+                            ) as mock_filter:
+                                mock_filter.return_value.order_by.return_value.first.return_value = payload['snapshot']
+                                return self.client.get(reverse('mission_control:live-paper-validation'))
+
+    def test_ready_case_and_compact_payload(self):
+        payload = self._payload()
+        response = self._call_endpoint(payload)
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body['validation_status'], 'READY')
+        self.assertEqual(body['next_action_hint'], 'V1 paper appears operational')
+        self.assertIn('READY:', body['validation_summary'])
+        required_keys = {
+            'preset_name',
+            'validation_status',
+            'session_active',
+            'heartbeat_active',
+            'attention_mode',
+            'paper_account_ready',
+            'market_data_ready',
+            'portfolio_snapshot_ready',
+            'recent_activity_present',
+            'recent_trades_present',
+            'cash_available',
+            'equity_available',
+            'next_action_hint',
+            'validation_summary',
+            'checks',
+        }
+        self.assertEqual(set(body.keys()), required_keys)
+
+    def test_warning_case_without_recent_trades(self):
+        payload = self._payload(summary={'recent_trades': []})
+        response = self._call_endpoint(payload)
+        body = response.json()
+        self.assertEqual(body['validation_status'], 'WARNING')
+        self.assertEqual(body['next_action_hint'], 'Waiting for first paper trade')
+
+    def test_blocked_case_when_session_inactive(self):
+        payload = self._payload(
+            bootstrap={
+                'preset_name': 'live_read_only_paper_conservative',
+                'session_active': False,
+                'heartbeat_active': True,
+                'market_data_mode': 'REAL_READ_ONLY',
+            }
+        )
+        response = self._call_endpoint(payload)
+        body = response.json()
+        self.assertEqual(body['validation_status'], 'BLOCKED')
+        self.assertEqual(body['next_action_hint'], 'Start live paper autopilot')
+
+    def test_checks_are_present_and_human_readable(self):
+        payload = self._payload(summary={'recent_trades': []})
+        response = self._call_endpoint(payload)
+        checks = response.json()['checks']
+        check_names = [item['check_name'] for item in checks]
+        self.assertEqual(
+            check_names,
+            ['bootstrap_session', 'heartbeat_loop', 'attention_bridge', 'paper_account', 'portfolio_snapshot', 'recent_activity', 'recent_trades'],
+        )
+        self.assertTrue(all(item.get('status') in {'PASS', 'WARN', 'FAIL'} for item in checks))
+        self.assertTrue(all(isinstance(item.get('summary'), str) and item['summary'] for item in checks))
+
+    def test_summary_is_stable_and_deterministic(self):
+        payload = self._payload()
+        first = self._call_endpoint(payload).json()['validation_summary']
+        second = self._call_endpoint(payload).json()['validation_summary']
+        self.assertEqual(first, second)
+
+    def test_default_preset_is_applied(self):
+        payload = self._payload()
+        with patch('apps.mission_control.services.live_paper_validation.get_live_paper_bootstrap_status', return_value=payload['bootstrap']) as mock_bootstrap:
+            with patch('apps.mission_control.services.live_paper_validation.get_live_paper_attention_alert_status', return_value=payload['attention']):
+                with patch('apps.mission_control.services.live_paper_validation.build_heartbeat_summary', return_value=payload['heartbeat']):
+                    with patch('apps.mission_control.services.live_paper_validation.get_active_account', return_value=payload['account']):
+                        with patch('apps.mission_control.services.live_paper_validation.build_account_summary', return_value=payload['summary']):
+                            with patch('apps.mission_control.services.live_paper_validation.PaperPortfolioSnapshot.objects.filter') as mock_filter:
+                                mock_filter.return_value.order_by.return_value.first.return_value = payload['snapshot']
+                                response = self.client.get(reverse('mission_control:live-paper-validation'))
+        self.assertEqual(response.status_code, 200)
+        mock_bootstrap.assert_called_once_with(preset_name='live_read_only_paper_conservative')
+
 class SessionTimingProfileTests(TestCase):
     def test_profile_endpoint_bootstraps_defaults(self):
         response = self.client.get(reverse('mission_control:schedule-profiles'))

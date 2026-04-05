@@ -83,6 +83,21 @@ This bridge reuses mission-control bootstrap/heartbeat/health/recovery summaries
 
 It now also auto-syncs once per local mission-control heartbeat pass (reusing the existing local loop; no new scheduler). Heartbeat summary exposes compact `live_paper_attention_sync` (`attempted`, `success`, `alert_action`, `attention_mode`, `session_active`, `heartbeat_active`, `current_session_status`, `sync_summary`), and manual `POST /api/mission-control/sync-live-paper-attention-alert/` remains intact as fallback.
 
+### Live Paper V1 Validation Digest (backend, new)
+
+`mission_control` now includes a compact read-only validation digest that answers, in one backend response, whether the live read-only paper V1 loop is operational right now.
+
+- service: `apps/backend/apps/mission_control/services/live_paper_validation.py`
+- API:
+  - `GET /api/mission-control/live-paper-validation/`
+  - optional query param: `preset` (default: `live_read_only_paper_conservative`)
+- deterministic statuses:
+  - `READY`: session + heartbeat active, non-blocking attention, account/economic snapshot available, and useful recent evidence
+  - `WARNING`: loop is alive but missing key evidence (e.g., no recent trades/activity yet, partial snapshot, degraded attention)
+  - `BLOCKED`: session/heartbeat down, blocking attention mode, or missing minimum paper account/economic readiness
+
+The digest is strictly an aggregation/validation layer: it reuses existing bootstrap/heartbeat/attention/paper signals, introduces no new models, and remains real-market read-only plus paper-money-only execution.
+
 ### Runtime Tuning Review Escalation (new)
 
 `runtime_governor` now exposes a compact read-only **Runtime Tuning Review Escalation** layer above existing tuning review queue + aging.
