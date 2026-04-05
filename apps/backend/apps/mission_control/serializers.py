@@ -206,6 +206,46 @@ class LivePaperAttentionAlertStatusSerializer(serializers.Serializer):
     last_auto_sync = serializers.DictField(required=False)
 
 
+
+
+class LivePaperSmokeTestRequestSerializer(serializers.Serializer):
+    preset = serializers.CharField(required=False, allow_blank=True, default='live_read_only_paper_conservative')
+    heartbeat_passes = serializers.IntegerField(required=False, min_value=1, max_value=2, default=1)
+
+
+class LivePaperSmokeTestCheckSerializer(serializers.Serializer):
+    check_name = serializers.CharField()
+    status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])
+    summary = serializers.CharField()
+
+
+class LivePaperSmokeTestResultSerializer(serializers.Serializer):
+    preset_name = serializers.CharField()
+    smoke_test_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])
+    executed_at = serializers.DateTimeField()
+    bootstrap_action = serializers.CharField()
+    session_active_after = serializers.BooleanField()
+    heartbeat_active_after = serializers.BooleanField()
+    validation_status_before = serializers.ChoiceField(choices=['READY', 'WARNING', 'BLOCKED'])
+    validation_status_after = serializers.ChoiceField(choices=['READY', 'WARNING', 'BLOCKED'])
+    heartbeat_passes_requested = serializers.IntegerField()
+    heartbeat_passes_completed = serializers.IntegerField()
+    recent_activity_detected = serializers.BooleanField()
+    recent_trades_detected = serializers.BooleanField()
+    next_action_hint = serializers.CharField()
+    smoke_test_summary = serializers.CharField()
+    checks = LivePaperSmokeTestCheckSerializer(many=True)
+
+
+class LivePaperSmokeTestStatusSerializer(serializers.Serializer):
+    preset_name = serializers.CharField()
+    smoke_test_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])
+    executed_at = serializers.DateTimeField()
+    validation_status_after = serializers.ChoiceField(choices=['READY', 'WARNING', 'BLOCKED'])
+    heartbeat_passes_completed = serializers.IntegerField()
+    smoke_test_summary = serializers.CharField()
+    next_action_hint = serializers.CharField()
+
 class LivePaperValidationCheckSerializer(serializers.Serializer):
     check_name = serializers.CharField()
     status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])

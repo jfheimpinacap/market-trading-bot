@@ -108,6 +108,9 @@ from apps.mission_control.serializers import (
     AutonomousSessionStartRequestSerializer,
     LivePaperAttentionAlertStatusSerializer,
     LivePaperValidationDigestSerializer,
+    LivePaperSmokeTestRequestSerializer,
+    LivePaperSmokeTestResultSerializer,
+    LivePaperSmokeTestStatusSerializer,
     LivePaperAttentionAlertSyncSerializer,
     LivePaperBootstrapRequestSerializer,
     AutonomousTickDispatchAttemptSerializer,
@@ -197,6 +200,10 @@ from apps.mission_control.services.live_paper_attention_bridge import (
     sync_live_paper_attention_alert,
 )
 from apps.mission_control.services.live_paper_validation import build_live_paper_validation_digest
+from apps.mission_control.services.live_paper_smoke_test import (
+    get_last_live_paper_smoke_test_result,
+    run_live_paper_smoke_test,
+)
 
 
 class MissionControlStatusView(APIView):
@@ -426,6 +433,37 @@ class LivePaperValidationDigestView(APIView):
         preset_name = request.query_params.get('preset') or 'live_read_only_paper_conservative'
         serializer = LivePaperValidationDigestSerializer(build_live_paper_validation_digest(preset_name=preset_name))
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RunLivePaperSmokeTestView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = LivePaperSmokeTestRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+
+        result = run_live_paper_smoke_test(
+            preset_name=payload.get('preset'),
+            heartbeat_passes=payload.get('heartbeat_passes', 1),
+        )
+        return Response(LivePaperSmokeTestResultSerializer(result).data, status=status.HTTP_200_OK)
+
+
+class LivePaperSmokeTestStatusView(APIView):
+    def get(self, request, *args, **kwargs):
+        latest = get_last_live_paper_smoke_test_result()
+        if not latest:
+            return Response({'detail': 'No smoke test has been executed yet.'}, status=status.HTTP_404_NOT_FOUND)
+
+        payload = {
+            'preset_name': latest.get('preset_name'),
+            'smoke_test_status': latest.get('smoke_test_status'),
+            'executed_at': latest.get('executed_at'),
+            'validation_status_after': latest.get('validation_status_after'),
+            'heartbeat_passes_completed': latest.get('heartbeat_passes_completed'),
+            'smoke_test_summary': latest.get('smoke_test_summary'),
+            'next_action_hint': latest.get('next_action_hint'),
+        }
+        return Response(LivePaperSmokeTestStatusSerializer(payload).data, status=status.HTTP_200_OK)
 
 
 class StartAutonomousRunnerView(APIView):

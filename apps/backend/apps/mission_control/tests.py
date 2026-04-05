@@ -1774,3 +1774,187 @@ class GovernanceBacklogPressureTests(TestCase):
         payload = response.json()
         self.assertIn('governance_backlog_pressure_state', payload)
         self.assertIn('latest_counts', payload)
+
+
+class LivePaperSmokeTestApiTests(TestCase):
+    def _validation_payload(self, status: str, *, activity: bool, trades: bool, snapshot: bool) -> dict:
+        return {
+            'preset_name': 'live_read_only_paper_conservative',
+            'validation_status': status,
+            'session_active': True,
+            'heartbeat_active': True,
+            'attention_mode': 'HEALTHY',
+            'paper_account_ready': True,
+            'market_data_ready': True,
+            'portfolio_snapshot_ready': snapshot,
+            'recent_activity_present': activity,
+            'recent_trades_present': trades,
+            'cash_available': 10000.0,
+            'equity_available': 10000.0,
+            'next_action_hint': 'hint',
+            'validation_summary': f'{status} summary',
+            'checks': [],
+        }
+
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_heartbeat_summary', return_value={'latest_run': 999})
+    @patch('apps.mission_control.services.live_paper_smoke_test.run_heartbeat_pass')
+    @patch('apps.mission_control.services.live_paper_smoke_test.get_live_paper_bootstrap_status', return_value={'session_active': True, 'heartbeat_active': True})
+    @patch('apps.mission_control.services.live_paper_smoke_test.bootstrap_live_read_only_paper_session', return_value={'bootstrap_action': 'REUSED_EXISTING_SESSION', 'bootstrap_summary': 'reused'})
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_live_paper_validation_digest')
+    def test_post_returns_pass_when_signals_are_healthy(self, mock_validation, _mock_bootstrap, _mock_status, mock_heartbeat, _mock_summary):
+        mock_validation.side_effect = [
+            self._validation_payload('WARNING', activity=True, trades=False, snapshot=True),
+            self._validation_payload('READY', activity=True, trades=True, snapshot=True),
+        ]
+
+        response = self.client.post(reverse('mission_control:run-live-paper-smoke-test'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['smoke_test_status'], 'PASS')
+        self.assertEqual(payload['validation_status_before'], 'WARNING')
+        self.assertEqual(payload['validation_status_after'], 'READY')
+        self.assertEqual(payload['heartbeat_passes_completed'], 1)
+        self.assertEqual(mock_heartbeat.call_count, 1)
+
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_heartbeat_summary', return_value={'latest_run': 111})
+    @patch('apps.mission_control.services.live_paper_smoke_test.run_heartbeat_pass')
+    @patch('apps.mission_control.services.live_paper_smoke_test.get_live_paper_bootstrap_status', return_value={'session_active': True, 'heartbeat_active': True})
+    @patch('apps.mission_control.services.live_paper_smoke_test.bootstrap_live_read_only_paper_session', return_value={'bootstrap_action': 'REUSED_EXISTING_SESSION', 'bootstrap_summary': 'reused'})
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_live_paper_validation_digest')
+    def test_post_returns_warn_when_validation_stays_warning(self, mock_validation, *_mocks):
+        mock_validation.side_effect = [
+            self._validation_payload('WARNING', activity=True, trades=False, snapshot=True),
+            self._validation_payload('WARNING', activity=True, trades=False, snapshot=True),
+        ]
+
+        response = self.client.post(reverse('mission_control:run-live-paper-smoke-test'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['smoke_test_status'], 'WARN')
+        self.assertEqual(payload['next_action_hint'], 'Review cockpit and let autopilot continue')
+
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_heartbeat_summary', return_value={'latest_run': None})
+    @patch('apps.mission_control.services.live_paper_smoke_test.run_heartbeat_pass')
+    @patch('apps.mission_control.services.live_paper_smoke_test.get_live_paper_bootstrap_status', return_value={'session_active': False, 'heartbeat_active': False})
+    @patch('apps.mission_control.services.live_paper_smoke_test.bootstrap_live_read_only_paper_session', return_value={'bootstrap_action': 'BLOCKED', 'bootstrap_summary': 'blocked'})
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_live_paper_validation_digest')
+    def test_post_returns_fail_when_bootstrap_or_validation_blocked(self, mock_validation, *_mocks):
+        mock_validation.side_effect = [
+            self._validation_payload('BLOCKED', activity=False, trades=False, snapshot=False),
+            self._validation_payload('BLOCKED', activity=False, trades=False, snapshot=False),
+        ]
+
+        response = self.client.post(reverse('mission_control:run-live-paper-smoke-test'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['smoke_test_status'], 'FAIL')
+        self.assertEqual(payload['validation_status_after'], 'BLOCKED')
+
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_heartbeat_summary', return_value={'latest_run': 222})
+    @patch('apps.mission_control.services.live_paper_smoke_test.run_heartbeat_pass')
+    @patch('apps.mission_control.services.live_paper_smoke_test.get_live_paper_bootstrap_status', return_value={'session_active': True, 'heartbeat_active': True})
+    @patch('apps.mission_control.services.live_paper_smoke_test.bootstrap_live_read_only_paper_session', return_value={'bootstrap_action': 'REUSED_EXISTING_SESSION', 'bootstrap_summary': 'Bootstrap reused existing session'})
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_live_paper_validation_digest')
+    def test_reuses_existing_bootstrap_session_without_duplication_signal(self, mock_validation, *_mocks):
+        mock_validation.side_effect = [
+            self._validation_payload('READY', activity=True, trades=True, snapshot=True),
+            self._validation_payload('READY', activity=True, trades=True, snapshot=True),
+        ]
+
+        response = self.client.post(reverse('mission_control:run-live-paper-smoke-test'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        bootstrap_check = next(item for item in response.json()['checks'] if item['check_name'] == 'bootstrap')
+        self.assertEqual(bootstrap_check['status'], 'PASS')
+        self.assertIn('reused', bootstrap_check['summary'].lower())
+
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_heartbeat_summary', return_value={'latest_run': 333})
+    @patch('apps.mission_control.services.live_paper_smoke_test.run_heartbeat_pass')
+    @patch('apps.mission_control.services.live_paper_smoke_test.get_live_paper_bootstrap_status', return_value={'session_active': True, 'heartbeat_active': True})
+    @patch('apps.mission_control.services.live_paper_smoke_test.bootstrap_live_read_only_paper_session', return_value={'bootstrap_action': 'REUSED_EXISTING_SESSION', 'bootstrap_summary': 'reused'})
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_live_paper_validation_digest')
+    def test_heartbeat_passes_honors_requested_max_two(self, mock_validation, _mock_bootstrap, _mock_status, mock_heartbeat, _mock_summary):
+        mock_validation.side_effect = [
+            self._validation_payload('READY', activity=True, trades=True, snapshot=True),
+            self._validation_payload('READY', activity=True, trades=True, snapshot=True),
+        ]
+
+        response = self.client.post(
+            reverse('mission_control:run-live-paper-smoke-test'),
+            data=json.dumps({'heartbeat_passes': 2}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['heartbeat_passes_requested'], 2)
+        self.assertEqual(payload['heartbeat_passes_completed'], 2)
+        self.assertEqual(mock_heartbeat.call_count, 2)
+
+        too_many = self.client.post(
+            reverse('mission_control:run-live-paper-smoke-test'),
+            data=json.dumps({'heartbeat_passes': 3}),
+            content_type='application/json',
+        )
+        self.assertEqual(too_many.status_code, 400)
+
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_heartbeat_summary', return_value={'latest_run': 444})
+    @patch('apps.mission_control.services.live_paper_smoke_test.run_heartbeat_pass')
+    @patch('apps.mission_control.services.live_paper_smoke_test.get_live_paper_bootstrap_status', return_value={'session_active': True, 'heartbeat_active': True})
+    @patch('apps.mission_control.services.live_paper_smoke_test.bootstrap_live_read_only_paper_session', return_value={'bootstrap_action': 'REUSED_EXISTING_SESSION', 'bootstrap_summary': 'reused'})
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_live_paper_validation_digest')
+    def test_post_payload_contract_is_compact_and_stable(self, mock_validation, *_mocks):
+        mock_validation.side_effect = [
+            self._validation_payload('READY', activity=True, trades=True, snapshot=True),
+            self._validation_payload('READY', activity=True, trades=True, snapshot=True),
+        ]
+
+        response = self.client.post(reverse('mission_control:run-live-paper-smoke-test'), data='{}', content_type='application/json')
+        payload = response.json()
+        required_keys = {
+            'preset_name', 'smoke_test_status', 'bootstrap_action', 'session_active_after', 'heartbeat_active_after',
+            'validation_status_before', 'validation_status_after', 'heartbeat_passes_requested', 'heartbeat_passes_completed',
+            'recent_activity_detected', 'recent_trades_detected', 'next_action_hint', 'smoke_test_summary', 'checks',
+        }
+        self.assertTrue(required_keys.issubset(payload.keys()))
+        self.assertEqual(len(payload['checks']), 6)
+
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_heartbeat_summary', return_value={'latest_run': 555})
+    @patch('apps.mission_control.services.live_paper_smoke_test.run_heartbeat_pass')
+    @patch('apps.mission_control.services.live_paper_smoke_test.get_live_paper_bootstrap_status', return_value={'session_active': True, 'heartbeat_active': True})
+    @patch('apps.mission_control.services.live_paper_smoke_test.bootstrap_live_read_only_paper_session', return_value={'bootstrap_action': 'REUSED_EXISTING_SESSION', 'bootstrap_summary': 'reused'})
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_live_paper_validation_digest')
+    def test_get_status_returns_latest_summary_contract(self, mock_validation, *_mocks):
+        mock_validation.side_effect = [
+            self._validation_payload('WARNING', activity=True, trades=False, snapshot=True),
+            self._validation_payload('WARNING', activity=True, trades=False, snapshot=True),
+        ]
+        self.client.post(reverse('mission_control:run-live-paper-smoke-test'), data='{}', content_type='application/json')
+
+        status_response = self.client.get(reverse('mission_control:live-paper-smoke-test-status'))
+        self.assertEqual(status_response.status_code, 200)
+        payload = status_response.json()
+        required_keys = {
+            'preset_name', 'smoke_test_status', 'executed_at', 'validation_status_after',
+            'heartbeat_passes_completed', 'smoke_test_summary', 'next_action_hint',
+        }
+        self.assertTrue(required_keys.issubset(payload.keys()))
+
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_heartbeat_summary', return_value={'latest_run': 666})
+    @patch('apps.mission_control.services.live_paper_smoke_test.run_heartbeat_pass')
+    @patch('apps.mission_control.services.live_paper_smoke_test.get_live_paper_bootstrap_status', return_value={'session_active': True, 'heartbeat_active': True})
+    @patch('apps.mission_control.services.live_paper_smoke_test.bootstrap_live_read_only_paper_session', return_value={'bootstrap_action': 'REUSED_EXISTING_SESSION', 'bootstrap_summary': 'reused'})
+    @patch('apps.mission_control.services.live_paper_smoke_test.build_live_paper_validation_digest')
+    def test_summary_is_deterministic_for_same_inputs(self, mock_validation, *_mocks):
+        mock_validation.side_effect = [
+            self._validation_payload('READY', activity=True, trades=True, snapshot=True),
+            self._validation_payload('READY', activity=True, trades=True, snapshot=True),
+            self._validation_payload('READY', activity=True, trades=True, snapshot=True),
+            self._validation_payload('READY', activity=True, trades=True, snapshot=True),
+        ]
+
+        first = self.client.post(reverse('mission_control:run-live-paper-smoke-test'), data='{}', content_type='application/json').json()
+        second = self.client.post(reverse('mission_control:run-live-paper-smoke-test'), data='{}', content_type='application/json').json()
+        self.assertEqual(first['smoke_test_summary'], second['smoke_test_summary'])
+
+    def test_existing_mission_control_summary_flow_still_works(self):
+        response = self.client.get(reverse('mission_control:autonomous-session-summary'))
+        self.assertEqual(response.status_code, 200)
