@@ -2617,3 +2617,25 @@ Frontend runtime clients added:
 - `getRuntimeTuningReviewAgingDetail(sourceScope)`
 
 This complements the existing manual review queue/investigation flow and preserves runtime handoff `/runtime?tuningScope=<scope>&investigate=1`. No operational behavior change.
+
+## Cockpit Autotriage Digest (Prompt 188)
+
+`/cockpit` now renders a compact **Autotriage Digest** subsection in the runtime tuning human-review block (above Review Escalation).
+
+It consumes:
+- `GET /api/runtime-governor/tuning-autotriage/` (`top_n=3`, `include_monitor=false`)
+
+The card shows:
+- `human_attention_mode` (`REVIEW_NOW`, `REVIEW_SOON`, `MONITOR_ONLY`, `NO_ACTION`)
+- `requires_human_now`
+- `can_defer_human_review`
+- unresolved / urgent / overdue / recent activity counts
+- `next_recommended_scope`
+- `autotriage_summary`
+- up to 3 `top_scopes`
+
+Compact actions:
+- `Open next review` (opens compact investigation in cockpit)
+- `Open in runtime` (handoff to `/runtime?tuningScope=<scope>&investigate=1`)
+
+This complements existing queue/aging/escalation/activity sections and does not replace or mutate runtime logic.

@@ -3039,3 +3039,246 @@ class RuntimeTuningReviewEscalationTests(TestCase):
     def test_detail_endpoint_returns_404_for_unknown_scope(self):
         response = self.client.get(reverse('runtime_governor_v2:tuning_review_escalation_detail', args=['unknown_scope']))
         self.assertEqual(response.status_code, 404)
+
+
+class RuntimeTuningAutotriageDigestTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def _mock_sources(
+        self,
+        *,
+        queue_items,
+        escalation_items,
+        aging_items,
+        activity_count=0,
+        followup_count=0,
+    ):
+        return (
+            patch(
+                'apps.runtime_governor.services.tuning_autotriage.build_tuning_review_queue',
+                return_value={
+                    'queue_count': len(queue_items),
+                    'followup_count': followup_count,
+                    'items': queue_items,
+                },
+            ),
+            patch(
+                'apps.runtime_governor.services.tuning_autotriage.build_tuning_review_aging',
+                return_value={
+                    'overdue_count': sum(1 for item in aging_items if item.get('age_bucket') == 'OVERDUE'),
+                    'items': aging_items,
+                },
+            ),
+            patch(
+                'apps.runtime_governor.services.tuning_autotriage.build_tuning_review_escalation',
+                return_value={
+                    'urgent_count': sum(1 for item in escalation_items if item.get('escalation_level') == 'URGENT'),
+                    'elevated_count': sum(1 for item in escalation_items if item.get('escalation_level') == 'ELEVATED'),
+                    'items': escalation_items,
+                },
+            ),
+            patch(
+                'apps.runtime_governor.services.tuning_autotriage.build_tuning_review_activity',
+                return_value={
+                    'activity_count': activity_count,
+                },
+            ),
+        )
+
+    def test_autotriage_payload_general_shape(self):
+        queue_items = [
+            {
+                'source_scope': 'mode_enforcement',
+                'effective_review_status': 'FOLLOWUP_REQUIRED',
+                'attention_priority': 'REVIEW_NOW',
+                'review_summary': 'Follow-up needed',
+                'technical_summary': 'Technical summary',
+                'runtime_investigation_deep_link': '/runtime?tuningScope=mode_enforcement&investigate=1',
+                'last_action_at': timezone.now(),
+            }
+        ]
+        escalation_items = [
+            {
+                **queue_items[0],
+                'age_bucket': 'OVERDUE',
+                'age_days': 9,
+                'escalation_level': 'URGENT',
+                'requires_immediate_attention': True,
+            }
+        ]
+        aging_items = [{**escalation_items[0]}]
+
+        patches = self._mock_sources(
+            queue_items=queue_items,
+            escalation_items=escalation_items,
+            aging_items=aging_items,
+            activity_count=2,
+            followup_count=1,
+        )
+        with patches[0], patches[1], patches[2], patches[3]:
+            response = self.client.get(reverse('runtime_governor_v2:tuning_autotriage'))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        for key in [
+            'generated_at',
+            'human_attention_mode',
+            'requires_human_now',
+            'can_defer_human_review',
+            'unresolved_count',
+            'urgent_count',
+            'overdue_count',
+            'recent_activity_count',
+            'next_recommended_scope',
+            'next_recommended_reason_codes',
+            'autotriage_summary',
+            'top_scopes',
+        ]:
+            self.assertIn(key, payload)
+        self.assertEqual(payload['top_scopes'][0]['runtime_investigation_deep_link'], '/runtime?tuningScope=mode_enforcement&investigate=1')
+
+    def test_human_attention_mode_and_requires_human_now_when_urgent(self):
+        scope = {
+            'source_scope': 'mode_enforcement',
+            'effective_review_status': 'STALE_REVIEW',
+            'attention_priority': 'REVIEW_NOW',
+            'review_summary': 'Stale review',
+            'technical_summary': 'Needs manual check',
+            'runtime_investigation_deep_link': '/runtime?tuningScope=mode_enforcement&investigate=1',
+            'last_action_at': timezone.now(),
+            'age_bucket': 'OVERDUE',
+            'age_days': 10,
+            'escalation_level': 'URGENT',
+            'requires_immediate_attention': True,
+        }
+        patches = self._mock_sources(
+            queue_items=[scope],
+            escalation_items=[scope],
+            aging_items=[scope],
+        )
+        with patches[0], patches[1], patches[2], patches[3]:
+            response = self.client.get(reverse('runtime_governor_v2:tuning_autotriage'))
+        payload = response.json()
+        self.assertEqual(payload['human_attention_mode'], 'REVIEW_NOW')
+        self.assertTrue(payload['requires_human_now'])
+        self.assertFalse(payload['can_defer_human_review'])
+
+    def test_can_defer_human_review_for_review_soon(self):
+        queue_item = {
+            'source_scope': 'operating_mode',
+            'effective_review_status': 'FOLLOWUP_REQUIRED',
+            'attention_priority': 'PROFILE_SHIFT',
+            'review_summary': 'Follow-up pending',
+            'technical_summary': 'Follow-up',
+            'runtime_investigation_deep_link': '/runtime?tuningScope=operating_mode&investigate=1',
+            'last_action_at': timezone.now(),
+        }
+        aging_item = {**queue_item, 'age_bucket': 'AGING', 'age_days': 3}
+        escalation_item = {**aging_item, 'escalation_level': 'ELEVATED', 'requires_immediate_attention': False}
+        patches = self._mock_sources(
+            queue_items=[queue_item],
+            escalation_items=[escalation_item],
+            aging_items=[aging_item],
+            followup_count=1,
+        )
+        with patches[0], patches[1], patches[2], patches[3]:
+            response = self.client.get(reverse('runtime_governor_v2:tuning_autotriage'))
+        payload = response.json()
+        self.assertEqual(payload['human_attention_mode'], 'REVIEW_SOON')
+        self.assertTrue(payload['can_defer_human_review'])
+
+    def test_next_recommended_scope_priority(self):
+        base = {
+            'effective_review_status': 'UNREVIEWED',
+            'attention_priority': 'REVIEW_NOW',
+            'review_summary': 'Review',
+            'technical_summary': 'Tech',
+            'runtime_investigation_deep_link': '/runtime?tuningScope=runtime_feedback&investigate=1',
+            'last_action_at': timezone.now(),
+            'age_days': 8,
+            'requires_immediate_attention': False,
+        }
+        urgent = {**base, 'source_scope': 'runtime_feedback', 'escalation_level': 'URGENT', 'age_bucket': 'OVERDUE'}
+        overdue = {**base, 'source_scope': 'mode_stabilization', 'escalation_level': 'MONITOR', 'age_bucket': 'OVERDUE'}
+        followup = {**base, 'source_scope': 'operating_mode', 'effective_review_status': 'FOLLOWUP_REQUIRED', 'escalation_level': 'MONITOR', 'age_bucket': 'AGING'}
+
+        patches = self._mock_sources(
+            queue_items=[followup],
+            escalation_items=[urgent, overdue],
+            aging_items=[overdue],
+            followup_count=1,
+        )
+        with patches[0], patches[1], patches[2], patches[3]:
+            response = self.client.get(reverse('runtime_governor_v2:tuning_autotriage'))
+        self.assertEqual(response.json()['next_recommended_scope'], 'runtime_feedback')
+
+        patches2 = self._mock_sources(
+            queue_items=[followup],
+            escalation_items=[{**overdue, 'source_scope': 'mode_stabilization', 'escalation_level': 'ELEVATED'}],
+            aging_items=[overdue],
+            followup_count=1,
+        )
+        with patches2[0], patches2[1], patches2[2], patches2[3]:
+            response2 = self.client.get(reverse('runtime_governor_v2:tuning_autotriage'))
+        self.assertEqual(response2.json()['next_recommended_scope'], 'mode_stabilization')
+
+    def test_top_scopes_respects_top_n(self):
+        queue_items = []
+        escalation_items = []
+        aging_items = []
+        for idx in range(5):
+            item = {
+                'source_scope': f'scope_{idx}',
+                'effective_review_status': 'UNREVIEWED',
+                'attention_priority': 'PROFILE_SHIFT',
+                'review_summary': 'Review pending',
+                'technical_summary': 'Tech summary',
+                'runtime_investigation_deep_link': f'/runtime?tuningScope=scope_{idx}&investigate=1',
+                'last_action_at': timezone.now(),
+                'age_bucket': 'AGING',
+                'age_days': 3,
+                'escalation_level': 'ELEVATED',
+                'requires_immediate_attention': False,
+            }
+            queue_items.append(item)
+            escalation_items.append(item)
+            aging_items.append(item)
+
+        patches = self._mock_sources(queue_items=queue_items, escalation_items=escalation_items, aging_items=aging_items)
+        with patches[0], patches[1], patches[2], patches[3]:
+            response = self.client.get(reverse('runtime_governor_v2:tuning_autotriage'), {'top_n': 2})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()['top_scopes']), 2)
+
+    def test_summary_stable_for_no_action(self):
+        patches = self._mock_sources(queue_items=[], escalation_items=[], aging_items=[], activity_count=0)
+        with patches[0], patches[1], patches[2], patches[3]:
+            response = self.client.get(reverse('runtime_governor_v2:tuning_autotriage'))
+        payload = response.json()
+        self.assertEqual(payload['human_attention_mode'], 'NO_ACTION')
+        self.assertEqual(payload['autotriage_summary'], 'No runtime tuning review action required now')
+
+    def test_detail_endpoint_and_404(self):
+        scope = {
+            'source_scope': 'runtime_feedback',
+            'effective_review_status': 'FOLLOWUP_REQUIRED',
+            'attention_priority': 'REVIEW_NOW',
+            'review_summary': 'Follow-up needed',
+            'technical_summary': 'Tech summary',
+            'runtime_investigation_deep_link': '/runtime?tuningScope=runtime_feedback&investigate=1',
+            'last_action_at': timezone.now(),
+            'age_bucket': 'OVERDUE',
+            'age_days': 8,
+            'escalation_level': 'URGENT',
+            'requires_immediate_attention': True,
+        }
+        patches = self._mock_sources(queue_items=[scope], escalation_items=[scope], aging_items=[scope], followup_count=1)
+        with patches[0], patches[1], patches[2], patches[3]:
+            response = self.client.get(reverse('runtime_governor_v2:tuning_autotriage_detail', args=['runtime_feedback']))
+            response_404 = self.client.get(reverse('runtime_governor_v2:tuning_autotriage_detail', args=['unknown_scope']))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['source_scope'], 'runtime_feedback')
+        self.assertEqual(response.json()['runtime_investigation_deep_link'], '/runtime?tuningScope=runtime_feedback&investigate=1')
+        self.assertEqual(response_404.status_code, 404)

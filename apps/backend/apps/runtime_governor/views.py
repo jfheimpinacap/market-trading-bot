@@ -90,6 +90,8 @@ from apps.runtime_governor.serializers import (
     RuntimeTuningReviewStateSerializer,
     RuntimeTuningReviewActivitySerializer,
     RuntimeTuningReviewActivityDetailSerializer,
+    RuntimeTuningAutotriageSerializer,
+    RuntimeTuningAutotriageDetailSerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -138,6 +140,11 @@ from apps.runtime_governor.services.tuning_review_activity import (
     DEFAULT_ACTIVITY_LIMIT,
     build_tuning_review_activity,
     get_tuning_review_activity_detail,
+)
+from apps.runtime_governor.services.tuning_autotriage import (
+    DEFAULT_AUTOTRIAGE_TOP_N,
+    build_tuning_autotriage_digest,
+    get_tuning_autotriage_digest_detail,
 )
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
@@ -629,6 +636,43 @@ class RuntimeTuningReviewActivityDetailView(APIView):
         except TuningScopeSnapshotNotFound:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = RuntimeTuningReviewActivityDetailSerializer(payload)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningAutotriageListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        top_n_raw = request.query_params.get('top_n')
+        include_monitor = request.query_params.get('include_monitor', 'false').lower() == 'true'
+        top_n = DEFAULT_AUTOTRIAGE_TOP_N
+        if top_n_raw is not None:
+            try:
+                top_n = int(top_n_raw)
+            except (TypeError, ValueError):
+                top_n = DEFAULT_AUTOTRIAGE_TOP_N
+
+        serializer = RuntimeTuningAutotriageSerializer(
+            build_tuning_autotriage_digest(
+                top_n=top_n,
+                include_monitor=include_monitor,
+            )
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningAutotriageDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, source_scope: str, *args, **kwargs):
+        include_monitor = request.query_params.get('include_monitor', 'false').lower() == 'true'
+        try:
+            payload = get_tuning_autotriage_digest_detail(source_scope=source_scope, include_monitor=include_monitor)
+        except TuningScopeSnapshotNotFound:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = RuntimeTuningAutotriageDetailSerializer(payload)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

@@ -19,6 +19,7 @@ import {
   getRuntimeTuningReviewEscalation,
   getRuntimeTuningReviewActivity,
   getRuntimeTuningReviewQueue,
+  getRuntimeTuningAutotriage,
   getRuntimeTuningReviewStateDetail,
   getRuntimeTuningScopeTimeline,
   markRuntimeTuningScopeFollowup,
@@ -36,6 +37,7 @@ import type {
   RuntimeTuningReviewEscalation,
   RuntimeTuningReviewActivity,
   RuntimeTuningReviewAction,
+  RuntimeTuningAutotriageDigest,
   RuntimeTuningReviewState,
   RuntimeTuningScopeTimeline,
 } from '../types/runtime';
@@ -99,6 +101,7 @@ export function CockpitPage() {
   const [scanSummary, setScanSummary] = useState<Awaited<ReturnType<typeof getScanSummary>> | null>(null);
   const [tuningPanel, setTuningPanel] = useState<RuntimeTuningCockpitPanel | null>(null);
   const [reviewQueue, setReviewQueue] = useState<RuntimeTuningReviewQueue | null>(null);
+  const [autotriageDigest, setAutotriageDigest] = useState<RuntimeTuningAutotriageDigest | null>(null);
   const [reviewAging, setReviewAging] = useState<RuntimeTuningReviewAging | null>(null);
   const [reviewEscalation, setReviewEscalation] = useState<RuntimeTuningReviewEscalation | null>(null);
   const [reviewActivity, setReviewActivity] = useState<RuntimeTuningReviewActivity | null>(null);
@@ -135,7 +138,7 @@ export function CockpitPage() {
     setTuningPanelError(null);
     setReviewQueueError(null);
     try {
-      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse, reviewQueueResponse, reviewAgingResponse, reviewEscalationResponse, reviewActivityResponse] = await Promise.all([
+      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse, reviewQueueResponse, reviewAgingResponse, reviewEscalationResponse, reviewActivityResponse, autotriageResponse] = await Promise.all([
         getCockpitSummary(),
         getAutonomyScenarioSummary(),
         getScanSummary(),
@@ -159,6 +162,7 @@ export function CockpitPage() {
           action_type: reviewActivityActionTypeFilter === 'ALL' ? undefined : reviewActivityActionTypeFilter,
           limit: reviewActivityLimit,
         }),
+        getRuntimeTuningAutotriage({ top_n: 3, include_monitor: false }),
       ]);
       setSnapshot(response);
       setAutonomyScenarioSummary(scenarioSummary);
@@ -168,6 +172,7 @@ export function CockpitPage() {
       setReviewAging(reviewAgingResponse);
       setReviewEscalation(reviewEscalationResponse);
       setReviewActivity(reviewActivityResponse);
+      setAutotriageDigest(autotriageResponse);
       setReviewStateCache({});
       setReviewStateErrorCache({});
     } catch (loadError) {
@@ -175,6 +180,7 @@ export function CockpitPage() {
       setSnapshot(null);
       setTuningPanelError(getErrorMessage(loadError, 'Could not load runtime tuning attention panel.'));
       setReviewQueueError(getErrorMessage(loadError, 'Could not load runtime tuning review queue.'));
+      setAutotriageDigest(null);
     } finally {
       setLoading(false);
     }
@@ -550,6 +556,72 @@ export function CockpitPage() {
               {reviewQueueError ? <p className="warning-text">{reviewQueueError}</p> : null}
               {!reviewQueue ? null : (
                 <>
+                  {!autotriageDigest ? null : (
+                    <div className="subsection">
+                      <p className="section-label">Autotriage Digest</p>
+                      <ul className="key-value-list">
+                        <li><span>Human attention mode</span><strong>{autotriageDigest.human_attention_mode}</strong></li>
+                        <li><span>Requires human now</span><strong>{String(autotriageDigest.requires_human_now)}</strong></li>
+                        <li><span>Can defer human review</span><strong>{String(autotriageDigest.can_defer_human_review)}</strong></li>
+                        <li><span>Unresolved</span><strong>{autotriageDigest.unresolved_count}</strong></li>
+                        <li><span>Urgent</span><strong>{autotriageDigest.urgent_count}</strong></li>
+                        <li><span>Overdue</span><strong>{autotriageDigest.overdue_count}</strong></li>
+                        <li><span>Recent activity</span><strong>{autotriageDigest.recent_activity_count}</strong></li>
+                        <li><span>Next recommended scope</span><strong>{autotriageDigest.next_recommended_scope ?? 'n/a'}</strong></li>
+                      </ul>
+                      <p className={autotriageDigest.requires_human_now ? 'warning-text' : 'muted-text'}>{autotriageDigest.autotriage_summary}</p>
+                      <div className="button-row">
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          disabled={!autotriageDigest.next_recommended_scope}
+                          onClick={() => {
+                            const nextScope = autotriageDigest.next_recommended_scope;
+                            if (!nextScope) return;
+                            if (tuningPanel?.items?.some((panelItem) => panelItem.source_scope === nextScope)) {
+                              void investigateScope(nextScope);
+                              return;
+                            }
+                            setAttentionOnly(false);
+                            setQueuedInvestigationScope(nextScope);
+                          }}
+                        >
+                          Open next review
+                        </button>
+                        <button
+                          className="ghost-button"
+                          type="button"
+                          disabled={!autotriageDigest.next_recommended_scope && autotriageDigest.top_scopes.length === 0}
+                          onClick={() => {
+                            const nextScope = autotriageDigest.next_recommended_scope;
+                            const topScope = autotriageDigest.top_scopes[0];
+                            const deepLink = topScope?.runtime_investigation_deep_link ?? (nextScope ? `/runtime?tuningScope=${encodeURIComponent(nextScope)}&investigate=1` : null);
+                            if (deepLink) {
+                              navigate(deepLink);
+                            }
+                          }}
+                        >
+                          Open in runtime
+                        </button>
+                      </div>
+                      {autotriageDigest.top_scopes.length === 0 ? (
+                        <p className="muted-text">No top scopes recommended right now.</p>
+                      ) : (
+                        <div className="cockpit-attention-list">
+                          {autotriageDigest.top_scopes.map((item) => (
+                            <article key={`autotriage-${item.source_scope}`} className="cockpit-attention-item">
+                              <div>
+                                <p className="section-label">{item.escalation_level} · {item.effective_review_status} · {item.age_bucket}{typeof item.age_days === 'number' ? ` (${item.age_days}d)` : ''}</p>
+                                <h3>{item.source_scope}</h3>
+                                <p><strong>{item.attention_priority}</strong> · {item.review_summary}</p>
+                                <p className="muted-text">{item.technical_summary}</p>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {!reviewEscalation ? null : (
                     <div className="subsection">
                       <p className="section-label">Review Escalation</p>

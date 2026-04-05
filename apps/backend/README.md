@@ -4026,3 +4026,29 @@ Bucket rules:
 - `OVERDUE` `>= 7` days
 
 This remains read-only/paper-only and does not modify runtime tuning operational behavior or add new persistent models.
+
+## Runtime tuning autotriage digest (new)
+
+Runtime governor now includes a compact read-only autotriage layer that aggregates existing tuning review signals without changing semantics or operational behavior.
+
+Endpoints:
+- `GET /api/runtime-governor/tuning-autotriage/`
+- `GET /api/runtime-governor/tuning-autotriage/<source_scope>/`
+
+Query params:
+- `top_n` (default `3`, max `3`)
+- `include_monitor` (default `false`)
+
+The digest returns deterministic human attention modes:
+- `REVIEW_NOW` (urgent scope present)
+- `REVIEW_SOON` (elevated/overdue/follow-up pending)
+- `MONITOR_ONLY` (only low-pressure unresolved)
+- `NO_ACTION` (no significant unresolved)
+
+Implementation: `apps/runtime_governor/services/tuning_autotriage.py`, explicitly reusing:
+- `tuning_review_queue.py`
+- `tuning_review_aging.py`
+- `tuning_review_escalation.py`
+- `tuning_review_activity.py`
+
+No new persistent models and no mutative endpoints were added.

@@ -67,6 +67,9 @@ import type {
   RuntimeTuningReviewActivity,
   RuntimeTuningReviewActivityDetail,
   RuntimeTuningReviewActivityQuery,
+  RuntimeTuningAutotriageDigest,
+  RuntimeTuningAutotriageDetail,
+  RuntimeTuningAutotriageQuery,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -467,4 +470,23 @@ export function getRuntimeTuningReviewActivity(query: RuntimeTuningReviewActivit
 
 export function getRuntimeTuningReviewActivityDetail(sourceScope: string) {
   return requestJson<RuntimeTuningReviewActivityDetail>(`/api/runtime-governor/tuning-review-activity/${encodeURIComponent(sourceScope)}/`);
+}
+
+
+function buildAutotriageQueryString(query: RuntimeTuningAutotriageQuery = {}) {
+  const params = new URLSearchParams();
+  if (typeof query.top_n === 'number') params.set('top_n', String(query.top_n));
+  if (typeof query.include_monitor === 'boolean') params.set('include_monitor', String(query.include_monitor));
+  const encoded = params.toString();
+  return encoded ? `?${encoded}` : '';
+}
+
+export function getRuntimeTuningAutotriage(query: RuntimeTuningAutotriageQuery = {}) {
+  return requestJson<RuntimeTuningAutotriageDigest>(`/api/runtime-governor/tuning-autotriage/${buildAutotriageQueryString(query)}`);
+}
+
+export function getRuntimeTuningAutotriageDetail(sourceScope: string, query: Pick<RuntimeTuningAutotriageQuery, 'include_monitor'> = {}) {
+  return requestJson<RuntimeTuningAutotriageDetail>(
+    `/api/runtime-governor/tuning-autotriage/${encodeURIComponent(sourceScope)}/${buildAutotriageQueryString(query)}`,
+  );
 }
