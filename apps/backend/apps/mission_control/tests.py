@@ -275,6 +275,11 @@ class AutonomousHeartbeatRunnerTests(TestCase):
             'alert_action': 'UPDATED',
             'human_attention_mode': 'REVIEW_NOW',
             'next_recommended_scope': 'mode_enforcement',
+            'material_change_detected': True,
+            'material_change_fields': ['next_recommended_scope'],
+            'update_suppressed': False,
+            'suppression_reason': None,
+            'active_alert_present': True,
             'sync_summary': 'REVIEW_NOW: active high attention alert (next: mode_enforcement)',
         },
     )
@@ -288,15 +293,21 @@ class AutonomousHeartbeatRunnerTests(TestCase):
         sync_payload = (payload.get('metadata') or {}).get('runtime_tuning_attention_sync') or {}
         self.assertEqual(sync_payload.get('alert_action'), 'UPDATED')
         self.assertTrue(sync_payload.get('success'))
+        self.assertTrue(sync_payload.get('material_change_detected'))
 
     @patch(
         'apps.mission_control.services.session_heartbeat.run.run_tuning_autotriage_attention_auto_sync',
         return_value={
             'attempted': True,
             'success': True,
-            'alert_action': 'UPDATED',
+            'alert_action': 'NOOP',
             'human_attention_mode': 'REVIEW_SOON',
             'next_recommended_scope': 'operating_mode',
+            'material_change_detected': False,
+            'material_change_fields': [],
+            'update_suppressed': True,
+            'suppression_reason': 'NO_MATERIAL_CHANGE',
+            'active_alert_present': True,
             'sync_summary': 'REVIEW_SOON: active warning attention alert (next: operating_mode)',
         },
     )
@@ -307,8 +318,9 @@ class AutonomousHeartbeatRunnerTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn('runtime_tuning_attention_sync', payload)
-        self.assertEqual(payload['runtime_tuning_attention_sync']['alert_action'], 'UPDATED')
+        self.assertEqual(payload['runtime_tuning_attention_sync']['alert_action'], 'NOOP')
         self.assertEqual(payload['runtime_tuning_attention_sync']['human_attention_mode'], 'REVIEW_SOON')
+        self.assertTrue(payload['runtime_tuning_attention_sync']['update_suppressed'])
 
     @patch(
         'apps.mission_control.services.session_heartbeat.run.run_tuning_autotriage_attention_auto_sync',
@@ -318,6 +330,11 @@ class AutonomousHeartbeatRunnerTests(TestCase):
             'alert_action': 'ERROR',
             'human_attention_mode': None,
             'next_recommended_scope': None,
+            'material_change_detected': False,
+            'material_change_fields': [],
+            'update_suppressed': False,
+            'suppression_reason': None,
+            'active_alert_present': False,
             'sync_summary': 'auto-sync failed: RuntimeError',
         },
     )

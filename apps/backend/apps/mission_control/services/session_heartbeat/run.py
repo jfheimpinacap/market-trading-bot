@@ -186,6 +186,11 @@ def build_heartbeat_summary() -> dict:
             'alert_action': runtime_tuning_attention_sync.get('alert_action'),
             'human_attention_mode': runtime_tuning_attention_sync.get('human_attention_mode'),
             'next_recommended_scope': runtime_tuning_attention_sync.get('next_recommended_scope'),
+            'material_change_detected': bool(runtime_tuning_attention_sync.get('material_change_detected', False)),
+            'material_change_fields': runtime_tuning_attention_sync.get('material_change_fields', []),
+            'update_suppressed': bool(runtime_tuning_attention_sync.get('update_suppressed', False)),
+            'suppression_reason': runtime_tuning_attention_sync.get('suppression_reason'),
+            'active_alert_present': bool(runtime_tuning_attention_sync.get('active_alert_present', False)),
             'sync_summary': runtime_tuning_attention_sync.get('sync_summary', ''),
         },
     }

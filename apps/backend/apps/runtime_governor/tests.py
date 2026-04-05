@@ -3295,11 +3295,21 @@ class RuntimeTuningAutotriageAlertBridgeTests(TestCase):
     def setUp(self):
         self.client = APIClient()
 
-    def _digest(self, *, mode: str, scope: str | None = 'mode_enforcement', summary: str = 'Digest summary'):
+    def _digest(
+        self,
+        *,
+        mode: str,
+        scope: str | None = 'mode_enforcement',
+        summary: str = 'Digest summary',
+        reason_codes: list[str] | None = None,
+        requires_human_now: bool | None = None,
+    ):
         return {
             'human_attention_mode': mode,
             'next_recommended_scope': scope,
             'autotriage_summary': summary,
+            'next_recommended_reason_codes': reason_codes or [],
+            'requires_human_now': requires_human_now if requires_human_now is not None else mode == 'REVIEW_NOW',
         }
 
     def _create_other_source_alert(self):
@@ -3363,6 +3373,65 @@ class RuntimeTuningAutotriageAlertBridgeTests(TestCase):
         self.assertEqual(alert.severity, OperatorAlertSeverity.WARNING)
         self.assertEqual(alert.status, OperatorAlertStatus.OPEN)
 
+    def test_repeated_material_state_returns_noop_without_unnecessary_update(self):
+        first_digest = self._digest(
+            mode='REVIEW_NOW',
+            scope='mode_enforcement',
+            summary='Immediate runtime tuning attention needed',
+            reason_codes=['URGENT_SCOPE_PRESENT'],
+            requires_human_now=True,
+        )
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=first_digest,
+        ):
+            self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value={**first_digest, 'autotriage_summary': 'Same state with reworded summary only'},
+        ):
+            response = self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        payload = response.json()
+        self.assertEqual(payload['alert_action'], 'NOOP')
+        self.assertFalse(payload['material_change_detected'])
+        self.assertEqual(payload['material_change_fields'], [])
+        self.assertTrue(payload['update_suppressed'])
+        self.assertEqual(payload['suppression_reason'], 'NO_MATERIAL_CHANGE')
+
+    def test_material_change_on_scope_triggers_updated(self):
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='REVIEW_SOON', scope='operating_mode', reason_codes=['FOLLOWUP_PENDING']),
+        ):
+            self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='REVIEW_SOON', scope='mode_enforcement', reason_codes=['FOLLOWUP_PENDING']),
+        ):
+            response = self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        self.assertEqual(response.json()['alert_action'], 'UPDATED')
+        self.assertIn('next_recommended_scope', response.json()['material_change_fields'])
+
+    def test_material_change_on_human_attention_mode_triggers_updated(self):
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='REVIEW_SOON', scope='operating_mode', reason_codes=['FOLLOWUP_PENDING']),
+        ):
+            self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='REVIEW_NOW', scope='operating_mode', reason_codes=['URGENT_SCOPE_PRESENT'], requires_human_now=True),
+        ):
+            response = self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
+
+        self.assertEqual(response.json()['alert_action'], 'UPDATED')
+        self.assertIn('human_attention_mode', response.json()['material_change_fields'])
+
     def test_monitor_only_resolves_existing_or_noop_without_alert(self):
         OperatorAlert.objects.create(
             alert_type=OperatorAlertType.RUNTIME,
@@ -3393,6 +3462,8 @@ class RuntimeTuningAutotriageAlertBridgeTests(TestCase):
         ):
             second_response = self.client.post(reverse('runtime_governor_v2:sync_tuning_autotriage_alert'), {}, format='json')
         self.assertEqual(second_response.json()['alert_action'], 'NOOP')
+        self.assertTrue(second_response.json()['update_suppressed'])
+        self.assertEqual(second_response.json()['suppression_reason'], 'NO_ACTIVE_ALERT')
 
     def test_no_action_resolves_existing_or_noop_without_alert(self):
         with patch(
@@ -3450,6 +3521,11 @@ class RuntimeTuningAutotriageAlertBridgeTests(TestCase):
             'alert_severity',
             'next_recommended_scope',
             'autotriage_summary',
+            'material_change_detected',
+            'material_change_fields',
+            'update_suppressed',
+            'suppression_reason',
+            'active_alert_present',
             'alert_status_summary',
         ]:
             self.assertIn(key, payload)
@@ -3476,6 +3552,9 @@ class RuntimeTuningAutotriageAlertBridgeTests(TestCase):
             'next_recommended_scope',
             'autotriage_summary',
             'status_summary',
+            'material_change_detected',
+            'last_alert_action',
+            'last_sync_summary',
         ]:
             self.assertIn(key, payload)
         self.assertTrue(payload['active_alert_present'])
@@ -3535,6 +3614,11 @@ class RuntimeTuningAutotriageAlertBridgeTests(TestCase):
                     'alert_action': 'NOOP',
                     'human_attention_mode': 'MONITOR_ONLY',
                     'next_recommended_scope': None,
+                    'material_change_detected': False,
+                    'material_change_fields': [],
+                    'update_suppressed': True,
+                    'suppression_reason': 'NO_MATERIAL_CHANGE',
+                    'active_alert_present': False,
                     'sync_summary': 'MONITOR_ONLY: no active runtime tuning attention alert',
                 }
             },
@@ -3549,3 +3633,5 @@ class RuntimeTuningAutotriageAlertBridgeTests(TestCase):
         payload = response.json()
         self.assertIn('runtime_tuning_attention_sync', payload)
         self.assertEqual(payload['runtime_tuning_attention_sync']['alert_action'], 'NOOP')
+        self.assertEqual(payload['last_alert_action'], 'NOOP')
+        self.assertFalse(payload['material_change_detected'])

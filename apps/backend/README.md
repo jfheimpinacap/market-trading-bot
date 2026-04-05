@@ -155,7 +155,14 @@ Runtime governor now also provides a compact **tuning autotriage alert bridge** 
 
 This bridge only transforms existing `tuning_autotriage` output into low-noise operator alerts, without changing runtime operating logic, autotriage semantics, or paper-only boundaries.
 
-Automatic sync is now wired to the existing mission-control local heartbeat pass via `runtime_governor/services/tuning_autotriage_auto_sync.py` (no new scheduler, no new persistent models). The heartbeat summary exposes a compact `runtime_tuning_attention_sync` block (`attempted`, `success`, `alert_action`, `human_attention_mode`, `next_recommended_scope`, `sync_summary`). Manual `sync-tuning-autotriage-alert` remains intact as fallback.
+Automatic sync is now wired to the existing mission-control local heartbeat pass via `runtime_governor/services/tuning_autotriage_auto_sync.py` (no new scheduler, no new persistent models). The heartbeat summary exposes a compact `runtime_tuning_attention_sync` block (`attempted`, `success`, `alert_action`, `human_attention_mode`, `next_recommended_scope`, `material_change_detected`, `update_suppressed`, `suppression_reason`, `sync_summary`). Manual `sync-tuning-autotriage-alert` remains intact as fallback, and now shares the same low-noise material-change rules.
+
+Low-noise stabilization behavior:
+- `CREATED` when attention is newly needed and no active bridge alert exists.
+- `UPDATED` only when material signal fields changed.
+- `NOOP` when no material change is detected (suppressed update, no churn).
+- `RESOLVED` when attention is no longer needed and an alert was active.
+- repeated heartbeats with equivalent signal remain deterministic `NOOP`.
 
 ## Runtime feedback apply bridge (new)
 
