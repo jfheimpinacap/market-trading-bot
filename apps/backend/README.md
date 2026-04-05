@@ -297,6 +297,22 @@ Guardrails:
 - no parallel architecture to mission_control
 - reuses existing runtime_governor, portfolio_governor, profile_manager, real_market_ops, autonomous_trader, and paper_trading integrations
 
+## Mission control live paper V1 validation digest (new)
+
+`apps.mission_control` now includes a compact backend-only validation digest to answer if the paper V1 stack is operational now, without creating a new authority.
+
+- service: `apps/mission_control/services/live_paper_validation.py`
+- API:
+  - `GET /api/mission-control/live-paper-validation/`
+  - query param: `preset` (optional, default `live_read_only_paper_conservative`)
+- payload focus:
+  - one compact status: `READY`, `WARNING`, or `BLOCKED`
+  - explicit readiness flags (session, heartbeat, attention mode, paper account, market-data mode, snapshot/economic state)
+  - deterministic `next_action_hint`
+  - compact `checks` list for operator readability
+
+This digest reuses existing live-paper bootstrap status, heartbeat summary, live-paper attention status, and paper account/snapshot/trade summaries. It remains real-market read-only and paper-money-only (no live execution, no new models, no mutative endpoints).
+
 ## Mission control local heartbeat runner (new)
 
 `apps.mission_control` now also includes a local autonomous heartbeat runner sublayer:

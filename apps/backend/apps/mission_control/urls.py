@@ -37,6 +37,7 @@ urlpatterns = [
     path('autonomous-session-summary/', views.AutonomousSessionSummaryView.as_view(), name='autonomous-session-summary'),
     path('bootstrap-live-paper-session/', views.BootstrapLivePaperSessionView.as_view(), name='bootstrap-live-paper-session'),
     path('live-paper-bootstrap-status/', views.LivePaperBootstrapStatusView.as_view(), name='live-paper-bootstrap-status'),
+    path('live-paper-validation/', views.LivePaperValidationDigestView.as_view(), name='live-paper-validation'),
     path('sync-live-paper-attention-alert/', views.SyncLivePaperAttentionAlertView.as_view(), name='sync-live-paper-attention-alert'),
     path('live-paper-attention-alert-status/', views.LivePaperAttentionAlertStatusView.as_view(), name='live-paper-attention-alert-status'),
     path('start-autonomous-runner/', views.StartAutonomousRunnerView.as_view(), name='start-autonomous-runner'),
