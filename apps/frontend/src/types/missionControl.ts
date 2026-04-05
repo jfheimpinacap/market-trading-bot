@@ -194,6 +194,30 @@ export type LivePaperAttentionAlertStatusResponse = {
   last_auto_sync?: LivePaperAttentionAutoSyncStatus | null;
 };
 
+
+export type LivePaperValidationCheck = {
+  check_name: string;
+  status: 'PASS' | 'WARN' | 'FAIL';
+  summary: string;
+};
+
+export type LivePaperValidationDigestResponse = {
+  preset_name: string;
+  validation_status: 'READY' | 'WARNING' | 'BLOCKED';
+  session_active: boolean;
+  heartbeat_active: boolean;
+  attention_mode: LivePaperAttentionMode;
+  paper_account_ready: boolean;
+  market_data_ready: boolean;
+  portfolio_snapshot_ready: boolean;
+  recent_activity_present: boolean;
+  recent_trades_present: boolean;
+  cash_available: number | null;
+  equity_available: number | null;
+  next_action_hint: string;
+  validation_summary: string;
+  checks: LivePaperValidationCheck[];
+};
 export type LivePaperAttentionAlertSyncResponse = {
   attention_needed: boolean;
   attention_mode: LivePaperAttentionMode;

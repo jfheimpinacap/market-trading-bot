@@ -75,6 +75,7 @@ import type {
   LivePaperBootstrapStatusResponse,
   LivePaperAttentionAlertStatusResponse,
   LivePaperAttentionAlertSyncResponse,
+  LivePaperValidationDigestResponse,
 } from '../types/missionControl';
 
 export function getMissionControlStatus() {
@@ -142,6 +143,15 @@ export function getLivePaperBootstrapStatus(params?: { preset?: string }) {
   return requestJson<LivePaperBootstrapStatusResponse>(`/api/mission-control/live-paper-bootstrap-status/${suffix}`);
 }
 
+
+export function getLivePaperValidation(params?: { preset?: string }) {
+  const query = new URLSearchParams();
+  if (params?.preset) {
+    query.set('preset', params.preset);
+  }
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return requestJson<LivePaperValidationDigestResponse>(`/api/mission-control/live-paper-validation/${suffix}`);
+}
 export function getLivePaperAttentionAlertStatus() {
   return requestJson<LivePaperAttentionAlertStatusResponse>('/api/mission-control/live-paper-attention-alert-status/');
 }
