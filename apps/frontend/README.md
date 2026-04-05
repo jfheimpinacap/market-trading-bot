@@ -2784,3 +2784,44 @@ Scope/guardrails remain unchanged:
 - `REAL_READ_ONLY`
 - `PAPER_ONLY`
 - does **not** enable live trading
+
+## Cockpit Autonomy Funnel card (Prompt 203)
+
+`/cockpit` now includes a compact **Autonomy Funnel** card next to Live Paper Validation + Smoke Test to answer if autonomy is truly advancing through:
+
+1. scan
+2. research
+3. prediction
+4. risk
+5. paper execution
+
+What it consumes:
+- `GET /api/mission-control/live-paper-autonomy-funnel/`
+  - optional params used by client: `window_minutes=60`, `preset=live_read_only_paper_conservative`
+
+What it shows (compact, operational):
+- strong funnel badge: `ACTIVE` / `THIN_FLOW` / `STALLED`
+- `funnel_summary`
+- deterministic `next_action_hint`
+- compact counts:
+  - scan candidates
+  - research pursued
+  - prediction evaluated
+  - risk approved / blocked
+  - paper executions / recent trades
+- short `stages` strip with per-stage status (`ACTIVE`, `LOW`, `EMPTY`)
+
+Actions and behavior:
+- auto-load on cockpit open
+- `Refresh funnel` button
+- funnel refresh is also triggered after:
+  - `Start live paper autopilot`
+  - `Refresh status`
+  - `Run smoke test`
+
+Fallback behavior:
+- endpoint error is non-blocking and card shows `Autonomy funnel unavailable`
+
+Guardrails remain unchanged:
+- read-only real-market data + paper/fake-money execution only
+- no live trading enablement

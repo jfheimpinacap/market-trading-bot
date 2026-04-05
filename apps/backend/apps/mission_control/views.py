@@ -111,6 +111,7 @@ from apps.mission_control.serializers import (
     LivePaperSmokeTestRequestSerializer,
     LivePaperSmokeTestResultSerializer,
     LivePaperSmokeTestStatusSerializer,
+    LivePaperAutonomyFunnelSerializer,
     LivePaperAttentionAlertSyncSerializer,
     LivePaperBootstrapRequestSerializer,
     AutonomousTickDispatchAttemptSerializer,
@@ -204,6 +205,7 @@ from apps.mission_control.services.live_paper_smoke_test import (
     get_last_live_paper_smoke_test_result,
     run_live_paper_smoke_test,
 )
+from apps.mission_control.services.live_paper_autonomy_funnel import build_live_paper_autonomy_funnel_snapshot
 
 
 class MissionControlStatusView(APIView):
@@ -464,6 +466,18 @@ class LivePaperSmokeTestStatusView(APIView):
             'next_action_hint': latest.get('next_action_hint'),
         }
         return Response(LivePaperSmokeTestStatusSerializer(payload).data, status=status.HTTP_200_OK)
+
+
+class LivePaperAutonomyFunnelView(APIView):
+    def get(self, request, *args, **kwargs):
+        preset_name = request.query_params.get('preset') or 'live_read_only_paper_conservative'
+        try:
+            window_minutes = int(request.query_params.get('window_minutes') or 60)
+        except (TypeError, ValueError):
+            window_minutes = 60
+        payload = build_live_paper_autonomy_funnel_snapshot(window_minutes=window_minutes, preset_name=preset_name)
+        serializer = LivePaperAutonomyFunnelSerializer(payload)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class StartAutonomousRunnerView(APIView):

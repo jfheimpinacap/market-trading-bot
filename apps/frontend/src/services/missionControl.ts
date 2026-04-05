@@ -79,6 +79,7 @@ import type {
   LivePaperSmokeTestResultResponse,
   LivePaperSmokeTestStatusResponse,
   LivePaperValidationDigestResponse,
+  LivePaperAutonomyFunnelResponse,
 } from '../types/missionControl';
 
 export function getMissionControlStatus() {
@@ -169,6 +170,18 @@ export function runLivePaperSmokeTest(payload: LivePaperSmokeTestRequest = {}) {
 
 export function getLivePaperSmokeTestStatus() {
   return requestJson<LivePaperSmokeTestStatusResponse>('/api/mission-control/live-paper-smoke-test-status/');
+}
+
+export function getLivePaperAutonomyFunnel(params?: { preset?: string; window_minutes?: number }) {
+  const query = new URLSearchParams();
+  if (params?.preset) {
+    query.set('preset', params.preset);
+  }
+  if (params?.window_minutes) {
+    query.set('window_minutes', String(params.window_minutes));
+  }
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return requestJson<LivePaperAutonomyFunnelResponse>(`/api/mission-control/live-paper-autonomy-funnel/${suffix}`);
 }
 
 export function getLivePaperAttentionAlertStatus() {

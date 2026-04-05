@@ -13,6 +13,7 @@ import {
   getAutonomousHeartbeatSummary,
   getLivePaperAttentionAlertStatus,
   getLivePaperBootstrapStatus,
+  getLivePaperAutonomyFunnel,
   getLivePaperSmokeTestStatus,
   getLivePaperValidation,
   runLivePaperSmokeTest,
@@ -48,6 +49,7 @@ import type {
   LivePaperBootstrapStatusResponse,
   LivePaperSmokeTestResultResponse,
   LivePaperSmokeTestStatusResponse,
+  LivePaperAutonomyFunnelResponse,
   LivePaperValidationDigestResponse,
 } from '../types/missionControl';
 import type {
@@ -111,6 +113,13 @@ const toneFromSmokeStatus = (status: 'PASS' | 'WARN' | 'FAIL' | null | undefined
   if (status === 'PASS') return 'ready';
   if (status === 'WARN') return 'pending';
   if (status === 'FAIL') return 'offline';
+  return 'neutral';
+};
+
+const toneFromFunnelStatus = (status: LivePaperAutonomyFunnelResponse['funnel_status'] | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
+  if (status === 'ACTIVE') return 'ready';
+  if (status === 'THIN_FLOW') return 'pending';
+  if (status === 'STALLED') return 'offline';
   return 'neutral';
 };
 
@@ -209,6 +218,9 @@ export function CockpitPage() {
   const [livePaperSmokeRunLoading, setLivePaperSmokeRunLoading] = useState(false);
   const [livePaperSmokeRunError, setLivePaperSmokeRunError] = useState<string | null>(null);
   const [livePaperSmokeRunResult, setLivePaperSmokeRunResult] = useState<LivePaperSmokeTestResultResponse | null>(null);
+  const [livePaperAutonomyFunnel, setLivePaperAutonomyFunnel] = useState<LivePaperAutonomyFunnelResponse | null>(null);
+  const [livePaperAutonomyFunnelLoading, setLivePaperAutonomyFunnelLoading] = useState(true);
+  const [livePaperAutonomyFunnelError, setLivePaperAutonomyFunnelError] = useState<string | null>(null);
   const [livePaperStartLoading, setLivePaperStartLoading] = useState(false);
   const [livePaperStartError, setLivePaperStartError] = useState<string | null>(null);
   const [livePaperStartResult, setLivePaperStartResult] = useState<LivePaperBootstrapResponse | null>(null);
@@ -286,6 +298,20 @@ export function CockpitPage() {
       }
     } finally {
       setLivePaperSmokeStatusLoading(false);
+    }
+  }, []);
+
+  const loadLivePaperAutonomyFunnel = useCallback(async () => {
+    setLivePaperAutonomyFunnelLoading(true);
+    setLivePaperAutonomyFunnelError(null);
+    try {
+      const payload = await getLivePaperAutonomyFunnel({ window_minutes: 60, preset: 'live_read_only_paper_conservative' });
+      setLivePaperAutonomyFunnel(payload);
+    } catch (funnelError) {
+      setLivePaperAutonomyFunnel(null);
+      setLivePaperAutonomyFunnelError(getErrorMessage(funnelError, 'Autonomy funnel unavailable'));
+    } finally {
+      setLivePaperAutonomyFunnelLoading(false);
     }
   }, []);
 
@@ -372,13 +398,13 @@ export function CockpitPage() {
     try {
       const payload = await bootstrapLivePaperSession();
       setLivePaperStartResult(payload);
-      await Promise.all([loadLivePaperStatus(), loadLivePaperOperationalSnapshot(), loadPaperPortfolioSnapshot(), loadLivePaperValidation()]);
+      await Promise.all([loadLivePaperStatus(), loadLivePaperOperationalSnapshot(), loadPaperPortfolioSnapshot(), loadLivePaperValidation(), loadLivePaperAutonomyFunnel()]);
     } catch (startError) {
       setLivePaperStartError(getErrorMessage(startError, 'Could not start live paper autopilot.'));
     } finally {
       setLivePaperStartLoading(false);
     }
-  }, [loadLivePaperOperationalSnapshot, loadLivePaperStatus, loadPaperPortfolioSnapshot, loadLivePaperValidation]);
+  }, [loadLivePaperOperationalSnapshot, loadLivePaperStatus, loadPaperPortfolioSnapshot, loadLivePaperValidation, loadLivePaperAutonomyFunnel]);
 
   const runLivePaperSmokeTestFromCockpit = useCallback(async () => {
     setLivePaperSmokeRunLoading(true);
@@ -399,13 +425,13 @@ export function CockpitPage() {
         smoke_test_summary: payload.smoke_test_summary,
         next_action_hint: payload.next_action_hint,
       });
-      await Promise.all([loadLivePaperSmokeTestStatus(), loadLivePaperValidation()]);
+      await Promise.all([loadLivePaperSmokeTestStatus(), loadLivePaperValidation(), loadLivePaperAutonomyFunnel()]);
     } catch (smokeRunError) {
       setLivePaperSmokeRunError(getErrorMessage(smokeRunError, 'Live paper smoke test unavailable'));
     } finally {
       setLivePaperSmokeRunLoading(false);
     }
-  }, [loadLivePaperSmokeTestStatus, loadLivePaperValidation]);
+  }, [loadLivePaperSmokeTestStatus, loadLivePaperValidation, loadLivePaperAutonomyFunnel]);
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -492,6 +518,10 @@ export function CockpitPage() {
   useEffect(() => {
     void loadLivePaperSmokeTestStatus();
   }, [loadLivePaperSmokeTestStatus]);
+
+  useEffect(() => {
+    void loadLivePaperAutonomyFunnel();
+  }, [loadLivePaperAutonomyFunnel]);
 
   useEffect(() => {
     void loadPaperPortfolioSnapshot();
@@ -926,6 +956,54 @@ export function CockpitPage() {
                   </div>
                 </SectionCard>
                 <SectionCard
+                  eyebrow="Autonomy flow"
+                  title="Autonomy Funnel"
+                  description="Compact scan → research → prediction → risk → paper execution snapshot for live read-only + paper-only autonomy."
+                >
+                  {livePaperAutonomyFunnelLoading ? <p>Loading autonomy funnel…</p> : null}
+                  {!livePaperAutonomyFunnelLoading && livePaperAutonomyFunnelError ? <p className="warning-text">Autonomy funnel unavailable.</p> : null}
+                  {!livePaperAutonomyFunnelLoading && livePaperAutonomyFunnel ? (
+                    <>
+                      <div className="button-row">
+                        <StatusBadge tone={toneFromFunnelStatus(livePaperAutonomyFunnel.funnel_status)}>
+                          {livePaperAutonomyFunnel.funnel_status}
+                        </StatusBadge>
+                        <StatusBadge tone="neutral">window {livePaperAutonomyFunnel.window_minutes}m</StatusBadge>
+                        <StatusBadge tone="neutral">top stage {livePaperAutonomyFunnel.top_stage}</StatusBadge>
+                        <StatusBadge tone={livePaperAutonomyFunnel.stalled_stage ? 'pending' : 'ready'}>
+                          stalled {livePaperAutonomyFunnel.stalled_stage ?? 'none'}
+                        </StatusBadge>
+                      </div>
+                      <ul className="key-value-list">
+                        <li><span>Funnel summary</span><strong>{livePaperAutonomyFunnel.funnel_summary}</strong></li>
+                        <li><span>Next action hint</span><strong>{livePaperAutonomyFunnel.next_action_hint}</strong></li>
+                        <li><span>Scan candidates</span><strong>{livePaperAutonomyFunnel.scan_count}</strong></li>
+                        <li><span>Research pursued</span><strong>{livePaperAutonomyFunnel.research_count}</strong></li>
+                        <li><span>Prediction evaluated</span><strong>{livePaperAutonomyFunnel.prediction_count}</strong></li>
+                        <li><span>Risk approved</span><strong>{livePaperAutonomyFunnel.risk_approved_count}</strong></li>
+                        <li><span>Risk blocked</span><strong>{livePaperAutonomyFunnel.risk_blocked_count}</strong></li>
+                        <li><span>Paper executions</span><strong>{livePaperAutonomyFunnel.paper_execution_count}</strong></li>
+                        <li><span>Recent paper trades</span><strong>{livePaperAutonomyFunnel.recent_trades_count}</strong></li>
+                      </ul>
+                      <div className="subsection">
+                        <p className="section-label">Stages</p>
+                        <div className="button-row">
+                          {livePaperAutonomyFunnel.stages.map((stage) => (
+                            <StatusBadge key={stage.stage_name} tone={toneFromFunnelStatus(stage.status === 'EMPTY' ? 'STALLED' : stage.status === 'LOW' ? 'THIN_FLOW' : 'ACTIVE')}>
+                              {stage.stage_name} · {stage.status} · {stage.count}
+                            </StatusBadge>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                  <div className="button-row">
+                    <button className="secondary-button" type="button" disabled={livePaperAutonomyFunnelLoading} onClick={() => void loadLivePaperAutonomyFunnel()}>
+                      Refresh funnel
+                    </button>
+                  </div>
+                </SectionCard>
+                <SectionCard
                   eyebrow="Operational snapshot"
                   title="Operational Snapshot"
                   description="Compact live view of autonomous heartbeat, operator attention, and tuning alert bridge hints."
@@ -1023,7 +1101,7 @@ export function CockpitPage() {
                   <button
                     className="secondary-button"
                     type="button"
-                    disabled={livePaperStatusLoading || livePaperOperationalSnapshotLoading || livePaperValidationLoading}
+                    disabled={livePaperStatusLoading || livePaperOperationalSnapshotLoading || livePaperValidationLoading || livePaperAutonomyFunnelLoading}
                     onClick={() => {
                       void Promise.all([
                         loadLivePaperStatus(),
@@ -1031,6 +1109,7 @@ export function CockpitPage() {
                         loadPaperPortfolioSnapshot(),
                         loadLivePaperValidation(),
                         loadLivePaperSmokeTestStatus(),
+                        loadLivePaperAutonomyFunnel(),
                       ]);
                     }}
                   >

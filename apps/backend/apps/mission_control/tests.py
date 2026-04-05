@@ -1958,3 +1958,111 @@ class LivePaperSmokeTestApiTests(TestCase):
     def test_existing_mission_control_summary_flow_still_works(self):
         response = self.client.get(reverse('mission_control:autonomous-session-summary'))
         self.assertEqual(response.status_code, 200)
+
+
+class LivePaperAutonomyFunnelApiTests(TestCase):
+    def _funnel_counts(
+        self,
+        *,
+        scan: int,
+        research: int,
+        prediction: int,
+        risk_approved: int,
+        risk_blocked: int,
+        execution: int,
+        recent_trades: int,
+    ):
+        from apps.mission_control.services.live_paper_autonomy_funnel import FunnelCounts
+
+        return FunnelCounts(
+            scan_count=scan,
+            research_count=research,
+            prediction_count=prediction,
+            risk_approved_count=risk_approved,
+            risk_blocked_count=risk_blocked,
+            paper_execution_count=execution,
+            recent_trades_count=recent_trades,
+        )
+
+    def _call_with_counts(self, *, counts):
+        with patch('apps.mission_control.services.live_paper_autonomy_funnel._collect_funnel_counts', return_value=counts):
+            with patch('apps.mission_control.services.live_paper_autonomy_funnel.build_live_paper_validation_digest', return_value={'validation_status': 'READY'}):
+                with patch('apps.mission_control.services.live_paper_autonomy_funnel.build_heartbeat_summary', return_value={'latest_run': 999}):
+                    return self.client.get(reverse('mission_control:live-paper-autonomy-funnel'))
+
+    def test_active_case_returns_expected_status_and_contract(self):
+        response = self._call_with_counts(
+            counts=self._funnel_counts(scan=12, research=8, prediction=6, risk_approved=4, risk_blocked=1, execution=3, recent_trades=4)
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['funnel_status'], 'ACTIVE')
+        self.assertEqual(payload['top_stage'], 'scan')
+        self.assertIsNone(payload['stalled_stage'])
+        self.assertEqual(payload['next_action_hint'], 'Autonomy funnel appears healthy')
+        required = {
+            'window_minutes',
+            'funnel_status',
+            'scan_count',
+            'research_count',
+            'prediction_count',
+            'risk_approved_count',
+            'risk_blocked_count',
+            'paper_execution_count',
+            'recent_trades_count',
+            'top_stage',
+            'stalled_stage',
+            'next_action_hint',
+            'funnel_summary',
+            'stages',
+        }
+        self.assertTrue(required.issubset(payload.keys()))
+
+    def test_thin_flow_case_detects_stalled_stage(self):
+        response = self._call_with_counts(
+            counts=self._funnel_counts(scan=9, research=5, prediction=4, risk_approved=0, risk_blocked=0, execution=0, recent_trades=0)
+        )
+        payload = response.json()
+        self.assertEqual(payload['funnel_status'], 'THIN_FLOW')
+        self.assertEqual(payload['stalled_stage'], 'risk')
+        self.assertEqual(payload['next_action_hint'], 'Flow is thin after prediction')
+
+    def test_stalled_case_detects_no_scan_activity(self):
+        response = self._call_with_counts(
+            counts=self._funnel_counts(scan=0, research=0, prediction=0, risk_approved=0, risk_blocked=0, execution=0, recent_trades=0)
+        )
+        payload = response.json()
+        self.assertEqual(payload['funnel_status'], 'STALLED')
+        self.assertEqual(payload['top_stage'], 'scan')
+        self.assertEqual(payload['next_action_hint'], 'No recent scan activity detected')
+
+    def test_stage_rows_are_present_and_readable(self):
+        response = self._call_with_counts(
+            counts=self._funnel_counts(scan=2, research=1, prediction=0, risk_approved=0, risk_blocked=0, execution=0, recent_trades=0)
+        )
+        payload = response.json()
+        stage_names = [stage['stage_name'] for stage in payload['stages']]
+        self.assertEqual(stage_names, ['scan', 'research', 'prediction', 'risk', 'paper_execution'])
+        statuses = {stage['stage_name']: stage['status'] for stage in payload['stages']}
+        self.assertEqual(statuses['scan'], 'LOW')
+        self.assertEqual(statuses['prediction'], 'EMPTY')
+
+    def test_risk_blocking_hint_is_deterministic(self):
+        response = self._call_with_counts(
+            counts=self._funnel_counts(scan=5, research=4, prediction=3, risk_approved=1, risk_blocked=4, execution=0, recent_trades=0)
+        )
+        payload = response.json()
+        self.assertEqual(payload['next_action_hint'], 'Risk is blocking most candidates')
+
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'recent_trades': []})
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_heartbeat_summary', return_value={'latest_run': None})
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_live_paper_validation_digest', return_value={'validation_status': 'WARNING'})
+    def test_service_reuses_existing_validation_heartbeat_and_paper_summary(self, mock_validation, mock_heartbeat, mock_account, _mock_summary):
+        from apps.mission_control.services.live_paper_autonomy_funnel import build_live_paper_autonomy_funnel_snapshot
+
+        mock_account.return_value = object()
+        payload = build_live_paper_autonomy_funnel_snapshot(window_minutes=60, preset_name='live_read_only_paper_conservative')
+        self.assertIn(payload['funnel_status'], {'ACTIVE', 'THIN_FLOW', 'STALLED'})
+        self.assertTrue(mock_validation.called)
+        self.assertTrue(mock_heartbeat.called)

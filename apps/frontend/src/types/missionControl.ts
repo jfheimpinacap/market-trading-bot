@@ -260,6 +260,34 @@ export type LivePaperSmokeTestStatusResponse = {
   next_action_hint: string;
 };
 
+export type LivePaperAutonomyFunnelStatus = 'ACTIVE' | 'THIN_FLOW' | 'STALLED';
+export type LivePaperAutonomyFunnelStageStatus = 'ACTIVE' | 'LOW' | 'EMPTY';
+
+export type LivePaperAutonomyFunnelStage = {
+  stage_name: 'scan' | 'research' | 'prediction' | 'risk' | 'paper_execution';
+  count: number;
+  status: LivePaperAutonomyFunnelStageStatus;
+  summary: string;
+};
+
+export type LivePaperAutonomyFunnelResponse = {
+  window_minutes: number;
+  preset_name: string;
+  funnel_status: LivePaperAutonomyFunnelStatus;
+  scan_count: number;
+  research_count: number;
+  prediction_count: number;
+  risk_approved_count: number;
+  risk_blocked_count: number;
+  paper_execution_count: number;
+  recent_trades_count: number;
+  top_stage: LivePaperAutonomyFunnelStage['stage_name'];
+  stalled_stage: LivePaperAutonomyFunnelStage['stage_name'] | null;
+  next_action_hint: string;
+  funnel_summary: string;
+  stages: LivePaperAutonomyFunnelStage[];
+};
+
 export type LivePaperAttentionAlertSyncResponse = {
   attention_needed: boolean;
   attention_mode: LivePaperAttentionMode;
