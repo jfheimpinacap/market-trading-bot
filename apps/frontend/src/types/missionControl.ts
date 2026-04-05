@@ -131,6 +131,39 @@ export type MissionControlSummary = {
   cycle_count: number;
 };
 
+export type LivePaperBootstrapRequest = {
+  preset?: string;
+  auto_start_heartbeat?: boolean;
+  start_now?: boolean;
+};
+
+export type LivePaperBootstrapResponse = {
+  preset_name: string;
+  session_created: boolean;
+  session_started: boolean;
+  heartbeat_started: boolean;
+  runtime_mode: string;
+  paper_execution_mode: string;
+  market_data_mode: string;
+  bootstrap_action: 'CREATED_AND_STARTED' | 'STARTED_EXISTING_SAFE_SESSION' | 'REUSED_EXISTING_SESSION' | 'BLOCKED' | 'FAILED';
+  session_id: number | null;
+  next_step_summary: string;
+  bootstrap_summary: string;
+  stack_snapshot?: Record<string, unknown>;
+};
+
+export type LivePaperBootstrapStatusResponse = {
+  preset_name: string;
+  session_active: boolean;
+  heartbeat_active: boolean;
+  runtime_mode: string;
+  market_data_mode: string;
+  paper_execution_mode: string;
+  current_session_status: string;
+  operator_attention_hint: string;
+  status_summary: string;
+};
+
 export type AutonomousRuntimeSummary = {
   latest_runtime_run_id: number | null;
   runtime_run_count: number;

@@ -70,6 +70,9 @@ import type {
   MissionControlSession,
   MissionControlStatusResponse,
   MissionControlSummary,
+  LivePaperBootstrapRequest,
+  LivePaperBootstrapResponse,
+  LivePaperBootstrapStatusResponse,
 } from '../types/missionControl';
 
 export function getMissionControlStatus() {
@@ -114,6 +117,27 @@ export function getMissionControlCycle(id: number) {
 
 export function getMissionControlSummary() {
   return requestJson<MissionControlSummary>('/api/mission-control/summary/');
+}
+
+export function bootstrapLivePaperSession(payload: LivePaperBootstrapRequest = {}) {
+  return requestJson<LivePaperBootstrapResponse>('/api/mission-control/bootstrap-live-paper-session/', {
+    method: 'POST',
+    body: JSON.stringify({
+      preset: 'live_read_only_paper_conservative',
+      auto_start_heartbeat: true,
+      start_now: true,
+      ...payload,
+    }),
+  });
+}
+
+export function getLivePaperBootstrapStatus(params?: { preset?: string }) {
+  const query = new URLSearchParams();
+  if (params?.preset) {
+    query.set('preset', params.preset);
+  }
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return requestJson<LivePaperBootstrapStatusResponse>(`/api/mission-control/live-paper-bootstrap-status/${suffix}`);
 }
 
 export function runAutonomousRuntime(payload: Record<string, unknown> = {}) {

@@ -2653,3 +2653,43 @@ Compact actions:
 - `Open in runtime` (handoff to `/runtime?tuningScope=<scope>&investigate=1`)
 
 This complements existing queue/aging/escalation/activity sections and does not replace or mutate runtime logic.
+
+## Cockpit Live Paper Autopilot card (Prompt 193)
+
+`/cockpit` now includes a compact **Live Paper Autopilot** card in the command-center grid (near mission control/runtime posture) with a strict V1 scope.
+
+What it consumes:
+- `GET /api/mission-control/live-paper-bootstrap-status/`
+- `POST /api/mission-control/bootstrap-live-paper-session/`
+
+Default bootstrap payload sent by UI:
+
+```json
+{
+  "preset": "live_read_only_paper_conservative",
+  "auto_start_heartbeat": true,
+  "start_now": true
+}
+```
+
+What it shows:
+- preset name
+- session active/inactive badge
+- heartbeat active/inactive badge
+- runtime mode
+- market data mode
+- paper execution mode
+- current session status
+- `status_summary` and `operator_attention_hint`
+- last bootstrap feedback (`bootstrap_action`, `bootstrap_summary`, `next_step_summary`)
+
+Compact actions:
+- `Start live paper autopilot`
+- `Refresh status`
+
+Guardrails are explicit in the card:
+- `REAL_READ_ONLY`
+- `PAPER_ONLY`
+- `live_execution_enabled = false`
+
+This is frontend-only integration over existing mission-control bootstrap/status behavior; it does not add a new screen, does not create a parallel flow, and does not enable live trading.
