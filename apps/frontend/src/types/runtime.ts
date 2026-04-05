@@ -992,3 +992,55 @@ export type RuntimeTuningReviewActivityQuery = {
   action_type?: RuntimeTuningReviewAction['action_type'];
   limit?: number;
 };
+
+
+export type RuntimeTuningAutotriageHumanAttentionMode = 'REVIEW_NOW' | 'REVIEW_SOON' | 'MONITOR_ONLY' | 'NO_ACTION';
+
+export type RuntimeTuningAutotriageReasonCode =
+  | 'URGENT_SCOPE_PRESENT'
+  | 'OVERDUE_SCOPE_PRESENT'
+  | 'FOLLOWUP_PENDING'
+  | 'STALE_REVIEW_PENDING'
+  | 'RECENT_ACTIVITY_ONLY'
+  | 'NO_UNRESOLVED_SCOPES';
+
+export type RuntimeTuningAutotriageTopScope = {
+  source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  effective_review_status: RuntimeTuningManualReviewStatus;
+  attention_priority: RuntimeTuningReviewPriority;
+  age_bucket: RuntimeTuningReviewAgingBucket;
+  escalation_level: RuntimeTuningReviewEscalationLevel;
+  requires_immediate_attention: boolean;
+  review_summary: string;
+  technical_summary: string;
+  runtime_investigation_deep_link: string;
+  age_days?: number | null;
+  last_action_at?: string | null;
+};
+
+export type RuntimeTuningAutotriageDigest = {
+  generated_at: string;
+  human_attention_mode: RuntimeTuningAutotriageHumanAttentionMode;
+  requires_human_now: boolean;
+  can_defer_human_review: boolean;
+  unresolved_count: number;
+  urgent_count: number;
+  overdue_count: number;
+  recent_activity_count: number;
+  next_recommended_scope: RuntimeTuningContextSnapshot['source_scope'] | null;
+  next_recommended_reason_codes: RuntimeTuningAutotriageReasonCode[];
+  autotriage_summary: string;
+  top_scopes: RuntimeTuningAutotriageTopScope[];
+};
+
+export type RuntimeTuningAutotriageDetail = RuntimeTuningAutotriageTopScope & {
+  generated_at: string;
+  human_attention_mode: RuntimeTuningAutotriageHumanAttentionMode;
+  next_recommended_scope: RuntimeTuningContextSnapshot['source_scope'] | null;
+  next_recommended_reason_codes: RuntimeTuningAutotriageReasonCode[];
+};
+
+export type RuntimeTuningAutotriageQuery = {
+  top_n?: number;
+  include_monitor?: boolean;
+};

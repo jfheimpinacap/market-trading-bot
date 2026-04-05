@@ -500,6 +500,42 @@ class RuntimeTuningReviewEscalationDetailSerializer(RuntimeTuningReviewEscalatio
     escalation_summary = serializers.CharField()
 
 
+class RuntimeTuningAutotriageTopScopeSerializer(serializers.Serializer):
+    source_scope = serializers.CharField()
+    effective_review_status = serializers.CharField()
+    attention_priority = serializers.CharField()
+    age_bucket = serializers.CharField()
+    escalation_level = serializers.CharField()
+    requires_immediate_attention = serializers.BooleanField()
+    review_summary = serializers.CharField()
+    technical_summary = serializers.CharField()
+    runtime_investigation_deep_link = serializers.CharField()
+    age_days = serializers.IntegerField(required=False, allow_null=True)
+    last_action_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class RuntimeTuningAutotriageSerializer(serializers.Serializer):
+    generated_at = serializers.DateTimeField()
+    human_attention_mode = serializers.CharField()
+    requires_human_now = serializers.BooleanField()
+    can_defer_human_review = serializers.BooleanField()
+    unresolved_count = serializers.IntegerField()
+    urgent_count = serializers.IntegerField()
+    overdue_count = serializers.IntegerField()
+    recent_activity_count = serializers.IntegerField()
+    next_recommended_scope = serializers.CharField(required=False, allow_null=True)
+    next_recommended_reason_codes = serializers.ListField(child=serializers.CharField())
+    autotriage_summary = serializers.CharField()
+    top_scopes = RuntimeTuningAutotriageTopScopeSerializer(many=True)
+
+
+class RuntimeTuningAutotriageDetailSerializer(RuntimeTuningAutotriageTopScopeSerializer):
+    generated_at = serializers.DateTimeField()
+    human_attention_mode = serializers.CharField()
+    next_recommended_scope = serializers.CharField(required=False, allow_null=True)
+    next_recommended_reason_codes = serializers.ListField(child=serializers.CharField())
+
+
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecommendation

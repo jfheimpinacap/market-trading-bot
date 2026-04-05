@@ -2787,3 +2787,19 @@ Aging buckets are deterministic and paper-only:
 - `OVERDUE`: `>= 7` full days
 
 Cockpit now adds a compact **Review Aging** subsection above Runtime Tuning Review Queue and shows per-item aging badges (`age_bucket`, `age_days`, overdue hint) while preserving existing manual review actions and runtime handoff (`/runtime?tuningScope=<scope>&investigate=1`). No runtime/tuning operational logic changed.
+
+## Runtime Tuning Autotriage Digest (Prompt 188)
+
+A compact read-only **Runtime Tuning Autotriage Digest** now consolidates existing runtime tuning human-review signals (queue + aging + escalation + recent activity) into one deterministic operator signal.
+
+- `GET /api/runtime-governor/tuning-autotriage/`
+- `GET /api/runtime-governor/tuning-autotriage/<source_scope>/`
+- query params: `top_n` (default `3`, max `3`) and `include_monitor` (default `false`)
+
+Digest modes are deterministic and explainable:
+- `REVIEW_NOW`
+- `REVIEW_SOON`
+- `MONITOR_ONLY`
+- `NO_ACTION`
+
+This reduces manual scanning across multiple tuning review subsections by publishing one next-action signal (`next_recommended_scope`) plus up to 3 top scopes. The layer is read-only, paper-only, and does not change runtime/tuning operational behavior.
