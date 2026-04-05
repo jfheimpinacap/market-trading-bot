@@ -543,6 +543,11 @@ class RuntimeTuningAutotriageAlertSyncSerializer(serializers.Serializer):
     alert_severity = serializers.CharField(required=False, allow_null=True)
     next_recommended_scope = serializers.CharField(required=False, allow_null=True)
     autotriage_summary = serializers.CharField()
+    material_change_detected = serializers.BooleanField()
+    material_change_fields = serializers.ListField(child=serializers.CharField())
+    update_suppressed = serializers.BooleanField()
+    suppression_reason = serializers.CharField(required=False, allow_null=True)
+    active_alert_present = serializers.BooleanField()
     alert_status_summary = serializers.CharField()
 
 
@@ -554,6 +559,9 @@ class RuntimeTuningAutotriageAlertStatusSerializer(serializers.Serializer):
     next_recommended_scope = serializers.CharField(required=False, allow_null=True)
     autotriage_summary = serializers.CharField()
     status_summary = serializers.CharField()
+    material_change_detected = serializers.BooleanField(required=False, allow_null=True)
+    last_alert_action = serializers.CharField(required=False, allow_null=True)
+    last_sync_summary = serializers.CharField(required=False, allow_null=True)
     runtime_tuning_attention_sync = serializers.DictField(required=False, allow_null=True)
 
 

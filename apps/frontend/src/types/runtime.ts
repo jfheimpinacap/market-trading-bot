@@ -1055,6 +1055,11 @@ export type RuntimeTuningAttentionSyncStatus = {
   alert_action: RuntimeTuningAttentionSyncAction;
   human_attention_mode: RuntimeTuningAutotriageHumanAttentionMode | null;
   next_recommended_scope: RuntimeTuningContextSnapshot['source_scope'] | null;
+  material_change_detected: boolean;
+  material_change_fields: string[];
+  update_suppressed: boolean;
+  suppression_reason: 'NO_MATERIAL_CHANGE' | 'ALERT_NOT_NEEDED' | 'NO_ACTIVE_ALERT' | null;
+  active_alert_present: boolean;
   sync_summary: string;
 };
 
@@ -1065,6 +1070,11 @@ export type RuntimeTuningAutotriageAlertSyncResponse = {
   alert_severity: RuntimeTuningAutotriageAlertSeverity;
   next_recommended_scope: RuntimeTuningContextSnapshot['source_scope'] | null;
   autotriage_summary: string;
+  material_change_detected: boolean;
+  material_change_fields: string[];
+  update_suppressed: boolean;
+  suppression_reason: 'NO_MATERIAL_CHANGE' | 'ALERT_NOT_NEEDED' | 'NO_ACTIVE_ALERT' | null;
+  active_alert_present: boolean;
   alert_status_summary: string;
 };
 
@@ -1076,5 +1086,8 @@ export type RuntimeTuningAutotriageAlertStatus = {
   next_recommended_scope: RuntimeTuningContextSnapshot['source_scope'] | null;
   autotriage_summary: string;
   status_summary: string;
+  material_change_detected?: boolean | null;
+  last_alert_action?: RuntimeTuningAttentionSyncAction;
+  last_sync_summary?: string | null;
   runtime_tuning_attention_sync?: RuntimeTuningAttentionSyncStatus | null;
 };

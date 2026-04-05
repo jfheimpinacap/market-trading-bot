@@ -20,6 +20,11 @@ from apps.runtime_governor.services.tuning_autotriage import (
     MODE_REVIEW_SOON,
     build_tuning_autotriage_digest,
 )
+from apps.runtime_governor.services.tuning_autotriage_alert_stability import (
+    build_existing_material_signal,
+    build_material_signal,
+    detect_material_change,
+)
 
 TUNING_AUTOTRIAGE_ALERT_DEDUPE_KEY = 'runtime_tuning_autotriage_global'
 
@@ -27,6 +32,10 @@ ALERT_ACTION_CREATED = 'CREATED'
 ALERT_ACTION_UPDATED = 'UPDATED'
 ALERT_ACTION_RESOLVED = 'RESOLVED'
 ALERT_ACTION_NOOP = 'NOOP'
+
+SUPPRESSION_REASON_NO_MATERIAL_CHANGE = 'NO_MATERIAL_CHANGE'
+SUPPRESSION_REASON_ALERT_NOT_NEEDED = 'ALERT_NOT_NEEDED'
+SUPPRESSION_REASON_NO_ACTIVE_ALERT = 'NO_ACTIVE_ALERT'
 
 
 def _alert_needed(mode: str) -> bool:
@@ -77,34 +86,79 @@ def sync_tuning_autotriage_attention_alert() -> dict[str, Any]:
     alert_severity = _resolve_alert_severity(mode)
     next_scope = digest.get('next_recommended_scope')
     autotriage_summary = str(digest.get('autotriage_summary', ''))
+    material_signal = build_material_signal(
+        digest=digest,
+        mode=mode,
+        alert_needed=alert_needed,
+        alert_severity=alert_severity,
+    )
 
     existing_alert = _active_signal_alert()
     alert_action = ALERT_ACTION_NOOP
+    material_change_detected = False
+    material_change_fields: list[str] = []
+    update_suppressed = False
+    suppression_reason: str | None = None
 
     if alert_needed and alert_severity:
-        alert = emit_alert(
-            AlertEmitPayload(
-                alert_type=OperatorAlertType.RUNTIME,
-                severity=alert_severity,
-                title='Runtime tuning human attention',
-                summary=_build_alert_summary(mode=mode, next_recommended_scope=next_scope, autotriage_summary=autotriage_summary),
-                source=OperatorAlertSource.RUNTIME,
-                dedupe_key=TUNING_AUTOTRIAGE_ALERT_DEDUPE_KEY,
-                metadata={
-                    'bridge_type': 'runtime_tuning_autotriage_alert_bridge',
-                    'human_attention_mode': mode,
-                    'next_recommended_scope': next_scope,
-                },
+        if existing_alert is None:
+            alert = emit_alert(
+                AlertEmitPayload(
+                    alert_type=OperatorAlertType.RUNTIME,
+                    severity=alert_severity,
+                    title='Runtime tuning human attention',
+                    summary=_build_alert_summary(mode=mode, next_recommended_scope=next_scope, autotriage_summary=autotriage_summary),
+                    source=OperatorAlertSource.RUNTIME,
+                    dedupe_key=TUNING_AUTOTRIAGE_ALERT_DEDUPE_KEY,
+                    metadata={
+                        'bridge_type': 'runtime_tuning_autotriage_alert_bridge',
+                        **material_signal,
+                    },
+                )
             )
-        )
-        alert_action = ALERT_ACTION_CREATED if existing_alert is None else ALERT_ACTION_UPDATED
-        active_alert = alert
+            alert_action = ALERT_ACTION_CREATED
+            material_change_detected = True
+            material_change_fields = list(material_signal.keys())
+            active_alert = alert
+        else:
+            material_change_fields = detect_material_change(
+                previous_signal=build_existing_material_signal(existing_alert),
+                current_signal=material_signal,
+            )
+            material_change_detected = bool(material_change_fields)
+            if material_change_detected:
+                alert = emit_alert(
+                    AlertEmitPayload(
+                        alert_type=OperatorAlertType.RUNTIME,
+                        severity=alert_severity,
+                        title='Runtime tuning human attention',
+                        summary=_build_alert_summary(mode=mode, next_recommended_scope=next_scope, autotriage_summary=autotriage_summary),
+                        source=OperatorAlertSource.RUNTIME,
+                        dedupe_key=TUNING_AUTOTRIAGE_ALERT_DEDUPE_KEY,
+                        metadata={
+                            'bridge_type': 'runtime_tuning_autotriage_alert_bridge',
+                            **material_signal,
+                        },
+                    )
+                )
+                alert_action = ALERT_ACTION_UPDATED
+                active_alert = alert
+            else:
+                alert_action = ALERT_ACTION_NOOP
+                update_suppressed = True
+                suppression_reason = SUPPRESSION_REASON_NO_MATERIAL_CHANGE
+                active_alert = existing_alert
     else:
         resolved_any = False
         for alert in _active_bridge_alerts():
             resolve_alert(alert)
             resolved_any = True
         alert_action = ALERT_ACTION_RESOLVED if resolved_any else ALERT_ACTION_NOOP
+        if not resolved_any:
+            update_suppressed = True
+            suppression_reason = SUPPRESSION_REASON_NO_ACTIVE_ALERT
+        else:
+            suppression_reason = SUPPRESSION_REASON_ALERT_NOT_NEEDED
         active_alert = None
 
     return {
@@ -114,6 +168,11 @@ def sync_tuning_autotriage_attention_alert() -> dict[str, Any]:
         'alert_severity': alert_severity,
         'next_recommended_scope': next_scope,
         'autotriage_summary': autotriage_summary,
+        'material_change_detected': material_change_detected,
+        'material_change_fields': material_change_fields,
+        'update_suppressed': update_suppressed,
+        'suppression_reason': suppression_reason,
+        'active_alert_present': active_alert is not None,
         'alert_status_summary': _build_status_summary(
             mode=mode,
             alert_needed=alert_needed,
@@ -133,6 +192,13 @@ def get_tuning_autotriage_attention_alert_status() -> dict[str, Any]:
     active_alert = _active_signal_alert()
     latest_heartbeat_run = AutonomousHeartbeatRun.objects.order_by('-started_at', '-id').first()
     heartbeat_sync = ((latest_heartbeat_run.metadata or {}).get('runtime_tuning_attention_sync') if latest_heartbeat_run else None) or None
+    last_sync_action = heartbeat_sync.get('alert_action') if isinstance(heartbeat_sync, dict) else None
+    last_sync_summary = heartbeat_sync.get('sync_summary') if isinstance(heartbeat_sync, dict) else None
+    last_material_change_detected = (
+        heartbeat_sync.get('material_change_detected')
+        if isinstance(heartbeat_sync, dict) and 'material_change_detected' in heartbeat_sync
+        else None
+    )
     return {
         'human_attention_mode': mode,
         'alert_needed': alert_needed,
@@ -146,5 +212,8 @@ def get_tuning_autotriage_attention_alert_status() -> dict[str, Any]:
             active_alert=active_alert,
             next_recommended_scope=next_scope,
         ),
+        'last_alert_action': last_sync_action,
+        'last_sync_summary': last_sync_summary,
+        'material_change_detected': last_material_change_detected,
         'runtime_tuning_attention_sync': heartbeat_sync,
     }

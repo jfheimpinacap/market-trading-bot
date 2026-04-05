@@ -210,13 +210,15 @@ Delta UX adicional: `/cockpit` ahora incluye una mini-franja **Attention alert b
 
 - muestra estado de señal operativa (`Alert active` / `No active alert`)
 - muestra severidad activa, `next_recommended_scope` y `status_summary`
+- muestra `last_alert_action`, `material_change_detected`, `update_suppressed` y `suppression_reason` (cuando aplique)
+- cuando hay cambio material, muestra campos cambiados (`Changed fields`)
 - botón manual `Sync attention alert` para ejecutar:
   - `POST /api/runtime-governor/sync-tuning-autotriage-alert/`
 - lectura compacta de estado vía:
   - `GET /api/runtime-governor/tuning-autotriage-alert-status/`
-  - hint de auto-sync por heartbeat local cuando hay datos (`Auto-sync via heartbeat active · Last auto-sync: ...`)
+  - hint de auto-sync por heartbeat local con `NOOP`/`UPDATED` y supresión por no cambio material
 
-Este bridge reduce necesidad de revisión manual constante del cockpit, mantiene dedupe global (`runtime_tuning_autotriage_global`), reutiliza el loop local heartbeat existente (sin scheduler nuevo), conserva el botón manual como fallback, no crea pantallas nuevas y no modifica lógica operativa (paper-only).
+Este bridge reduce necesidad de revisión manual constante del cockpit, mantiene dedupe global (`runtime_tuning_autotriage_global`), reutiliza el loop local heartbeat existente (sin scheduler nuevo), conserva el botón manual como fallback (con la misma lógica conservadora de bajo ruido), no crea pantallas nuevas y no modifica lógica operativa (paper-only).
 
 Delta UX adicional: `/runtime` ahora incluye una sección **Tuning Context History** (sin pantalla nueva) para trazabilidad temporal ligera:
 - snapshots recientes de contexto de tuning por scope operativo

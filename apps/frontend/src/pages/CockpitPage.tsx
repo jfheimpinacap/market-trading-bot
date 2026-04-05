@@ -142,6 +142,9 @@ export function CockpitPage() {
     const sync = autotriageAlertStatus?.runtime_tuning_attention_sync;
     if (!sync || !sync.attempted) return 'Auto-sync status unavailable';
     if (!sync.success || sync.alert_action === 'ERROR') return 'Auto-sync via heartbeat active · last: ERROR';
+    if (sync.update_suppressed && sync.suppression_reason === 'NO_MATERIAL_CHANGE') {
+      return `Auto-sync via heartbeat active · Last sync: ${sync.alert_action ?? 'NOOP'} · No material change`;
+    }
     return `Auto-sync via heartbeat active · Last auto-sync: ${sync.alert_action ?? 'NOOP'}`;
   }, [autotriageAlertStatus]);
 
@@ -368,7 +371,8 @@ export function CockpitPage() {
       const payload = await syncRuntimeTuningAutotriageAlert();
       const refreshedStatus = await getRuntimeTuningAutotriageAlertStatus();
       setAutotriageAlertStatus(refreshedStatus);
-      setAutotriageAlertSyncMessage(`Attention alert sync: ${payload.alert_action}.`);
+      const suppressionHint = payload.update_suppressed && payload.suppression_reason ? ` (${payload.suppression_reason})` : '';
+      setAutotriageAlertSyncMessage(`Attention alert sync: ${payload.alert_action}${suppressionHint}.`);
     } catch (syncError) {
       setAutotriageAlertSyncError(getErrorMessage(syncError, 'Could not sync runtime tuning attention alert.'));
     } finally {
@@ -610,8 +614,23 @@ export function CockpitPage() {
                             <li><span>Severity</span><strong>{autotriageAlertStatus.active_alert_severity ?? 'n/a'}</strong></li>
                             <li><span>Next recommended scope</span><strong>{autotriageAlertStatus.next_recommended_scope ?? 'n/a'}</strong></li>
                             <li><span>Status summary</span><strong>{autotriageAlertStatus.status_summary}</strong></li>
+                            <li><span>Last sync</span><strong>{autotriageAlertStatus.last_alert_action ?? autotriageAlertStatus.runtime_tuning_attention_sync?.alert_action ?? 'n/a'}</strong></li>
+                            <li><span>Material change</span><strong>{String(autotriageAlertStatus.material_change_detected ?? autotriageAlertStatus.runtime_tuning_attention_sync?.material_change_detected ?? false)}</strong></li>
+                            <li><span>Update suppressed</span><strong>{String(autotriageAlertStatus.runtime_tuning_attention_sync?.update_suppressed ?? false)}</strong></li>
+                            {(autotriageAlertStatus.runtime_tuning_attention_sync?.material_change_fields?.length ?? 0) > 0 ? (
+                              <li>
+                                <span>Changed fields</span>
+                                <strong>{autotriageAlertStatus.runtime_tuning_attention_sync?.material_change_fields.join(', ')}</strong>
+                              </li>
+                            ) : null}
+                            {autotriageAlertStatus.runtime_tuning_attention_sync?.suppression_reason ? (
+                              <li><span>Suppression reason</span><strong>{autotriageAlertStatus.runtime_tuning_attention_sync.suppression_reason}</strong></li>
+                            ) : null}
                             <li><span>Sync source</span><strong>Manual + heartbeat auto-sync</strong></li>
                           </ul>
+                          {autotriageAlertStatus.runtime_tuning_attention_sync?.update_suppressed ? (
+                            <p className="muted-text">Alert update suppressed.</p>
+                          ) : null}
                           <p className="muted-text">{heartbeatAutoSyncHint}</p>
                           <div className="button-row">
                             <button className="secondary-button" type="button" disabled={autotriageAlertSyncLoading} onClick={() => void syncAutotriageAttentionAlert()}>

@@ -65,6 +65,8 @@ Cockpit uses this as recent human-context next to queue/aging/escalation so oper
 
 The bridge now also auto-syncs once per local heartbeat pass (reusing the existing mission-control heartbeat loop; no new scheduler). Manual sync remains available as fallback. This complements existing autotriage/queue/aging/escalation flows, reduces manual cockpit-only dependency, keeps full alert history, and remains paper-only with no runtime execution logic changes.
 
+It now includes **Runtime Tuning Alert Low-Noise Stabilization**: the bridge only updates active alerts on material signal changes (`human_attention_mode`, `alert_needed`, `alert_severity`, `next_recommended_scope`, normalized `next_recommended_reason_codes`, `requires_human_now`). Repeated heartbeat syncs on equivalent state return `NOOP` with suppression metadata instead of noisy `UPDATED` churn.
+
 ### Governance review queue (new)
 
 `mission_control` now includes a **unified governance review queue** to centralize pending manual triage from:
