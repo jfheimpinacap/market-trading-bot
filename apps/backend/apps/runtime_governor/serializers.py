@@ -550,3 +550,32 @@ class RuntimeTuningReviewActionSerializer(serializers.ModelSerializer):
             'resulting_review_status',
             'created_at',
         ]
+
+
+class RuntimeTuningReviewActivityItemSerializer(serializers.Serializer):
+    source_scope = serializers.CharField()
+    action_type = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    resulting_review_status = serializers.CharField()
+    snapshot_id = serializers.IntegerField(allow_null=True)
+    activity_label = serializers.CharField()
+    activity_reason_codes = serializers.ListField(child=serializers.CharField())
+    scope_review_summary = serializers.CharField()
+    runtime_investigation_deep_link = serializers.CharField()
+    effective_review_status = serializers.CharField(required=False)
+    has_newer_snapshot_than_reviewed = serializers.BooleanField(required=False)
+
+
+class RuntimeTuningReviewActivitySerializer(serializers.Serializer):
+    activity_count = serializers.IntegerField()
+    latest_action_at = serializers.DateTimeField(required=False, allow_null=True)
+    activity_summary = serializers.CharField()
+    items = RuntimeTuningReviewActivityItemSerializer(many=True)
+
+
+class RuntimeTuningReviewActivityDetailSerializer(serializers.Serializer):
+    source_scope = serializers.CharField()
+    activity_count = serializers.IntegerField()
+    latest_action_at = serializers.DateTimeField()
+    scope_activity_summary = serializers.CharField()
+    items = RuntimeTuningReviewActivityItemSerializer(many=True)

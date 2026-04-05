@@ -128,6 +128,19 @@ Runtime governor now also provides a compact read-only **tuning review escalatio
 
 This layer is deterministic and derived from existing review queue + review aging state (including manual review state, stale detection, technical priority, and existing runtime deep links). It introduces no new models and no new mutative behavior.
 
+Runtime governor now also provides a compact read-only **tuning review activity feed** layer:
+
+- service: `apps.runtime_governor.services.tuning_review_activity`
+- endpoints:
+  - `GET /api/runtime-governor/tuning-review-activity/`
+  - `GET /api/runtime-governor/tuning-review-activity/<source_scope>/`
+- optional list query params:
+  - `source_scope`
+  - `action_type` (`ACKNOWLEDGE_CURRENT`, `MARK_FOLLOWUP_REQUIRED`, `CLEAR_REVIEW_STATE`)
+  - `limit` (default `10`)
+
+This feed is derived from existing `RuntimeTuningReviewAction` + current review state summaries/deep links, and is intentionally read-only. It complements manual review state, queue, aging, and escalation without changing runtime/tuning mutation logic.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:

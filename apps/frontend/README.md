@@ -182,6 +182,30 @@ Delta UX adicional: `/cockpit` ahora incluye una subsección **Review Escalation
 
 La capa sigue siendo read-only y paper-only: prioriza operativamente sobre queue+aging sin reemplazar ni modificar su lógica base.
 
+Delta UX adicional: `/cockpit` ahora incluye una subsección **Recent Review Activity** junto al bloque humano de tuning review:
+
+- consume:
+  - `GET /api/runtime-governor/tuning-review-activity/`
+  - `GET /api/runtime-governor/tuning-review-activity/<source_scope>/` (cliente disponible)
+- header compacto:
+  - `activity_count`
+  - `latest_action_at`
+  - `activity_summary`
+- lista por item:
+  - `source_scope`
+  - `activity_label` / `action_type`
+  - `created_at`
+  - `resulting_review_status`
+  - `scope_review_summary`
+- acciones (sin mutaciones nuevas):
+  - `Open review` (reutiliza compact investigation en cockpit)
+  - `Open in runtime` (`/runtime?tuningScope=<scope>&investigate=1`)
+- controles livianos:
+  - filtro por `action_type`
+  - `limit` compacto
+
+Esta capa agrega contexto humano reciente y trazable, complementando manual review state + queue + aging + escalation, sin reemplazar flujos ni cambiar lógica operativa (paper-only/read-only).
+
 Delta UX adicional: `/runtime` ahora incluye una sección **Tuning Context History** (sin pantalla nueva) para trazabilidad temporal ligera:
 - snapshots recientes de contexto de tuning por scope operativo
 - drift status (`INITIAL`, `NO_CHANGE`, `MINOR_CONTEXT_CHANGE`, `PROFILE_CHANGE`)

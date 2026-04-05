@@ -88,6 +88,8 @@ from apps.runtime_governor.serializers import (
     RuntimeTuningReviewEscalationDetailSerializer,
     RuntimeTuningReviewActionSerializer,
     RuntimeTuningReviewStateSerializer,
+    RuntimeTuningReviewActivitySerializer,
+    RuntimeTuningReviewActivityDetailSerializer,
 )
 from apps.runtime_governor.services import (
     apply_operating_mode_decision,
@@ -131,6 +133,11 @@ from apps.runtime_governor.services.tuning_review_state import (
     list_tuning_review_actions,
     list_tuning_review_states,
     mark_followup_required,
+)
+from apps.runtime_governor.services.tuning_review_activity import (
+    DEFAULT_ACTIVITY_LIMIT,
+    build_tuning_review_activity,
+    get_tuning_review_activity_detail,
 )
 from apps.runtime_governor.mode_enforcement.services import get_mode_enforcement_summary, run_mode_enforcement_review
 from apps.runtime_governor.runtime_feedback.services import (
@@ -584,6 +591,44 @@ class RuntimeTuningReviewActionListView(APIView):
             list_tuning_review_actions(source_scope=source_scope, limit=limit),
             many=True,
         )
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningReviewActivityListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        source_scope = request.query_params.get('source_scope')
+        action_type = request.query_params.get('action_type')
+        limit_raw = request.query_params.get('limit')
+        limit = DEFAULT_ACTIVITY_LIMIT
+        if limit_raw is not None:
+            try:
+                limit = int(limit_raw)
+            except (TypeError, ValueError):
+                limit = DEFAULT_ACTIVITY_LIMIT
+
+        serializer = RuntimeTuningReviewActivitySerializer(
+            build_tuning_review_activity(
+                source_scope=source_scope,
+                action_type=action_type,
+                limit=limit,
+            )
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RuntimeTuningReviewActivityDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, source_scope: str, *args, **kwargs):
+        try:
+            payload = get_tuning_review_activity_detail(source_scope=source_scope)
+        except TuningScopeSnapshotNotFound:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = RuntimeTuningReviewActivityDetailSerializer(payload)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
