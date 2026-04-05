@@ -2744,3 +2744,43 @@ Guardrails remain unchanged and explicit:
 - `REAL_READ_ONLY`
 - `PAPER_ONLY`
 - `live_execution_enabled = false`
+
+## Cockpit Live Paper Smoke Test card (Prompt 202)
+
+`/cockpit` now adds a compact **Live Paper Smoke Test** card (frontend-only integration; no new screen, no `/runtime` changes) to validate the V1 paper loop quickly and repeatedly.
+
+What it consumes:
+- `GET /api/mission-control/live-paper-smoke-test-status/`
+- `POST /api/mission-control/run-live-paper-smoke-test/`
+
+Default smoke payload sent by UI:
+
+```json
+{
+  "preset": "live_read_only_paper_conservative",
+  "heartbeat_passes": 1
+}
+```
+
+What it shows (compact operational view):
+- strong smoke badge: `PASS` / `WARN` / `FAIL`
+- `smoke_test_summary`
+- `next_action_hint`
+- `validation_status_before` / `validation_status_after` (full detail after a cockpit-triggered run)
+- `heartbeat_passes_completed`
+- `recent_activity_detected` / `recent_trades_detected` (after a cockpit-triggered run)
+- compact checks list (`check_name`, status, summary) for the latest cockpit-triggered run
+
+Compact actions:
+- `Run smoke test`
+- `Refresh smoke result`
+
+Fallback behavior:
+- if backend has no previous run: `No smoke test result yet`
+- if endpoint fails: `Live paper smoke test unavailable`
+
+Scope/guardrails remain unchanged:
+- real markets read-only + fake money only
+- `REAL_READ_ONLY`
+- `PAPER_ONLY`
+- does **not** enable live trading

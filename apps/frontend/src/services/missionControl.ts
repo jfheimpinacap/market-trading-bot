@@ -75,6 +75,9 @@ import type {
   LivePaperBootstrapStatusResponse,
   LivePaperAttentionAlertStatusResponse,
   LivePaperAttentionAlertSyncResponse,
+  LivePaperSmokeTestRequest,
+  LivePaperSmokeTestResultResponse,
+  LivePaperSmokeTestStatusResponse,
   LivePaperValidationDigestResponse,
 } from '../types/missionControl';
 
@@ -152,6 +155,22 @@ export function getLivePaperValidation(params?: { preset?: string }) {
   const suffix = query.size ? `?${query.toString()}` : '';
   return requestJson<LivePaperValidationDigestResponse>(`/api/mission-control/live-paper-validation/${suffix}`);
 }
+
+export function runLivePaperSmokeTest(payload: LivePaperSmokeTestRequest = {}) {
+  return requestJson<LivePaperSmokeTestResultResponse>('/api/mission-control/run-live-paper-smoke-test/', {
+    method: 'POST',
+    body: JSON.stringify({
+      preset: 'live_read_only_paper_conservative',
+      heartbeat_passes: 1,
+      ...payload,
+    }),
+  });
+}
+
+export function getLivePaperSmokeTestStatus() {
+  return requestJson<LivePaperSmokeTestStatusResponse>('/api/mission-control/live-paper-smoke-test-status/');
+}
+
 export function getLivePaperAttentionAlertStatus() {
   return requestJson<LivePaperAttentionAlertStatusResponse>('/api/mission-control/live-paper-attention-alert-status/');
 }
