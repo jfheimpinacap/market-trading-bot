@@ -12,6 +12,20 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
 - **Precedent-aware decision support (new):** research, prediction, risk, signal-fusion, and postmortem now consume semantic precedents automatically in internal flows with conservative influence and explicit audit trails (`AgentPrecedentUse`).
 
+### Live Read-Only Paper Autopilot Bootstrap (backend, new)
+
+`mission_control` now exposes a compact backend bootstrap for autonomous paper sessions using real-market read-only data without enabling live trading execution.
+
+- preset: `live_read_only_paper_conservative`
+- guarantees:
+  - `market_data_mode = REAL_READ_ONLY`
+  - `paper_execution_mode = PAPER_ONLY`
+  - no real-money/live execution routes enabled
+  - reuses existing mission-control runtime session + heartbeat runner (no new scheduler)
+- API:
+  - `POST /api/mission-control/bootstrap-live-paper-session/`
+  - `GET /api/mission-control/live-paper-bootstrap-status/`
+
 ### Runtime Tuning Review Escalation (new)
 
 `runtime_governor` now exposes a compact read-only **Runtime Tuning Review Escalation** layer above existing tuning review queue + aging.

@@ -10,6 +10,9 @@ from django.utils import timezone
 from apps.mission_control.models import (
     AutonomousProfileSwitchRecord,
     AutonomousCooldownState,
+    AutonomousRunnerState,
+    AutonomousRunnerStatus,
+    AutonomousRuntimeSessionStatus,
     AutonomousSessionInterventionDecision,
     AutonomousSessionHealthSnapshot,
     AutonomousResumeDecision,
@@ -29,6 +32,7 @@ from apps.mission_control.models import (
     MissionControlState,
     GovernanceReviewItem,
 )
+from apps.runtime_governor.models import RuntimeMode
 from apps.mission_control.services.collect import collect_governance_review_candidates
 from apps.mission_control.services.prioritize import assign_severity_and_priority
 from apps.portfolio_governor.models import (
@@ -200,6 +204,179 @@ class AutonomousSessionRuntimeTests(TestCase):
         response = self.client.get(reverse('mission_control:autonomous-session-summary'))
         self.assertEqual(response.status_code, 200)
         self.assertIn('active_sessions', response.json())
+
+
+class LivePaperBootstrapApiTests(TestCase):
+    SUCCESS_CAPABILITIES = {
+        'allow_signal_generation': True,
+        'allow_proposals': True,
+        'allow_allocation': True,
+        'allow_real_market_ops': True,
+        'allow_auto_execution': False,
+        'allow_continuous_loop': True,
+        'require_operator_for_all_trades': True,
+        'allow_pending_approvals': True,
+        'allow_replay': True,
+        'allow_experiments': True,
+        'max_auto_trades_per_cycle': 0,
+        'max_auto_trades_per_session': 0,
+        'blocked_reasons': [],
+    }
+
+    @patch('apps.mission_control.services.live_paper_bootstrap.get_capabilities_for_current_mode')
+    @patch('apps.mission_control.services.live_paper_bootstrap.start_runner')
+    @patch('apps.mission_control.services.live_paper_bootstrap.set_runtime_mode')
+    def test_creates_and_starts_session_when_missing(self, mock_set_mode, mock_start_runner, mock_caps):
+        mock_caps.return_value = self.SUCCESS_CAPABILITIES
+        mock_set_mode.return_value = {
+            'decision': type('Decision', (), {'allowed': True, 'reasons': []})(),
+            'state': type('State', (), {'current_mode': RuntimeMode.PAPER_ASSIST})(),
+        }
+        mock_start_runner.side_effect = lambda: AutonomousRunnerState.objects.update_or_create(
+            runner_name='local_autonomous_heartbeat_runner',
+            defaults={'runner_status': AutonomousRunnerStatus.RUNNING},
+        )[0]
+        response = self.client.post(reverse('mission_control:bootstrap-live-paper-session'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['bootstrap_action'], 'CREATED_AND_STARTED')
+        self.assertTrue(payload['session_created'])
+        self.assertTrue(payload['session_started'])
+        session = AutonomousRuntimeSession.objects.get(id=payload['session_id'])
+        self.assertEqual(session.metadata.get('market_data_mode'), 'REAL_READ_ONLY')
+        self.assertEqual(session.metadata.get('paper_execution_mode'), 'PAPER_ONLY')
+
+    @patch('apps.mission_control.services.live_paper_bootstrap.get_capabilities_for_current_mode')
+    @patch('apps.mission_control.services.live_paper_bootstrap.start_runner')
+    @patch('apps.mission_control.services.live_paper_bootstrap.set_runtime_mode')
+    def test_does_not_duplicate_equivalent_session(self, mock_set_mode, mock_start_runner, mock_caps):
+        mock_caps.return_value = self.SUCCESS_CAPABILITIES
+        mock_set_mode.return_value = {
+            'decision': type('Decision', (), {'allowed': True, 'reasons': []})(),
+            'state': type('State', (), {'current_mode': RuntimeMode.PAPER_ASSIST})(),
+        }
+        mock_start_runner.side_effect = lambda: AutonomousRunnerState.objects.update_or_create(
+            runner_name='local_autonomous_heartbeat_runner',
+            defaults={'runner_status': AutonomousRunnerStatus.RUNNING},
+        )[0]
+        existing = AutonomousRuntimeSession.objects.create(
+            session_status=AutonomousRuntimeSessionStatus.RUNNING,
+            runtime_mode=RuntimeMode.PAPER_ASSIST,
+            metadata={
+                'autopilot_preset_name': 'live_read_only_paper_conservative',
+                'market_data_mode': 'REAL_READ_ONLY',
+                'paper_execution_mode': 'PAPER_ONLY',
+            },
+        )
+        response = self.client.post(reverse('mission_control:bootstrap-live-paper-session'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['bootstrap_action'], 'REUSED_EXISTING_SESSION')
+        self.assertFalse(payload['session_created'])
+        self.assertEqual(payload['session_id'], existing.id)
+        self.assertEqual(
+            AutonomousRuntimeSession.objects.filter(metadata__autopilot_preset_name='live_read_only_paper_conservative').count(),
+            1,
+        )
+
+    @patch('apps.mission_control.services.live_paper_bootstrap.get_capabilities_for_current_mode')
+    @patch('apps.mission_control.services.live_paper_bootstrap.start_runner')
+    @patch('apps.mission_control.services.live_paper_bootstrap.set_runtime_mode')
+    def test_reuses_heartbeat_when_runner_already_running(self, mock_set_mode, mock_start_runner, mock_caps):
+        mock_caps.return_value = self.SUCCESS_CAPABILITIES
+        mock_set_mode.return_value = {
+            'decision': type('Decision', (), {'allowed': True, 'reasons': []})(),
+            'state': type('State', (), {'current_mode': RuntimeMode.PAPER_ASSIST})(),
+        }
+        AutonomousRunnerState.objects.create(runner_name='local_autonomous_heartbeat_runner', runner_status=AutonomousRunnerStatus.RUNNING)
+        response = self.client.post(reverse('mission_control:bootstrap-live-paper-session'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()['heartbeat_started'])
+        mock_start_runner.assert_not_called()
+
+    @patch('apps.mission_control.services.live_paper_bootstrap.get_capabilities_for_current_mode')
+    @patch('apps.mission_control.services.live_paper_bootstrap.set_runtime_mode')
+    def test_returns_blocked_when_constraints_disallow_runtime_mode(self, mock_set_mode, mock_caps):
+        mock_caps.return_value = self.SUCCESS_CAPABILITIES
+        mock_set_mode.return_value = {
+            'decision': type('Decision', (), {'allowed': False, 'reasons': ['blocked for test']})(),
+            'state': type('State', (), {'current_mode': RuntimeMode.OBSERVE_ONLY})(),
+        }
+        response = self.client.post(reverse('mission_control:bootstrap-live-paper-session'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['bootstrap_action'], 'BLOCKED')
+        self.assertIn('blocked for test', payload['bootstrap_summary'])
+
+    @patch('apps.mission_control.services.live_paper_bootstrap.get_capabilities_for_current_mode')
+    @patch('apps.mission_control.services.live_paper_bootstrap.start_runner')
+    @patch('apps.mission_control.services.live_paper_bootstrap.set_runtime_mode')
+    def test_post_payload_contract_is_compact_and_stable(self, mock_set_mode, mock_start_runner, mock_caps):
+        mock_caps.return_value = self.SUCCESS_CAPABILITIES
+        mock_set_mode.return_value = {
+            'decision': type('Decision', (), {'allowed': True, 'reasons': []})(),
+            'state': type('State', (), {'current_mode': RuntimeMode.PAPER_ASSIST})(),
+        }
+        mock_start_runner.side_effect = lambda: AutonomousRunnerState.objects.update_or_create(
+            runner_name='local_autonomous_heartbeat_runner',
+            defaults={'runner_status': AutonomousRunnerStatus.RUNNING},
+        )[0]
+        response = self.client.post(reverse('mission_control:bootstrap-live-paper-session'), data='{}', content_type='application/json')
+        payload = response.json()
+        required_keys = {
+            'preset_name', 'session_created', 'session_started', 'heartbeat_started', 'runtime_mode',
+            'paper_execution_mode', 'market_data_mode', 'bootstrap_action', 'session_id',
+            'next_step_summary', 'bootstrap_summary',
+        }
+        self.assertTrue(required_keys.issubset(payload.keys()))
+        self.assertEqual(payload['market_data_mode'], 'REAL_READ_ONLY')
+        self.assertEqual(payload['paper_execution_mode'], 'PAPER_ONLY')
+
+    def test_status_payload_contract_and_summary_readable(self):
+        session = AutonomousRuntimeSession.objects.create(
+            session_status=AutonomousRuntimeSessionStatus.RUNNING,
+            runtime_mode=RuntimeMode.PAPER_ASSIST,
+            metadata={
+                'autopilot_preset_name': 'live_read_only_paper_conservative',
+                'market_data_mode': 'REAL_READ_ONLY',
+                'paper_execution_mode': 'PAPER_ONLY',
+            },
+        )
+        AutonomousRunnerState.objects.create(runner_name='local_autonomous_heartbeat_runner', runner_status=AutonomousRunnerStatus.RUNNING)
+        response = self.client.get(reverse('mission_control:live-paper-bootstrap-status'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        required_keys = {
+            'preset_name', 'session_active', 'heartbeat_active', 'runtime_mode', 'market_data_mode',
+            'paper_execution_mode', 'current_session_status', 'operator_attention_hint', 'status_summary',
+        }
+        self.assertTrue(required_keys.issubset(payload.keys()))
+        self.assertTrue(payload['session_active'])
+        self.assertEqual(payload['current_session_status'], session.session_status)
+        self.assertIn('preset=live_read_only_paper_conservative', payload['status_summary'])
+
+    @patch('apps.mission_control.services.live_paper_bootstrap.get_capabilities_for_current_mode')
+    def test_existing_session_is_resumed_when_paused(self, mock_caps):
+        mock_caps.return_value = self.SUCCESS_CAPABILITIES
+        session = AutonomousRuntimeSession.objects.create(
+            session_status=AutonomousRuntimeSessionStatus.PAUSED,
+            runtime_mode=RuntimeMode.PAPER_ASSIST,
+            metadata={
+                'autopilot_preset_name': 'live_read_only_paper_conservative',
+                'market_data_mode': 'REAL_READ_ONLY',
+                'paper_execution_mode': 'PAPER_ONLY',
+            },
+        )
+        response = self.client.post(reverse('mission_control:bootstrap-live-paper-session'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['bootstrap_action'], 'STARTED_EXISTING_SAFE_SESSION')
+        session.refresh_from_db()
+        self.assertEqual(session.session_status, AutonomousRuntimeSessionStatus.RUNNING)
+
+    def test_existing_mission_control_flows_still_work(self):
+        response = self.client.get(reverse('mission_control:autonomous-session-summary'))
+        self.assertEqual(response.status_code, 200)
 
 
 class AutonomousHeartbeatRunnerTests(TestCase):
