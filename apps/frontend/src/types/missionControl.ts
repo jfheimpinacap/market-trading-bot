@@ -330,6 +330,11 @@ export type AutonomousHeartbeatSummary = {
     alert_action: 'CREATED' | 'UPDATED' | 'RESOLVED' | 'NOOP' | 'ERROR' | null;
     human_attention_mode: 'REVIEW_NOW' | 'REVIEW_SOON' | 'MONITOR_ONLY' | 'NO_ACTION' | null;
     next_recommended_scope: string | null;
+    material_change_detected?: boolean;
+    material_change_fields?: string[];
+    update_suppressed?: boolean;
+    suppression_reason?: 'NO_MATERIAL_CHANGE' | 'ALERT_NOT_NEEDED' | 'NO_ACTIVE_ALERT' | null;
+    active_alert_present?: boolean;
     sync_summary: string;
   };
 };

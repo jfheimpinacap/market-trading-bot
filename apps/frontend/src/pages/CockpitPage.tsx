@@ -7,7 +7,12 @@ import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
 import { getCockpitAttention, getCockpitQuickLinks, getCockpitSummary, runCockpitAction } from '../services/cockpit';
-import { bootstrapLivePaperSession, getLivePaperBootstrapStatus } from '../services/missionControl';
+import {
+  bootstrapLivePaperSession,
+  getAutonomousHeartbeatRuns,
+  getAutonomousHeartbeatSummary,
+  getLivePaperBootstrapStatus,
+} from '../services/missionControl';
 import { getAutonomyScenarioSummary } from '../services/autonomyScenario';
 import {
   acknowledgeRuntimeTuningScope,
@@ -29,7 +34,12 @@ import {
 } from '../services/runtime';
 import { getScanSummary } from '../services/scanAgent';
 import type { CockpitAttentionItem, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
-import type { LivePaperBootstrapResponse, LivePaperBootstrapStatusResponse } from '../types/missionControl';
+import type {
+  AutonomousHeartbeatRun,
+  AutonomousHeartbeatSummary,
+  LivePaperBootstrapResponse,
+  LivePaperBootstrapStatusResponse,
+} from '../types/missionControl';
 import type {
   RuntimeTuningCockpitPanel,
   RuntimeTuningCockpitPanelDetail,
@@ -146,6 +156,10 @@ export function CockpitPage() {
   const [livePaperStartLoading, setLivePaperStartLoading] = useState(false);
   const [livePaperStartError, setLivePaperStartError] = useState<string | null>(null);
   const [livePaperStartResult, setLivePaperStartResult] = useState<LivePaperBootstrapResponse | null>(null);
+  const [livePaperOperationalSnapshotLoading, setLivePaperOperationalSnapshotLoading] = useState(true);
+  const [livePaperOperationalSnapshotError, setLivePaperOperationalSnapshotError] = useState<string | null>(null);
+  const [autonomousHeartbeatSummary, setAutonomousHeartbeatSummary] = useState<AutonomousHeartbeatSummary | null>(null);
+  const [latestAutonomousHeartbeatRun, setLatestAutonomousHeartbeatRun] = useState<AutonomousHeartbeatRun | null>(null);
   const heartbeatAutoSyncHint = useMemo(() => {
     const sync = autotriageAlertStatus?.runtime_tuning_attention_sync;
     if (!sync || !sync.attempted) return 'Auto-sync status unavailable';
@@ -170,6 +184,27 @@ export function CockpitPage() {
     }
   }, []);
 
+  const loadLivePaperOperationalSnapshot = useCallback(async () => {
+    setLivePaperOperationalSnapshotLoading(true);
+    setLivePaperOperationalSnapshotError(null);
+    try {
+      const [heartbeatSummary, heartbeatRuns, tuningAlertStatus] = await Promise.all([
+        getAutonomousHeartbeatSummary(),
+        getAutonomousHeartbeatRuns(),
+        getRuntimeTuningAutotriageAlertStatus(),
+      ]);
+      setAutonomousHeartbeatSummary(heartbeatSummary);
+      setLatestAutonomousHeartbeatRun(heartbeatRuns[0] ?? null);
+      setAutotriageAlertStatus(tuningAlertStatus);
+    } catch (snapshotError) {
+      setAutonomousHeartbeatSummary(null);
+      setLatestAutonomousHeartbeatRun(null);
+      setLivePaperOperationalSnapshotError(getErrorMessage(snapshotError, 'Operational snapshot unavailable.'));
+    } finally {
+      setLivePaperOperationalSnapshotLoading(false);
+    }
+  }, []);
+
   const startLivePaperAutopilot = useCallback(async () => {
     setLivePaperStartLoading(true);
     setLivePaperStartError(null);
@@ -177,13 +212,13 @@ export function CockpitPage() {
     try {
       const payload = await bootstrapLivePaperSession();
       setLivePaperStartResult(payload);
-      await loadLivePaperStatus();
+      await Promise.all([loadLivePaperStatus(), loadLivePaperOperationalSnapshot()]);
     } catch (startError) {
       setLivePaperStartError(getErrorMessage(startError, 'Could not start live paper autopilot.'));
     } finally {
       setLivePaperStartLoading(false);
     }
-  }, [loadLivePaperStatus]);
+  }, [loadLivePaperOperationalSnapshot, loadLivePaperStatus]);
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -258,6 +293,10 @@ export function CockpitPage() {
   useEffect(() => {
     void loadLivePaperStatus();
   }, [loadLivePaperStatus]);
+
+  useEffect(() => {
+    void loadLivePaperOperationalSnapshot();
+  }, [loadLivePaperOperationalSnapshot]);
 
   useEffect(() => {
     if (!tuningPanel?.items?.length) return;
@@ -495,6 +534,44 @@ export function CockpitPage() {
                   <StatusBadge tone="ready">PAPER_ONLY</StatusBadge>
                   <StatusBadge tone="ready">live_execution_enabled = false</StatusBadge>
                 </div>
+                <SectionCard
+                  eyebrow="Operational snapshot"
+                  title="Operational Snapshot"
+                  description="Compact live view of autonomous heartbeat, operator attention, and tuning alert bridge hints."
+                >
+                  {livePaperOperationalSnapshotLoading ? <p>Loading operational snapshot…</p> : null}
+                  {livePaperOperationalSnapshotError ? <p className="error-text">{livePaperOperationalSnapshotError}</p> : null}
+                  {!livePaperOperationalSnapshotLoading && !livePaperOperationalSnapshotError && livePaperStatus ? (
+                    <>
+                      <div className="button-row">
+                        <StatusBadge tone={livePaperStatus.session_active ? 'ready' : 'pending'}>
+                          Session {livePaperStatus.session_active ? 'active' : 'inactive'}
+                        </StatusBadge>
+                        <StatusBadge tone={livePaperStatus.heartbeat_active ? 'ready' : 'pending'}>
+                          Heartbeat {livePaperStatus.heartbeat_active ? 'active' : 'inactive'}
+                        </StatusBadge>
+                        {livePaperStatus.operator_attention_hint ? (
+                          <StatusBadge tone={toneFromStatus(livePaperStatus.session_active ? 'READY' : 'CAUTION')}>
+                            {livePaperStatus.operator_attention_hint.toLowerCase().includes('paused') ? 'Operator attention' : 'No operator attention'}
+                          </StatusBadge>
+                        ) : null}
+                        <StatusBadge tone={autotriageAlertStatus?.alert_needed ? 'pending' : 'neutral'}>
+                          {autotriageAlertStatus ? (autotriageAlertStatus.alert_needed ? 'Auto-sync attention' : 'Auto-sync active') : 'Auto-sync unavailable'}
+                        </StatusBadge>
+                      </div>
+                      <ul className="key-value-list">
+                        <li><span>Current session status</span><strong>{livePaperStatus.current_session_status}</strong></li>
+                        <li><span>Last heartbeat</span><strong>{formatDate(autonomousHeartbeatSummary?.runner_state.last_heartbeat_at)}</strong></li>
+                        <li><span>Last successful pass</span><strong>{formatDate(autonomousHeartbeatSummary?.runner_state.last_successful_run_at)}</strong></li>
+                        <li><span>Latest heartbeat run</span><strong>{latestAutonomousHeartbeatRun ? `#${latestAutonomousHeartbeatRun.id} · ${latestAutonomousHeartbeatRun.recommendation_summary}` : 'n/a'}</strong></li>
+                        <li><span>Latest heartbeat outcome</span><strong>{latestAutonomousHeartbeatRun ? `executed=${latestAutonomousHeartbeatRun.executed_tick_count} blocked=${latestAutonomousHeartbeatRun.blocked_count} wait=${latestAutonomousHeartbeatRun.wait_count}` : 'n/a'}</strong></li>
+                        <li><span>Operator hint</span><strong>{livePaperStatus.operator_attention_hint || 'n/a'}</strong></li>
+                        <li><span>Auto-sync hint</span><strong>{autotriageAlertStatus?.status_summary ?? heartbeatAutoSyncHint}</strong></li>
+                        <li><span>Status summary</span><strong>{livePaperStatus.status_summary}</strong></li>
+                      </ul>
+                    </>
+                  ) : null}
+                </SectionCard>
                 {livePaperStartResult ? (
                   <p className={livePaperStartResult.bootstrap_action === 'BLOCKED' || livePaperStartResult.bootstrap_action === 'FAILED' ? 'error-text' : 'success-text'}>
                     {livePaperStartResult.bootstrap_action}: {livePaperStartResult.bootstrap_summary} {livePaperStartResult.next_step_summary}
@@ -505,7 +582,14 @@ export function CockpitPage() {
                   <button className="primary-button" type="button" disabled={livePaperStartLoading} onClick={() => void startLivePaperAutopilot()}>
                     {livePaperStartLoading ? 'Starting…' : 'Start live paper autopilot'}
                   </button>
-                  <button className="secondary-button" type="button" disabled={livePaperStatusLoading} onClick={() => void loadLivePaperStatus()}>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={livePaperStatusLoading || livePaperOperationalSnapshotLoading}
+                    onClick={() => {
+                      void Promise.all([loadLivePaperStatus(), loadLivePaperOperationalSnapshot()]);
+                    }}
+                  >
                     Refresh status
                   </button>
                 </div>
