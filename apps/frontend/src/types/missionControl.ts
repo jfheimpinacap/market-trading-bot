@@ -291,6 +291,14 @@ export type AutonomousHeartbeatSummary = {
     decisions: number;
     dispatch_attempts: number;
   };
+  runtime_tuning_attention_sync: {
+    attempted: boolean;
+    success: boolean;
+    alert_action: 'CREATED' | 'UPDATED' | 'RESOLVED' | 'NOOP' | 'ERROR' | null;
+    human_attention_mode: 'REVIEW_NOW' | 'REVIEW_SOON' | 'MONITOR_ONLY' | 'NO_ACTION' | null;
+    next_recommended_scope: string | null;
+    sync_summary: string;
+  };
 };
 
 export type AutonomousScheduleProfile = {

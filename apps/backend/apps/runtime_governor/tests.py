@@ -36,7 +36,13 @@ from apps.runtime_governor.services.tuning_history import create_tuning_context_
 from apps.runtime_governor.services.tuning_diff import build_tuning_context_diff
 from apps.runtime_governor.services.operating_mode.mode_switch import GLOBAL_MODE_METADATA_KEY
 from apps.runtime_governor.tuning_profiles import DEFAULT_CONSERVATIVE_TUNING_PROFILE
-from apps.mission_control.models import AutonomousRuntimeSession, AutonomousRuntimeSessionStatus, AutonomousSessionHealthSnapshot, AutonomousSessionHealthStatus
+from apps.mission_control.models import (
+    AutonomousHeartbeatRun,
+    AutonomousRuntimeSession,
+    AutonomousRuntimeSessionStatus,
+    AutonomousSessionHealthSnapshot,
+    AutonomousSessionHealthStatus,
+)
 from apps.mission_control.models import GovernanceBacklogPressureSnapshot
 from apps.mission_control.services.session_timing.timing import evaluate_session_timing
 from apps.portfolio_governor.models import (
@@ -3507,3 +3513,39 @@ class RuntimeTuningAutotriageAlertBridgeTests(TestCase):
 
         other_alert.refresh_from_db()
         self.assertEqual(other_alert.status, OperatorAlertStatus.OPEN)
+
+    def test_status_payload_exposes_latest_heartbeat_auto_sync_hint(self):
+        AutonomousHeartbeatRun.objects.create(
+            started_at=timezone.now(),
+            completed_at=timezone.now(),
+            runner_status='COMPLETED',
+            considered_session_count=0,
+            due_tick_count=0,
+            executed_tick_count=0,
+            wait_count=0,
+            cooldown_skip_count=0,
+            blocked_count=0,
+            paused_count=0,
+            stopped_count=0,
+            recommendation_summary='ok',
+            metadata={
+                'runtime_tuning_attention_sync': {
+                    'attempted': True,
+                    'success': True,
+                    'alert_action': 'NOOP',
+                    'human_attention_mode': 'MONITOR_ONLY',
+                    'next_recommended_scope': None,
+                    'sync_summary': 'MONITOR_ONLY: no active runtime tuning attention alert',
+                }
+            },
+        )
+
+        with patch(
+            'apps.runtime_governor.services.tuning_autotriage_alert_bridge.build_tuning_autotriage_digest',
+            return_value=self._digest(mode='MONITOR_ONLY', scope='runtime_feedback', summary='Monitor only'),
+        ):
+            response = self.client.get(reverse('runtime_governor_v2:tuning_autotriage_alert_status'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('runtime_tuning_attention_sync', payload)
+        self.assertEqual(payload['runtime_tuning_attention_sync']['alert_action'], 'NOOP')

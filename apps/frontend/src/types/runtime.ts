@@ -1047,6 +1047,16 @@ export type RuntimeTuningAutotriageQuery = {
 
 export type RuntimeTuningAutotriageAlertAction = 'CREATED' | 'UPDATED' | 'RESOLVED' | 'NOOP';
 export type RuntimeTuningAutotriageAlertSeverity = 'info' | 'warning' | 'high' | 'critical' | null;
+export type RuntimeTuningAttentionSyncAction = RuntimeTuningAutotriageAlertAction | 'ERROR' | null;
+
+export type RuntimeTuningAttentionSyncStatus = {
+  attempted: boolean;
+  success: boolean;
+  alert_action: RuntimeTuningAttentionSyncAction;
+  human_attention_mode: RuntimeTuningAutotriageHumanAttentionMode | null;
+  next_recommended_scope: RuntimeTuningContextSnapshot['source_scope'] | null;
+  sync_summary: string;
+};
 
 export type RuntimeTuningAutotriageAlertSyncResponse = {
   human_attention_mode: RuntimeTuningAutotriageHumanAttentionMode;
@@ -1066,4 +1076,5 @@ export type RuntimeTuningAutotriageAlertStatus = {
   next_recommended_scope: RuntimeTuningContextSnapshot['source_scope'] | null;
   autotriage_summary: string;
   status_summary: string;
+  runtime_tuning_attention_sync?: RuntimeTuningAttentionSyncStatus | null;
 };

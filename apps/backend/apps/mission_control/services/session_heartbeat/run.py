@@ -20,6 +20,7 @@ from apps.mission_control.services.session_heartbeat.dispatch import dispatch_du
 from apps.mission_control.services.session_heartbeat.due_tick import evaluate_due_tick
 from apps.mission_control.services.session_heartbeat.recommendation import emit_heartbeat_recommendation
 from apps.mission_control.services.session_profile_control import run_profile_selection_review
+from apps.runtime_governor.services.tuning_autotriage_auto_sync import run_tuning_autotriage_attention_auto_sync
 
 
 def _runner_state() -> AutonomousRunnerState:
@@ -127,6 +128,8 @@ def run_heartbeat_pass() -> AutonomousHeartbeatRun:
         elif decision.decision_type in {AutonomousHeartbeatDecisionType.STOP_SESSION}:
             stopped_count += 1
 
+    runtime_tuning_attention_sync = run_tuning_autotriage_attention_auto_sync()
+
     run.completed_at = timezone.now()
     run.runner_status = AutonomousHeartbeatRunnerStatus.COMPLETED
     run.due_tick_count = due_count
@@ -136,8 +139,15 @@ def run_heartbeat_pass() -> AutonomousHeartbeatRun:
     run.blocked_count = blocked_count
     run.paused_count = paused_count
     run.stopped_count = stopped_count
-    run.recommendation_summary = f'due={due_count} executed={executed_count} cooldown={cooldown_count} blocked={blocked_count}'
-    run.metadata = {'runner_state': state.runner_status, 'profile_selection_run_id': profile_review_run.id}
+    run.recommendation_summary = (
+        f'due={due_count} executed={executed_count} cooldown={cooldown_count} blocked={blocked_count} '
+        f'autotriage_sync={runtime_tuning_attention_sync.get("alert_action")}'
+    )
+    run.metadata = {
+        'runner_state': state.runner_status,
+        'profile_selection_run_id': profile_review_run.id,
+        'runtime_tuning_attention_sync': runtime_tuning_attention_sync,
+    }
     run.save()
 
     with transaction.atomic():
@@ -153,6 +163,7 @@ def run_heartbeat_pass() -> AutonomousHeartbeatRun:
 
 def build_heartbeat_summary() -> dict:
     latest_run = AutonomousHeartbeatRun.objects.order_by('-started_at', '-id').first()
+    runtime_tuning_attention_sync = (latest_run.metadata or {}).get('runtime_tuning_attention_sync', {}) if latest_run else {}
     return {
         'runner_state': {
             'runner_name': _runner_state().runner_name,
@@ -168,5 +179,13 @@ def build_heartbeat_summary() -> dict:
             'heartbeat_runs': AutonomousHeartbeatRun.objects.count(),
             'decisions': AutonomousHeartbeatDecision.objects.count(),
             'dispatch_attempts': sum(r.executed_tick_count for r in AutonomousHeartbeatRun.objects.all()[:100]),
+        },
+        'runtime_tuning_attention_sync': {
+            'attempted': bool(runtime_tuning_attention_sync.get('attempted', False)),
+            'success': bool(runtime_tuning_attention_sync.get('success', False)),
+            'alert_action': runtime_tuning_attention_sync.get('alert_action'),
+            'human_attention_mode': runtime_tuning_attention_sync.get('human_attention_mode'),
+            'next_recommended_scope': runtime_tuning_attention_sync.get('next_recommended_scope'),
+            'sync_summary': runtime_tuning_attention_sync.get('sync_summary', ''),
         },
     }

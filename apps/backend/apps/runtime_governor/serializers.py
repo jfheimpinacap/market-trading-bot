@@ -554,6 +554,7 @@ class RuntimeTuningAutotriageAlertStatusSerializer(serializers.Serializer):
     next_recommended_scope = serializers.CharField(required=False, allow_null=True)
     autotriage_summary = serializers.CharField()
     status_summary = serializers.CharField()
+    runtime_tuning_attention_sync = serializers.DictField(required=False, allow_null=True)
 
 
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):

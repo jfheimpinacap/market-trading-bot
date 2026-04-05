@@ -12,6 +12,7 @@ from apps.operator_alerts.models import (
     OperatorAlertType,
 )
 from apps.operator_alerts.services.alerts import AlertEmitPayload, emit_alert, resolve_alert
+from apps.mission_control.models import AutonomousHeartbeatRun
 from apps.runtime_governor.services.tuning_autotriage import (
     MODE_MONITOR_ONLY,
     MODE_NO_ACTION,
@@ -130,6 +131,8 @@ def get_tuning_autotriage_attention_alert_status() -> dict[str, Any]:
     autotriage_summary = str(digest.get('autotriage_summary', ''))
 
     active_alert = _active_signal_alert()
+    latest_heartbeat_run = AutonomousHeartbeatRun.objects.order_by('-started_at', '-id').first()
+    heartbeat_sync = ((latest_heartbeat_run.metadata or {}).get('runtime_tuning_attention_sync') if latest_heartbeat_run else None) or None
     return {
         'human_attention_mode': mode,
         'alert_needed': alert_needed,
@@ -143,4 +146,5 @@ def get_tuning_autotriage_attention_alert_status() -> dict[str, Any]:
             active_alert=active_alert,
             next_recommended_scope=next_scope,
         ),
+        'runtime_tuning_attention_sync': heartbeat_sync,
     }
