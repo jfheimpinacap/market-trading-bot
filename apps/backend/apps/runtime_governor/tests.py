@@ -26,6 +26,7 @@ from apps.runtime_governor.models import (
     RuntimeMode,
     RuntimeSetBy,
     RuntimeTuningContextSnapshot,
+    RuntimeTuningReviewAction,
     RuntimeTuningReviewState,
     RuntimeTransitionLog,
 )
@@ -2578,6 +2579,113 @@ class RuntimeTuningManualReviewStateTests(TestCase):
         self.client.post(reverse('runtime_governor_v2:mark_tuning_scope_followup', args=[self.scope]), {}, format='json')
         response2 = self.client.get(reverse('runtime_governor_v2:tuning_review_state_detail', args=[self.scope]))
         self.assertEqual(response2.json()['review_summary'], 'Follow-up required for current tuning state')
+
+
+class RuntimeTuningReviewActivityTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def _snapshot(self, *, scope: str, run_id: int, fingerprint: str):
+        return RuntimeTuningContextSnapshot.objects.create(
+            source_scope=scope,
+            source_run_id=run_id,
+            tuning_profile_name='runtime_conservative_v1',
+            tuning_profile_fingerprint=fingerprint,
+            tuning_profile_summary='summary',
+            effective_values={'a': run_id},
+            drift_status='MINOR_CONTEXT_CHANGE',
+            drift_summary='changed',
+        )
+
+    def _seed_activity(self):
+        self._snapshot(scope='runtime_feedback', run_id=1, fingerprint='rf-1')
+        self._snapshot(scope='mode_enforcement', run_id=2, fingerprint='me-1')
+        self._snapshot(scope='runtime_feedback', run_id=3, fingerprint='rf-2')
+
+        self.client.post(reverse('runtime_governor_v2:acknowledge_tuning_scope', args=['runtime_feedback']), {}, format='json')
+        self.client.post(reverse('runtime_governor_v2:mark_tuning_scope_followup', args=['mode_enforcement']), {}, format='json')
+        self.client.post(reverse('runtime_governor_v2:clear_tuning_scope_review', args=['runtime_feedback']), {}, format='json')
+
+        now = timezone.now()
+        actions = list(RuntimeTuningReviewAction.objects.order_by('id'))
+        for index, action in enumerate(actions):
+            RuntimeTuningReviewAction.objects.filter(id=action.id).update(created_at=now - timedelta(minutes=(len(actions) - index)))
+
+    def test_activity_list_payload_and_summary(self):
+        self._seed_activity()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_activity'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        for key in ['activity_count', 'latest_action_at', 'activity_summary', 'items']:
+            self.assertIn(key, payload)
+        self.assertEqual(payload['activity_count'], 3)
+        self.assertIn('runtime tuning review actions recorded recently', payload['activity_summary'])
+        self.assertIn('Most recent action was REVIEW_CLEARED on runtime_feedback', payload['activity_summary'])
+        item = payload['items'][0]
+        for item_key in [
+            'source_scope',
+            'action_type',
+            'created_at',
+            'resulting_review_status',
+            'snapshot_id',
+            'activity_label',
+            'activity_reason_codes',
+            'scope_review_summary',
+            'runtime_investigation_deep_link',
+            'effective_review_status',
+            'has_newer_snapshot_than_reviewed',
+        ]:
+            self.assertIn(item_key, item)
+
+    def test_activity_list_order_most_recent_first(self):
+        self._seed_activity()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_activity'))
+        self.assertEqual(response.status_code, 200)
+        items = response.json()['items']
+        created_at_values = [parse_datetime(item['created_at']) for item in items]
+        self.assertEqual(created_at_values, sorted(created_at_values, reverse=True))
+        self.assertEqual(items[0]['action_type'], 'CLEAR_REVIEW_STATE')
+
+    def test_activity_list_filter_by_source_scope(self):
+        self._seed_activity()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_activity'), {'source_scope': 'mode_enforcement'})
+        self.assertEqual(response.status_code, 200)
+        items = response.json()['items']
+        self.assertEqual(len(items), 1)
+        self.assertTrue(all(item['source_scope'] == 'mode_enforcement' for item in items))
+
+    def test_activity_list_filter_by_action_type(self):
+        self._seed_activity()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_activity'), {'action_type': 'MARK_FOLLOWUP_REQUIRED'})
+        self.assertEqual(response.status_code, 200)
+        items = response.json()['items']
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['activity_label'], 'FOLLOWUP_MARKED')
+
+    def test_activity_list_limit(self):
+        self._seed_activity()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_activity'), {'limit': 2})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['activity_count'], 2)
+        self.assertEqual(len(payload['items']), 2)
+
+    def test_activity_detail_endpoint_by_scope(self):
+        self._seed_activity()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_activity_detail', args=['runtime_feedback']))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['source_scope'], 'runtime_feedback')
+        self.assertEqual(payload['activity_count'], 2)
+        self.assertEqual(payload['scope_activity_summary'], '2 review actions recorded for runtime_feedback')
+        self.assertEqual(payload['items'][0]['runtime_investigation_deep_link'], '/runtime?tuningScope=runtime_feedback&investigate=1')
+
+    def test_activity_detail_404_for_unknown_or_empty_scope(self):
+        self._seed_activity()
+        response = self.client.get(reverse('runtime_governor_v2:tuning_review_activity_detail', args=['operating_mode']))
+        self.assertEqual(response.status_code, 404)
+        response2 = self.client.get(reverse('runtime_governor_v2:tuning_review_activity_detail', args=['unknown_scope']))
+        self.assertEqual(response2.status_code, 404)
 
 
 class RuntimeTuningReviewQueueTests(TestCase):

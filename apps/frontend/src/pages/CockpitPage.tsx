@@ -17,6 +17,7 @@ import {
   getRuntimeTuningInvestigation,
   getRuntimeTuningReviewAging,
   getRuntimeTuningReviewEscalation,
+  getRuntimeTuningReviewActivity,
   getRuntimeTuningReviewQueue,
   getRuntimeTuningReviewStateDetail,
   getRuntimeTuningScopeTimeline,
@@ -33,6 +34,8 @@ import type {
   RuntimeTuningReviewAging,
   RuntimeTuningReviewQueue,
   RuntimeTuningReviewEscalation,
+  RuntimeTuningReviewActivity,
+  RuntimeTuningReviewAction,
   RuntimeTuningReviewState,
   RuntimeTuningScopeTimeline,
 } from '../types/runtime';
@@ -98,11 +101,14 @@ export function CockpitPage() {
   const [reviewQueue, setReviewQueue] = useState<RuntimeTuningReviewQueue | null>(null);
   const [reviewAging, setReviewAging] = useState<RuntimeTuningReviewAging | null>(null);
   const [reviewEscalation, setReviewEscalation] = useState<RuntimeTuningReviewEscalation | null>(null);
+  const [reviewActivity, setReviewActivity] = useState<RuntimeTuningReviewActivity | null>(null);
   const [reviewQueueUnresolvedOnly, setReviewQueueUnresolvedOnly] = useState(true);
   const [reviewQueueStatusFilter, setReviewQueueStatusFilter] = useState<RuntimeTuningReviewState['effective_review_status'] | 'ALL'>('ALL');
   const [reviewQueueAgeBucketFilter, setReviewQueueAgeBucketFilter] = useState<'ALL' | 'FRESH' | 'AGING' | 'OVERDUE'>('ALL');
   const [reviewEscalatedOnly, setReviewEscalatedOnly] = useState(true);
   const [reviewEscalationLevelFilter, setReviewEscalationLevelFilter] = useState<'ALL' | 'MONITOR' | 'ELEVATED' | 'URGENT'>('ALL');
+  const [reviewActivityActionTypeFilter, setReviewActivityActionTypeFilter] = useState<RuntimeTuningReviewAction['action_type'] | 'ALL'>('ALL');
+  const [reviewActivityLimit, setReviewActivityLimit] = useState<number>(10);
   const [reviewQueueError, setReviewQueueError] = useState<string | null>(null);
   const [attentionOnly, setAttentionOnly] = useState(true);
   const [tuningPanelError, setTuningPanelError] = useState<string | null>(null);
@@ -129,7 +135,7 @@ export function CockpitPage() {
     setTuningPanelError(null);
     setReviewQueueError(null);
     try {
-      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse, reviewQueueResponse, reviewAgingResponse, reviewEscalationResponse] = await Promise.all([
+      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse, reviewQueueResponse, reviewAgingResponse, reviewEscalationResponse, reviewActivityResponse] = await Promise.all([
         getCockpitSummary(),
         getAutonomyScenarioSummary(),
         getScanSummary(),
@@ -149,6 +155,10 @@ export function CockpitPage() {
           escalation_level: reviewEscalationLevelFilter === 'ALL' ? undefined : reviewEscalationLevelFilter,
           limit: 6,
         }),
+        getRuntimeTuningReviewActivity({
+          action_type: reviewActivityActionTypeFilter === 'ALL' ? undefined : reviewActivityActionTypeFilter,
+          limit: reviewActivityLimit,
+        }),
       ]);
       setSnapshot(response);
       setAutonomyScenarioSummary(scenarioSummary);
@@ -157,6 +167,7 @@ export function CockpitPage() {
       setReviewQueue(reviewQueueResponse);
       setReviewAging(reviewAgingResponse);
       setReviewEscalation(reviewEscalationResponse);
+      setReviewActivity(reviewActivityResponse);
       setReviewStateCache({});
       setReviewStateErrorCache({});
     } catch (loadError) {
@@ -167,7 +178,16 @@ export function CockpitPage() {
     } finally {
       setLoading(false);
     }
-  }, [attentionOnly, reviewEscalatedOnly, reviewEscalationLevelFilter, reviewQueueAgeBucketFilter, reviewQueueStatusFilter, reviewQueueUnresolvedOnly]);
+  }, [
+    attentionOnly,
+    reviewActivityActionTypeFilter,
+    reviewActivityLimit,
+    reviewEscalatedOnly,
+    reviewEscalationLevelFilter,
+    reviewQueueAgeBucketFilter,
+    reviewQueueStatusFilter,
+    reviewQueueUnresolvedOnly,
+  ]);
 
   useEffect(() => {
     void loadCockpit();
@@ -506,6 +526,26 @@ export function CockpitPage() {
                     <option value="MONITOR">MONITOR</option>
                   </select>
                 </label>
+                <label className="muted-text">
+                  Activity action:{' '}
+                  <select
+                    value={reviewActivityActionTypeFilter}
+                    onChange={(event) => setReviewActivityActionTypeFilter(event.target.value as RuntimeTuningReviewAction['action_type'] | 'ALL')}
+                  >
+                    <option value="ALL">All</option>
+                    <option value="ACKNOWLEDGE_CURRENT">ACKNOWLEDGE_CURRENT</option>
+                    <option value="MARK_FOLLOWUP_REQUIRED">MARK_FOLLOWUP_REQUIRED</option>
+                    <option value="CLEAR_REVIEW_STATE">CLEAR_REVIEW_STATE</option>
+                  </select>
+                </label>
+                <label className="muted-text">
+                  Activity limit:{' '}
+                  <select value={reviewActivityLimit} onChange={(event) => setReviewActivityLimit(Number(event.target.value))}>
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                  </select>
+                </label>
               </div>
               {reviewQueueError ? <p className="warning-text">{reviewQueueError}</p> : null}
               {!reviewQueue ? null : (
@@ -569,6 +609,49 @@ export function CockpitPage() {
                         <li><span>Highest urgency scope</span><strong>{reviewAging.highest_urgency_scope ?? 'n/a'}</strong></li>
                       </ul>
                       <p className={reviewAging.overdue_count > 0 ? 'warning-text' : 'muted-text'}>{reviewAging.aging_summary}</p>
+                    </div>
+                  )}
+                  {!reviewActivity ? null : (
+                    <div className="subsection">
+                      <p className="section-label">Recent Review Activity</p>
+                      <ul className="key-value-list">
+                        <li><span>Recent actions</span><strong>{reviewActivity.activity_count}</strong></li>
+                        <li><span>Latest action at</span><strong>{formatDate(reviewActivity.latest_action_at)}</strong></li>
+                        <li><span>Summary</span><strong>{reviewActivity.activity_summary}</strong></li>
+                      </ul>
+                      {reviewActivity.items.length === 0 ? (
+                        <p className="muted-text">No review actions match the current activity filters.</p>
+                      ) : (
+                        <div className="cockpit-attention-list">
+                          {reviewActivity.items.map((item, index) => (
+                            <article key={`activity-${item.source_scope}-${item.created_at}-${index}`} className="cockpit-attention-item">
+                              <div>
+                                <p className="section-label">{item.activity_label} · {item.resulting_review_status}</p>
+                                <h3>{item.source_scope}</h3>
+                                <p>{formatDate(item.created_at)} · {item.action_type}</p>
+                                <p className="muted-text">{item.scope_review_summary}</p>
+                              </div>
+                              <div className="button-row">
+                                <button
+                                  className="secondary-button"
+                                  type="button"
+                                  onClick={() => {
+                                    if (tuningPanel?.items?.some((panelItem) => panelItem.source_scope === item.source_scope)) {
+                                      void investigateScope(item.source_scope);
+                                      return;
+                                    }
+                                    setAttentionOnly(false);
+                                    setQueuedInvestigationScope(item.source_scope);
+                                  }}
+                                >
+                                  Open review
+                                </button>
+                                <button className="ghost-button" type="button" onClick={() => navigate(item.runtime_investigation_deep_link)}>Open in runtime</button>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                   <ul className="key-value-list">

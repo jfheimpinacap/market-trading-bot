@@ -30,6 +30,25 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 
 This layer is paper-only/read-only and does not change runtime operation logic, manual-review actions, or `/runtime` authority paths. Cockpit uses it as a compact prioritization strip above existing review aging + review queue.
 
+### Runtime Tuning Review Activity Feed (new)
+
+`runtime_governor` now exposes a compact read-only **Runtime Tuning Review Activity Feed** derived directly from existing manual review actions (`RuntimeTuningReviewAction`).
+
+- API:
+  - `GET /api/runtime-governor/tuning-review-activity/`
+  - `GET /api/runtime-governor/tuning-review-activity/<source_scope>/`
+- optional list query params:
+  - `source_scope`
+  - `action_type` (`ACKNOWLEDGE_CURRENT` | `MARK_FOLLOWUP_REQUIRED` | `CLEAR_REVIEW_STATE`)
+  - `limit` (compact default: `10`)
+- payload focus:
+  - deterministic `activity_summary`
+  - compact action labels (`ACKNOWLEDGED`, `FOLLOWUP_MARKED`, `REVIEW_CLEARED`)
+  - explicit reason codes (action + resulting state)
+  - scope review summary + runtime investigation deep links
+
+Cockpit uses this as recent human-context next to queue/aging/escalation so operators can see what manual actions happened recently before a scope becomes stale or urgent. This remains paper-only/read-only and does not change runtime tuning operation logic.
+
 ### Governance review queue (new)
 
 `mission_control` now includes a **unified governance review queue** to centralize pending manual triage from:

@@ -947,3 +947,48 @@ export type RuntimeTuningReviewAction = {
   resulting_review_status: RuntimeTuningManualReviewStatus;
   created_at: string;
 };
+
+export type RuntimeTuningReviewActivityLabel = 'ACKNOWLEDGED' | 'FOLLOWUP_MARKED' | 'REVIEW_CLEARED';
+
+export type RuntimeTuningReviewActivityReasonCode =
+  | 'ACTION_ACKNOWLEDGE_CURRENT'
+  | 'ACTION_MARK_FOLLOWUP_REQUIRED'
+  | 'ACTION_CLEAR_REVIEW_STATE'
+  | 'STATE_NOW_ACKNOWLEDGED'
+  | 'STATE_NOW_FOLLOWUP'
+  | 'STATE_NOW_UNREVIEWED';
+
+export type RuntimeTuningReviewActivityItem = {
+  source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  action_type: RuntimeTuningReviewAction['action_type'];
+  created_at: string;
+  resulting_review_status: RuntimeTuningManualReviewStatus;
+  snapshot_id: number | null;
+  activity_label: RuntimeTuningReviewActivityLabel;
+  activity_reason_codes: RuntimeTuningReviewActivityReasonCode[];
+  scope_review_summary: string;
+  runtime_investigation_deep_link: string;
+  effective_review_status?: RuntimeTuningManualReviewStatus;
+  has_newer_snapshot_than_reviewed?: boolean;
+};
+
+export type RuntimeTuningReviewActivity = {
+  activity_count: number;
+  latest_action_at: string | null;
+  activity_summary: string;
+  items: RuntimeTuningReviewActivityItem[];
+};
+
+export type RuntimeTuningReviewActivityDetail = {
+  source_scope: RuntimeTuningContextSnapshot['source_scope'];
+  activity_count: number;
+  latest_action_at: string;
+  scope_activity_summary: string;
+  items: RuntimeTuningReviewActivityItem[];
+};
+
+export type RuntimeTuningReviewActivityQuery = {
+  source_scope?: RuntimeTuningContextSnapshot['source_scope'];
+  action_type?: RuntimeTuningReviewAction['action_type'];
+  limit?: number;
+};
