@@ -174,6 +174,37 @@ class LivePaperBootstrapRequestSerializer(serializers.Serializer):
     start_now = serializers.BooleanField(required=False, default=True)
 
 
+class LivePaperAttentionAlertSyncSerializer(serializers.Serializer):
+    attention_needed = serializers.BooleanField()
+    attention_mode = serializers.ChoiceField(choices=['HEALTHY', 'DEGRADED', 'REVIEW_NOW', 'BLOCKED'])
+    alert_action = serializers.ChoiceField(choices=['CREATED', 'UPDATED', 'RESOLVED', 'NOOP'])
+    alert_severity = serializers.ChoiceField(choices=['warning', 'high', 'critical'], allow_null=True, required=False)
+    session_active = serializers.BooleanField()
+    heartbeat_active = serializers.BooleanField()
+    current_session_status = serializers.CharField()
+    attention_reason_codes = serializers.ListField(child=serializers.CharField(), required=False)
+    status_summary = serializers.CharField()
+    alert_status_summary = serializers.CharField()
+    material_change_detected = serializers.BooleanField(required=False)
+    material_change_fields = serializers.ListField(child=serializers.CharField(), required=False)
+    update_suppressed = serializers.BooleanField(required=False)
+    suppression_reason = serializers.CharField(required=False, allow_null=True)
+    active_alert_present = serializers.BooleanField(required=False)
+
+
+class LivePaperAttentionAlertStatusSerializer(serializers.Serializer):
+    attention_needed = serializers.BooleanField()
+    attention_mode = serializers.ChoiceField(choices=['HEALTHY', 'DEGRADED', 'REVIEW_NOW', 'BLOCKED'])
+    active_alert_present = serializers.BooleanField()
+    active_alert_severity = serializers.ChoiceField(choices=['warning', 'high', 'critical'], allow_null=True, required=False)
+    session_active = serializers.BooleanField()
+    heartbeat_active = serializers.BooleanField()
+    current_session_status = serializers.CharField()
+    status_summary = serializers.CharField()
+    last_alert_action = serializers.CharField(required=False, allow_null=True)
+    last_sync_summary = serializers.CharField(required=False, allow_null=True)
+
+
 class AutonomousRunnerStateSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousRunnerState

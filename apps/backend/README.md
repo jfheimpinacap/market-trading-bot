@@ -164,6 +164,26 @@ Low-noise stabilization behavior:
 - `RESOLVED` when attention is no longer needed and an alert was active.
 - repeated heartbeats with equivalent signal remain deterministic `NOOP`.
 
+Mission control now also provides a compact **live paper autopilot operational attention bridge**:
+
+- service: `apps.mission_control.services.live_paper_attention_bridge`
+- endpoints:
+  - `POST /api/mission-control/sync-live-paper-attention-alert/`
+  - `GET /api/mission-control/live-paper-attention-alert-status/`
+- global dedupe key: `live_paper_autopilot_attention_global`
+- deterministic attention mapping:
+  - `BLOCKED` -> `high` active operator alert
+  - `REVIEW_NOW` -> `high` active operator alert
+  - `DEGRADED` -> `warning` active operator alert
+  - `HEALTHY` -> resolve bridge alert (if active)
+- low-noise behavior:
+  - `CREATED` when attention appears and no active bridge alert exists
+  - `UPDATED` only on material signal changes
+  - `NOOP` when signal is materially unchanged
+  - `RESOLVED` when attention is no longer needed
+
+The bridge reuses existing mission-control bootstrap status, heartbeat summaries, and health/recovery hints plus the existing `operator_alerts` services. It introduces no new scheduler/models, remains paper-only, and does not modify runtime/trading logic.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:

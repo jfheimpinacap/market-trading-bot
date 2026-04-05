@@ -40,6 +40,7 @@ from apps.portfolio_governor.models import (
     PortfolioExposureCoordinationRun,
     PortfolioExposureDecision,
 )
+from apps.operator_alerts.models import OperatorAlert, OperatorAlertSeverity, OperatorAlertSource, OperatorAlertStatus, OperatorAlertType
 
 
 class MissionControlApiTests(TestCase):
@@ -525,6 +526,246 @@ class AutonomousHeartbeatRunnerTests(TestCase):
         self.assertEqual(sync_payload.get('alert_action'), 'ERROR')
         self.assertFalse(sync_payload.get('success'))
 
+
+class LivePaperAttentionBridgeTests(TestCase):
+    def _sync(self) -> dict:
+        response = self.client.post(reverse('mission_control:sync-live-paper-attention-alert'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary',
+        return_value={'runtime_tuning_attention_sync': {'human_attention_mode': 'NO_ACTION'}},
+    )
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': False,
+            'heartbeat_active': False,
+            'current_session_status': 'MISSING',
+            'operator_attention_hint': 'Bootstrap has not created a reusable session yet.',
+            'status_summary': 'preset=live_read_only_paper_conservative session_active=False heartbeat_active=False',
+        },
+    )
+    def test_healthy_without_session_keeps_no_active_alert(self, *_mocks):
+        payload = self._sync()
+        self.assertEqual(payload['attention_mode'], 'HEALTHY')
+        self.assertIn(payload['alert_action'], {'NOOP', 'RESOLVED'})
+        self.assertFalse(OperatorAlert.objects.filter(dedupe_key='live_paper_autopilot_attention_global', status=OperatorAlertStatus.OPEN).exists())
+
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary', return_value={'runtime_tuning_attention_sync': {}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': True,
+            'heartbeat_active': True,
+            'current_session_status': 'BLOCKED',
+            'operator_attention_hint': 'Session blocked by safety stop.',
+            'status_summary': 'session blocked',
+        },
+    )
+    def test_blocked_session_creates_active_alert(self, *_mocks):
+        payload = self._sync()
+        self.assertEqual(payload['attention_mode'], 'BLOCKED')
+        self.assertEqual(payload['alert_action'], 'CREATED')
+        self.assertEqual(payload['alert_severity'], OperatorAlertSeverity.HIGH)
+        self.assertTrue(OperatorAlert.objects.filter(dedupe_key='live_paper_autopilot_attention_global', status=OperatorAlertStatus.OPEN).exists())
+
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary', return_value={'runtime_tuning_attention_sync': {}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': True,
+            'heartbeat_active': False,
+            'current_session_status': 'RUNNING',
+            'operator_attention_hint': 'Session is active; monitor heartbeat and safety guardrails.',
+            'status_summary': 'session active heartbeat inactive',
+        },
+    )
+    def test_active_session_with_inactive_heartbeat_requires_review(self, *_mocks):
+        payload = self._sync()
+        self.assertEqual(payload['attention_mode'], 'REVIEW_NOW')
+        self.assertTrue(payload['attention_needed'])
+        self.assertIn('session_active_heartbeat_inactive', payload['attention_reason_codes'])
+
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {'manual_review': 0, 'incident_escalation': 0}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {'manual_review_or_escalation': 1}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary', return_value={'runtime_tuning_attention_sync': {'human_attention_mode': 'REVIEW_SOON'}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': True,
+            'heartbeat_active': True,
+            'current_session_status': 'DEGRADED',
+            'operator_attention_hint': 'Session is active; monitor heartbeat and safety guardrails.',
+            'status_summary': 'session degraded',
+        },
+    )
+    def test_degraded_state_uses_warning_alert(self, *_mocks):
+        payload = self._sync()
+        self.assertEqual(payload['attention_mode'], 'DEGRADED')
+        self.assertEqual(payload['alert_severity'], OperatorAlertSeverity.WARNING)
+        alert = OperatorAlert.objects.get(dedupe_key='live_paper_autopilot_attention_global')
+        self.assertEqual(alert.severity, OperatorAlertSeverity.WARNING)
+
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary', return_value={'runtime_tuning_attention_sync': {}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': True,
+            'heartbeat_active': False,
+            'current_session_status': 'RUNNING',
+            'operator_attention_hint': 'active',
+            'status_summary': 'review now state',
+        },
+    )
+    def test_global_dedupe_avoids_multiple_open_alerts(self, *_mocks):
+        OperatorAlert.objects.create(
+            alert_type=OperatorAlertType.RUNTIME,
+            severity=OperatorAlertSeverity.HIGH,
+            status=OperatorAlertStatus.OPEN,
+            title='dup-1',
+            summary='dup',
+            source=OperatorAlertSource.RUNTIME,
+            dedupe_key='live_paper_autopilot_attention_global',
+            first_seen_at=timezone.now(),
+            last_seen_at=timezone.now(),
+            metadata={},
+        )
+        OperatorAlert.objects.create(
+            alert_type=OperatorAlertType.RUNTIME,
+            severity=OperatorAlertSeverity.HIGH,
+            status=OperatorAlertStatus.OPEN,
+            title='dup-2',
+            summary='dup',
+            source=OperatorAlertSource.RUNTIME,
+            dedupe_key='live_paper_autopilot_attention_global',
+            first_seen_at=timezone.now(),
+            last_seen_at=timezone.now(),
+            metadata={},
+        )
+        payload = self._sync()
+        self.assertIn(payload['alert_action'], {'UPDATED', 'NOOP'})
+        self.assertEqual(
+            OperatorAlert.objects.filter(dedupe_key='live_paper_autopilot_attention_global', status=OperatorAlertStatus.OPEN).count(),
+            1,
+        )
+
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary', return_value={'runtime_tuning_attention_sync': {}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': True,
+            'heartbeat_active': False,
+            'current_session_status': 'RUNNING',
+            'operator_attention_hint': 'active',
+            'status_summary': 'review now state',
+        },
+    )
+    def test_repeated_same_state_returns_noop(self, *_mocks):
+        first = self._sync()
+        second = self._sync()
+        self.assertEqual(first['attention_mode'], 'REVIEW_NOW')
+        self.assertEqual(second['alert_action'], 'NOOP')
+
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary', return_value={'runtime_tuning_attention_sync': {}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': True,
+            'heartbeat_active': False,
+            'current_session_status': 'RUNNING',
+            'operator_attention_hint': 'active',
+            'status_summary': 'review now state',
+        },
+    )
+    def test_sync_payload_contract(self, *_mocks):
+        payload = self._sync()
+        required_keys = {
+            'attention_needed',
+            'attention_mode',
+            'alert_action',
+            'alert_severity',
+            'session_active',
+            'heartbeat_active',
+            'current_session_status',
+            'attention_reason_codes',
+            'status_summary',
+            'alert_status_summary',
+        }
+        self.assertTrue(required_keys.issubset(payload.keys()))
+
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary', return_value={'runtime_tuning_attention_sync': {}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': True,
+            'heartbeat_active': False,
+            'current_session_status': 'RUNNING',
+            'operator_attention_hint': 'active',
+            'status_summary': 'review now state',
+        },
+    )
+    def test_status_payload_contract(self, *_mocks):
+        self._sync()
+        response = self.client.get(reverse('mission_control:live-paper-attention-alert-status'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        required_keys = {
+            'attention_needed',
+            'attention_mode',
+            'active_alert_present',
+            'active_alert_severity',
+            'session_active',
+            'heartbeat_active',
+            'current_session_status',
+            'status_summary',
+        }
+        self.assertTrue(required_keys.issubset(payload.keys()))
+
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary', return_value={'runtime_tuning_attention_sync': {}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': True,
+            'heartbeat_active': False,
+            'current_session_status': 'RUNNING',
+            'operator_attention_hint': 'active',
+            'status_summary': 'review now state',
+        },
+    )
+    def test_sync_does_not_affect_alerts_from_other_sources(self, *_mocks):
+        other = OperatorAlert.objects.create(
+            alert_type=OperatorAlertType.SAFETY,
+            severity=OperatorAlertSeverity.HIGH,
+            status=OperatorAlertStatus.OPEN,
+            title='other source',
+            summary='should stay open',
+            source=OperatorAlertSource.SAFETY,
+            dedupe_key='safety_global',
+            first_seen_at=timezone.now(),
+            last_seen_at=timezone.now(),
+            metadata={},
+        )
+        self._sync()
+        other.refresh_from_db()
+        self.assertEqual(other.status, OperatorAlertStatus.OPEN)
 
 class SessionTimingProfileTests(TestCase):
     def test_profile_endpoint_bootstraps_defaults(self):

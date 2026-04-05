@@ -106,6 +106,8 @@ from apps.mission_control.serializers import (
     ApplySessionResumeRequestSerializer,
     AutonomousSessionRecommendationSerializer,
     AutonomousSessionStartRequestSerializer,
+    LivePaperAttentionAlertStatusSerializer,
+    LivePaperAttentionAlertSyncSerializer,
     LivePaperBootstrapRequestSerializer,
     AutonomousTickDispatchAttemptSerializer,
     MissionControlCycleSerializer,
@@ -188,6 +190,10 @@ from apps.mission_control.governance_auto_resolution.services.auto_resolve impor
 from apps.mission_control.services.live_paper_bootstrap import (
     bootstrap_live_read_only_paper_session,
     get_live_paper_bootstrap_status,
+)
+from apps.mission_control.services.live_paper_attention_bridge import (
+    get_live_paper_attention_alert_status,
+    sync_live_paper_attention_alert,
 )
 
 
@@ -399,6 +405,18 @@ class LivePaperBootstrapStatusView(APIView):
     def get(self, request, *args, **kwargs):
         preset_name = request.query_params.get('preset') or request.query_params.get('preset_name')
         return Response(get_live_paper_bootstrap_status(preset_name=preset_name), status=status.HTTP_200_OK)
+
+
+class SyncLivePaperAttentionAlertView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = LivePaperAttentionAlertSyncSerializer(sync_live_paper_attention_alert())
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class LivePaperAttentionAlertStatusView(APIView):
+    def get(self, request, *args, **kwargs):
+        serializer = LivePaperAttentionAlertStatusSerializer(get_live_paper_attention_alert_status())
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class StartAutonomousRunnerView(APIView):
