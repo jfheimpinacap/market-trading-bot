@@ -530,6 +530,12 @@ Qué centraliza en una sola vista:
   - lista compacta de recent paper trades (cuando backend los expone)
   - botón `Refresh portfolio` + enlace `Open portfolio`
   - fallback no bloqueante: `Paper portfolio snapshot unavailable`
+- card compacta `Live Paper Validation` para readiness V1:
+  - badge fuerte `READY` / `WARNING` / `BLOCKED`
+  - `validation_summary` + `next_action_hint`
+  - señales compactas: `session_active`, `heartbeat_active`, `attention_mode`, `paper_account_ready`, `portfolio_snapshot_ready`
+  - checks cortos `PASS` / `WARN` / `FAIL`
+  - botón `Refresh validation` y fallback no bloqueante: `Live paper validation unavailable`
 - attention queue priorizada por severidad con drill-down a módulos y a `/trace`
 - quick actions para disparar acciones ya existentes (sin nueva lógica autónoma)
 
@@ -577,6 +583,7 @@ El cockpit compone servicios ya existentes (sin backend monolítico nuevo):
 - promotion, champion-challenger
 - trace summary + query runs
 - paper trading snapshot services (`/api/paper/account/`, `/api/paper/summary/`, `/api/paper/snapshots/`)
+- live paper validation digest (`/api/mission-control/live-paper-validation/`)
 
 ## Autonomy advisory board en `/autonomy-advisory` (new)
 

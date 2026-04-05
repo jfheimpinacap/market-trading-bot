@@ -13,6 +13,7 @@ import {
   getAutonomousHeartbeatSummary,
   getLivePaperAttentionAlertStatus,
   getLivePaperBootstrapStatus,
+  getLivePaperValidation,
   syncLivePaperAttentionAlert,
 } from '../services/missionControl';
 import { getPaperAccount, getPaperSnapshots, getPaperSummary } from '../services/paperTrading';
@@ -43,6 +44,7 @@ import type {
   LivePaperAttentionAlertStatusResponse,
   LivePaperBootstrapResponse,
   LivePaperBootstrapStatusResponse,
+  LivePaperValidationDigestResponse,
 } from '../types/missionControl';
 import type {
   RuntimeTuningCockpitPanel,
@@ -84,6 +86,20 @@ const toneFromStatus = (status: string | null | undefined): 'ready' | 'pending' 
   if (['ACTIVE', 'READY', 'RUNNING', 'SUCCESS', 'PARITY_OK', 'COMPLETED', 'NORMAL', 'ACKNOWLEDGED'].includes(normalized)) return 'ready';
   if (['DEGRADED', 'PAUSED', 'WARNING', 'THROTTLED', 'BLOCK_NEW_ENTRIES', 'PARTIAL', 'CAUTION', 'FOLLOWUP', 'STALE', 'UNREVIEWED'].includes(normalized)) return 'pending';
   if (['FAILED', 'STOPPED', 'ROLLED_BACK', 'REJECTED', 'REMEDIATION_REQUIRED', 'RECERTIFICATION_REQUIRED'].includes(normalized)) return 'offline';
+  return 'neutral';
+};
+
+const toneFromValidationStatus = (status: LivePaperValidationDigestResponse['validation_status'] | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
+  if (status === 'READY') return 'ready';
+  if (status === 'WARNING') return 'pending';
+  if (status === 'BLOCKED') return 'offline';
+  return 'neutral';
+};
+
+const toneFromValidationCheck = (status: 'PASS' | 'WARN' | 'FAIL'): 'ready' | 'pending' | 'offline' | 'neutral' => {
+  if (status === 'PASS') return 'ready';
+  if (status === 'WARN') return 'pending';
+  if (status === 'FAIL') return 'offline';
   return 'neutral';
 };
 
@@ -173,6 +189,9 @@ export function CockpitPage() {
   const [livePaperStatus, setLivePaperStatus] = useState<LivePaperBootstrapStatusResponse | null>(null);
   const [livePaperStatusLoading, setLivePaperStatusLoading] = useState(true);
   const [livePaperStatusError, setLivePaperStatusError] = useState<string | null>(null);
+  const [livePaperValidation, setLivePaperValidation] = useState<LivePaperValidationDigestResponse | null>(null);
+  const [livePaperValidationLoading, setLivePaperValidationLoading] = useState(true);
+  const [livePaperValidationError, setLivePaperValidationError] = useState<string | null>(null);
   const [livePaperStartLoading, setLivePaperStartLoading] = useState(false);
   const [livePaperStartError, setLivePaperStartError] = useState<string | null>(null);
   const [livePaperStartResult, setLivePaperStartResult] = useState<LivePaperBootstrapResponse | null>(null);
@@ -217,6 +236,20 @@ export function CockpitPage() {
       setLivePaperStatusError(getErrorMessage(statusError, 'Could not load live paper autopilot status.'));
     } finally {
       setLivePaperStatusLoading(false);
+    }
+  }, []);
+
+  const loadLivePaperValidation = useCallback(async () => {
+    setLivePaperValidationLoading(true);
+    setLivePaperValidationError(null);
+    try {
+      const payload = await getLivePaperValidation();
+      setLivePaperValidation(payload);
+    } catch (validationError) {
+      setLivePaperValidation(null);
+      setLivePaperValidationError(getErrorMessage(validationError, 'Live paper validation unavailable'));
+    } finally {
+      setLivePaperValidationLoading(false);
     }
   }, []);
 
@@ -303,13 +336,13 @@ export function CockpitPage() {
     try {
       const payload = await bootstrapLivePaperSession();
       setLivePaperStartResult(payload);
-      await Promise.all([loadLivePaperStatus(), loadLivePaperOperationalSnapshot(), loadPaperPortfolioSnapshot()]);
+      await Promise.all([loadLivePaperStatus(), loadLivePaperOperationalSnapshot(), loadPaperPortfolioSnapshot(), loadLivePaperValidation()]);
     } catch (startError) {
       setLivePaperStartError(getErrorMessage(startError, 'Could not start live paper autopilot.'));
     } finally {
       setLivePaperStartLoading(false);
     }
-  }, [loadLivePaperOperationalSnapshot, loadLivePaperStatus, loadPaperPortfolioSnapshot]);
+  }, [loadLivePaperOperationalSnapshot, loadLivePaperStatus, loadPaperPortfolioSnapshot, loadLivePaperValidation]);
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -388,6 +421,10 @@ export function CockpitPage() {
   useEffect(() => {
     void loadLivePaperOperationalSnapshot();
   }, [loadLivePaperOperationalSnapshot]);
+
+  useEffect(() => {
+    void loadLivePaperValidation();
+  }, [loadLivePaperValidation]);
 
   useEffect(() => {
     void loadPaperPortfolioSnapshot();
@@ -690,10 +727,66 @@ export function CockpitPage() {
                     </>
                   ) : null}
                   <div className="button-row">
-                    <button className="secondary-button" type="button" disabled={paperPortfolioLoading} onClick={() => void loadPaperPortfolioSnapshot()}>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={paperPortfolioLoading}
+                      onClick={() => {
+                        void Promise.all([loadPaperPortfolioSnapshot(), loadLivePaperValidation()]);
+                      }}
+                    >
                       Refresh portfolio
                     </button>
                     <button className="ghost-button" type="button" onClick={() => navigate('/portfolio')}>Open portfolio</button>
+                  </div>
+                </SectionCard>
+                <SectionCard
+                  eyebrow="V1 readiness"
+                  title="Live Paper Validation"
+                  description="Compact digest to answer if the read-only paper V1 loop is operational now."
+                >
+                  {livePaperValidationLoading ? <p>Loading live paper validation…</p> : null}
+                  {!livePaperValidationLoading && livePaperValidationError ? <p className="warning-text">Live paper validation unavailable.</p> : null}
+                  {!livePaperValidationLoading && livePaperValidation ? (
+                    <>
+                      <div className="button-row">
+                        <StatusBadge tone={toneFromValidationStatus(livePaperValidation.validation_status)}>
+                          {livePaperValidation.validation_status}
+                        </StatusBadge>
+                        <StatusBadge tone={livePaperValidation.session_active ? 'ready' : 'pending'}>
+                          Session {livePaperValidation.session_active ? 'active' : 'inactive'}
+                        </StatusBadge>
+                        <StatusBadge tone={livePaperValidation.heartbeat_active ? 'ready' : 'pending'}>
+                          Heartbeat {livePaperValidation.heartbeat_active ? 'active' : 'inactive'}
+                        </StatusBadge>
+                        <StatusBadge tone={toneFromStatus(livePaperValidation.attention_mode)}>
+                          Attention {livePaperValidation.attention_mode}
+                        </StatusBadge>
+                      </div>
+                      <ul className="key-value-list">
+                        <li><span>Validation summary</span><strong>{livePaperValidation.validation_summary}</strong></li>
+                        <li><span>Next action hint</span><strong>{livePaperValidation.next_action_hint}</strong></li>
+                        <li><span>Paper account ready</span><strong>{String(livePaperValidation.paper_account_ready)}</strong></li>
+                        <li><span>Portfolio snapshot ready</span><strong>{String(livePaperValidation.portfolio_snapshot_ready)}</strong></li>
+                        <li><span>Market data ready</span><strong>{String(livePaperValidation.market_data_ready)}</strong></li>
+                      </ul>
+                      <div className="subsection">
+                        <p className="section-label">Compact checks</p>
+                        <div className="button-row">
+                          {livePaperValidation.checks.slice(0, 6).map((check) => (
+                            <StatusBadge key={check.check_name} tone={toneFromValidationCheck(check.status)}>
+                              {check.status} · {check.check_name}
+                            </StatusBadge>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                  <div className="button-row">
+                    <button className="secondary-button" type="button" disabled={livePaperValidationLoading} onClick={() => void loadLivePaperValidation()}>
+                      Refresh validation
+                    </button>
+                    <button className="ghost-button" type="button" onClick={() => navigate('/mission-control')}>Open autopilot</button>
                   </div>
                 </SectionCard>
                 <SectionCard
@@ -794,9 +887,9 @@ export function CockpitPage() {
                   <button
                     className="secondary-button"
                     type="button"
-                    disabled={livePaperStatusLoading || livePaperOperationalSnapshotLoading}
+                    disabled={livePaperStatusLoading || livePaperOperationalSnapshotLoading || livePaperValidationLoading}
                     onClick={() => {
-                      void Promise.all([loadLivePaperStatus(), loadLivePaperOperationalSnapshot(), loadPaperPortfolioSnapshot()]);
+                      void Promise.all([loadLivePaperStatus(), loadLivePaperOperationalSnapshot(), loadPaperPortfolioSnapshot(), loadLivePaperValidation()]);
                     }}
                   >
                     Refresh status

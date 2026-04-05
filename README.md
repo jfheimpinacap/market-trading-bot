@@ -98,6 +98,23 @@ It now also auto-syncs once per local mission-control heartbeat pass (reusing th
 
 The digest is strictly an aggregation/validation layer: it reuses existing bootstrap/heartbeat/attention/paper signals, introduces no new models, and remains real-market read-only plus paper-money-only execution.
 
+### Live Paper Validation cockpit card (frontend, new)
+
+`/cockpit` now includes a compact **Live Paper Validation** card next to the existing live-paper operational cards.
+
+- consumes existing backend digest endpoint:
+  - `GET /api/mission-control/live-paper-validation/`
+- shows at-a-glance V1 readiness:
+  - strong status badge: `READY` / `WARNING` / `BLOCKED`
+  - `validation_summary` + `next_action_hint`
+  - compact state line for `session_active`, `heartbeat_active`, `attention_mode`, `paper_account_ready`, `portfolio_snapshot_ready`
+  - short check list (`PASS` / `WARN` / `FAIL`)
+- includes compact actions:
+  - `Refresh validation`
+  - optional navigation shortcut to autopilot (`Open autopilot`)
+
+The card complements (does not replace) **Live Paper Autopilot**, **Operational Snapshot**, and **Paper Portfolio Snapshot** and remains strictly `REAL_READ_ONLY` + `PAPER_ONLY` (no live trading enablement).
+
 ### Runtime Tuning Review Escalation (new)
 
 `runtime_governor` now exposes a compact read-only **Runtime Tuning Review Escalation** layer above existing tuning review queue + aging.
