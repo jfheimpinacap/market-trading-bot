@@ -164,6 +164,54 @@ export type LivePaperBootstrapStatusResponse = {
   status_summary: string;
 };
 
+export type LivePaperAttentionMode = 'HEALTHY' | 'DEGRADED' | 'REVIEW_NOW' | 'BLOCKED';
+export type LivePaperAttentionAlertAction = 'CREATED' | 'UPDATED' | 'RESOLVED' | 'NOOP';
+export type LivePaperAttentionSyncAction = LivePaperAttentionAlertAction | 'ERROR' | null;
+export type LivePaperAttentionSeverity = 'warning' | 'high' | 'critical' | null;
+
+export type LivePaperAttentionAutoSyncStatus = {
+  attempted: boolean;
+  success: boolean;
+  alert_action: LivePaperAttentionSyncAction;
+  attention_mode: LivePaperAttentionMode | null;
+  session_active?: boolean;
+  heartbeat_active?: boolean;
+  current_session_status?: string | null;
+  sync_summary: string;
+};
+
+export type LivePaperAttentionAlertStatusResponse = {
+  attention_needed: boolean;
+  attention_mode: LivePaperAttentionMode;
+  active_alert_present: boolean;
+  active_alert_severity: LivePaperAttentionSeverity;
+  session_active: boolean;
+  heartbeat_active: boolean;
+  current_session_status: string;
+  status_summary: string;
+  last_alert_action?: LivePaperAttentionSyncAction;
+  last_sync_summary?: string | null;
+  last_auto_sync?: LivePaperAttentionAutoSyncStatus | null;
+};
+
+export type LivePaperAttentionAlertSyncResponse = {
+  attention_needed: boolean;
+  attention_mode: LivePaperAttentionMode;
+  alert_action: LivePaperAttentionAlertAction;
+  alert_severity?: LivePaperAttentionSeverity;
+  session_active: boolean;
+  heartbeat_active: boolean;
+  current_session_status: string;
+  attention_reason_codes?: string[];
+  status_summary: string;
+  alert_status_summary: string;
+  material_change_detected?: boolean;
+  material_change_fields?: string[];
+  update_suppressed?: boolean;
+  suppression_reason?: 'NO_MATERIAL_CHANGE' | 'ALERT_NOT_NEEDED' | 'NO_ACTIVE_ALERT' | null;
+  active_alert_present?: boolean;
+};
+
 export type AutonomousRuntimeSummary = {
   latest_runtime_run_id: number | null;
   runtime_run_count: number;
@@ -337,6 +385,7 @@ export type AutonomousHeartbeatSummary = {
     active_alert_present?: boolean;
     sync_summary: string;
   };
+  live_paper_attention_sync?: LivePaperAttentionAutoSyncStatus | null;
 };
 
 export type AutonomousScheduleProfile = {

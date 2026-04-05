@@ -11,7 +11,9 @@ import {
   bootstrapLivePaperSession,
   getAutonomousHeartbeatRuns,
   getAutonomousHeartbeatSummary,
+  getLivePaperAttentionAlertStatus,
   getLivePaperBootstrapStatus,
+  syncLivePaperAttentionAlert,
 } from '../services/missionControl';
 import { getAutonomyScenarioSummary } from '../services/autonomyScenario';
 import {
@@ -37,6 +39,7 @@ import type { CockpitAttentionItem, CockpitQuickActionId, CockpitSnapshot } from
 import type {
   AutonomousHeartbeatRun,
   AutonomousHeartbeatSummary,
+  LivePaperAttentionAlertStatusResponse,
   LivePaperBootstrapResponse,
   LivePaperBootstrapStatusResponse,
 } from '../types/missionControl';
@@ -160,15 +163,19 @@ export function CockpitPage() {
   const [livePaperOperationalSnapshotError, setLivePaperOperationalSnapshotError] = useState<string | null>(null);
   const [autonomousHeartbeatSummary, setAutonomousHeartbeatSummary] = useState<AutonomousHeartbeatSummary | null>(null);
   const [latestAutonomousHeartbeatRun, setLatestAutonomousHeartbeatRun] = useState<AutonomousHeartbeatRun | null>(null);
+  const [livePaperAttentionStatus, setLivePaperAttentionStatus] = useState<LivePaperAttentionAlertStatusResponse | null>(null);
+  const [livePaperAttentionStatusError, setLivePaperAttentionStatusError] = useState<string | null>(null);
+  const [livePaperAttentionSyncLoading, setLivePaperAttentionSyncLoading] = useState(false);
+  const [livePaperAttentionSyncMessage, setLivePaperAttentionSyncMessage] = useState<string | null>(null);
+  const [livePaperAttentionSyncError, setLivePaperAttentionSyncError] = useState<string | null>(null);
   const heartbeatAutoSyncHint = useMemo(() => {
-    const sync = autotriageAlertStatus?.runtime_tuning_attention_sync;
-    if (!sync || !sync.attempted) return 'Auto-sync status unavailable';
-    if (!sync.success || sync.alert_action === 'ERROR') return 'Auto-sync via heartbeat active · last: ERROR';
-    if (sync.update_suppressed && sync.suppression_reason === 'NO_MATERIAL_CHANGE') {
-      return `Auto-sync via heartbeat active · Last sync: ${sync.alert_action ?? 'NOOP'} · No material change`;
-    }
-    return `Auto-sync via heartbeat active · Last auto-sync: ${sync.alert_action ?? 'NOOP'}`;
-  }, [autotriageAlertStatus]);
+    const heartbeatSync = autonomousHeartbeatSummary?.live_paper_attention_sync;
+    const lastAutoSync = livePaperAttentionStatus?.last_auto_sync;
+    const sync = lastAutoSync ?? heartbeatSync;
+    if (!sync?.attempted) return 'Attention auto-sync unavailable';
+    if (!sync.success || sync.alert_action === 'ERROR') return 'Attention auto-sync active · last result: ERROR';
+    return `Attention auto-sync active · Last auto-sync: ${sync.alert_action ?? 'NOOP'}`;
+  }, [autonomousHeartbeatSummary, livePaperAttentionStatus]);
 
   const loadLivePaperStatus = useCallback(async () => {
     setLivePaperStatusLoading(true);
@@ -187,19 +194,42 @@ export function CockpitPage() {
   const loadLivePaperOperationalSnapshot = useCallback(async () => {
     setLivePaperOperationalSnapshotLoading(true);
     setLivePaperOperationalSnapshotError(null);
+    setLivePaperAttentionStatusError(null);
     try {
-      const [heartbeatSummary, heartbeatRuns, tuningAlertStatus] = await Promise.all([
+      const [heartbeatSummaryResult, heartbeatRunsResult, attentionStatusResult] = await Promise.allSettled([
         getAutonomousHeartbeatSummary(),
         getAutonomousHeartbeatRuns(),
-        getRuntimeTuningAutotriageAlertStatus(),
+        getLivePaperAttentionAlertStatus(),
       ]);
-      setAutonomousHeartbeatSummary(heartbeatSummary);
-      setLatestAutonomousHeartbeatRun(heartbeatRuns[0] ?? null);
-      setAutotriageAlertStatus(tuningAlertStatus);
+
+      if (heartbeatSummaryResult.status === 'fulfilled') {
+        setAutonomousHeartbeatSummary(heartbeatSummaryResult.value);
+      } else {
+        setAutonomousHeartbeatSummary(null);
+      }
+
+      if (heartbeatRunsResult.status === 'fulfilled') {
+        setLatestAutonomousHeartbeatRun(heartbeatRunsResult.value[0] ?? null);
+      } else {
+        setLatestAutonomousHeartbeatRun(null);
+      }
+
+      if (attentionStatusResult.status === 'fulfilled') {
+        setLivePaperAttentionStatus(attentionStatusResult.value);
+      } else {
+        setLivePaperAttentionStatus(null);
+        setLivePaperAttentionStatusError('Attention auto-sync unavailable');
+      }
+
+      if (heartbeatSummaryResult.status === 'rejected' || heartbeatRunsResult.status === 'rejected') {
+        setLivePaperOperationalSnapshotError('Operational snapshot unavailable.');
+      }
     } catch (snapshotError) {
       setAutonomousHeartbeatSummary(null);
       setLatestAutonomousHeartbeatRun(null);
+      setLivePaperAttentionStatus(null);
       setLivePaperOperationalSnapshotError(getErrorMessage(snapshotError, 'Operational snapshot unavailable.'));
+      setLivePaperAttentionStatusError('Attention auto-sync unavailable');
     } finally {
       setLivePaperOperationalSnapshotLoading(false);
     }
@@ -460,6 +490,21 @@ export function CockpitPage() {
     }
   }, []);
 
+  const syncLivePaperAttentionAlertManual = useCallback(async () => {
+    setLivePaperAttentionSyncLoading(true);
+    setLivePaperAttentionSyncMessage(null);
+    setLivePaperAttentionSyncError(null);
+    try {
+      const payload = await syncLivePaperAttentionAlert();
+      await loadLivePaperOperationalSnapshot();
+      setLivePaperAttentionSyncMessage(`Sync attention alert: ${payload.alert_action}.`);
+    } catch (syncError) {
+      setLivePaperAttentionSyncError(getErrorMessage(syncError, 'Could not sync live paper operational attention alert.'));
+    } finally {
+      setLivePaperAttentionSyncLoading(false);
+    }
+  }, [loadLivePaperOperationalSnapshot]);
+
   useEffect(() => {
     if (!queuedInvestigationScope || !tuningPanel?.items?.length) return;
     if (!tuningPanel.items.some((item) => item.source_scope === queuedInvestigationScope)) return;
@@ -555,8 +600,10 @@ export function CockpitPage() {
                             {livePaperStatus.operator_attention_hint.toLowerCase().includes('paused') ? 'Operator attention' : 'No operator attention'}
                           </StatusBadge>
                         ) : null}
-                        <StatusBadge tone={autotriageAlertStatus?.alert_needed ? 'pending' : 'neutral'}>
-                          {autotriageAlertStatus ? (autotriageAlertStatus.alert_needed ? 'Auto-sync attention' : 'Auto-sync active') : 'Auto-sync unavailable'}
+                        <StatusBadge tone={livePaperAttentionStatus?.last_auto_sync?.attempted || autonomousHeartbeatSummary?.live_paper_attention_sync?.attempted ? 'ready' : 'neutral'}>
+                          {livePaperAttentionStatus?.last_auto_sync?.attempted || autonomousHeartbeatSummary?.live_paper_attention_sync?.attempted
+                            ? 'Auto-sync available'
+                            : 'Auto-sync unavailable'}
                         </StatusBadge>
                       </div>
                       <ul className="key-value-list">
@@ -566,9 +613,54 @@ export function CockpitPage() {
                         <li><span>Latest heartbeat run</span><strong>{latestAutonomousHeartbeatRun ? `#${latestAutonomousHeartbeatRun.id} · ${latestAutonomousHeartbeatRun.recommendation_summary}` : 'n/a'}</strong></li>
                         <li><span>Latest heartbeat outcome</span><strong>{latestAutonomousHeartbeatRun ? `executed=${latestAutonomousHeartbeatRun.executed_tick_count} blocked=${latestAutonomousHeartbeatRun.blocked_count} wait=${latestAutonomousHeartbeatRun.wait_count}` : 'n/a'}</strong></li>
                         <li><span>Operator hint</span><strong>{livePaperStatus.operator_attention_hint || 'n/a'}</strong></li>
-                        <li><span>Auto-sync hint</span><strong>{autotriageAlertStatus?.status_summary ?? heartbeatAutoSyncHint}</strong></li>
+                        <li><span>Auto-sync hint</span><strong>{heartbeatAutoSyncHint}</strong></li>
                         <li><span>Status summary</span><strong>{livePaperStatus.status_summary}</strong></li>
                       </ul>
+                      <div className="subsection">
+                        <p className="section-label">Operational attention</p>
+                        <div className="button-row">
+                          <StatusBadge tone={livePaperAttentionStatus?.last_auto_sync?.attempted || autonomousHeartbeatSummary?.live_paper_attention_sync?.attempted ? 'ready' : 'neutral'}>
+                            {livePaperAttentionStatus?.last_auto_sync?.attempted || autonomousHeartbeatSummary?.live_paper_attention_sync?.attempted
+                              ? 'Heartbeat auto-sync'
+                              : 'Auto-sync unavailable'}
+                          </StatusBadge>
+                          <StatusBadge tone={livePaperAttentionStatus?.active_alert_present ? 'pending' : 'neutral'}>
+                            {livePaperAttentionStatus?.active_alert_present ? 'Alert active' : 'No active alert'}
+                          </StatusBadge>
+                          {livePaperAttentionStatus?.attention_mode ? (
+                            <StatusBadge tone={toneFromStatus(livePaperAttentionStatus.attention_mode)}>
+                              Mode {livePaperAttentionStatus.attention_mode}
+                            </StatusBadge>
+                          ) : null}
+                        </div>
+                        {livePaperAttentionStatusError ? <p className="muted-text">{livePaperAttentionStatusError}</p> : null}
+                        <p className="muted-text">
+                          Last auto-sync: {livePaperAttentionStatus?.last_auto_sync?.alert_action ?? autonomousHeartbeatSummary?.live_paper_attention_sync?.alert_action ?? 'n/a'}
+                        </p>
+                        <p className="muted-text">
+                          {livePaperAttentionStatus?.last_auto_sync?.sync_summary
+                            ?? autonomousHeartbeatSummary?.live_paper_attention_sync?.sync_summary
+                            ?? livePaperAttentionStatus?.status_summary
+                            ?? 'Attention auto-sync unavailable'}
+                        </p>
+                        <ul className="key-value-list">
+                          <li><span>Auto-sync success</span><strong>{String(livePaperAttentionStatus?.last_auto_sync?.success ?? autonomousHeartbeatSummary?.live_paper_attention_sync?.success ?? false)}</strong></li>
+                          <li><span>Active alert severity</span><strong>{livePaperAttentionStatus?.active_alert_severity ?? 'n/a'}</strong></li>
+                          <li><span>Status summary</span><strong>{livePaperAttentionStatus?.status_summary ?? 'Attention auto-sync unavailable'}</strong></li>
+                        </ul>
+                        <div className="button-row">
+                          <button
+                            className="secondary-button"
+                            type="button"
+                            disabled={livePaperAttentionSyncLoading}
+                            onClick={() => void syncLivePaperAttentionAlertManual()}
+                          >
+                            {livePaperAttentionSyncLoading ? 'Syncing…' : 'Sync attention alert'}
+                          </button>
+                        </div>
+                        {livePaperAttentionSyncMessage ? <p className="success-text">{livePaperAttentionSyncMessage}</p> : null}
+                        {livePaperAttentionSyncError ? <p className="warning-text">{livePaperAttentionSyncError}</p> : null}
+                      </div>
                     </>
                   ) : null}
                 </SectionCard>

@@ -2702,7 +2702,8 @@ Reused endpoints:
 - `GET /api/mission-control/live-paper-bootstrap-status/`
 - `GET /api/mission-control/autonomous-heartbeat-summary/`
 - `GET /api/mission-control/autonomous-heartbeat-runs/`
-- `GET /api/runtime-governor/tuning-autotriage-alert-status/`
+- `GET /api/mission-control/live-paper-attention-alert-status/`
+- `POST /api/mission-control/sync-live-paper-attention-alert/` (manual fallback)
 
 Snapshot content (compact badges + key/value lines):
 - session active/inactive
@@ -2710,14 +2711,20 @@ Snapshot content (compact badges + key/value lines):
 - current session status
 - last heartbeat and last successful pass timestamps
 - latest heartbeat run + compact outcome counters (`executed`, `blocked`, `wait`)
-- operator hint + autotriage bridge status hint
+- compact **Operational attention** block:
+  - heartbeat auto-sync availability
+  - last auto-sync result (`last_auto_sync.alert_action` / heartbeat fallback)
+  - compact sync summary (`last_auto_sync.sync_summary` / `status_summary`)
+  - `active_alert_present` + `active_alert_severity`
+  - `attention_mode`
+  - `Sync attention alert` button for manual fallback
 - `status_summary`
 
 Behavior:
 - cockpit load fetches bootstrap status and operational snapshot
 - `Start live paper autopilot` refreshes both status + snapshot
 - `Refresh status` refreshes both status + snapshot
-- if any secondary snapshot endpoint fails, card remains usable and shows `Operational snapshot unavailable`
+- if attention bridge status fails, card remains usable and shows `Attention auto-sync unavailable`
 
 Guardrails remain unchanged and explicit:
 - `REAL_READ_ONLY`
