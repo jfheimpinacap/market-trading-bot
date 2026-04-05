@@ -41,6 +41,24 @@ The card shows current preset, session/heartbeat state, runtime/market/paper mod
 
 Scope remains strictly operational + paper-only: no new screen, no wizard, no `/runtime` rewrite, and no live-trading enablement.
 
+### Live Paper Autopilot operational snapshot (frontend, delta)
+
+The same `/cockpit` **Live Paper Autopilot** card now adds a compact **Operational Snapshot** block (no new page) to answer if the loop is truly alive and progressing.
+
+- Reuses existing endpoints only:
+  - `GET /api/mission-control/live-paper-bootstrap-status/`
+  - `GET /api/mission-control/autonomous-heartbeat-summary/`
+  - `GET /api/mission-control/autonomous-heartbeat-runs/`
+  - `GET /api/runtime-governor/tuning-autotriage-alert-status/`
+- Displays compact operational hints:
+  - `session_active` / `heartbeat_active`
+  - `current_session_status`
+  - last heartbeat timestamps + latest heartbeat run outcome summary
+  - operator attention + tuning autotriage bridge status hint
+  - `status_summary` from bootstrap status
+
+This remains strictly `REAL_READ_ONLY` + `PAPER_ONLY`; it improves observability only and does not enable live execution.
+
 ### Runtime Tuning Review Escalation (new)
 
 `runtime_governor` now exposes a compact read-only **Runtime Tuning Review Escalation** layer above existing tuning review queue + aging.

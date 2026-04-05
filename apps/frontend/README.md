@@ -2693,3 +2693,33 @@ Guardrails are explicit in the card:
 - `live_execution_enabled = false`
 
 This is frontend-only integration over existing mission-control bootstrap/status behavior; it does not add a new screen, does not create a parallel flow, and does not enable live trading.
+
+## Cockpit Live Paper Autopilot operational snapshot (Prompt 194)
+
+The same `/cockpit` card now includes a compact **Operational Snapshot** subsection (inside the existing card; no new screen) focused on fast operator confirmation of loop liveness/progress.
+
+Reused endpoints:
+- `GET /api/mission-control/live-paper-bootstrap-status/`
+- `GET /api/mission-control/autonomous-heartbeat-summary/`
+- `GET /api/mission-control/autonomous-heartbeat-runs/`
+- `GET /api/runtime-governor/tuning-autotriage-alert-status/`
+
+Snapshot content (compact badges + key/value lines):
+- session active/inactive
+- heartbeat active/inactive
+- current session status
+- last heartbeat and last successful pass timestamps
+- latest heartbeat run + compact outcome counters (`executed`, `blocked`, `wait`)
+- operator hint + autotriage bridge status hint
+- `status_summary`
+
+Behavior:
+- cockpit load fetches bootstrap status and operational snapshot
+- `Start live paper autopilot` refreshes both status + snapshot
+- `Refresh status` refreshes both status + snapshot
+- if any secondary snapshot endpoint fails, card remains usable and shows `Operational snapshot unavailable`
+
+Guardrails remain unchanged and explicit:
+- `REAL_READ_ONLY`
+- `PAPER_ONLY`
+- `live_execution_enabled = false`
