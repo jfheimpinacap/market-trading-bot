@@ -73,6 +73,8 @@ import type {
   LivePaperBootstrapRequest,
   LivePaperBootstrapResponse,
   LivePaperBootstrapStatusResponse,
+  LivePaperAttentionAlertStatusResponse,
+  LivePaperAttentionAlertSyncResponse,
 } from '../types/missionControl';
 
 export function getMissionControlStatus() {
@@ -138,6 +140,17 @@ export function getLivePaperBootstrapStatus(params?: { preset?: string }) {
   }
   const suffix = query.size ? `?${query.toString()}` : '';
   return requestJson<LivePaperBootstrapStatusResponse>(`/api/mission-control/live-paper-bootstrap-status/${suffix}`);
+}
+
+export function getLivePaperAttentionAlertStatus() {
+  return requestJson<LivePaperAttentionAlertStatusResponse>('/api/mission-control/live-paper-attention-alert-status/');
+}
+
+export function syncLivePaperAttentionAlert() {
+  return requestJson<LivePaperAttentionAlertSyncResponse>('/api/mission-control/sync-live-paper-attention-alert/', {
+    method: 'POST',
+    body: '{}',
+  });
 }
 
 export function runAutonomousRuntime(payload: Record<string, unknown> = {}) {

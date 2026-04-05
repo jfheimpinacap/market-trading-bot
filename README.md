@@ -49,12 +49,14 @@ The same `/cockpit` **Live Paper Autopilot** card now adds a compact **Operation
   - `GET /api/mission-control/live-paper-bootstrap-status/`
   - `GET /api/mission-control/autonomous-heartbeat-summary/`
   - `GET /api/mission-control/autonomous-heartbeat-runs/`
-  - `GET /api/runtime-governor/tuning-autotriage-alert-status/`
+  - `GET /api/mission-control/live-paper-attention-alert-status/`
+  - `POST /api/mission-control/sync-live-paper-attention-alert/` (manual fallback)
 - Displays compact operational hints:
   - `session_active` / `heartbeat_active`
   - `current_session_status`
   - last heartbeat timestamps + latest heartbeat run outcome summary
-  - operator attention + tuning autotriage bridge status hint
+  - `Operational attention` mini-block for heartbeat auto-sync availability/result, active alert state/severity, and `attention_mode`
+  - explicit `Sync attention alert` button as manual fallback (with compact feedback + refresh)
   - `status_summary` from bootstrap status
 
 This remains strictly `REAL_READ_ONLY` + `PAPER_ONLY`; it improves observability only and does not enable live execution.
