@@ -26,6 +26,21 @@ Professional initial scaffold for a modular prediction markets intelligence and 
   - `POST /api/mission-control/bootstrap-live-paper-session/`
   - `GET /api/mission-control/live-paper-bootstrap-status/`
 
+### Live Paper Autopilot cockpit card (frontend, new)
+
+`/cockpit` now includes a compact **Live Paper Autopilot** card that consumes the backend bootstrap/status endpoints directly:
+
+- `GET /api/mission-control/live-paper-bootstrap-status/` on cockpit load and manual refresh
+- `POST /api/mission-control/bootstrap-live-paper-session/` from a single action button (`live_read_only_paper_conservative` preset by default)
+
+The card shows current preset, session/heartbeat state, runtime/market/paper modes, compact bootstrap result summaries (`bootstrap_action`, `bootstrap_summary`, `next_step_summary`) and explicit guardrails:
+
+- `REAL_READ_ONLY`
+- `PAPER_ONLY`
+- `live_execution_enabled = false`
+
+Scope remains strictly operational + paper-only: no new screen, no wizard, no `/runtime` rewrite, and no live-trading enablement.
+
 ### Runtime Tuning Review Escalation (new)
 
 `runtime_governor` now exposes a compact read-only **Runtime Tuning Review Escalation** layer above existing tuning review queue + aging.

@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
 import { getCockpitAttention, getCockpitQuickLinks, getCockpitSummary, runCockpitAction } from '../services/cockpit';
+import { bootstrapLivePaperSession, getLivePaperBootstrapStatus } from '../services/missionControl';
 import { getAutonomyScenarioSummary } from '../services/autonomyScenario';
 import {
   acknowledgeRuntimeTuningScope,
@@ -28,6 +29,7 @@ import {
 } from '../services/runtime';
 import { getScanSummary } from '../services/scanAgent';
 import type { CockpitAttentionItem, CockpitQuickActionId, CockpitSnapshot } from '../types/cockpit';
+import type { LivePaperBootstrapResponse, LivePaperBootstrapStatusResponse } from '../types/missionControl';
 import type {
   RuntimeTuningCockpitPanel,
   RuntimeTuningCockpitPanelDetail,
@@ -138,6 +140,12 @@ export function CockpitPage() {
   const [reviewStateErrorCache, setReviewStateErrorCache] = useState<Record<string, string | null>>({});
   const [reviewActionLoadingByScope, setReviewActionLoadingByScope] = useState<Record<string, boolean>>({});
   const [reviewActionErrorByScope, setReviewActionErrorByScope] = useState<Record<string, string | null>>({});
+  const [livePaperStatus, setLivePaperStatus] = useState<LivePaperBootstrapStatusResponse | null>(null);
+  const [livePaperStatusLoading, setLivePaperStatusLoading] = useState(true);
+  const [livePaperStatusError, setLivePaperStatusError] = useState<string | null>(null);
+  const [livePaperStartLoading, setLivePaperStartLoading] = useState(false);
+  const [livePaperStartError, setLivePaperStartError] = useState<string | null>(null);
+  const [livePaperStartResult, setLivePaperStartResult] = useState<LivePaperBootstrapResponse | null>(null);
   const heartbeatAutoSyncHint = useMemo(() => {
     const sync = autotriageAlertStatus?.runtime_tuning_attention_sync;
     if (!sync || !sync.attempted) return 'Auto-sync status unavailable';
@@ -147,6 +155,35 @@ export function CockpitPage() {
     }
     return `Auto-sync via heartbeat active · Last auto-sync: ${sync.alert_action ?? 'NOOP'}`;
   }, [autotriageAlertStatus]);
+
+  const loadLivePaperStatus = useCallback(async () => {
+    setLivePaperStatusLoading(true);
+    setLivePaperStatusError(null);
+    try {
+      const payload = await getLivePaperBootstrapStatus();
+      setLivePaperStatus(payload);
+    } catch (statusError) {
+      setLivePaperStatus(null);
+      setLivePaperStatusError(getErrorMessage(statusError, 'Could not load live paper autopilot status.'));
+    } finally {
+      setLivePaperStatusLoading(false);
+    }
+  }, []);
+
+  const startLivePaperAutopilot = useCallback(async () => {
+    setLivePaperStartLoading(true);
+    setLivePaperStartError(null);
+    setLivePaperStartResult(null);
+    try {
+      const payload = await bootstrapLivePaperSession();
+      setLivePaperStartResult(payload);
+      await loadLivePaperStatus();
+    } catch (startError) {
+      setLivePaperStartError(getErrorMessage(startError, 'Could not start live paper autopilot.'));
+    } finally {
+      setLivePaperStartLoading(false);
+    }
+  }, [loadLivePaperStatus]);
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -217,6 +254,10 @@ export function CockpitPage() {
   useEffect(() => {
     void loadCockpit();
   }, [loadCockpit]);
+
+  useEffect(() => {
+    void loadLivePaperStatus();
+  }, [loadLivePaperStatus]);
 
   useEffect(() => {
     if (!tuningPanel?.items?.length) return;
@@ -427,6 +468,49 @@ export function CockpitPage() {
             </SectionCard>
 
             <div className="content-grid content-grid--two-columns">
+              <SectionCard
+                eyebrow="Mission control bootstrap"
+                title="Live Paper Autopilot"
+                description="Real market data in read-only mode with paper-only execution. This does not enable live trading."
+              >
+                {livePaperStatusLoading ? (
+                  <p>Loading live paper autopilot status…</p>
+                ) : null}
+                {livePaperStatusError ? <p className="error-text">{livePaperStatusError}</p> : null}
+                {livePaperStatus ? (
+                  <ul className="key-value-list">
+                    <li><span>Preset</span><strong>{livePaperStatus.preset_name}</strong></li>
+                    <li><span>Session</span><strong><StatusBadge tone={livePaperStatus.session_active ? 'ready' : 'pending'}>{livePaperStatus.session_active ? 'ACTIVE' : 'INACTIVE'}</StatusBadge></strong></li>
+                    <li><span>Heartbeat</span><strong><StatusBadge tone={livePaperStatus.heartbeat_active ? 'ready' : 'pending'}>{livePaperStatus.heartbeat_active ? 'ACTIVE' : 'INACTIVE'}</StatusBadge></strong></li>
+                    <li><span>Runtime mode</span><strong>{livePaperStatus.runtime_mode}</strong></li>
+                    <li><span>Market data</span><strong>{livePaperStatus.market_data_mode}</strong></li>
+                    <li><span>Paper execution</span><strong>{livePaperStatus.paper_execution_mode}</strong></li>
+                    <li><span>Session status</span><strong>{livePaperStatus.current_session_status}</strong></li>
+                    <li><span>Status summary</span><strong>{livePaperStatus.status_summary}</strong></li>
+                    <li><span>Operator hint</span><strong>{livePaperStatus.operator_attention_hint}</strong></li>
+                  </ul>
+                ) : null}
+                <div className="button-row">
+                  <StatusBadge tone="ready">REAL_READ_ONLY</StatusBadge>
+                  <StatusBadge tone="ready">PAPER_ONLY</StatusBadge>
+                  <StatusBadge tone="ready">live_execution_enabled = false</StatusBadge>
+                </div>
+                {livePaperStartResult ? (
+                  <p className={livePaperStartResult.bootstrap_action === 'BLOCKED' || livePaperStartResult.bootstrap_action === 'FAILED' ? 'error-text' : 'success-text'}>
+                    {livePaperStartResult.bootstrap_action}: {livePaperStartResult.bootstrap_summary} {livePaperStartResult.next_step_summary}
+                  </p>
+                ) : null}
+                {livePaperStartError ? <p className="error-text">{livePaperStartError}</p> : null}
+                <div className="button-row">
+                  <button className="primary-button" type="button" disabled={livePaperStartLoading} onClick={() => void startLivePaperAutopilot()}>
+                    {livePaperStartLoading ? 'Starting…' : 'Start live paper autopilot'}
+                  </button>
+                  <button className="secondary-button" type="button" disabled={livePaperStatusLoading} onClick={() => void loadLivePaperStatus()}>
+                    Refresh status
+                  </button>
+                </div>
+              </SectionCard>
+
               <SectionCard eyebrow="Mission control & operations" title="Cycle posture and impact" description="Mission status, cycle context, and operational incidents.">
                 <ul className="key-value-list">
                   <li><span>Mission status</span><strong>{snapshot.missionControl?.state.status ?? 'n/a'}</strong></li>
