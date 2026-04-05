@@ -15,6 +15,7 @@ import {
   getLivePaperBootstrapStatus,
   syncLivePaperAttentionAlert,
 } from '../services/missionControl';
+import { getPaperAccount, getPaperSnapshots, getPaperSummary } from '../services/paperTrading';
 import { getAutonomyScenarioSummary } from '../services/autonomyScenario';
 import {
   acknowledgeRuntimeTuningScope,
@@ -59,8 +60,24 @@ import type {
   RuntimeTuningReviewState,
   RuntimeTuningScopeTimeline,
 } from '../types/runtime';
+import type { PaperAccount, PaperPortfolioSnapshot, PaperPortfolioSummary } from '../types/paperTrading';
 
 const formatDate = (value: string | null | undefined) => (value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'n/a');
+const parseNumber = (value: string | null | undefined) => {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+const formatMoney = (value: string | null | undefined, currency = 'USD') => {
+  const parsed = parseNumber(value);
+  if (parsed === null) return 'n/a';
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 2 }).format(parsed);
+};
+const formatSignedMoney = (value: string | null | undefined, currency = 'USD') => {
+  const parsed = parseNumber(value);
+  if (parsed === null) return 'n/a';
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 2, signDisplay: 'always' }).format(parsed);
+};
 
 const toneFromStatus = (status: string | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
   const normalized = (status ?? '').toUpperCase();
@@ -168,6 +185,11 @@ export function CockpitPage() {
   const [livePaperAttentionSyncLoading, setLivePaperAttentionSyncLoading] = useState(false);
   const [livePaperAttentionSyncMessage, setLivePaperAttentionSyncMessage] = useState<string | null>(null);
   const [livePaperAttentionSyncError, setLivePaperAttentionSyncError] = useState<string | null>(null);
+  const [paperAccountSnapshot, setPaperAccountSnapshot] = useState<PaperAccount | null>(null);
+  const [paperPortfolioSummary, setPaperPortfolioSummary] = useState<PaperPortfolioSummary | null>(null);
+  const [paperPortfolioSnapshots, setPaperPortfolioSnapshots] = useState<PaperPortfolioSnapshot[]>([]);
+  const [paperPortfolioLoading, setPaperPortfolioLoading] = useState(true);
+  const [paperPortfolioError, setPaperPortfolioError] = useState<string | null>(null);
   const heartbeatAutoSyncHint = useMemo(() => {
     const heartbeatSync = autonomousHeartbeatSummary?.live_paper_attention_sync;
     const lastAutoSync = livePaperAttentionStatus?.last_auto_sync;
@@ -176,6 +198,13 @@ export function CockpitPage() {
     if (!sync.success || sync.alert_action === 'ERROR') return 'Attention auto-sync active · last result: ERROR';
     return `Attention auto-sync active · Last auto-sync: ${sync.alert_action ?? 'NOOP'}`;
   }, [autonomousHeartbeatSummary, livePaperAttentionStatus]);
+  const paperCurrency = paperAccountSnapshot?.currency ?? paperPortfolioSummary?.account.currency ?? 'USD';
+  const openExposure = useMemo(
+    () => paperPortfolioSummary?.exposure_by_market.reduce((total, item) => total + (parseNumber(item.market_value) ?? 0), 0) ?? 0,
+    [paperPortfolioSummary],
+  );
+  const latestPaperSnapshot = paperPortfolioSnapshots[0] ?? null;
+  const recentPaperTrades = useMemo(() => (paperPortfolioSummary?.recent_trades ?? []).slice(0, 5), [paperPortfolioSummary]);
 
   const loadLivePaperStatus = useCallback(async () => {
     setLivePaperStatusLoading(true);
@@ -235,6 +264,38 @@ export function CockpitPage() {
     }
   }, []);
 
+  const loadPaperPortfolioSnapshot = useCallback(async () => {
+    setPaperPortfolioLoading(true);
+    setPaperPortfolioError(null);
+    try {
+      const [accountResult, summaryResult, snapshotsResult] = await Promise.allSettled([
+        getPaperAccount(),
+        getPaperSummary(),
+        getPaperSnapshots(),
+      ]);
+
+      if (accountResult.status === 'fulfilled') setPaperAccountSnapshot(accountResult.value);
+      else setPaperAccountSnapshot(null);
+
+      if (summaryResult.status === 'fulfilled') setPaperPortfolioSummary(summaryResult.value);
+      else setPaperPortfolioSummary(null);
+
+      if (snapshotsResult.status === 'fulfilled') setPaperPortfolioSnapshots(snapshotsResult.value);
+      else setPaperPortfolioSnapshots([]);
+
+      if (accountResult.status === 'rejected' && summaryResult.status === 'rejected' && snapshotsResult.status === 'rejected') {
+        setPaperPortfolioError('Paper portfolio snapshot unavailable');
+      }
+    } catch (portfolioError) {
+      setPaperAccountSnapshot(null);
+      setPaperPortfolioSummary(null);
+      setPaperPortfolioSnapshots([]);
+      setPaperPortfolioError(getErrorMessage(portfolioError, 'Paper portfolio snapshot unavailable'));
+    } finally {
+      setPaperPortfolioLoading(false);
+    }
+  }, []);
+
   const startLivePaperAutopilot = useCallback(async () => {
     setLivePaperStartLoading(true);
     setLivePaperStartError(null);
@@ -242,13 +303,13 @@ export function CockpitPage() {
     try {
       const payload = await bootstrapLivePaperSession();
       setLivePaperStartResult(payload);
-      await Promise.all([loadLivePaperStatus(), loadLivePaperOperationalSnapshot()]);
+      await Promise.all([loadLivePaperStatus(), loadLivePaperOperationalSnapshot(), loadPaperPortfolioSnapshot()]);
     } catch (startError) {
       setLivePaperStartError(getErrorMessage(startError, 'Could not start live paper autopilot.'));
     } finally {
       setLivePaperStartLoading(false);
     }
-  }, [loadLivePaperOperationalSnapshot, loadLivePaperStatus]);
+  }, [loadLivePaperOperationalSnapshot, loadLivePaperStatus, loadPaperPortfolioSnapshot]);
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -327,6 +388,10 @@ export function CockpitPage() {
   useEffect(() => {
     void loadLivePaperOperationalSnapshot();
   }, [loadLivePaperOperationalSnapshot]);
+
+  useEffect(() => {
+    void loadPaperPortfolioSnapshot();
+  }, [loadPaperPortfolioSnapshot]);
 
   useEffect(() => {
     if (!tuningPanel?.items?.length) return;
@@ -580,6 +645,58 @@ export function CockpitPage() {
                   <StatusBadge tone="ready">live_execution_enabled = false</StatusBadge>
                 </div>
                 <SectionCard
+                  eyebrow="Economic snapshot"
+                  title="Paper Portfolio Snapshot"
+                  description="Compact fake-money snapshot for validating that live-read-only paper autopilot is moving."
+                >
+                  {paperPortfolioLoading ? <p>Loading paper portfolio snapshot…</p> : null}
+                  {!paperPortfolioLoading && paperPortfolioError ? <p className="warning-text">{paperPortfolioError}</p> : null}
+                  {!paperPortfolioLoading && !paperPortfolioError ? (
+                    <>
+                      <div className="button-row">
+                        <StatusBadge tone="ready">fake_money_only</StatusBadge>
+                        <StatusBadge tone={Number(paperAccountSnapshot?.open_positions_count ?? paperPortfolioSummary?.open_positions_count ?? 0) > 0 ? 'pending' : 'neutral'}>
+                          Open positions {paperAccountSnapshot?.open_positions_count ?? paperPortfolioSummary?.open_positions_count ?? 0}
+                        </StatusBadge>
+                        <StatusBadge tone={(parseNumber(paperAccountSnapshot?.total_pnl) ?? 0) >= 0 ? 'ready' : 'offline'}>
+                          Total PnL {formatSignedMoney(paperAccountSnapshot?.total_pnl, paperCurrency)}
+                        </StatusBadge>
+                      </div>
+                      <ul className="key-value-list">
+                        <li><span>Cash balance</span><strong>{formatMoney(paperAccountSnapshot?.cash_balance, paperCurrency)}</strong></li>
+                        <li><span>Total equity</span><strong>{formatMoney(paperAccountSnapshot?.equity, paperCurrency)}</strong></li>
+                        <li><span>Realized PnL</span><strong>{formatSignedMoney(paperAccountSnapshot?.realized_pnl, paperCurrency)}</strong></li>
+                        <li><span>Unrealized PnL</span><strong>{formatSignedMoney(paperAccountSnapshot?.unrealized_pnl, paperCurrency)}</strong></li>
+                        <li><span>Open positions count</span><strong>{paperAccountSnapshot?.open_positions_count ?? paperPortfolioSummary?.open_positions_count ?? 0}</strong></li>
+                        <li><span>Total positions exposure</span><strong>{formatMoney(String(openExposure), paperCurrency)}</strong></li>
+                        <li><span>Recent paper trades</span><strong>{paperPortfolioSummary?.recent_trades.length ?? 0}</strong></li>
+                        <li><span>Latest snapshot</span><strong>{formatDate(latestPaperSnapshot?.captured_at ?? paperAccountSnapshot?.updated_at)}</strong></li>
+                      </ul>
+                      {recentPaperTrades.length > 0 ? (
+                        <div className="subsection">
+                          <p className="section-label">Recent paper trades</p>
+                          <ul className="key-value-list">
+                            {recentPaperTrades.map((trade) => (
+                              <li key={trade.id}>
+                                <span>{trade.market__title}</span>
+                                <strong>{trade.trade_type} {trade.side} · qty {trade.quantity} · px {trade.price} · {formatDate(trade.executed_at)}</strong>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : (
+                        <p className="muted-text">No recent paper trades yet.</p>
+                      )}
+                    </>
+                  ) : null}
+                  <div className="button-row">
+                    <button className="secondary-button" type="button" disabled={paperPortfolioLoading} onClick={() => void loadPaperPortfolioSnapshot()}>
+                      Refresh portfolio
+                    </button>
+                    <button className="ghost-button" type="button" onClick={() => navigate('/portfolio')}>Open portfolio</button>
+                  </div>
+                </SectionCard>
+                <SectionCard
                   eyebrow="Operational snapshot"
                   title="Operational Snapshot"
                   description="Compact live view of autonomous heartbeat, operator attention, and tuning alert bridge hints."
@@ -679,7 +796,7 @@ export function CockpitPage() {
                     type="button"
                     disabled={livePaperStatusLoading || livePaperOperationalSnapshotLoading}
                     onClick={() => {
-                      void Promise.all([loadLivePaperStatus(), loadLivePaperOperationalSnapshot()]);
+                      void Promise.all([loadLivePaperStatus(), loadLivePaperOperationalSnapshot(), loadPaperPortfolioSnapshot()]);
                     }}
                   >
                     Refresh status

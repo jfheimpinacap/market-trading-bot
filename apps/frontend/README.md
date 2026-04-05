@@ -525,6 +525,11 @@ Qué centraliza en una sola vista:
 - riesgo/exposure: portfolio governor, throttle, review_required
 - ejecución/venue: broker bridge, parity, venue reconciliation
 - change governance: promotion, rollout, champion/challenger
+- `Paper Portfolio Snapshot` junto a `Live Paper Autopilot` para validación operacional rápida:
+  - cash, equity, realized/unrealized PnL, open positions, exposure total y latest snapshot
+  - lista compacta de recent paper trades (cuando backend los expone)
+  - botón `Refresh portfolio` + enlace `Open portfolio`
+  - fallback no bloqueante: `Paper portfolio snapshot unavailable`
 - attention queue priorizada por severidad con drill-down a módulos y a `/trace`
 - quick actions para disparar acciones ya existentes (sin nueva lógica autónoma)
 
@@ -558,6 +563,7 @@ Límites operativos intactos:
 - no reemplaza pantallas especializadas; las enlaza como source of truth
 - fallback parcial por panel cuando algún endpoint falla
 - local-first, single-user, paper/sandbox only
+- sigue siendo fake money / paper-only; no habilita live trading real
 
 ### Endpoints integrados por cockpit
 
@@ -570,6 +576,7 @@ El cockpit compone servicios ya existentes (sin backend monolítico nuevo):
 - operator-queue, alerts
 - promotion, champion-challenger
 - trace summary + query runs
+- paper trading snapshot services (`/api/paper/account/`, `/api/paper/summary/`, `/api/paper/snapshots/`)
 
 ## Autonomy advisory board en `/autonomy-advisory` (new)
 
