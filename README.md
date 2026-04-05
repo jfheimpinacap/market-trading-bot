@@ -688,6 +688,11 @@ A new desktop-first `/cockpit` route now provides a **single-pane operational co
 - change-governance panel with promotion, rollout, and champion/challenger status
 - severity-based attention queue (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) with trace drill-down buttons
 - quick actions that trigger existing controls (mission control, incident detection, certification, governance, rollout pause/rollback)
+- live-read-only **Paper Portfolio Snapshot** card near Live Paper Autopilot for fast fake-money validation:
+  - cash/equity/realized+unrealized PnL/open positions
+  - aggregated open exposure + recent paper trades + latest snapshot timestamp
+  - compact fallback (`Paper portfolio snapshot unavailable`) if paper endpoints are temporarily unavailable
+  - reuses existing paper endpoints only (`/api/paper/account/`, `/api/paper/summary/`, `/api/paper/snapshots/`) and does not enable live execution
 
 Scope remains unchanged: local-first, single-user, paper/sandbox only, and no real-money execution.
 
