@@ -59,6 +59,26 @@ The same `/cockpit` **Live Paper Autopilot** card now adds a compact **Operation
 
 This remains strictly `REAL_READ_ONLY` + `PAPER_ONLY`; it improves observability only and does not enable live execution.
 
+### Live Paper Autopilot Operational Attention Bridge (backend, new)
+
+`mission_control` now includes a compact backend-only bridge that converts existing live-paper operational signals into one deduplicated `operator_alerts` signal to further reduce manual cockpit checking.
+
+- service: `apps/backend/apps/mission_control/services/live_paper_attention_bridge.py`
+- global dedupe key: `live_paper_autopilot_attention_global`
+- API:
+  - `POST /api/mission-control/sync-live-paper-attention-alert/`
+  - `GET /api/mission-control/live-paper-attention-alert-status/`
+- attention mode mapping (explicit + conservative):
+  - `BLOCKED` → high active alert
+  - `REVIEW_NOW` → high active alert
+  - `DEGRADED` → warning active alert
+  - `HEALTHY` → resolve bridge alert if present
+- low-noise sync actions:
+  - `CREATED` / `UPDATED` / `RESOLVED` / `NOOP`
+  - updates only on material field changes (`attention_mode`, `attention_needed`, `alert_severity`, `current_session_status`, normalized `attention_reason_codes`)
+
+This bridge reuses mission-control bootstrap/heartbeat/health/recovery summaries and existing `operator_alerts` services, introduces no new models, keeps paper-only scope, and does not change runtime/trading operation logic.
+
 ### Runtime Tuning Review Escalation (new)
 
 `runtime_governor` now exposes a compact read-only **Runtime Tuning Review Escalation** layer above existing tuning review queue + aging.
