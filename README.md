@@ -79,6 +79,8 @@ This remains strictly `REAL_READ_ONLY` + `PAPER_ONLY`; it improves observability
 
 This bridge reuses mission-control bootstrap/heartbeat/health/recovery summaries and existing `operator_alerts` services, introduces no new models, keeps paper-only scope, and does not change runtime/trading operation logic.
 
+It now also auto-syncs once per local mission-control heartbeat pass (reusing the existing local loop; no new scheduler). Heartbeat summary exposes compact `live_paper_attention_sync` (`attempted`, `success`, `alert_action`, `attention_mode`, `session_active`, `heartbeat_active`, `current_session_status`, `sync_summary`), and manual `POST /api/mission-control/sync-live-paper-attention-alert/` remains intact as fallback.
+
 ### Runtime Tuning Review Escalation (new)
 
 `runtime_governor` now exposes a compact read-only **Runtime Tuning Review Escalation** layer above existing tuning review queue + aging.
