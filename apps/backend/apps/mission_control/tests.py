@@ -267,6 +267,70 @@ class AutonomousHeartbeatRunnerTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('totals', response.json())
 
+    @patch(
+        'apps.mission_control.services.session_heartbeat.run.run_tuning_autotriage_attention_auto_sync',
+        return_value={
+            'attempted': True,
+            'success': True,
+            'alert_action': 'UPDATED',
+            'human_attention_mode': 'REVIEW_NOW',
+            'next_recommended_scope': 'mode_enforcement',
+            'sync_summary': 'REVIEW_NOW: active high attention alert (next: mode_enforcement)',
+        },
+    )
+    def test_heartbeat_runs_tuning_attention_sync_once_per_pass(self, mock_auto_sync):
+        AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        response = self.client.post(reverse('mission_control:run-autonomous-heartbeat'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_auto_sync.call_count, 1)
+
+        payload = response.json()
+        sync_payload = (payload.get('metadata') or {}).get('runtime_tuning_attention_sync') or {}
+        self.assertEqual(sync_payload.get('alert_action'), 'UPDATED')
+        self.assertTrue(sync_payload.get('success'))
+
+    @patch(
+        'apps.mission_control.services.session_heartbeat.run.run_tuning_autotriage_attention_auto_sync',
+        return_value={
+            'attempted': True,
+            'success': True,
+            'alert_action': 'UPDATED',
+            'human_attention_mode': 'REVIEW_SOON',
+            'next_recommended_scope': 'operating_mode',
+            'sync_summary': 'REVIEW_SOON: active warning attention alert (next: operating_mode)',
+        },
+    )
+    def test_heartbeat_summary_exposes_runtime_tuning_attention_sync_contract(self, _mock_auto_sync):
+        AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        self.client.post(reverse('mission_control:run-autonomous-heartbeat'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:autonomous-heartbeat-summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('runtime_tuning_attention_sync', payload)
+        self.assertEqual(payload['runtime_tuning_attention_sync']['alert_action'], 'UPDATED')
+        self.assertEqual(payload['runtime_tuning_attention_sync']['human_attention_mode'], 'REVIEW_SOON')
+
+    @patch(
+        'apps.mission_control.services.session_heartbeat.run.run_tuning_autotriage_attention_auto_sync',
+        return_value={
+            'attempted': True,
+            'success': False,
+            'alert_action': 'ERROR',
+            'human_attention_mode': None,
+            'next_recommended_scope': None,
+            'sync_summary': 'auto-sync failed: RuntimeError',
+        },
+    )
+    def test_heartbeat_continues_when_tuning_attention_sync_fails(self, _mock_auto_sync):
+        AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        response = self.client.post(reverse('mission_control:run-autonomous-heartbeat'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['runner_status'], 'COMPLETED')
+        sync_payload = (payload.get('metadata') or {}).get('runtime_tuning_attention_sync') or {}
+        self.assertEqual(sync_payload.get('alert_action'), 'ERROR')
+        self.assertFalse(sync_payload.get('success'))
+
 
 class SessionTimingProfileTests(TestCase):
     def test_profile_endpoint_bootstraps_defaults(self):

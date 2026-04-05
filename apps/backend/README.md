@@ -155,6 +155,8 @@ Runtime governor now also provides a compact **tuning autotriage alert bridge** 
 
 This bridge only transforms existing `tuning_autotriage` output into low-noise operator alerts, without changing runtime operating logic, autotriage semantics, or paper-only boundaries.
 
+Automatic sync is now wired to the existing mission-control local heartbeat pass via `runtime_governor/services/tuning_autotriage_auto_sync.py` (no new scheduler, no new persistent models). The heartbeat summary exposes a compact `runtime_tuning_attention_sync` block (`attempted`, `success`, `alert_action`, `human_attention_mode`, `next_recommended_scope`, `sync_summary`). Manual `sync-tuning-autotriage-alert` remains intact as fallback.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:
@@ -271,6 +273,8 @@ This layer extends existing mission control and autonomous trader orchestration;
   - `GET /api/mission-control/autonomous-heartbeat-summary/`
 
 This layer only automates due-tick progression of existing autonomous sessions and preserves paper-only, local-first boundaries.
+
+Each heartbeat pass now also performs one Runtime Tuning Attention auto-sync attempt (through the existing autotriage alert bridge), records compact outcome in run metadata, and mirrors it in `autonomous-heartbeat-summary`.
 
 ## Mission control governance review queue (new)
 

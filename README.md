@@ -57,12 +57,13 @@ Cockpit uses this as recent human-context next to queue/aging/escalation so oper
 - API:
   - `POST /api/runtime-governor/sync-tuning-autotriage-alert/`
   - `GET /api/runtime-governor/tuning-autotriage-alert-status/`
+  - `GET /api/mission-control/autonomous-heartbeat-summary/` now includes compact `runtime_tuning_attention_sync`
 - mapping:
   - `REVIEW_NOW` → active runtime operator alert (`high`)
   - `REVIEW_SOON` → active runtime operator alert (`warning`)
   - `MONITOR_ONLY` / `NO_ACTION` → resolve existing bridge alert
 
-The bridge complements existing autotriage/queue/aging/escalation flows, reduces manual cockpit-only dependency, keeps full alert history, and remains paper-only with no runtime execution logic changes.
+The bridge now also auto-syncs once per local heartbeat pass (reusing the existing mission-control heartbeat loop; no new scheduler). Manual sync remains available as fallback. This complements existing autotriage/queue/aging/escalation flows, reduces manual cockpit-only dependency, keeps full alert history, and remains paper-only with no runtime execution logic changes.
 
 ### Governance review queue (new)
 

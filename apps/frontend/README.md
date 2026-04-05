@@ -214,8 +214,9 @@ Delta UX adicional: `/cockpit` ahora incluye una mini-franja **Attention alert b
   - `POST /api/runtime-governor/sync-tuning-autotriage-alert/`
 - lectura compacta de estado vía:
   - `GET /api/runtime-governor/tuning-autotriage-alert-status/`
+  - hint de auto-sync por heartbeat local cuando hay datos (`Auto-sync via heartbeat active · Last auto-sync: ...`)
 
-Este bridge reduce necesidad de revisión manual constante del cockpit, mantiene dedupe global (`runtime_tuning_autotriage_global`), no crea pantallas nuevas y no modifica lógica operativa (paper-only).
+Este bridge reduce necesidad de revisión manual constante del cockpit, mantiene dedupe global (`runtime_tuning_autotriage_global`), reutiliza el loop local heartbeat existente (sin scheduler nuevo), conserva el botón manual como fallback, no crea pantallas nuevas y no modifica lógica operativa (paper-only).
 
 Delta UX adicional: `/runtime` ahora incluye una sección **Tuning Context History** (sin pantalla nueva) para trazabilidad temporal ligera:
 - snapshots recientes de contexto de tuning por scope operativo

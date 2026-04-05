@@ -138,6 +138,12 @@ export function CockpitPage() {
   const [reviewStateErrorCache, setReviewStateErrorCache] = useState<Record<string, string | null>>({});
   const [reviewActionLoadingByScope, setReviewActionLoadingByScope] = useState<Record<string, boolean>>({});
   const [reviewActionErrorByScope, setReviewActionErrorByScope] = useState<Record<string, string | null>>({});
+  const heartbeatAutoSyncHint = useMemo(() => {
+    const sync = autotriageAlertStatus?.runtime_tuning_attention_sync;
+    if (!sync || !sync.attempted) return 'Auto-sync status unavailable';
+    if (!sync.success || sync.alert_action === 'ERROR') return 'Auto-sync via heartbeat active · last: ERROR';
+    return `Auto-sync via heartbeat active · Last auto-sync: ${sync.alert_action ?? 'NOOP'}`;
+  }, [autotriageAlertStatus]);
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -604,7 +610,9 @@ export function CockpitPage() {
                             <li><span>Severity</span><strong>{autotriageAlertStatus.active_alert_severity ?? 'n/a'}</strong></li>
                             <li><span>Next recommended scope</span><strong>{autotriageAlertStatus.next_recommended_scope ?? 'n/a'}</strong></li>
                             <li><span>Status summary</span><strong>{autotriageAlertStatus.status_summary}</strong></li>
+                            <li><span>Sync source</span><strong>Manual + heartbeat auto-sync</strong></li>
                           </ul>
+                          <p className="muted-text">{heartbeatAutoSyncHint}</p>
                           <div className="button-row">
                             <button className="secondary-button" type="button" disabled={autotriageAlertSyncLoading} onClick={() => void syncAutotriageAttentionAlert()}>
                               Sync attention alert
