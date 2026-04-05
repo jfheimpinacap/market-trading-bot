@@ -49,6 +49,21 @@ This layer is paper-only/read-only and does not change runtime operation logic, 
 
 Cockpit uses this as recent human-context next to queue/aging/escalation so operators can see what manual actions happened recently before a scope becomes stale or urgent. This remains paper-only/read-only and does not change runtime tuning operation logic.
 
+### Runtime Tuning Autotriage Alert Bridge (new)
+
+`runtime_governor` now includes a compact **Runtime Tuning Autotriage Alert Bridge** that maps existing autotriage output into a single deduplicated operational alert signal.
+
+- global dedupe key: `runtime_tuning_autotriage_global`
+- API:
+  - `POST /api/runtime-governor/sync-tuning-autotriage-alert/`
+  - `GET /api/runtime-governor/tuning-autotriage-alert-status/`
+- mapping:
+  - `REVIEW_NOW` → active runtime operator alert (`high`)
+  - `REVIEW_SOON` → active runtime operator alert (`warning`)
+  - `MONITOR_ONLY` / `NO_ACTION` → resolve existing bridge alert
+
+The bridge complements existing autotriage/queue/aging/escalation flows, reduces manual cockpit-only dependency, keeps full alert history, and remains paper-only with no runtime execution logic changes.
+
 ### Governance review queue (new)
 
 `mission_control` now includes a **unified governance review queue** to centralize pending manual triage from:

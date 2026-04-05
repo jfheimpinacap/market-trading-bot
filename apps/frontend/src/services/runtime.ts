@@ -70,6 +70,8 @@ import type {
   RuntimeTuningAutotriageDigest,
   RuntimeTuningAutotriageDetail,
   RuntimeTuningAutotriageQuery,
+  RuntimeTuningAutotriageAlertStatus,
+  RuntimeTuningAutotriageAlertSyncResponse,
 } from '../types/runtime';
 
 export function getRuntimeStatus() {
@@ -489,4 +491,15 @@ export function getRuntimeTuningAutotriageDetail(sourceScope: string, query: Pic
   return requestJson<RuntimeTuningAutotriageDetail>(
     `/api/runtime-governor/tuning-autotriage/${encodeURIComponent(sourceScope)}/${buildAutotriageQueryString(query)}`,
   );
+}
+
+export function syncRuntimeTuningAutotriageAlert() {
+  return requestJson<RuntimeTuningAutotriageAlertSyncResponse>('/api/runtime-governor/sync-tuning-autotriage-alert/', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export function getRuntimeTuningAutotriageAlertStatus() {
+  return requestJson<RuntimeTuningAutotriageAlertStatus>('/api/runtime-governor/tuning-autotriage-alert-status/');
 }

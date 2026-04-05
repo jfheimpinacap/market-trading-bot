@@ -536,6 +536,26 @@ class RuntimeTuningAutotriageDetailSerializer(RuntimeTuningAutotriageTopScopeSer
     next_recommended_reason_codes = serializers.ListField(child=serializers.CharField())
 
 
+class RuntimeTuningAutotriageAlertSyncSerializer(serializers.Serializer):
+    human_attention_mode = serializers.CharField()
+    alert_needed = serializers.BooleanField()
+    alert_action = serializers.ChoiceField(choices=['CREATED', 'UPDATED', 'RESOLVED', 'NOOP'])
+    alert_severity = serializers.CharField(required=False, allow_null=True)
+    next_recommended_scope = serializers.CharField(required=False, allow_null=True)
+    autotriage_summary = serializers.CharField()
+    alert_status_summary = serializers.CharField()
+
+
+class RuntimeTuningAutotriageAlertStatusSerializer(serializers.Serializer):
+    human_attention_mode = serializers.CharField()
+    alert_needed = serializers.BooleanField()
+    active_alert_present = serializers.BooleanField()
+    active_alert_severity = serializers.CharField(required=False, allow_null=True)
+    next_recommended_scope = serializers.CharField(required=False, allow_null=True)
+    autotriage_summary = serializers.CharField()
+    status_summary = serializers.CharField()
+
+
 class RuntimeFeedbackApplyRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RuntimeFeedbackApplyRecommendation
