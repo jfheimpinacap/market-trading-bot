@@ -203,6 +203,30 @@ Automatic sync is now wired to the existing mission-control local heartbeat pass
 
 This remains strictly real-market read-only + paper-only money simulation, introduces no new persistent models or schedulers, and is designed as a quick backend pre-check before longer manual cockpit observation.
 
+## Live Paper Autonomy Funnel Snapshot (new)
+
+`apps.mission_control` now includes a compact autonomy-funnel digest to validate whether the recent flow is progressing across:
+
+1. scan candidates
+2. research pursued
+3. prediction evaluated
+4. risk approved/blocked
+5. paper execution / paper trades
+
+- service: `apps/mission_control/services/live_paper_autonomy_funnel.py`
+- endpoint:
+  - `GET /api/mission-control/live-paper-autonomy-funnel/`
+  - optional query params:
+    - `window_minutes` (default `60`)
+    - `preset` (default `live_read_only_paper_conservative`)
+- output includes:
+  - `funnel_status` (`ACTIVE`, `THIN_FLOW`, `STALLED`)
+  - compact counts (`scan_count`, `research_count`, `prediction_count`, `risk_approved_count`, `risk_blocked_count`, `paper_execution_count`, `recent_trades_count`)
+  - `top_stage`, optional `stalled_stage`, deterministic `next_action_hint`, concise `funnel_summary`
+  - per-stage compact list with `status` (`ACTIVE`, `LOW`, `EMPTY`)
+
+Implementation is aggregation/observability only: it reuses existing scan/research/prediction/risk/paper/heartbeat/validation signals, introduces no new models, does not alter decision authority, and keeps strict real-market read-only + paper-only boundaries.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:

@@ -270,6 +270,31 @@ class LivePaperValidationDigestSerializer(serializers.Serializer):
     checks = LivePaperValidationCheckSerializer(many=True)
 
 
+class LivePaperAutonomyFunnelStageSerializer(serializers.Serializer):
+    stage_name = serializers.ChoiceField(choices=['scan', 'research', 'prediction', 'risk', 'paper_execution'])
+    count = serializers.IntegerField(min_value=0)
+    status = serializers.ChoiceField(choices=['ACTIVE', 'LOW', 'EMPTY'])
+    summary = serializers.CharField()
+
+
+class LivePaperAutonomyFunnelSerializer(serializers.Serializer):
+    window_minutes = serializers.IntegerField(min_value=5, max_value=1440)
+    preset_name = serializers.CharField()
+    funnel_status = serializers.ChoiceField(choices=['ACTIVE', 'THIN_FLOW', 'STALLED'])
+    scan_count = serializers.IntegerField(min_value=0)
+    research_count = serializers.IntegerField(min_value=0)
+    prediction_count = serializers.IntegerField(min_value=0)
+    risk_approved_count = serializers.IntegerField(min_value=0)
+    risk_blocked_count = serializers.IntegerField(min_value=0)
+    paper_execution_count = serializers.IntegerField(min_value=0)
+    recent_trades_count = serializers.IntegerField(min_value=0)
+    top_stage = serializers.ChoiceField(choices=['scan', 'research', 'prediction', 'risk', 'paper_execution'])
+    stalled_stage = serializers.ChoiceField(choices=['scan', 'research', 'prediction', 'risk', 'paper_execution'], allow_null=True)
+    next_action_hint = serializers.CharField()
+    funnel_summary = serializers.CharField()
+    stages = LivePaperAutonomyFunnelStageSerializer(many=True)
+
+
 class AutonomousRunnerStateSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousRunnerState

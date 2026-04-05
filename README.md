@@ -126,6 +126,31 @@ Fallback behavior is explicit and non-breaking: if no run exists yet it shows `N
 
 Scope remains strictly real-market read-only + fake-money paper execution and does not enable live trading.
 
+### Live Paper Autonomy Funnel Snapshot (backend + cockpit, new)
+
+`mission_control` now includes a compact **Live Paper Autonomy Funnel Snapshot** to validate if autonomy is truly advancing through scan → research → prediction → risk → paper execution in a recent window.
+
+- backend service: `apps/backend/apps/mission_control/services/live_paper_autonomy_funnel.py`
+- API:
+  - `GET /api/mission-control/live-paper-autonomy-funnel/`
+  - query params:
+    - `window_minutes` (default `60`)
+    - `preset` (default `live_read_only_paper_conservative`)
+- compact digest payload includes:
+  - `funnel_status`: `ACTIVE` / `THIN_FLOW` / `STALLED`
+  - stage counts + `top_stage` + optional `stalled_stage`
+  - deterministic `next_action_hint` + `funnel_summary`
+  - compact `stages` list (`scan`, `research`, `prediction`, `risk`, `paper_execution`) with `ACTIVE` / `LOW` / `EMPTY`
+
+Cockpit now renders a sister card **Autonomy Funnel** (near Live Paper Validation + Smoke Test) with:
+- strong status badge (`ACTIVE` / `THIN_FLOW` / `STALLED`)
+- short summary + deterministic hint
+- compact per-stage counts and status badges
+- non-blocking fallback: `Autonomy funnel unavailable`
+- manual action: `Refresh funnel`
+
+This remains strictly real-market read-only + paper-money-only execution, introduces no new persistent models, no scheduler/polling/websocket changes, no `/runtime` changes, and no live trading enablement.
+
 ### Live Paper V1 Validation Digest (backend, new)
 
 `mission_control` now includes a compact read-only validation digest that answers, in one backend response, whether the live read-only paper V1 loop is operational right now.
