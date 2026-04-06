@@ -153,6 +153,23 @@ Scope remains strictly real-market read-only + fake-money paper execution and do
 
 Scope remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` changes, no scheduler additions, no live trading enablement, and no parallel trial orchestration logic in frontend.
 
+### Live Paper Trial Run History (backend, new)
+
+`mission_control` now keeps a compact in-memory history of recent Live Paper Trial runs for quick operational comparison across the latest V1 paper checks.
+
+- service: `apps/backend/apps/mission_control/services/live_paper_trial_history.py`
+- API:
+  - `GET /api/mission-control/live-paper-trial-history/`
+  - optional query params:
+    - `limit` (default `5`, max `20`)
+    - `status` (`PASS` | `WARN` | `FAIL`)
+- behavior:
+  - auto-records each successful `POST /api/mission-control/run-live-paper-trial/` result
+  - keeps newest-first bounded buffer in memory (no DB model/migration)
+  - returns compact payload: `count`, `latest_trial_status`, deterministic `history_summary`, and `items`
+
+This is operational evidence only for recent paper runs, remains strictly `REAL_READ_ONLY` + `PAPER_ONLY`, and does not enable live trading.
+
 ### Live Paper Autonomy Funnel Snapshot (backend + cockpit, new)
 
 `mission_control` now includes a compact **Live Paper Autonomy Funnel Snapshot** to validate if autonomy is truly advancing through scan → research → prediction → risk → paper execution in a recent window.
