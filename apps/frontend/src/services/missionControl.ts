@@ -81,6 +81,9 @@ import type {
   LivePaperTrialRunRequest,
   LivePaperTrialHistoryResponse,
   LivePaperExtendedRunGateResponse,
+  ExtendedPaperRunLaunchRequest,
+  ExtendedPaperRunLaunchResponse,
+  ExtendedPaperRunStatusResponse,
   LivePaperTrialTrendResponse,
   LivePaperTrialRunResultResponse,
   LivePaperTrialRunStatusResponse,
@@ -224,6 +227,28 @@ export function getExtendedPaperRunGate(params?: { preset?: string }) {
   }
   const suffix = query.size ? `?${query.toString()}` : '';
   return requestJson<LivePaperExtendedRunGateResponse>(`/api/mission-control/extended-paper-run-gate/${suffix}`);
+}
+
+export function startExtendedPaperRun(payload: ExtendedPaperRunLaunchRequest = {}) {
+  return requestJson<ExtendedPaperRunLaunchResponse>('/api/mission-control/start-extended-paper-run/', {
+    method: 'POST',
+    body: JSON.stringify({
+      preset: 'live_read_only_paper_conservative',
+      ...payload,
+    }),
+  });
+}
+
+export function getExtendedPaperRunStatus(params?: { preset?: string; preset_name?: string }) {
+  const query = new URLSearchParams();
+  if (params?.preset) {
+    query.set('preset', params.preset);
+  }
+  if (params?.preset_name) {
+    query.set('preset_name', params.preset_name);
+  }
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return requestJson<ExtendedPaperRunStatusResponse>(`/api/mission-control/extended-paper-run-status/${suffix}`);
 }
 
 export function getLivePaperAutonomyFunnel(params?: { preset?: string; window_minutes?: number }) {

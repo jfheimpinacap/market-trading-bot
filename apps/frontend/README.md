@@ -82,6 +82,30 @@ Esta card complementa (no reemplaza) Trial Run + Trial History y mantiene alcanc
 
 Esta card complementa cards existentes (no las reemplaza) y mantiene alcance estricto `REAL_READ_ONLY` + `PAPER_ONLY`.
 
+## Cockpit Extended Paper Run card (new)
+
+`/cockpit` ahora incluye una card compacta **Extended Paper Run** para lanzar/reusar una sesión paper más larga usando los endpoints backend ya implementados.
+
+- integración backend:
+  - `POST /api/mission-control/start-extended-paper-run/`
+  - `GET /api/mission-control/extended-paper-run-status/`
+  - cliente frontend:
+    - `startExtendedPaperRun(payload?)` (preset por defecto `live_read_only_paper_conservative`)
+    - `getExtendedPaperRunStatus(params?)`
+- comportamiento:
+  - auto-carga de status al abrir cockpit
+  - botón `Start extended run` para lanzar/reusar
+  - botón `Refresh extended status` para reconsultar estado
+  - refresh automático de status/gate tras lanzar
+- salida compacta:
+  - badge principal con `launch_status` o fallback a `gate_status`
+  - resumen `launch_summary`/`status_summary`
+  - `next_action_hint`
+  - estado corto de `gate_status`, `session_active`, `heartbeat_active`, `current_session_status`, `caution_mode`, `extended_run_active`
+  - `reason_codes` compactos y legibles cuando backend los devuelve
+
+El alcance se mantiene estricto: `REAL_READ_ONLY` + `PAPER_ONLY`, sin habilitar live trading real y sin crear una pantalla nueva ni tocar `/runtime`.
+
 ## Mission control autonomous session UX (new)
 
 La vista `/mission-control` ahora incluye una sección explícita de **Autonomous Session Control** para operación persistente gobernada:

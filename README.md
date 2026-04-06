@@ -183,6 +183,22 @@ The card provides a concise operational decision for a longer paper run:
 
 This remains read-only/paper-only (`REAL_READ_ONLY` + `PAPER_ONLY`), complements existing cockpit cards, and does not enable live trading.
 
+Cockpit now also includes a compact **Extended Paper Run** card that consumes:
+- `POST /api/mission-control/start-extended-paper-run/`
+- `GET /api/mission-control/extended-paper-run-status/`
+- manual actions:
+  - `Start extended run`
+  - `Refresh extended status`
+
+The card is intentionally compact and operational:
+- primary status badge from `launch_status` (`STARTED` / `REUSED_RUNNING_SESSION` / `REUSED_PAUSED_SESSION` / `BLOCKED` / `FAILED`)
+- fallback badge from `gate_status` when no launch has been requested yet
+- concise `launch_summary` or `status_summary`, plus `next_action_hint`
+- short state line for `gate_status`, `session_active`, `heartbeat_active`, `current_session_status`, `caution_mode`, `extended_run_active`
+- compact readable `reason_codes` when available
+
+Scope remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY`; no new screen, no `/runtime` changes, no new polling/websocket loop, and no live trading enablement.
+
 ### Extended Paper Run Launcher (backend, new)
 
 `mission_control` now exposes a compact backend launcher for extended paper runs guarded directly by the existing Extended Paper Run Gate decision.
