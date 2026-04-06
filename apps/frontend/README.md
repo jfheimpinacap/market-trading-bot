@@ -61,6 +61,27 @@ Límites explícitos: sigue siendo `REAL_READ_ONLY` + `PAPER_ONLY`, no habilita 
 
 Esta card complementa (no reemplaza) Trial Run + Trial History y mantiene alcance `REAL_READ_ONLY` + `PAPER_ONLY`.
 
+## Cockpit Extended Run Gate card (new)
+
+`/cockpit` ahora incluye una card compacta **Extended Run Gate** para traducir `Trial Run + Trial Trend + Validation + Funnel` en una decisión operativa rápida sobre si conviene iniciar una prueba paper más larga.
+
+- integración backend:
+  - `GET /api/mission-control/extended-paper-run-gate/`
+  - cliente frontend: `getExtendedPaperRunGate(params?)` (query opcional `preset`)
+- comportamiento:
+  - auto-carga al abrir cockpit
+  - botón manual `Refresh gate`
+  - refresh coordinado después de `Run trial`, `Refresh trend` y `Refresh validation`
+  - fallback no bloqueante: `Extended run gate unavailable`
+- salida compacta:
+  - badge fuerte `gate_status` (`ALLOW` / `ALLOW_WITH_CAUTION` / `BLOCK`)
+  - `gate_summary` + `next_action_hint`
+  - estado corto de `latest_trial_status`, `trend_status`, `readiness_status`, `validation_status`, `attention_mode`, `funnel_status`
+  - checks compactos `PASS/WARN/FAIL`
+  - `reason_codes` (si backend los devuelve), en formato legible
+
+Esta card complementa cards existentes (no las reemplaza) y mantiene alcance estricto `REAL_READ_ONLY` + `PAPER_ONLY`.
+
 ## Mission control autonomous session UX (new)
 
 La vista `/mission-control` ahora incluye una sección explícita de **Autonomous Session Control** para operación persistente gobernada:
