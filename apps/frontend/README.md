@@ -2731,6 +2731,10 @@ Snapshot content (compact badges + key/value lines):
   - compact sync summary (`last_auto_sync.sync_summary` / `status_summary`)
   - `active_alert_present` + `active_alert_severity`
   - `attention_mode`
+  - autonomy funnel awareness from the same bridge payload (`funnel_status`, `stalled_stage`, `top_stage`, `funnel_summary`)
+    - compact funnel badge: `ACTIVE` / `THIN_FLOW` / `STALLED`
+    - short context lines: `Stalled at: ...` or `Top stage: ...`
+    - lightweight fallback: `Funnel context unavailable` when backend omits the funnel context
   - `Sync attention alert` button for manual fallback
 - `status_summary`
 
@@ -2738,12 +2742,14 @@ Behavior:
 - cockpit load fetches bootstrap status and operational snapshot
 - `Start live paper autopilot` refreshes both status + snapshot
 - `Refresh status` refreshes both status + snapshot
-- if attention bridge status fails, card remains usable and shows `Attention auto-sync unavailable`
+- if attention bridge status fails, card remains usable and shows `Operational attention unavailable`
 
 Guardrails remain unchanged and explicit:
 - `REAL_READ_ONLY`
 - `PAPER_ONLY`
 - `live_execution_enabled = false`
+
+This frontend delta keeps observability compact inside the same Live Paper Autopilot card and helps distinguish “alive and productive” vs “alive but stalled” without enabling live trading.
 
 ## Cockpit Live Paper Smoke Test card (Prompt 202)
 

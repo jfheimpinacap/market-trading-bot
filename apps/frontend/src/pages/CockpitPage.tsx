@@ -50,6 +50,7 @@ import type {
   LivePaperSmokeTestResultResponse,
   LivePaperSmokeTestStatusResponse,
   LivePaperAutonomyFunnelResponse,
+  LivePaperFunnelStatus,
   LivePaperValidationDigestResponse,
 } from '../types/missionControl';
 import type {
@@ -117,6 +118,13 @@ const toneFromSmokeStatus = (status: 'PASS' | 'WARN' | 'FAIL' | null | undefined
 };
 
 const toneFromFunnelStatus = (status: LivePaperAutonomyFunnelResponse['funnel_status'] | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
+  if (status === 'ACTIVE') return 'ready';
+  if (status === 'THIN_FLOW') return 'pending';
+  if (status === 'STALLED') return 'offline';
+  return 'neutral';
+};
+
+const toneFromAttentionFunnelStatus = (status: LivePaperFunnelStatus | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
   if (status === 'ACTIVE') return 'ready';
   if (status === 'THIN_FLOW') return 'pending';
   if (status === 'STALLED') return 'offline';
@@ -246,6 +254,12 @@ export function CockpitPage() {
     if (!sync.success || sync.alert_action === 'ERROR') return 'Attention auto-sync active · last result: ERROR';
     return `Attention auto-sync active · Last auto-sync: ${sync.alert_action ?? 'NOOP'}`;
   }, [autonomousHeartbeatSummary, livePaperAttentionStatus]);
+  const attentionFunnelUnavailable = livePaperAttentionStatus
+    ? !livePaperAttentionStatus.funnel_status
+      && !livePaperAttentionStatus.stalled_stage
+      && !livePaperAttentionStatus.top_stage
+      && !livePaperAttentionStatus.funnel_summary
+    : false;
   const paperCurrency = paperAccountSnapshot?.currency ?? paperPortfolioSummary?.account.currency ?? 'USD';
   const openExposure = useMemo(
     () => paperPortfolioSummary?.exposure_by_market.reduce((total, item) => total + (parseNumber(item.market_value) ?? 0), 0) ?? 0,
@@ -1056,8 +1070,13 @@ export function CockpitPage() {
                               Mode {livePaperAttentionStatus.attention_mode}
                             </StatusBadge>
                           ) : null}
+                          {livePaperAttentionStatus?.funnel_status ? (
+                            <StatusBadge tone={toneFromAttentionFunnelStatus(livePaperAttentionStatus.funnel_status)}>
+                              Funnel {livePaperAttentionStatus.funnel_status}
+                            </StatusBadge>
+                          ) : null}
                         </div>
-                        {livePaperAttentionStatusError ? <p className="muted-text">{livePaperAttentionStatusError}</p> : null}
+                        {livePaperAttentionStatusError ? <p className="muted-text">Operational attention unavailable</p> : null}
                         <p className="muted-text">
                           Last auto-sync: {livePaperAttentionStatus?.last_auto_sync?.alert_action ?? autonomousHeartbeatSummary?.live_paper_attention_sync?.alert_action ?? 'n/a'}
                         </p>
@@ -1067,6 +1086,10 @@ export function CockpitPage() {
                             ?? livePaperAttentionStatus?.status_summary
                             ?? 'Attention auto-sync unavailable'}
                         </p>
+                        {livePaperAttentionStatus?.stalled_stage ? <p className="muted-text">Stalled at: {livePaperAttentionStatus.stalled_stage}</p> : null}
+                        {!livePaperAttentionStatus?.stalled_stage && livePaperAttentionStatus?.top_stage ? <p className="muted-text">Top stage: {livePaperAttentionStatus.top_stage}</p> : null}
+                        {livePaperAttentionStatus?.funnel_summary ? <p className="muted-text">{livePaperAttentionStatus.funnel_summary}</p> : null}
+                        {!livePaperAttentionStatusError && attentionFunnelUnavailable ? <p className="muted-text">Funnel context unavailable</p> : null}
                         <ul className="key-value-list">
                           <li><span>Auto-sync success</span><strong>{String(livePaperAttentionStatus?.last_auto_sync?.success ?? autonomousHeartbeatSummary?.live_paper_attention_sync?.success ?? false)}</strong></li>
                           <li><span>Active alert severity</span><strong>{livePaperAttentionStatus?.active_alert_severity ?? 'n/a'}</strong></li>
