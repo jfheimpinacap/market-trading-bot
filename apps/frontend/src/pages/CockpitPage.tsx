@@ -14,6 +14,7 @@ import {
   getLivePaperAttentionAlertStatus,
   getLivePaperBootstrapStatus,
   getExtendedPaperRunGate,
+  getExtendedPaperRunStatus,
   getLivePaperAutonomyFunnel,
   getLivePaperSmokeTestStatus,
   getLivePaperTrialHistory,
@@ -21,6 +22,7 @@ import {
   getLivePaperTrialStatus,
   getLivePaperValidation,
   runLivePaperSmokeTest,
+  startExtendedPaperRun,
   runLivePaperTrial as runLivePaperTrialRequest,
   syncLivePaperAttentionAlert,
 } from '../services/missionControl';
@@ -55,6 +57,8 @@ import type {
   LivePaperSmokeTestResultResponse,
   LivePaperSmokeTestStatusResponse,
   LivePaperAutonomyFunnelResponse,
+  ExtendedPaperRunLaunchResponse,
+  ExtendedPaperRunStatusResponse,
   LivePaperFunnelStatus,
   LivePaperTrialRunResultResponse,
   LivePaperTrialHistoryResponse,
@@ -153,6 +157,13 @@ const toneFromExtendedGateStatus = (status: LivePaperExtendedRunGateResponse['ga
   if (status === 'ALLOW') return 'ready';
   if (status === 'ALLOW_WITH_CAUTION') return 'pending';
   if (status === 'BLOCK') return 'offline';
+  return 'neutral';
+};
+
+const toneFromExtendedRunLaunchStatus = (status: ExtendedPaperRunLaunchResponse['launch_status'] | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
+  if (status === 'STARTED' || status === 'REUSED_RUNNING_SESSION' || status === 'REUSED_PAUSED_SESSION') return 'ready';
+  if (status === 'BLOCKED') return 'offline';
+  if (status === 'FAILED') return 'offline';
   return 'neutral';
 };
 
@@ -305,6 +316,12 @@ export function CockpitPage() {
   const [extendedRunGateLoading, setExtendedRunGateLoading] = useState(true);
   const [extendedRunGateError, setExtendedRunGateError] = useState<string | null>(null);
   const [extendedRunGate, setExtendedRunGate] = useState<LivePaperExtendedRunGateResponse | null>(null);
+  const [extendedPaperRunStatusLoading, setExtendedPaperRunStatusLoading] = useState(true);
+  const [extendedPaperRunStatusError, setExtendedPaperRunStatusError] = useState<string | null>(null);
+  const [extendedPaperRunStatus, setExtendedPaperRunStatus] = useState<ExtendedPaperRunStatusResponse | null>(null);
+  const [extendedPaperRunStartLoading, setExtendedPaperRunStartLoading] = useState(false);
+  const [extendedPaperRunStartError, setExtendedPaperRunStartError] = useState<string | null>(null);
+  const [extendedPaperRunLaunch, setExtendedPaperRunLaunch] = useState<ExtendedPaperRunLaunchResponse | null>(null);
   const heartbeatAutoSyncHint = useMemo(() => {
     const heartbeatSync = autonomousHeartbeatSummary?.live_paper_attention_sync;
     const lastAutoSync = livePaperAttentionStatus?.last_auto_sync;
@@ -331,6 +348,13 @@ export function CockpitPage() {
   const livePaperTrialHistoryItems = livePaperTrialHistory?.items ?? [];
   const livePaperTrialRecentStatuses = livePaperTrialTrend?.recent_statuses ?? [];
   const extendedRunGateChecks = extendedRunGate?.checks ?? [];
+  const extendedPaperRunReasonCodes = extendedPaperRunLaunch?.reason_codes ?? extendedRunGate?.reason_codes ?? [];
+  const extendedPaperRunPrimaryLabel = extendedPaperRunLaunch?.launch_status ?? extendedPaperRunStatus?.gate_status ?? extendedRunGate?.gate_status ?? 'UNKNOWN';
+  const extendedPaperRunPrimaryTone = extendedPaperRunLaunch?.launch_status
+    ? toneFromExtendedRunLaunchStatus(extendedPaperRunLaunch.launch_status)
+    : toneFromExtendedGateStatus(extendedPaperRunStatus?.gate_status ?? extendedRunGate?.gate_status);
+  const extendedPaperRunSummary = extendedPaperRunLaunch?.launch_summary ?? extendedPaperRunStatus?.status_summary ?? 'No extended run launch yet.';
+  const extendedPaperRunHint = extendedPaperRunLaunch?.next_action_hint ?? extendedPaperRunStatus?.next_action_hint ?? 'Refresh status to get latest hint.';
 
   const loadLivePaperStatus = useCallback(async (): Promise<LivePaperBootstrapStatusResponse | null> => {
     setLivePaperStatusLoading(true);
@@ -590,6 +614,41 @@ export function CockpitPage() {
     }
   }, []);
 
+  const loadExtendedPaperRunStatus = useCallback(async () => {
+    setExtendedPaperRunStatusLoading(true);
+    setExtendedPaperRunStatusError(null);
+    try {
+      const payload = await getExtendedPaperRunStatus({ preset: 'live_read_only_paper_conservative' });
+      setExtendedPaperRunStatus(payload);
+      return payload;
+    } catch (statusError) {
+      setExtendedPaperRunStatus(null);
+      setExtendedPaperRunStatusError(getErrorMessage(statusError, 'Extended paper run status unavailable.'));
+      return null;
+    } finally {
+      setExtendedPaperRunStatusLoading(false);
+    }
+  }, []);
+
+  const startExtendedPaperRunFromCockpit = useCallback(async () => {
+    setExtendedPaperRunStartLoading(true);
+    setExtendedPaperRunStartError(null);
+    try {
+      const payload = await startExtendedPaperRun({ preset: 'live_read_only_paper_conservative' });
+      setExtendedPaperRunLaunch(payload);
+      await Promise.all([
+        loadExtendedPaperRunStatus(),
+        loadExtendedRunGate(),
+        loadLivePaperStatus(),
+        loadLivePaperOperationalSnapshot(),
+      ]);
+    } catch (startError) {
+      setExtendedPaperRunStartError(getErrorMessage(startError, 'Extended paper run launch failed.'));
+    } finally {
+      setExtendedPaperRunStartLoading(false);
+    }
+  }, [loadExtendedPaperRunStatus, loadExtendedRunGate, loadLivePaperOperationalSnapshot, loadLivePaperStatus]);
+
   const runLivePaperTrial = useCallback(async () => {
     setLivePaperTrialRequestLoading(true);
     setLivePaperTrialStatus('RUNNING');
@@ -733,6 +792,10 @@ export function CockpitPage() {
   useEffect(() => {
     void loadExtendedRunGate();
   }, [loadExtendedRunGate]);
+
+  useEffect(() => {
+    void loadExtendedPaperRunStatus();
+  }, [loadExtendedPaperRunStatus]);
 
   useEffect(() => {
     void loadLivePaperAutonomyFunnel();
@@ -1213,6 +1276,74 @@ export function CockpitPage() {
                       onClick={() => void loadExtendedRunGate()}
                     >
                       Refresh gate
+                    </button>
+                  </div>
+                </SectionCard>
+                <SectionCard
+                  eyebrow="Operational launcher"
+                  title="Extended Paper Run"
+                  description="Start or reuse a longer paper-only run after gate checks. Keeps REAL_READ_ONLY + PAPER_ONLY constraints."
+                >
+                  <div className="button-row">
+                    <StatusBadge tone={extendedPaperRunPrimaryTone}>{extendedPaperRunPrimaryLabel}</StatusBadge>
+                    <StatusBadge tone={toneFromExtendedGateStatus(extendedPaperRunStatus?.gate_status ?? extendedRunGate?.gate_status)}>
+                      Gate {(extendedPaperRunStatus?.gate_status ?? extendedRunGate?.gate_status) ?? 'n/a'}
+                    </StatusBadge>
+                    <StatusBadge tone={(extendedPaperRunStatus?.extended_run_active ?? false) ? 'ready' : 'neutral'}>
+                      Extended run {(extendedPaperRunStatus?.extended_run_active ?? false) ? 'ACTIVE' : 'INACTIVE'}
+                    </StatusBadge>
+                  </div>
+                  {extendedPaperRunStatusLoading ? <p>Loading extended paper run status…</p> : null}
+                  {!extendedPaperRunStatusLoading && extendedPaperRunStatusError ? <p className="warning-text">{extendedPaperRunStatusError}</p> : null}
+                  <ul className="key-value-list">
+                    <li><span>Launch summary</span><strong>{extendedPaperRunSummary}</strong></li>
+                    <li><span>Next action hint</span><strong>{extendedPaperRunHint}</strong></li>
+                    <li><span>Launch status</span><strong>{extendedPaperRunLaunch?.launch_status ?? 'n/a'}</strong></li>
+                    <li><span>Gate status</span><strong>{extendedPaperRunStatus?.gate_status ?? extendedRunGate?.gate_status ?? 'n/a'}</strong></li>
+                    <li><span>Session active</span><strong>{String(extendedPaperRunStatus?.session_active ?? extendedPaperRunLaunch?.session_active ?? false)}</strong></li>
+                    <li><span>Heartbeat active</span><strong>{String(extendedPaperRunStatus?.heartbeat_active ?? extendedPaperRunLaunch?.heartbeat_active ?? false)}</strong></li>
+                    <li><span>Current session status</span><strong>{extendedPaperRunStatus?.current_session_status ?? extendedPaperRunLaunch?.current_session_status ?? 'n/a'}</strong></li>
+                    <li><span>Caution mode</span><strong>{String(extendedPaperRunStatus?.caution_mode ?? extendedPaperRunLaunch?.caution_mode ?? false)}</strong></li>
+                    <li><span>Extended run active</span><strong>{String(extendedPaperRunStatus?.extended_run_active ?? false)}</strong></li>
+                  </ul>
+                  <div className="button-row">
+                    <StatusBadge tone={(extendedPaperRunStatus?.session_active ?? extendedPaperRunLaunch?.session_active ?? false) ? 'ready' : 'neutral'}>
+                      Session {(extendedPaperRunStatus?.session_active ?? extendedPaperRunLaunch?.session_active ?? false) ? 'active' : 'inactive'}
+                    </StatusBadge>
+                    <StatusBadge tone={(extendedPaperRunStatus?.heartbeat_active ?? extendedPaperRunLaunch?.heartbeat_active ?? false) ? 'ready' : 'neutral'}>
+                      Heartbeat {(extendedPaperRunStatus?.heartbeat_active ?? extendedPaperRunLaunch?.heartbeat_active ?? false) ? 'active' : 'inactive'}
+                    </StatusBadge>
+                    <StatusBadge tone={(extendedPaperRunStatus?.caution_mode ?? extendedPaperRunLaunch?.caution_mode ?? false) ? 'pending' : 'ready'}>
+                      Caution mode {(extendedPaperRunStatus?.caution_mode ?? extendedPaperRunLaunch?.caution_mode ?? false) ? 'ON' : 'OFF'}
+                    </StatusBadge>
+                  </div>
+                  {extendedPaperRunReasonCodes.length > 0 ? (
+                    <div className="subsection">
+                      <p className="section-label">Reason codes</p>
+                      <div className="button-row">
+                        {extendedPaperRunReasonCodes.slice(0, 6).map((code) => (
+                          <StatusBadge key={code} tone="neutral">{formatReasonCode(code)}</StatusBadge>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {extendedPaperRunStartError ? <p className="warning-text">{extendedPaperRunStartError}</p> : null}
+                  <div className="button-row">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={extendedPaperRunStartLoading}
+                      onClick={() => void startExtendedPaperRunFromCockpit()}
+                    >
+                      {extendedPaperRunStartLoading ? 'Starting…' : 'Start extended run'}
+                    </button>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      disabled={extendedPaperRunStatusLoading || extendedPaperRunStartLoading}
+                      onClick={() => void loadExtendedPaperRunStatus()}
+                    >
+                      Refresh extended status
                     </button>
                   </div>
                 </SectionCard>

@@ -362,6 +362,7 @@ export type LivePaperExtendedRunGateCheck = {
 };
 
 export type LivePaperExtendedRunGateResponse = {
+  preset_name: string;
   gate_status: LivePaperExtendedRunGateStatus;
   gate_summary: string;
   next_action_hint: string;
@@ -373,6 +374,42 @@ export type LivePaperExtendedRunGateResponse = {
   funnel_status: LivePaperAutonomyFunnelStatus | null;
   reason_codes?: string[];
   checks: LivePaperExtendedRunGateCheck[];
+};
+
+export type ExtendedPaperRunLaunchRequest = {
+  preset?: string;
+};
+
+export type ExtendedPaperRunLaunchStatus =
+  | 'STARTED'
+  | 'REUSED_RUNNING_SESSION'
+  | 'REUSED_PAUSED_SESSION'
+  | 'BLOCKED'
+  | 'FAILED';
+
+export type ExtendedPaperRunLaunchResponse = {
+  preset_name: string;
+  launch_status: ExtendedPaperRunLaunchStatus;
+  gate_status: LivePaperExtendedRunGateStatus;
+  session_active: boolean;
+  heartbeat_active: boolean;
+  current_session_status: string;
+  caution_mode?: boolean | null;
+  next_action_hint: string;
+  launch_summary: string;
+  reason_codes: string[];
+};
+
+export type ExtendedPaperRunStatusResponse = {
+  preset_name: string;
+  extended_run_active: boolean;
+  gate_status: LivePaperExtendedRunGateStatus;
+  session_active: boolean;
+  heartbeat_active: boolean;
+  current_session_status: string;
+  caution_mode?: boolean | null;
+  status_summary: string;
+  next_action_hint: string;
 };
 
 export type LivePaperAutonomyFunnelStatus = 'ACTIVE' | 'THIN_FLOW' | 'STALLED';
