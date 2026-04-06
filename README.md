@@ -56,10 +56,14 @@ The same `/cockpit` **Live Paper Autopilot** card now adds a compact **Operation
   - `current_session_status`
   - last heartbeat timestamps + latest heartbeat run outcome summary
   - `Operational attention` mini-block for heartbeat auto-sync availability/result, active alert state/severity, and `attention_mode`
+  - funnel-aware operational attention context from the same bridge payload (no new endpoint): `funnel_status`, `stalled_stage`, `top_stage`, `funnel_summary`
+    - compact badge: `ACTIVE` / `THIN_FLOW` / `STALLED`
+    - short lines: `Stalled at: ...` or `Top stage: ...`
+    - compact fallback when unavailable: `Funnel context unavailable`
   - explicit `Sync attention alert` button as manual fallback (with compact feedback + refresh)
   - `status_summary` from bootstrap status
 
-This remains strictly `REAL_READ_ONLY` + `PAPER_ONLY`; it improves observability only and does not enable live execution.
+This remains strictly `REAL_READ_ONLY` + `PAPER_ONLY`; it improves observability only (including “alive but unproductive” vs stalled funnel awareness) and does not enable live execution.
 
 ### Live Paper Autopilot Operational Attention Bridge (backend, new)
 

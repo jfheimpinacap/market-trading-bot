@@ -168,6 +168,8 @@ export type LivePaperAttentionMode = 'HEALTHY' | 'DEGRADED' | 'REVIEW_NOW' | 'BL
 export type LivePaperAttentionAlertAction = 'CREATED' | 'UPDATED' | 'RESOLVED' | 'NOOP';
 export type LivePaperAttentionSyncAction = LivePaperAttentionAlertAction | 'ERROR' | null;
 export type LivePaperAttentionSeverity = 'warning' | 'high' | 'critical' | null;
+export type LivePaperFunnelStatus = 'ACTIVE' | 'THIN_FLOW' | 'STALLED';
+export type LivePaperFunnelStage = 'scan' | 'research' | 'prediction' | 'risk' | 'paper_execution';
 
 export type LivePaperAttentionAutoSyncStatus = {
   attempted: boolean;
@@ -189,6 +191,10 @@ export type LivePaperAttentionAlertStatusResponse = {
   heartbeat_active: boolean;
   current_session_status: string;
   status_summary: string;
+  funnel_status?: LivePaperFunnelStatus | null;
+  stalled_stage?: LivePaperFunnelStage | null;
+  top_stage?: LivePaperFunnelStage | null;
+  funnel_summary?: string | null;
   last_alert_action?: LivePaperAttentionSyncAction;
   last_sync_summary?: string | null;
   last_auto_sync?: LivePaperAttentionAutoSyncStatus | null;
@@ -281,8 +287,8 @@ export type LivePaperAutonomyFunnelResponse = {
   risk_blocked_count: number;
   paper_execution_count: number;
   recent_trades_count: number;
-  top_stage: LivePaperAutonomyFunnelStage['stage_name'];
-  stalled_stage: LivePaperAutonomyFunnelStage['stage_name'] | null;
+  top_stage: LivePaperFunnelStage;
+  stalled_stage: LivePaperFunnelStage | null;
   next_action_hint: string;
   funnel_summary: string;
   stages: LivePaperAutonomyFunnelStage[];
@@ -304,6 +310,10 @@ export type LivePaperAttentionAlertSyncResponse = {
   update_suppressed?: boolean;
   suppression_reason?: 'NO_MATERIAL_CHANGE' | 'ALERT_NOT_NEEDED' | 'NO_ACTIVE_ALERT' | null;
   active_alert_present?: boolean;
+  funnel_status?: LivePaperFunnelStatus | null;
+  stalled_stage?: LivePaperFunnelStage | null;
+  top_stage?: LivePaperFunnelStage | null;
+  funnel_summary?: string | null;
 };
 
 export type AutonomousRuntimeSummary = {
