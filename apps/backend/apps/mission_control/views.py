@@ -122,6 +122,9 @@ from apps.mission_control.serializers import (
     ExtendedPaperRunGateSerializer,
     LivePaperAttentionAlertSyncSerializer,
     LivePaperBootstrapRequestSerializer,
+    ExtendedPaperRunLaunchRequestSerializer,
+    ExtendedPaperRunLaunchSerializer,
+    ExtendedPaperRunStatusSerializer,
     AutonomousTickDispatchAttemptSerializer,
     MissionControlCycleSerializer,
     MissionControlSessionSerializer,
@@ -221,6 +224,10 @@ from apps.mission_control.services.live_paper_trial_history import list_live_pap
 from apps.mission_control.services.live_paper_trial_trend import build_live_paper_trial_trend_digest
 from apps.mission_control.services.live_paper_autonomy_funnel import build_live_paper_autonomy_funnel_snapshot
 from apps.mission_control.services.extended_paper_run_gate import build_extended_paper_run_gate
+from apps.mission_control.services.extended_paper_run_launcher import (
+    get_extended_paper_run_status,
+    launch_extended_paper_run,
+)
 
 
 class MissionControlStatusView(APIView):
@@ -556,6 +563,21 @@ class ExtendedPaperRunGateView(APIView):
         payload = build_extended_paper_run_gate(preset_name=preset_name)
         serializer = ExtendedPaperRunGateSerializer(payload)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class StartExtendedPaperRunView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = ExtendedPaperRunLaunchRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = launch_extended_paper_run(preset_name=serializer.validated_data.get('preset'))
+        return Response(ExtendedPaperRunLaunchSerializer(payload).data, status=status.HTTP_200_OK)
+
+
+class ExtendedPaperRunStatusView(APIView):
+    def get(self, request, *args, **kwargs):
+        preset_name = request.query_params.get('preset') or request.query_params.get('preset_name')
+        payload = get_extended_paper_run_status(preset_name=preset_name)
+        return Response(ExtendedPaperRunStatusSerializer(payload).data, status=status.HTTP_200_OK)
 
 
 class StartAutonomousRunnerView(APIView):
