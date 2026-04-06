@@ -111,6 +111,9 @@ from apps.mission_control.serializers import (
     LivePaperSmokeTestRequestSerializer,
     LivePaperSmokeTestResultSerializer,
     LivePaperSmokeTestStatusSerializer,
+    LivePaperTrialRunRequestSerializer,
+    LivePaperTrialRunResultSerializer,
+    LivePaperTrialRunStatusSerializer,
     LivePaperAutonomyFunnelSerializer,
     LivePaperAttentionAlertSyncSerializer,
     LivePaperBootstrapRequestSerializer,
@@ -204,6 +207,10 @@ from apps.mission_control.services.live_paper_validation import build_live_paper
 from apps.mission_control.services.live_paper_smoke_test import (
     get_last_live_paper_smoke_test_result,
     run_live_paper_smoke_test,
+)
+from apps.mission_control.services.live_paper_trial_run import (
+    get_last_live_paper_trial_run_result,
+    run_live_paper_trial_run,
 )
 from apps.mission_control.services.live_paper_autonomy_funnel import build_live_paper_autonomy_funnel_snapshot
 
@@ -466,6 +473,37 @@ class LivePaperSmokeTestStatusView(APIView):
             'next_action_hint': latest.get('next_action_hint'),
         }
         return Response(LivePaperSmokeTestStatusSerializer(payload).data, status=status.HTTP_200_OK)
+
+
+class RunLivePaperTrialRunView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = LivePaperTrialRunRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        result = run_live_paper_trial_run(
+            preset_name=payload.get('preset'),
+            heartbeat_passes=payload.get('heartbeat_passes', 1),
+        )
+        return Response(LivePaperTrialRunResultSerializer(result).data, status=status.HTTP_200_OK)
+
+
+class LivePaperTrialRunStatusView(APIView):
+    def get(self, request, *args, **kwargs):
+        latest = get_last_live_paper_trial_run_result()
+        if not latest:
+            return Response({'detail': 'No live paper trial run has been executed yet.'}, status=status.HTTP_404_NOT_FOUND)
+
+        payload = {
+            'preset_name': latest.get('preset_name'),
+            'trial_status': latest.get('trial_status'),
+            'executed_at': latest.get('executed_at'),
+            'smoke_test_status': latest.get('smoke_test_status'),
+            'validation_status_after': latest.get('validation_status_after'),
+            'heartbeat_passes_completed': latest.get('heartbeat_passes_completed'),
+            'trial_summary': latest.get('trial_summary'),
+            'next_action_hint': latest.get('next_action_hint'),
+        }
+        return Response(LivePaperTrialRunStatusSerializer(payload).data, status=status.HTTP_200_OK)
 
 
 class LivePaperAutonomyFunnelView(APIView):

@@ -140,27 +140,22 @@ Scope remains strictly real-market read-only + fake-money paper execution and do
 
 `/cockpit` now includes a compact **Live Paper Trial Run** card for a one-click short V1 paper verification flow (no new screen).
 
-- Reuses existing mission-control endpoints only:
-  - `POST /api/mission-control/bootstrap-live-paper-session/`
-  - `GET /api/mission-control/live-paper-bootstrap-status/`
-  - `POST /api/mission-control/run-live-paper-smoke-test/`
-  - `GET /api/mission-control/live-paper-smoke-test-status/`
-  - `GET /api/mission-control/live-paper-validation/`
-- `Run trial` orchestrates in frontend (sequentially):
-  1. bootstrap (conservative defaults)
-  2. refresh bootstrap status
-  3. run smoke test (conservative defaults)
-  4. refresh smoke status
-  5. refresh validation
-  6. refresh operational snapshot + paper portfolio snapshot + attention bridge context already wired in cockpit
-- `Refresh trial status` only reloads bootstrap/smoke/validation and recomputes a compact frontend status (no full rerun).
+- Backend orchestration is now available:
+  - `POST /api/mission-control/run-live-paper-trial/`
+  - `GET /api/mission-control/live-paper-trial-status/`
+- The backend trial service reuses existing mission-control building blocks:
+  - bootstrap live-paper session + bootstrap status
+  - smoke test run + smoke test status
+  - live-paper validation digest (before/after) plus compact portfolio/activity/trade evidence
+- `Run trial` can call one compact backend endpoint and keep frontend logic minimal.
+- `Refresh trial status` can read the latest backend result without rerunning the sequence.
 - compact card output:
-  - `trial_status`: `IDLE` / `RUNNING` / `PASS` / `WARN` / `FAIL`
+  - `trial_status`: `PASS` / `WARN` / `FAIL` (backend-classified)
   - deterministic `trial_summary`
   - latest `bootstrap_action` (if available), smoke status, validation status
   - short next-step hint
 
-Scope remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` changes, no polling/websocket additions, and no live trading enablement.
+Scope remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` changes, no scheduler additions, and no live trading enablement.
 
 ### Live Paper Autonomy Funnel Snapshot (backend + cockpit, new)
 

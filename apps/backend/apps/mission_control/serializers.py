@@ -278,6 +278,46 @@ class LivePaperValidationDigestSerializer(serializers.Serializer):
     checks = LivePaperValidationCheckSerializer(many=True)
 
 
+class LivePaperTrialRunRequestSerializer(serializers.Serializer):
+    preset = serializers.CharField(required=False, allow_blank=True, default='live_read_only_paper_conservative')
+    heartbeat_passes = serializers.IntegerField(required=False, min_value=1, max_value=2, default=1)
+
+
+class LivePaperTrialRunCheckSerializer(serializers.Serializer):
+    check_name = serializers.CharField()
+    status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])
+    summary = serializers.CharField()
+
+
+class LivePaperTrialRunResultSerializer(serializers.Serializer):
+    preset_name = serializers.CharField()
+    trial_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])
+    executed_at = serializers.DateTimeField()
+    bootstrap_action = serializers.CharField()
+    smoke_test_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])
+    validation_status_before = serializers.ChoiceField(choices=['READY', 'WARNING', 'BLOCKED'])
+    validation_status_after = serializers.ChoiceField(choices=['READY', 'WARNING', 'BLOCKED'])
+    heartbeat_passes_requested = serializers.IntegerField()
+    heartbeat_passes_completed = serializers.IntegerField()
+    recent_activity_detected = serializers.BooleanField()
+    recent_trades_detected = serializers.BooleanField()
+    portfolio_snapshot_ready = serializers.BooleanField()
+    next_action_hint = serializers.CharField()
+    trial_summary = serializers.CharField()
+    checks = LivePaperTrialRunCheckSerializer(many=True)
+
+
+class LivePaperTrialRunStatusSerializer(serializers.Serializer):
+    preset_name = serializers.CharField()
+    trial_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])
+    executed_at = serializers.DateTimeField()
+    smoke_test_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])
+    validation_status_after = serializers.ChoiceField(choices=['READY', 'WARNING', 'BLOCKED'])
+    heartbeat_passes_completed = serializers.IntegerField()
+    trial_summary = serializers.CharField()
+    next_action_hint = serializers.CharField()
+
+
 class LivePaperAutonomyFunnelStageSerializer(serializers.Serializer):
     stage_name = serializers.ChoiceField(choices=['scan', 'research', 'prediction', 'risk', 'paper_execution'])
     count = serializers.IntegerField(min_value=0)
