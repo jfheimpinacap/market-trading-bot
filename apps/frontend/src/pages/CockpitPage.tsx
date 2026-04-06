@@ -15,6 +15,7 @@ import {
   getLivePaperBootstrapStatus,
   getLivePaperAutonomyFunnel,
   getLivePaperSmokeTestStatus,
+  getLivePaperTrialHistory,
   getLivePaperTrialStatus,
   getLivePaperValidation,
   runLivePaperSmokeTest,
@@ -56,6 +57,8 @@ import type {
   LivePaperTrialRunResultResponse,
   LivePaperTrialRunStatus,
   LivePaperTrialRunStatusResponse,
+  LivePaperTrialHistoryResponse,
+  LivePaperTrialHistoryItem,
   LivePaperValidationDigestResponse,
 } from '../types/missionControl';
 import type {
@@ -265,6 +268,9 @@ export function CockpitPage() {
   const [livePaperTrialNotFound, setLivePaperTrialNotFound] = useState(false);
   const [livePaperTrialResult, setLivePaperTrialResult] = useState<LivePaperTrialRunResultResponse | null>(null);
   const [livePaperTrialStatusSnapshot, setLivePaperTrialStatusSnapshot] = useState<LivePaperTrialRunStatusResponse | null>(null);
+  const [livePaperTrialHistory, setLivePaperTrialHistory] = useState<LivePaperTrialHistoryResponse | null>(null);
+  const [livePaperTrialHistoryLoading, setLivePaperTrialHistoryLoading] = useState(true);
+  const [livePaperTrialHistoryError, setLivePaperTrialHistoryError] = useState<string | null>(null);
   const heartbeatAutoSyncHint = useMemo(() => {
     const heartbeatSync = autonomousHeartbeatSummary?.live_paper_attention_sync;
     const lastAutoSync = livePaperAttentionStatus?.last_auto_sync;
@@ -288,6 +294,10 @@ export function CockpitPage() {
   const recentPaperTrades = useMemo(() => (paperPortfolioSummary?.recent_trades ?? []).slice(0, 5), [paperPortfolioSummary]);
   const livePaperTrialSnapshot = livePaperTrialResult ?? livePaperTrialStatusSnapshot;
   const livePaperTrialChecks = livePaperTrialResult?.checks ?? [];
+  const livePaperTrialHistoryItems = useMemo<LivePaperTrialHistoryItem[]>(
+    () => (livePaperTrialHistory?.history ?? []).slice(0, 5),
+    [livePaperTrialHistory],
+  );
 
   const loadLivePaperStatus = useCallback(async (): Promise<LivePaperBootstrapStatusResponse | null> => {
     setLivePaperStatusLoading(true);
@@ -499,6 +509,22 @@ export function CockpitPage() {
     }
   }, []);
 
+  const loadLivePaperTrialHistory = useCallback(async () => {
+    setLivePaperTrialHistoryLoading(true);
+    setLivePaperTrialHistoryError(null);
+    try {
+      const payload = await getLivePaperTrialHistory({ limit: 5 });
+      setLivePaperTrialHistory(payload);
+      return payload;
+    } catch {
+      setLivePaperTrialHistory(null);
+      setLivePaperTrialHistoryError('Trial history unavailable');
+      return null;
+    } finally {
+      setLivePaperTrialHistoryLoading(false);
+    }
+  }, []);
+
   const runLivePaperTrial = useCallback(async () => {
     setLivePaperTrialRequestLoading(true);
     setLivePaperTrialStatus('RUNNING');
@@ -513,6 +539,7 @@ export function CockpitPage() {
       setLivePaperTrialNotFound(false);
       await loadLivePaperTrialStatus();
       await Promise.all([
+        loadLivePaperTrialHistory(),
         loadLivePaperStatus(),
         loadLivePaperValidation(),
         loadLivePaperSmokeTestStatus(),
@@ -526,12 +553,16 @@ export function CockpitPage() {
     } finally {
       setLivePaperTrialRequestLoading(false);
     }
-  }, [loadLivePaperAutonomyFunnel, loadLivePaperOperationalSnapshot, loadLivePaperSmokeTestStatus, loadLivePaperStatus, loadLivePaperTrialStatus, loadLivePaperValidation, loadPaperPortfolioSnapshot]);
+  }, [loadLivePaperAutonomyFunnel, loadLivePaperOperationalSnapshot, loadLivePaperSmokeTestStatus, loadLivePaperStatus, loadLivePaperTrialHistory, loadLivePaperTrialStatus, loadLivePaperValidation, loadPaperPortfolioSnapshot]);
 
   const refreshLivePaperTrialStatus = useCallback(async () => {
     setLivePaperTrialStatus('RUNNING');
     await loadLivePaperTrialStatus();
   }, [loadLivePaperTrialStatus]);
+
+  const refreshLivePaperTrialHistory = useCallback(async () => {
+    await loadLivePaperTrialHistory();
+  }, [loadLivePaperTrialHistory]);
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -622,6 +653,10 @@ export function CockpitPage() {
   useEffect(() => {
     void loadLivePaperTrialStatus();
   }, [loadLivePaperTrialStatus]);
+
+  useEffect(() => {
+    void loadLivePaperTrialHistory();
+  }, [loadLivePaperTrialHistory]);
 
   useEffect(() => {
     void loadLivePaperAutonomyFunnel();
@@ -999,6 +1034,57 @@ export function CockpitPage() {
                       onClick={() => void refreshLivePaperTrialStatus()}
                     >
                       Refresh trial status
+                    </button>
+                  </div>
+                </SectionCard>
+                <SectionCard
+                  eyebrow="Recent V1 evidence"
+                  title="Live Paper Trial History"
+                  description="Compact view of the most recent trial runs for quick PASS/WARN/FAIL comparison."
+                >
+                  {livePaperTrialHistoryLoading ? <p>Loading trial history…</p> : null}
+                  {!livePaperTrialHistoryLoading && livePaperTrialHistoryError ? <p className="muted-text">Trial history unavailable</p> : null}
+                  {!livePaperTrialHistoryLoading && !livePaperTrialHistoryError ? (
+                    <>
+                      <ul className="key-value-list">
+                        <li><span>History summary</span><strong>{livePaperTrialHistory?.history_summary ?? 'n/a'}</strong></li>
+                      </ul>
+                      {livePaperTrialHistoryItems.length === 0 ? <p className="muted-text">No trial history yet</p> : null}
+                      {livePaperTrialHistoryItems.length > 0 ? (
+                        <div className="subsection">
+                          <p className="section-label">Recent runs</p>
+                          <ul className="key-value-list">
+                            {livePaperTrialHistoryItems.map((item) => (
+                              <li key={`${item.created_at}-${item.trial_summary}`}>
+                                <span>
+                                  {formatDate(item.created_at)}
+                                  <br />
+                                  {item.trial_summary}
+                                </span>
+                                <strong>
+                                  <StatusBadge tone={toneFromSmokeStatus(item.trial_status)}>{item.trial_status}</StatusBadge>
+                                  {' · '}Smoke {item.smoke_test_status}
+                                  {' · '}Validation {item.validation_status_after}
+                                  {' · '}HB {item.heartbeat_passes_completed}
+                                  {typeof item.recent_activity_detected === 'boolean' ? ` · Activity ${item.recent_activity_detected}` : ''}
+                                  {typeof item.recent_trades_detected === 'boolean' ? ` · Trades ${item.recent_trades_detected}` : ''}
+                                  {typeof item.portfolio_snapshot_ready === 'boolean' ? ` · Portfolio ${item.portfolio_snapshot_ready}` : ''}
+                                </strong>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                  <div className="button-row">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={livePaperTrialHistoryLoading}
+                      onClick={() => void refreshLivePaperTrialHistory()}
+                    >
+                      Refresh history
                     </button>
                   </div>
                 </SectionCard>

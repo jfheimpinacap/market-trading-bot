@@ -153,6 +153,26 @@ Scope remains strictly real-market read-only + fake-money paper execution and do
 
 Scope remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` changes, no scheduler additions, no live trading enablement, and no parallel trial orchestration logic in frontend.
 
+### Live Paper Trial History cockpit card (frontend, new)
+
+`/cockpit` now also includes a compact **Live Paper Trial History** card that complements **Live Paper Trial Run** with a short evidence trail of recent V1 paper runs.
+
+- The card consumes the existing backend history endpoint:
+  - `GET /api/mission-control/live-paper-trial-history/`
+- Behavior:
+  - auto-loads on cockpit open
+  - supports manual `Refresh history`
+  - auto-refreshes after `Run trial` succeeds in the neighboring trial card
+- Compact output:
+  - `history_summary`
+  - latest 3–5 runs with `created_at`, `trial_status`, `smoke_test_status`, `validation_status_after`, `heartbeat_passes_completed`, `trial_summary`
+  - when present, includes compact activity/trade/portfolio flags
+- Fallbacks (non-blocking):
+  - `Trial history unavailable` on endpoint failure
+  - `No trial history yet` when list is empty
+
+Scope remains unchanged: observability-only for recent V1 paper evidence, still `REAL_READ_ONLY` + `PAPER_ONLY`, no new pages, no live trading enablement.
+
 ### Live Paper Autonomy Funnel Snapshot (backend + cockpit, new)
 
 `mission_control` now includes a compact **Live Paper Autonomy Funnel Snapshot** to validate if autonomy is truly advancing through scan → research → prediction → risk → paper execution in a recent window.
