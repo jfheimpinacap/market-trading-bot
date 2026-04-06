@@ -308,6 +308,30 @@ export type LivePaperTrialRunStatusResponse = {
   next_action_hint: string;
 };
 
+export type LivePaperTrialHistoryStatus = 'PASS' | 'WARN' | 'FAIL';
+
+export type LivePaperTrialHistoryItem = {
+  created_at: string;
+  preset_name: string;
+  trial_status: LivePaperTrialHistoryStatus;
+  bootstrap_action: string;
+  smoke_test_status: LivePaperSmokeTestStatus;
+  validation_status_after: 'READY' | 'WARNING' | 'BLOCKED';
+  heartbeat_passes_completed: number;
+  next_action_hint: string;
+  trial_summary: string;
+  recent_activity_detected?: boolean;
+  recent_trades_detected?: boolean;
+  portfolio_snapshot_ready?: boolean;
+};
+
+export type LivePaperTrialHistoryResponse = {
+  count: number;
+  latest_trial_status: LivePaperTrialHistoryStatus | null;
+  history_summary: string;
+  items: LivePaperTrialHistoryItem[];
+};
+
 export type LivePaperAutonomyFunnelStatus = 'ACTIVE' | 'THIN_FLOW' | 'STALLED';
 export type LivePaperAutonomyFunnelStageStatus = 'ACTIVE' | 'LOW' | 'EMPTY';
 

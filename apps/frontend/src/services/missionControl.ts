@@ -79,6 +79,7 @@ import type {
   LivePaperSmokeTestResultResponse,
   LivePaperSmokeTestStatusResponse,
   LivePaperTrialRunRequest,
+  LivePaperTrialHistoryResponse,
   LivePaperTrialRunResultResponse,
   LivePaperTrialRunStatusResponse,
   LivePaperValidationDigestResponse,
@@ -188,6 +189,18 @@ export function runLivePaperTrial(payload: LivePaperTrialRunRequest = {}) {
 
 export function getLivePaperTrialStatus() {
   return requestJson<LivePaperTrialRunStatusResponse>('/api/mission-control/live-paper-trial-status/');
+}
+
+export function getLivePaperTrialHistory(params?: { limit?: number; status?: 'PASS' | 'WARN' | 'FAIL' }) {
+  const query = new URLSearchParams();
+  if (params?.limit) {
+    query.set('limit', String(params.limit));
+  }
+  if (params?.status) {
+    query.set('status', params.status);
+  }
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return requestJson<LivePaperTrialHistoryResponse>(`/api/mission-control/live-paper-trial-history/${suffix}`);
 }
 
 export function getLivePaperAutonomyFunnel(params?: { preset?: string; window_minutes?: number }) {
