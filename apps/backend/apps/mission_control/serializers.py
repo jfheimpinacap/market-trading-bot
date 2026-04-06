@@ -190,6 +190,10 @@ class LivePaperAttentionAlertSyncSerializer(serializers.Serializer):
     update_suppressed = serializers.BooleanField(required=False)
     suppression_reason = serializers.CharField(required=False, allow_null=True)
     active_alert_present = serializers.BooleanField(required=False)
+    funnel_status = serializers.ChoiceField(choices=['ACTIVE', 'THIN_FLOW', 'STALLED'], required=False, allow_null=True)
+    stalled_stage = serializers.CharField(required=False, allow_null=True)
+    top_stage = serializers.CharField(required=False, allow_null=True)
+    funnel_summary = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
 class LivePaperAttentionAlertStatusSerializer(serializers.Serializer):
@@ -201,6 +205,10 @@ class LivePaperAttentionAlertStatusSerializer(serializers.Serializer):
     heartbeat_active = serializers.BooleanField()
     current_session_status = serializers.CharField()
     status_summary = serializers.CharField()
+    funnel_status = serializers.ChoiceField(choices=['ACTIVE', 'THIN_FLOW', 'STALLED'], required=False, allow_null=True)
+    stalled_stage = serializers.CharField(required=False, allow_null=True)
+    top_stage = serializers.CharField(required=False, allow_null=True)
+    funnel_summary = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     last_alert_action = serializers.CharField(required=False, allow_null=True)
     last_sync_summary = serializers.CharField(required=False, allow_null=True)
     last_auto_sync = serializers.DictField(required=False)

@@ -184,7 +184,14 @@ Mission control now also provides a compact **live paper autopilot operational a
 
 The bridge reuses existing mission-control bootstrap status, heartbeat summaries, and health/recovery hints plus the existing `operator_alerts` services. It introduces no new scheduler/models, remains paper-only, and does not modify runtime/trading logic.
 
-Automatic sync is now wired to the existing mission-control local heartbeat pass via `mission_control/services/live_paper_attention_auto_sync.py` (no new scheduler, no new persistent models). The heartbeat run metadata and `autonomous-heartbeat-summary` include compact `live_paper_attention_sync` (`attempted`, `success`, `alert_action`, `attention_mode`, `session_active`, `heartbeat_active`, `current_session_status`, `sync_summary`). Manual `sync-live-paper-attention-alert` remains available as fallback.
+It also reuses the existing live paper autonomy funnel digest to add conservative flow-awareness without creating a parallel alert system:
+- consumes `funnel_status`, `stalled_stage`, `top_stage`, `funnel_summary`
+- `STALLED` with live session/heartbeat can escalate to `REVIEW_NOW`
+- `THIN_FLOW` contributes to `DEGRADED` (low-noise, deterministic)
+- operational `BLOCKED` retains priority over funnel hints
+- unavailable funnel evidence falls back to existing bridge logic with explicit `funnel_signal_unavailable`
+
+Automatic sync is now wired to the existing mission-control local heartbeat pass via `mission_control/services/live_paper_attention_auto_sync.py` (no new scheduler, no new persistent models). The heartbeat run metadata and `autonomous-heartbeat-summary` include compact `live_paper_attention_sync` (`attempted`, `success`, `alert_action`, `attention_mode`, `session_active`, `heartbeat_active`, `current_session_status`, `funnel_status`, `stalled_stage`, `sync_summary`). Manual `sync-live-paper-attention-alert` remains available as fallback.
 
 
 ## Live Paper V1 smoke test runner (new)
