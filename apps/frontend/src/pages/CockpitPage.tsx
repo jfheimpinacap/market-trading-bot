@@ -15,6 +15,7 @@ import {
   getLivePaperBootstrapStatus,
   getLivePaperAutonomyFunnel,
   getLivePaperSmokeTestStatus,
+  getLivePaperTrialHistory,
   getLivePaperTrialStatus,
   getLivePaperValidation,
   runLivePaperSmokeTest,
@@ -54,6 +55,7 @@ import type {
   LivePaperAutonomyFunnelResponse,
   LivePaperFunnelStatus,
   LivePaperTrialRunResultResponse,
+  LivePaperTrialHistoryResponse,
   LivePaperTrialRunStatus,
   LivePaperTrialRunStatusResponse,
   LivePaperValidationDigestResponse,
@@ -265,6 +267,9 @@ export function CockpitPage() {
   const [livePaperTrialNotFound, setLivePaperTrialNotFound] = useState(false);
   const [livePaperTrialResult, setLivePaperTrialResult] = useState<LivePaperTrialRunResultResponse | null>(null);
   const [livePaperTrialStatusSnapshot, setLivePaperTrialStatusSnapshot] = useState<LivePaperTrialRunStatusResponse | null>(null);
+  const [livePaperTrialHistoryLoading, setLivePaperTrialHistoryLoading] = useState(true);
+  const [livePaperTrialHistoryError, setLivePaperTrialHistoryError] = useState<string | null>(null);
+  const [livePaperTrialHistory, setLivePaperTrialHistory] = useState<LivePaperTrialHistoryResponse | null>(null);
   const heartbeatAutoSyncHint = useMemo(() => {
     const heartbeatSync = autonomousHeartbeatSummary?.live_paper_attention_sync;
     const lastAutoSync = livePaperAttentionStatus?.last_auto_sync;
@@ -288,6 +293,7 @@ export function CockpitPage() {
   const recentPaperTrades = useMemo(() => (paperPortfolioSummary?.recent_trades ?? []).slice(0, 5), [paperPortfolioSummary]);
   const livePaperTrialSnapshot = livePaperTrialResult ?? livePaperTrialStatusSnapshot;
   const livePaperTrialChecks = livePaperTrialResult?.checks ?? [];
+  const livePaperTrialHistoryItems = livePaperTrialHistory?.items ?? [];
 
   const loadLivePaperStatus = useCallback(async (): Promise<LivePaperBootstrapStatusResponse | null> => {
     setLivePaperStatusLoading(true);
@@ -499,6 +505,22 @@ export function CockpitPage() {
     }
   }, []);
 
+  const loadLivePaperTrialHistory = useCallback(async () => {
+    setLivePaperTrialHistoryLoading(true);
+    setLivePaperTrialHistoryError(null);
+    try {
+      const payload = await getLivePaperTrialHistory({ limit: 5 });
+      setLivePaperTrialHistory(payload);
+      return payload;
+    } catch (historyError) {
+      setLivePaperTrialHistory(null);
+      setLivePaperTrialHistoryError(getErrorMessage(historyError, 'Could not load live paper trial history.'));
+      return null;
+    } finally {
+      setLivePaperTrialHistoryLoading(false);
+    }
+  }, []);
+
   const runLivePaperTrial = useCallback(async () => {
     setLivePaperTrialRequestLoading(true);
     setLivePaperTrialStatus('RUNNING');
@@ -511,7 +533,7 @@ export function CockpitPage() {
       setLivePaperTrialResult(payload);
       setLivePaperTrialStatus(payload.trial_status);
       setLivePaperTrialNotFound(false);
-      await loadLivePaperTrialStatus();
+      await Promise.all([loadLivePaperTrialStatus(), loadLivePaperTrialHistory()]);
       await Promise.all([
         loadLivePaperStatus(),
         loadLivePaperValidation(),
@@ -526,7 +548,7 @@ export function CockpitPage() {
     } finally {
       setLivePaperTrialRequestLoading(false);
     }
-  }, [loadLivePaperAutonomyFunnel, loadLivePaperOperationalSnapshot, loadLivePaperSmokeTestStatus, loadLivePaperStatus, loadLivePaperTrialStatus, loadLivePaperValidation, loadPaperPortfolioSnapshot]);
+  }, [loadLivePaperAutonomyFunnel, loadLivePaperOperationalSnapshot, loadLivePaperSmokeTestStatus, loadLivePaperStatus, loadLivePaperTrialHistory, loadLivePaperTrialStatus, loadLivePaperValidation, loadPaperPortfolioSnapshot]);
 
   const refreshLivePaperTrialStatus = useCallback(async () => {
     setLivePaperTrialStatus('RUNNING');
@@ -622,6 +644,10 @@ export function CockpitPage() {
   useEffect(() => {
     void loadLivePaperTrialStatus();
   }, [loadLivePaperTrialStatus]);
+
+  useEffect(() => {
+    void loadLivePaperTrialHistory();
+  }, [loadLivePaperTrialHistory]);
 
   useEffect(() => {
     void loadLivePaperAutonomyFunnel();
@@ -999,6 +1025,52 @@ export function CockpitPage() {
                       onClick={() => void refreshLivePaperTrialStatus()}
                     >
                       Refresh trial status
+                    </button>
+                  </div>
+                </SectionCard>
+                <SectionCard
+                  eyebrow="Recent compact evidence"
+                  title="Live Paper Trial History"
+                  description="Recent compact run history for quick operational comparison of V1 trial outcomes."
+                >
+                  {livePaperTrialHistoryLoading ? <p>Loading live paper trial history…</p> : null}
+                  {!livePaperTrialHistoryLoading && livePaperTrialHistoryError ? <p className="warning-text">{livePaperTrialHistoryError}</p> : null}
+                  {!livePaperTrialHistoryLoading && !livePaperTrialHistoryError && livePaperTrialHistory ? (
+                    <>
+                      <div className="button-row">
+                        <StatusBadge tone={toneFromTrialStatus(livePaperTrialHistory.latest_trial_status ?? 'IDLE')}>
+                          {livePaperTrialHistory.latest_trial_status ?? 'IDLE'}
+                        </StatusBadge>
+                        <StatusBadge tone="neutral">{livePaperTrialHistory.count} runs</StatusBadge>
+                      </div>
+                      <ul className="key-value-list">
+                        <li><span>History summary</span><strong>{livePaperTrialHistory.history_summary}</strong></li>
+                      </ul>
+                      {livePaperTrialHistoryItems.length > 0 ? (
+                        <div className="subsection">
+                          <p className="section-label">Latest runs</p>
+                          <ul className="key-value-list">
+                            {livePaperTrialHistoryItems.map((item) => (
+                              <li key={`${item.created_at}-${item.trial_status}`}>
+                                <span>{formatDate(item.created_at)} · {item.trial_status}</span>
+                                <strong>{item.trial_summary || item.next_action_hint || 'n/a'}</strong>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : (
+                        <p className="muted-text">No trial history yet.</p>
+                      )}
+                    </>
+                  ) : null}
+                  <div className="button-row">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={livePaperTrialHistoryLoading || livePaperTrialRequestLoading}
+                      onClick={() => void loadLivePaperTrialHistory()}
+                    >
+                      Refresh history
                     </button>
                   </div>
                 </SectionCard>

@@ -24,6 +24,21 @@ La vista `/cockpit` ahora incluye una card compacta **Live Paper Trial Run** par
 
 Límites explícitos: sigue siendo `REAL_READ_ONLY` + `PAPER_ONLY`, no habilita live trading real, no crea pantalla nueva y no modifica backend.
 
+## Cockpit Live Paper Trial History UX (new)
+
+`/cockpit` también incluye una card compacta **Live Paper Trial History** como evidencia operativa rápida de corridas recientes.
+
+- integración backend:
+  - `GET /api/mission-control/live-paper-trial-history/?limit=5`
+- comportamiento:
+  - auto-carga al abrir cockpit
+  - botón manual `Refresh history`
+  - refresh automático de history después de `Run trial`
+- salida compacta:
+  - `latest_trial_status`
+  - `history_summary`
+  - lista newest-first de corridas recientes con status + resumen
+
 ## Mission control autonomous session UX (new)
 
 La vista `/mission-control` ahora incluye una sección explícita de **Autonomous Session Control** para operación persistente gobernada:

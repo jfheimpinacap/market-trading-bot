@@ -153,6 +153,11 @@ Scope remains strictly real-market read-only + fake-money paper execution and do
 
 Scope remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` changes, no scheduler additions, no live trading enablement, and no parallel trial orchestration logic in frontend.
 
+Cockpit also includes a compact **Live Paper Trial History** card that consumes:
+- `GET /api/mission-control/live-paper-trial-history/?limit=5`
+- manual action: `Refresh history`
+- automatic refresh right after `Run trial` completes
+
 ### Live Paper Trial Run History (backend, new)
 
 `mission_control` now keeps a compact in-memory history of recent Live Paper Trial runs for quick operational comparison across the latest V1 paper checks.
