@@ -13,6 +13,7 @@ import {
   getAutonomousHeartbeatSummary,
   getLivePaperAttentionAlertStatus,
   getLivePaperBootstrapStatus,
+  getExtendedPaperRunGate,
   getLivePaperAutonomyFunnel,
   getLivePaperSmokeTestStatus,
   getLivePaperTrialHistory,
@@ -57,6 +58,7 @@ import type {
   LivePaperFunnelStatus,
   LivePaperTrialRunResultResponse,
   LivePaperTrialHistoryResponse,
+  LivePaperExtendedRunGateResponse,
   LivePaperTrialTrendResponse,
   LivePaperTrialRunStatus,
   LivePaperTrialRunStatusResponse,
@@ -147,6 +149,13 @@ const toneFromTrialReadinessStatus = (status: LivePaperTrialTrendResponse['readi
   return 'neutral';
 };
 
+const toneFromExtendedGateStatus = (status: LivePaperExtendedRunGateResponse['gate_status'] | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
+  if (status === 'ALLOW') return 'ready';
+  if (status === 'ALLOW_WITH_CAUTION') return 'pending';
+  if (status === 'BLOCK') return 'offline';
+  return 'neutral';
+};
+
 const toneFromFunnelStatus = (status: LivePaperAutonomyFunnelResponse['funnel_status'] | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
   if (status === 'ACTIVE') return 'ready';
   if (status === 'THIN_FLOW') return 'pending';
@@ -163,6 +172,10 @@ const toneFromAttentionFunnelStatus = (status: LivePaperFunnelStatus | null | un
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+function formatReasonCode(value: string) {
+  return value.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (letter: string) => letter.toUpperCase());
 }
 
 const DEFAULT_TIMELINE_LIMIT = 3;
@@ -289,6 +302,9 @@ export function CockpitPage() {
   const [livePaperTrialTrendLoading, setLivePaperTrialTrendLoading] = useState(true);
   const [livePaperTrialTrendError, setLivePaperTrialTrendError] = useState<string | null>(null);
   const [livePaperTrialTrend, setLivePaperTrialTrend] = useState<LivePaperTrialTrendResponse | null>(null);
+  const [extendedRunGateLoading, setExtendedRunGateLoading] = useState(true);
+  const [extendedRunGateError, setExtendedRunGateError] = useState<string | null>(null);
+  const [extendedRunGate, setExtendedRunGate] = useState<LivePaperExtendedRunGateResponse | null>(null);
   const heartbeatAutoSyncHint = useMemo(() => {
     const heartbeatSync = autonomousHeartbeatSummary?.live_paper_attention_sync;
     const lastAutoSync = livePaperAttentionStatus?.last_auto_sync;
@@ -314,6 +330,7 @@ export function CockpitPage() {
   const livePaperTrialChecks = livePaperTrialResult?.checks ?? [];
   const livePaperTrialHistoryItems = livePaperTrialHistory?.items ?? [];
   const livePaperTrialRecentStatuses = livePaperTrialTrend?.recent_statuses ?? [];
+  const extendedRunGateChecks = extendedRunGate?.checks ?? [];
 
   const loadLivePaperStatus = useCallback(async (): Promise<LivePaperBootstrapStatusResponse | null> => {
     setLivePaperStatusLoading(true);
@@ -557,6 +574,22 @@ export function CockpitPage() {
     }
   }, []);
 
+  const loadExtendedRunGate = useCallback(async () => {
+    setExtendedRunGateLoading(true);
+    setExtendedRunGateError(null);
+    try {
+      const payload = await getExtendedPaperRunGate({ preset: 'live_read_only_paper_conservative' });
+      setExtendedRunGate(payload);
+      return payload;
+    } catch {
+      setExtendedRunGate(null);
+      setExtendedRunGateError('Extended run gate unavailable');
+      return null;
+    } finally {
+      setExtendedRunGateLoading(false);
+    }
+  }, []);
+
   const runLivePaperTrial = useCallback(async () => {
     setLivePaperTrialRequestLoading(true);
     setLivePaperTrialStatus('RUNNING');
@@ -569,7 +602,7 @@ export function CockpitPage() {
       setLivePaperTrialResult(payload);
       setLivePaperTrialStatus(payload.trial_status);
       setLivePaperTrialNotFound(false);
-      await Promise.all([loadLivePaperTrialStatus(), loadLivePaperTrialHistory(), loadLivePaperTrialTrend()]);
+      await Promise.all([loadLivePaperTrialStatus(), loadLivePaperTrialHistory(), loadLivePaperTrialTrend(), loadExtendedRunGate()]);
       await Promise.all([
         loadLivePaperStatus(),
         loadLivePaperValidation(),
@@ -584,12 +617,20 @@ export function CockpitPage() {
     } finally {
       setLivePaperTrialRequestLoading(false);
     }
-  }, [loadLivePaperAutonomyFunnel, loadLivePaperOperationalSnapshot, loadLivePaperSmokeTestStatus, loadLivePaperStatus, loadLivePaperTrialHistory, loadLivePaperTrialStatus, loadLivePaperTrialTrend, loadLivePaperValidation, loadPaperPortfolioSnapshot]);
+  }, [loadExtendedRunGate, loadLivePaperAutonomyFunnel, loadLivePaperOperationalSnapshot, loadLivePaperSmokeTestStatus, loadLivePaperStatus, loadLivePaperTrialHistory, loadLivePaperTrialStatus, loadLivePaperTrialTrend, loadLivePaperValidation, loadPaperPortfolioSnapshot]);
 
   const refreshLivePaperTrialStatus = useCallback(async () => {
     setLivePaperTrialStatus('RUNNING');
     await loadLivePaperTrialStatus();
   }, [loadLivePaperTrialStatus]);
+
+  const refreshLivePaperTrialTrend = useCallback(async () => {
+    await Promise.all([loadLivePaperTrialTrend(), loadExtendedRunGate()]);
+  }, [loadExtendedRunGate, loadLivePaperTrialTrend]);
+
+  const refreshLivePaperValidation = useCallback(async () => {
+    await Promise.all([loadLivePaperValidation(), loadExtendedRunGate()]);
+  }, [loadExtendedRunGate, loadLivePaperValidation]);
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -688,6 +729,10 @@ export function CockpitPage() {
   useEffect(() => {
     void loadLivePaperTrialTrend();
   }, [loadLivePaperTrialTrend]);
+
+  useEffect(() => {
+    void loadExtendedRunGate();
+  }, [loadExtendedRunGate]);
 
   useEffect(() => {
     void loadLivePaperAutonomyFunnel();
@@ -1103,9 +1148,71 @@ export function CockpitPage() {
                       className="secondary-button"
                       type="button"
                       disabled={livePaperTrialTrendLoading || livePaperTrialRequestLoading}
-                      onClick={() => void loadLivePaperTrialTrend()}
+                      onClick={() => void refreshLivePaperTrialTrend()}
                     >
                       Refresh trend
+                    </button>
+                  </div>
+                </SectionCard>
+                <SectionCard
+                  eyebrow="Go / caution / hold"
+                  title="Extended Run Gate"
+                  description="Compact decision layer to determine if V1 paper is ready for a longer paper trial."
+                >
+                  {extendedRunGateLoading ? <p>Loading extended run gate…</p> : null}
+                  {!extendedRunGateLoading && extendedRunGateError ? <p className="warning-text">Extended run gate unavailable.</p> : null}
+                  {!extendedRunGateLoading && !extendedRunGateError && extendedRunGate ? (
+                    <>
+                      <div className="button-row">
+                        <StatusBadge tone={toneFromExtendedGateStatus(extendedRunGate.gate_status)}>{extendedRunGate.gate_status}</StatusBadge>
+                        <StatusBadge tone={toneFromTrialStatus(extendedRunGate.latest_trial_status ?? 'IDLE')}>
+                          Trial {extendedRunGate.latest_trial_status ?? 'n/a'}
+                        </StatusBadge>
+                        <StatusBadge tone={toneFromTrialTrendStatus(extendedRunGate.trend_status)}>
+                          Trend {extendedRunGate.trend_status ?? 'n/a'}
+                        </StatusBadge>
+                      </div>
+                      <ul className="key-value-list">
+                        <li><span>Gate summary</span><strong>{extendedRunGate.gate_summary}</strong></li>
+                        <li><span>Next action hint</span><strong>{extendedRunGate.next_action_hint}</strong></li>
+                        <li><span>Readiness status</span><strong>{extendedRunGate.readiness_status ?? 'n/a'}</strong></li>
+                        <li><span>Validation status</span><strong>{extendedRunGate.validation_status ?? 'n/a'}</strong></li>
+                        <li><span>Attention mode</span><strong>{extendedRunGate.attention_mode ?? 'n/a'}</strong></li>
+                        <li><span>Funnel status</span><strong>{extendedRunGate.funnel_status ?? 'n/a'}</strong></li>
+                      </ul>
+                      {extendedRunGate.reason_codes && extendedRunGate.reason_codes.length > 0 ? (
+                        <div className="subsection">
+                          <p className="section-label">Reason codes</p>
+                          <div className="button-row">
+                            {extendedRunGate.reason_codes.slice(0, 6).map((code) => (
+                              <StatusBadge key={code} tone="neutral">{formatReasonCode(code)}</StatusBadge>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {extendedRunGateChecks.length > 0 ? (
+                        <div className="subsection">
+                          <p className="section-label">Checks</p>
+                          <ul className="key-value-list">
+                            {extendedRunGateChecks.map((check) => (
+                              <li key={check.check_name}>
+                                <span>{check.check_name}</span>
+                                <strong>{check.status} · {check.summary}</strong>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                  <div className="button-row">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={extendedRunGateLoading || livePaperTrialRequestLoading}
+                      onClick={() => void loadExtendedRunGate()}
+                    >
+                      Refresh gate
                     </button>
                   </div>
                 </SectionCard>
@@ -1198,7 +1305,7 @@ export function CockpitPage() {
                     </>
                   ) : null}
                   <div className="button-row">
-                    <button className="secondary-button" type="button" disabled={livePaperValidationLoading} onClick={() => void loadLivePaperValidation()}>
+                    <button className="secondary-button" type="button" disabled={livePaperValidationLoading} onClick={() => void refreshLivePaperValidation()}>
                       Refresh validation
                     </button>
                     <button className="ghost-button" type="button" onClick={() => navigate('/mission-control')}>Open autopilot</button>

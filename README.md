@@ -170,6 +170,19 @@ The card adds deterministic trend/readiness signals over recent trial history:
 
 This remains operational-only aggregation for paper runs and keeps strict `REAL_READ_ONLY` + `PAPER_ONLY` scope.
 
+Cockpit now also includes a compact **Extended Run Gate** card that consumes:
+- `GET /api/mission-control/extended-paper-run-gate/`
+- manual action: `Refresh gate`
+- automatic refresh on cockpit load, and after `Run trial`, `Refresh trend`, and `Refresh validation`
+
+The card provides a concise operational decision for a longer paper run:
+- strong `gate_status` badge (`ALLOW` / `ALLOW_WITH_CAUTION` / `BLOCK`)
+- `gate_summary` + `next_action_hint`
+- compact status line for `latest_trial_status`, `trend_status`, `readiness_status`, `validation_status`, `attention_mode`, `funnel_status`
+- compact checks (`PASS` / `WARN` / `FAIL`) and readable `reason_codes` (when available)
+
+This remains read-only/paper-only (`REAL_READ_ONLY` + `PAPER_ONLY`), complements existing cockpit cards, and does not enable live trading.
+
 ### Live Paper Trial Run History (backend, new)
 
 `mission_control` now keeps a compact in-memory history of recent Live Paper Trial runs for quick operational comparison across the latest V1 paper checks.

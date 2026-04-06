@@ -353,6 +353,28 @@ export type LivePaperTrialTrendResponse = {
   recent_statuses?: LivePaperTrialHistoryStatus[];
 };
 
+export type LivePaperExtendedRunGateStatus = 'ALLOW' | 'ALLOW_WITH_CAUTION' | 'BLOCK';
+
+export type LivePaperExtendedRunGateCheck = {
+  check_name: string;
+  status: 'PASS' | 'WARN' | 'FAIL';
+  summary: string;
+};
+
+export type LivePaperExtendedRunGateResponse = {
+  gate_status: LivePaperExtendedRunGateStatus;
+  gate_summary: string;
+  next_action_hint: string;
+  latest_trial_status: LivePaperTrialHistoryStatus | null;
+  trend_status: LivePaperTrialTrendStatus | null;
+  readiness_status: LivePaperTrialReadinessStatus | null;
+  validation_status: 'READY' | 'WARNING' | 'BLOCKED' | null;
+  attention_mode: LivePaperAttentionMode | null;
+  funnel_status: LivePaperAutonomyFunnelStatus | null;
+  reason_codes?: string[];
+  checks: LivePaperExtendedRunGateCheck[];
+};
+
 export type LivePaperAutonomyFunnelStatus = 'ACTIVE' | 'THIN_FLOW' | 'STALLED';
 export type LivePaperAutonomyFunnelStageStatus = 'ACTIVE' | 'LOW' | 'EMPTY';
 
