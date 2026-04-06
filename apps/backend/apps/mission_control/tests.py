@@ -2712,3 +2712,183 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         self.assertIn(payload['funnel_status'], {'ACTIVE', 'THIN_FLOW', 'STALLED'})
         self.assertTrue(mock_validation.called)
         self.assertTrue(mock_heartbeat.called)
+
+
+class ExtendedPaperRunGateApiTests(TestCase):
+    def _base_validation(self, status: str):
+        return {
+            'preset_name': 'live_read_only_paper_conservative',
+            'validation_status': status,
+        }
+
+    def _base_trend(self, *, latest_trial_status='PASS', trend_status='STABLE', readiness_status='READY_FOR_EXTENDED_RUN', sample_size=3, warn_count=0, fail_count=0):
+        return {
+            'sample_size': sample_size,
+            'latest_trial_status': latest_trial_status,
+            'trend_status': trend_status,
+            'readiness_status': readiness_status,
+            'counts': {
+                'pass_count': max(sample_size - warn_count - fail_count, 0),
+                'warn_count': warn_count,
+                'fail_count': fail_count,
+            },
+        }
+
+    def _base_history(self, latest_trial_status='PASS'):
+        return {
+            'count': 3,
+            'latest_trial_status': latest_trial_status,
+            'items': [],
+        }
+
+    def _base_attention(self, mode='HEALTHY'):
+        return {'attention_mode': mode}
+
+    def _base_funnel(self, status='ACTIVE'):
+        return {'funnel_status': status}
+
+    def _base_bootstrap(self):
+        return {'session_active': True, 'heartbeat_active': True}
+
+    def _call_gate(self, *, validation, trend, history, attention, funnel, bootstrap):
+        with patch('apps.mission_control.services.extended_paper_run_gate.build_live_paper_validation_digest', return_value=validation), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_live_paper_trial_trend_digest',
+            return_value=trend,
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.list_live_paper_trial_history',
+            return_value=history,
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_live_paper_attention_alert_status',
+            return_value=attention,
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_live_paper_autonomy_funnel_snapshot',
+            return_value=funnel,
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_live_paper_bootstrap_status',
+            return_value=bootstrap,
+        ):
+            return self.client.get(reverse('mission_control:extended-paper-run-gate'))
+
+    def test_gate_allow_case(self):
+        response = self._call_gate(
+            validation=self._base_validation('READY'),
+            trend=self._base_trend(),
+            history=self._base_history(),
+            attention=self._base_attention('HEALTHY'),
+            funnel=self._base_funnel('ACTIVE'),
+            bootstrap=self._base_bootstrap(),
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['gate_status'], 'ALLOW')
+        self.assertEqual(payload['next_action_hint'], 'Proceed to extended paper run')
+        self.assertIn('VALIDATION_READY', payload['reason_codes'])
+
+    def test_gate_allow_with_caution_case(self):
+        response = self._call_gate(
+            validation=self._base_validation('WARNING'),
+            trend=self._base_trend(latest_trial_status='WARN', readiness_status='NEEDS_REVIEW', warn_count=1),
+            history=self._base_history('WARN'),
+            attention=self._base_attention('DEGRADED'),
+            funnel=self._base_funnel('THIN_FLOW'),
+            bootstrap=self._base_bootstrap(),
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['gate_status'], 'ALLOW_WITH_CAUTION')
+        self.assertEqual(payload['next_action_hint'], 'Proceed cautiously and monitor the first cycles')
+        self.assertIn('RECENT_WARNINGS', payload['reason_codes'])
+        self.assertIn('ATTENTION_DEGRADED', payload['reason_codes'])
+        self.assertIn('FUNNEL_THIN_FLOW', payload['reason_codes'])
+
+    def test_gate_block_case(self):
+        response = self._call_gate(
+            validation=self._base_validation('BLOCKED'),
+            trend=self._base_trend(latest_trial_status='FAIL', trend_status='DEGRADING', readiness_status='NOT_READY', fail_count=1),
+            history=self._base_history('FAIL'),
+            attention=self._base_attention('REVIEW_NOW'),
+            funnel=self._base_funnel('STALLED'),
+            bootstrap=self._base_bootstrap(),
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['gate_status'], 'BLOCK')
+        self.assertEqual(payload['next_action_hint'], 'Do not start extended paper run yet')
+        self.assertIn('VALIDATION_BLOCKED', payload['reason_codes'])
+        self.assertIn('ATTENTION_BLOCKING', payload['reason_codes'])
+        self.assertIn('FUNNEL_STALLED', payload['reason_codes'])
+
+    def test_gate_payload_checks_and_contract_are_compact(self):
+        response = self._call_gate(
+            validation=self._base_validation('READY'),
+            trend=self._base_trend(),
+            history=self._base_history(),
+            attention=self._base_attention('HEALTHY'),
+            funnel=self._base_funnel('ACTIVE'),
+            bootstrap=self._base_bootstrap(),
+        )
+        payload = response.json()
+        expected = {
+            'preset_name',
+            'gate_status',
+            'latest_trial_status',
+            'trend_status',
+            'readiness_status',
+            'validation_status',
+            'attention_mode',
+            'funnel_status',
+            'next_action_hint',
+            'gate_summary',
+            'reason_codes',
+            'checks',
+        }
+        self.assertTrue(expected.issubset(payload.keys()))
+        check_names = [item['check_name'] for item in payload['checks']]
+        self.assertEqual(check_names, ['validation', 'trial_trend', 'operational_attention', 'autonomy_funnel', 'recent_trial_quality'])
+        for item in payload['checks']:
+            self.assertIn(item['status'], {'PASS', 'WARN', 'FAIL'})
+            self.assertTrue(item['summary'])
+
+    def test_missing_signals_fall_back_conservatively(self):
+        response = self._call_gate(
+            validation={},
+            trend={},
+            history={},
+            attention={},
+            funnel={},
+            bootstrap={},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['gate_status'], 'BLOCK')
+        self.assertEqual(payload['next_action_hint'], 'Run another short trial before extending')
+        self.assertIn('INSUFFICIENT_TRIAL_DATA', payload['reason_codes'])
+        self.assertIn('VALIDATION_BLOCKED', payload['reason_codes'])
+        self.assertIn('ATTENTION_BLOCKING', payload['reason_codes'])
+
+    def test_gate_reuses_existing_signal_services(self):
+        with patch('apps.mission_control.services.extended_paper_run_gate.build_live_paper_validation_digest', return_value=self._base_validation('READY')) as mock_validation, patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_live_paper_trial_trend_digest',
+            return_value=self._base_trend(),
+        ) as mock_trend, patch(
+            'apps.mission_control.services.extended_paper_run_gate.list_live_paper_trial_history',
+            return_value=self._base_history(),
+        ) as mock_history, patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_live_paper_attention_alert_status',
+            return_value=self._base_attention('HEALTHY'),
+        ) as mock_attention, patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_live_paper_autonomy_funnel_snapshot',
+            return_value=self._base_funnel('ACTIVE'),
+        ) as mock_funnel, patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_live_paper_bootstrap_status',
+            return_value=self._base_bootstrap(),
+        ) as mock_bootstrap:
+            response = self.client.get(reverse('mission_control:extended-paper-run-gate'), {'preset': 'live_read_only_paper_conservative'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(mock_validation.called)
+        self.assertTrue(mock_trend.called)
+        self.assertTrue(mock_history.called)
+        self.assertTrue(mock_attention.called)
+        self.assertTrue(mock_funnel.called)
+        self.assertTrue(mock_bootstrap.called)

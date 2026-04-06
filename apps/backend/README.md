@@ -304,6 +304,30 @@ Implementation explicitly reuses `live_paper_trial_history` (aggregation-only, n
 
 Implementation is aggregation/observability only: it reuses existing scan/research/prediction/risk/paper/heartbeat/validation signals, introduces no new models, does not alter decision authority, and keeps strict real-market read-only + paper-only boundaries.
 
+## Extended Paper Run Gate (new)
+
+`apps.mission_control` now includes a compact backend-only gate to decide whether short live-paper trials justify moving to a longer paper run.
+
+- service: `apps/mission_control/services/extended_paper_run_gate.py`
+- endpoint:
+  - `GET /api/mission-control/extended-paper-run-gate/`
+  - optional query param:
+    - `preset` (default `live_read_only_paper_conservative`)
+- gate output:
+  - `gate_status` (`ALLOW`, `ALLOW_WITH_CAUTION`, `BLOCK`)
+  - `next_action_hint` + `gate_summary`
+  - core context fields (`latest_trial_status`, `trend_status`, `readiness_status`, `validation_status`, `attention_mode`, `funnel_status`)
+  - explainability fields (`reason_codes`, compact `checks`)
+- decision sources (explicit reuse):
+  - `build_live_paper_validation_digest`
+  - `build_live_paper_trial_trend_digest`
+  - `list_live_paper_trial_history`
+  - `get_live_paper_attention_alert_status`
+  - `build_live_paper_autonomy_funnel_snapshot`
+  - `get_live_paper_bootstrap_status`
+
+This gate is deterministic and explainable aggregation-only logic. It introduces no new models, no mutative endpoint, no scheduler changes, and preserves strict `REAL_READ_ONLY` + `PAPER_ONLY` behavior with no live-trading enablement.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:

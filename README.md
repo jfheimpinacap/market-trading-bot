@@ -235,6 +235,32 @@ Cockpit now renders a sister card **Autonomy Funnel** (near Live Paper Validatio
 
 This remains strictly real-market read-only + paper-money-only execution, introduces no new persistent models, no scheduler/polling/websocket changes, no `/runtime` changes, and no live trading enablement.
 
+### Extended Paper Run Gate (backend, new)
+
+`mission_control` now includes a compact backend-only **Extended Paper Run Gate** that aggregates existing live-paper signals and returns a deterministic decision on whether a longer paper run should start.
+
+- backend service: `apps/backend/apps/mission_control/services/extended_paper_run_gate.py`
+- API:
+  - `GET /api/mission-control/extended-paper-run-gate/`
+  - optional query param: `preset` (default `live_read_only_paper_conservative`)
+- gate statuses:
+  - `ALLOW`
+  - `ALLOW_WITH_CAUTION`
+  - `BLOCK`
+- reused inputs:
+  - Live Paper Validation Digest
+  - Live Paper Trial Trend Digest + Trial History
+  - Live Paper Operational Attention status
+  - Live Paper Autonomy Funnel snapshot
+  - Live Paper bootstrap/status context
+- compact explainable output:
+  - `gate_status`, `next_action_hint`, `gate_summary`
+  - status fields (`validation_status`, `readiness_status`, `latest_trial_status`, `trend_status`, `attention_mode`, `funnel_status`)
+  - `reason_codes`
+  - compact `checks` (`validation`, `trial_trend`, `operational_attention`, `autonomy_funnel`, `recent_trial_quality`)
+
+This gate is read-only and explainable by design: it adds no new persistent models, no mutative endpoint, no scheduler changes, does not enable live trading, and remains strictly `REAL_READ_ONLY` + `PAPER_ONLY`.
+
 ### Live Paper V1 Validation Digest (backend, new)
 
 `mission_control` now includes a compact read-only validation digest that answers, in one backend response, whether the live read-only paper V1 loop is operational right now.
