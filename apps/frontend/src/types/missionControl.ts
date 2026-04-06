@@ -266,6 +266,48 @@ export type LivePaperSmokeTestStatusResponse = {
   next_action_hint: string;
 };
 
+export type LivePaperTrialRunRequest = {
+  preset?: string;
+  heartbeat_passes?: 1 | 2;
+};
+
+export type LivePaperTrialRunStatus = 'PASS' | 'WARN' | 'FAIL';
+
+export type LivePaperTrialRunCheck = {
+  check_name: string;
+  status: LivePaperTrialRunStatus;
+  summary: string;
+};
+
+export type LivePaperTrialRunResultResponse = {
+  preset_name: string;
+  trial_status: LivePaperTrialRunStatus;
+  executed_at: string;
+  bootstrap_action: string;
+  smoke_test_status: LivePaperSmokeTestStatus;
+  validation_status_before: 'READY' | 'WARNING' | 'BLOCKED';
+  validation_status_after: 'READY' | 'WARNING' | 'BLOCKED';
+  heartbeat_passes_requested: number;
+  heartbeat_passes_completed: number;
+  recent_activity_detected: boolean;
+  recent_trades_detected: boolean;
+  portfolio_snapshot_ready: boolean;
+  next_action_hint: string;
+  trial_summary: string;
+  checks: LivePaperTrialRunCheck[];
+};
+
+export type LivePaperTrialRunStatusResponse = {
+  preset_name: string;
+  trial_status: LivePaperTrialRunStatus;
+  executed_at: string;
+  smoke_test_status: LivePaperSmokeTestStatus;
+  validation_status_after: 'READY' | 'WARNING' | 'BLOCKED';
+  heartbeat_passes_completed: number;
+  trial_summary: string;
+  next_action_hint: string;
+};
+
 export type LivePaperAutonomyFunnelStatus = 'ACTIVE' | 'THIN_FLOW' | 'STALLED';
 export type LivePaperAutonomyFunnelStageStatus = 'ACTIVE' | 'LOW' | 'EMPTY';
 
