@@ -9,21 +9,18 @@ La vista `/cockpit` ahora incluye una card compacta **Live Paper Trial Run** par
 - acciones:
   - `Run trial`
   - `Refresh trial status` (sin rerun completo)
-- la orquestación ocurre en frontend y reutiliza endpoints existentes:
-  - `POST /api/mission-control/bootstrap-live-paper-session/`
-  - `GET /api/mission-control/live-paper-bootstrap-status/`
-  - `POST /api/mission-control/run-live-paper-smoke-test/`
-  - `GET /api/mission-control/live-paper-smoke-test-status/`
-  - `GET /api/mission-control/live-paper-validation/`
-- al finalizar muestra estado compacto calculado en frontend:
-  - `IDLE`, `RUNNING`, `PASS`, `WARN`, `FAIL`
-  - `trial_summary` determinístico
-  - último `bootstrap_action`, `smoke_test_status`, `validation_status`
-  - hint corto de siguiente paso
-- además, en `Run trial`, reutiliza refresh ya conectados en cockpit para:
-  - operational snapshot
-  - paper portfolio snapshot
-  - contexto de live paper attention bridge
+- integración backend compacta (sin orquestación manual en frontend):
+  - `POST /api/mission-control/run-live-paper-trial/`
+  - `GET /api/mission-control/live-paper-trial-status/`
+- comportamiento:
+  - al abrir cockpit hace `GET` de status
+  - si backend responde 404 (sin corrida previa), muestra `No trial run yet`
+  - `Run trial` usa directamente el payload del `POST` como resultado fuente de verdad
+  - `Refresh trial status` hace solo `GET` status (sin encadenar bootstrap/smoke/validation desde UI)
+- salida compacta de card:
+  - badge fuerte `PASS` / `WARN` / `FAIL`
+  - `trial_summary`, `next_action_hint`, smoke/validation/heartbeat status
+  - cuando aplica (payload de run): `bootstrap_action`, validation before/after, actividad/trades/snapshot, checks compactos
 
 Límites explícitos: sigue siendo `REAL_READ_ONLY` + `PAPER_ONLY`, no habilita live trading real, no crea pantalla nueva y no modifica backend.
 

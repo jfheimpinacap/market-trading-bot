@@ -140,22 +140,18 @@ Scope remains strictly real-market read-only + fake-money paper execution and do
 
 `/cockpit` now includes a compact **Live Paper Trial Run** card for a one-click short V1 paper verification flow (no new screen).
 
-- Backend orchestration is now available:
+- The card is now backend-driven and consumes only:
   - `POST /api/mission-control/run-live-paper-trial/`
   - `GET /api/mission-control/live-paper-trial-status/`
-- The backend trial service reuses existing mission-control building blocks:
-  - bootstrap live-paper session + bootstrap status
-  - smoke test run + smoke test status
-  - live-paper validation digest (before/after) plus compact portfolio/activity/trade evidence
-- `Run trial` can call one compact backend endpoint and keep frontend logic minimal.
-- `Refresh trial status` can read the latest backend result without rerunning the sequence.
+- `Run trial` calls the compact backend endpoint and uses its response as the source of truth.
+- `Refresh trial status` only re-reads latest trial status (no frontend re-orchestration).
+- On cockpit load, status is read from backend and a compact `No trial run yet` fallback is shown on 404.
 - compact card output:
   - `trial_status`: `PASS` / `WARN` / `FAIL` (backend-classified)
-  - deterministic `trial_summary`
-  - latest `bootstrap_action` (if available), smoke status, validation status
-  - short next-step hint
+  - `trial_summary`, `next_action_hint`, smoke/validation status, heartbeat passes
+  - when available from run response: `bootstrap_action`, validation before/after, activity/trade/snapshot flags, and compact checks
 
-Scope remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` changes, no scheduler additions, and no live trading enablement.
+Scope remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` changes, no scheduler additions, no live trading enablement, and no parallel trial orchestration logic in frontend.
 
 ### Live Paper Autonomy Funnel Snapshot (backend + cockpit, new)
 

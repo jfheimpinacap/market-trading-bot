@@ -78,6 +78,9 @@ import type {
   LivePaperSmokeTestRequest,
   LivePaperSmokeTestResultResponse,
   LivePaperSmokeTestStatusResponse,
+  LivePaperTrialRunRequest,
+  LivePaperTrialRunResultResponse,
+  LivePaperTrialRunStatusResponse,
   LivePaperValidationDigestResponse,
   LivePaperAutonomyFunnelResponse,
 } from '../types/missionControl';
@@ -170,6 +173,21 @@ export function runLivePaperSmokeTest(payload: LivePaperSmokeTestRequest = {}) {
 
 export function getLivePaperSmokeTestStatus() {
   return requestJson<LivePaperSmokeTestStatusResponse>('/api/mission-control/live-paper-smoke-test-status/');
+}
+
+export function runLivePaperTrial(payload: LivePaperTrialRunRequest = {}) {
+  return requestJson<LivePaperTrialRunResultResponse>('/api/mission-control/run-live-paper-trial/', {
+    method: 'POST',
+    body: JSON.stringify({
+      preset: 'live_read_only_paper_conservative',
+      heartbeat_passes: 1,
+      ...payload,
+    }),
+  });
+}
+
+export function getLivePaperTrialStatus() {
+  return requestJson<LivePaperTrialRunStatusResponse>('/api/mission-control/live-paper-trial-status/');
 }
 
 export function getLivePaperAutonomyFunnel(params?: { preset?: string; window_minutes?: number }) {
