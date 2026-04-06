@@ -210,6 +210,29 @@ Automatic sync is now wired to the existing mission-control local heartbeat pass
 
 This remains strictly real-market read-only + paper-only money simulation, introduces no new persistent models or schedulers, and is designed as a quick backend pre-check before longer manual cockpit observation.
 
+## Live Paper Trial Run service (new)
+
+`apps.mission_control` now includes a compact backend orchestrator for the Live Paper Trial Run flow so frontend no longer needs to chain bootstrap/smoke/validation step by step.
+
+- service: `apps/mission_control/services/live_paper_trial_run.py`
+- endpoints:
+  - `POST /api/mission-control/run-live-paper-trial/`
+    - optional body: `preset` (`live_read_only_paper_conservative` default), `heartbeat_passes` (`1` default, `2` max)
+  - `GET /api/mission-control/live-paper-trial-status/`
+- orchestration reuses existing services only:
+  1. live-paper validation digest (before)
+  2. bootstrap live-paper session + bootstrap status
+  3. smoke test execution + latest smoke status
+  4. live-paper validation digest (after)
+  5. compact portfolio/activity/trade evidence checks
+- result contract includes deterministic:
+  - `trial_status` (`PASS` / `WARN` / `FAIL`)
+  - concise `trial_summary`
+  - compact `checks` (`bootstrap`, `smoke_test`, `validation_before`, `validation_after`, `portfolio_snapshot`, `recent_activity`, `recent_trades`)
+  - `next_action_hint` for immediate operator guidance
+
+This adds no new models/scheduler/runtime authority, keeps strict `REAL_READ_ONLY` + `PAPER_ONLY` scope, reduces frontend operational orchestration, and does not enable live trading.
+
 ## Live Paper Autonomy Funnel Snapshot (new)
 
 `apps.mission_control` now includes a compact autonomy-funnel digest to validate whether the recent flow is progressing across:
