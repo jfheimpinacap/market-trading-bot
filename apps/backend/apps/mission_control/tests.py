@@ -2495,6 +2495,117 @@ class LivePaperTrialRunHistoryApiTests(TestCase):
         self.assertEqual(response.json()['trial_status'], 'PASS')
 
 
+class LivePaperTrialTrendApiTests(TestCase):
+    def setUp(self):
+        _clear_live_paper_trial_history_for_tests()
+
+    def _record_item(self, *, status: str, created_at, preset_name: str = 'live_read_only_paper_conservative'):
+        record_live_paper_trial_result(
+            {
+                'executed_at': created_at,
+                'preset_name': preset_name,
+                'trial_status': status,
+                'bootstrap_action': 'REUSED_EXISTING_SESSION',
+                'smoke_test_status': 'PASS' if status == 'PASS' else ('WARN' if status == 'WARN' else 'FAIL'),
+                'validation_status_after': 'READY' if status == 'PASS' else ('WARNING' if status == 'WARN' else 'BLOCKED'),
+                'heartbeat_passes_completed': 1,
+                'next_action_hint': f'{status} hint',
+                'trial_summary': f'{status} summary',
+                'recent_activity_detected': status != 'FAIL',
+                'recent_trades_detected': status == 'PASS',
+                'portfolio_snapshot_ready': status != 'FAIL',
+            }
+        )
+
+    def test_trend_insufficient_data(self):
+        self._record_item(status='PASS', created_at=timezone.now())
+        response = self.client.get(reverse('mission_control:live-paper-trial-trend'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['trend_status'], 'INSUFFICIENT_DATA')
+        self.assertEqual(payload['readiness_status'], 'NEEDS_REVIEW')
+
+    def test_trend_improving(self):
+        now = timezone.now()
+        self._record_item(status='WARN', created_at=now - timedelta(minutes=1))
+        self._record_item(status='PASS', created_at=now)
+        response = self.client.get(reverse('mission_control:live-paper-trial-trend'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['trend_status'], 'IMPROVING')
+
+    def test_trend_stable(self):
+        now = timezone.now()
+        self._record_item(status='PASS', created_at=now - timedelta(minutes=2))
+        self._record_item(status='PASS', created_at=now - timedelta(minutes=1))
+        self._record_item(status='PASS', created_at=now)
+        response = self.client.get(reverse('mission_control:live-paper-trial-trend'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['trend_status'], 'STABLE')
+
+    def test_trend_degrading(self):
+        now = timezone.now()
+        self._record_item(status='PASS', created_at=now - timedelta(minutes=1))
+        self._record_item(status='FAIL', created_at=now)
+        response = self.client.get(reverse('mission_control:live-paper-trial-trend'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['trend_status'], 'DEGRADING')
+
+    def test_readiness_ready_for_extended_run(self):
+        now = timezone.now()
+        self._record_item(status='PASS', created_at=now - timedelta(minutes=1))
+        self._record_item(status='PASS', created_at=now)
+        response = self.client.get(reverse('mission_control:live-paper-trial-trend'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['readiness_status'], 'READY_FOR_EXTENDED_RUN')
+
+    def test_readiness_needs_review(self):
+        now = timezone.now()
+        self._record_item(status='WARN', created_at=now - timedelta(minutes=1))
+        self._record_item(status='WARN', created_at=now)
+        response = self.client.get(reverse('mission_control:live-paper-trial-trend'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['readiness_status'], 'NEEDS_REVIEW')
+
+    def test_readiness_not_ready(self):
+        now = timezone.now()
+        self._record_item(status='PASS', created_at=now - timedelta(minutes=1))
+        self._record_item(status='FAIL', created_at=now)
+        response = self.client.get(reverse('mission_control:live-paper-trial-trend'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['readiness_status'], 'NOT_READY')
+
+    def test_trend_payload_contract_is_compact(self):
+        now = timezone.now()
+        self._record_item(status='WARN', created_at=now - timedelta(minutes=1))
+        self._record_item(status='PASS', created_at=now)
+        response = self.client.get(reverse('mission_control:live-paper-trial-trend'), {'limit': 5, 'preset': 'live_read_only_paper_conservative'})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        expected = {
+            'sample_size',
+            'latest_trial_status',
+            'latest_validation_status',
+            'trend_status',
+            'readiness_status',
+            'trend_summary',
+            'next_action_hint',
+            'counts',
+            'recent_statuses',
+        }
+        self.assertTrue(expected.issubset(payload.keys()))
+        self.assertEqual(set(payload['counts'].keys()), {'pass_count', 'warn_count', 'fail_count'})
+
+    def test_trend_endpoint_does_not_break_history_endpoint(self):
+        now = timezone.now()
+        self._record_item(status='PASS', created_at=now - timedelta(minutes=1))
+        self._record_item(status='WARN', created_at=now)
+        trend = self.client.get(reverse('mission_control:live-paper-trial-trend'))
+        self.assertEqual(trend.status_code, 200)
+        history = self.client.get(reverse('mission_control:live-paper-trial-history'))
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual(history.json()['count'], 2)
+
+
 class LivePaperAutonomyFunnelApiTests(TestCase):
     def _funnel_counts(
         self,

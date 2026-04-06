@@ -16,6 +16,7 @@ import {
   getLivePaperAutonomyFunnel,
   getLivePaperSmokeTestStatus,
   getLivePaperTrialHistory,
+  getLivePaperTrialTrend,
   getLivePaperTrialStatus,
   getLivePaperValidation,
   runLivePaperSmokeTest,
@@ -56,6 +57,7 @@ import type {
   LivePaperFunnelStatus,
   LivePaperTrialRunResultResponse,
   LivePaperTrialHistoryResponse,
+  LivePaperTrialTrendResponse,
   LivePaperTrialRunStatus,
   LivePaperTrialRunStatusResponse,
   LivePaperValidationDigestResponse,
@@ -128,6 +130,20 @@ const toneFromTrialStatus = (status: LivePaperTrialRunStatus | 'IDLE' | 'RUNNING
   if (status === 'PASS') return 'ready';
   if (status === 'WARN' || status === 'RUNNING') return 'pending';
   if (status === 'FAIL') return 'offline';
+  return 'neutral';
+};
+
+const toneFromTrialTrendStatus = (status: LivePaperTrialTrendResponse['trend_status'] | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
+  if (status === 'IMPROVING' || status === 'STABLE') return 'ready';
+  if (status === 'INSUFFICIENT_DATA') return 'pending';
+  if (status === 'DEGRADING') return 'offline';
+  return 'neutral';
+};
+
+const toneFromTrialReadinessStatus = (status: LivePaperTrialTrendResponse['readiness_status'] | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
+  if (status === 'READY_FOR_EXTENDED_RUN') return 'ready';
+  if (status === 'NEEDS_REVIEW') return 'pending';
+  if (status === 'NOT_READY') return 'offline';
   return 'neutral';
 };
 
@@ -270,6 +286,9 @@ export function CockpitPage() {
   const [livePaperTrialHistoryLoading, setLivePaperTrialHistoryLoading] = useState(true);
   const [livePaperTrialHistoryError, setLivePaperTrialHistoryError] = useState<string | null>(null);
   const [livePaperTrialHistory, setLivePaperTrialHistory] = useState<LivePaperTrialHistoryResponse | null>(null);
+  const [livePaperTrialTrendLoading, setLivePaperTrialTrendLoading] = useState(true);
+  const [livePaperTrialTrendError, setLivePaperTrialTrendError] = useState<string | null>(null);
+  const [livePaperTrialTrend, setLivePaperTrialTrend] = useState<LivePaperTrialTrendResponse | null>(null);
   const heartbeatAutoSyncHint = useMemo(() => {
     const heartbeatSync = autonomousHeartbeatSummary?.live_paper_attention_sync;
     const lastAutoSync = livePaperAttentionStatus?.last_auto_sync;
@@ -294,6 +313,7 @@ export function CockpitPage() {
   const livePaperTrialSnapshot = livePaperTrialResult ?? livePaperTrialStatusSnapshot;
   const livePaperTrialChecks = livePaperTrialResult?.checks ?? [];
   const livePaperTrialHistoryItems = livePaperTrialHistory?.items ?? [];
+  const livePaperTrialRecentStatuses = livePaperTrialTrend?.recent_statuses ?? [];
 
   const loadLivePaperStatus = useCallback(async (): Promise<LivePaperBootstrapStatusResponse | null> => {
     setLivePaperStatusLoading(true);
@@ -521,6 +541,22 @@ export function CockpitPage() {
     }
   }, []);
 
+  const loadLivePaperTrialTrend = useCallback(async () => {
+    setLivePaperTrialTrendLoading(true);
+    setLivePaperTrialTrendError(null);
+    try {
+      const payload = await getLivePaperTrialTrend({ limit: 5, preset: 'live_read_only_paper_conservative' });
+      setLivePaperTrialTrend(payload);
+      return payload;
+    } catch {
+      setLivePaperTrialTrend(null);
+      setLivePaperTrialTrendError('Trial trend unavailable');
+      return null;
+    } finally {
+      setLivePaperTrialTrendLoading(false);
+    }
+  }, []);
+
   const runLivePaperTrial = useCallback(async () => {
     setLivePaperTrialRequestLoading(true);
     setLivePaperTrialStatus('RUNNING');
@@ -533,7 +569,7 @@ export function CockpitPage() {
       setLivePaperTrialResult(payload);
       setLivePaperTrialStatus(payload.trial_status);
       setLivePaperTrialNotFound(false);
-      await Promise.all([loadLivePaperTrialStatus(), loadLivePaperTrialHistory()]);
+      await Promise.all([loadLivePaperTrialStatus(), loadLivePaperTrialHistory(), loadLivePaperTrialTrend()]);
       await Promise.all([
         loadLivePaperStatus(),
         loadLivePaperValidation(),
@@ -548,7 +584,7 @@ export function CockpitPage() {
     } finally {
       setLivePaperTrialRequestLoading(false);
     }
-  }, [loadLivePaperAutonomyFunnel, loadLivePaperOperationalSnapshot, loadLivePaperSmokeTestStatus, loadLivePaperStatus, loadLivePaperTrialHistory, loadLivePaperTrialStatus, loadLivePaperValidation, loadPaperPortfolioSnapshot]);
+  }, [loadLivePaperAutonomyFunnel, loadLivePaperOperationalSnapshot, loadLivePaperSmokeTestStatus, loadLivePaperStatus, loadLivePaperTrialHistory, loadLivePaperTrialStatus, loadLivePaperTrialTrend, loadLivePaperValidation, loadPaperPortfolioSnapshot]);
 
   const refreshLivePaperTrialStatus = useCallback(async () => {
     setLivePaperTrialStatus('RUNNING');
@@ -648,6 +684,10 @@ export function CockpitPage() {
   useEffect(() => {
     void loadLivePaperTrialHistory();
   }, [loadLivePaperTrialHistory]);
+
+  useEffect(() => {
+    void loadLivePaperTrialTrend();
+  }, [loadLivePaperTrialTrend]);
 
   useEffect(() => {
     void loadLivePaperAutonomyFunnel();
@@ -1025,6 +1065,47 @@ export function CockpitPage() {
                       onClick={() => void refreshLivePaperTrialStatus()}
                     >
                       Refresh trial status
+                    </button>
+                  </div>
+                </SectionCard>
+                <SectionCard
+                  eyebrow="Compact readiness signal"
+                  title="Trial Trend"
+                  description="Operational digest of recent trial history to quickly assess trend and readiness for an extended paper run."
+                >
+                  {livePaperTrialTrendLoading ? <p>Loading trial trend…</p> : null}
+                  {!livePaperTrialTrendLoading && livePaperTrialTrendError ? <p className="warning-text">{livePaperTrialTrendError}</p> : null}
+                  {!livePaperTrialTrendLoading && !livePaperTrialTrendError && livePaperTrialTrend ? (
+                    <>
+                      <div className="button-row">
+                        <StatusBadge tone={toneFromTrialTrendStatus(livePaperTrialTrend.trend_status)}>
+                          {livePaperTrialTrend.trend_status}
+                        </StatusBadge>
+                        <StatusBadge tone={toneFromTrialReadinessStatus(livePaperTrialTrend.readiness_status)}>
+                          {livePaperTrialTrend.readiness_status}
+                        </StatusBadge>
+                        <StatusBadge tone="neutral">{livePaperTrialTrend.sample_size} runs</StatusBadge>
+                      </div>
+                      <ul className="key-value-list">
+                        <li><span>Trend summary</span><strong>{livePaperTrialTrend.trend_summary}</strong></li>
+                        <li><span>Next action hint</span><strong>{livePaperTrialTrend.next_action_hint}</strong></li>
+                        <li><span>Latest trial status</span><strong>{livePaperTrialTrend.latest_trial_status ?? 'n/a'}</strong></li>
+                        <li><span>Latest validation status</span><strong>{livePaperTrialTrend.latest_validation_status ?? 'n/a'}</strong></li>
+                        <li><span>PASS / WARN / FAIL</span><strong>{livePaperTrialTrend.counts.pass_count} / {livePaperTrialTrend.counts.warn_count} / {livePaperTrialTrend.counts.fail_count}</strong></li>
+                        {livePaperTrialRecentStatuses.length > 0 ? (
+                          <li><span>Recent statuses</span><strong>{livePaperTrialRecentStatuses.join(' → ')}</strong></li>
+                        ) : null}
+                      </ul>
+                    </>
+                  ) : null}
+                  <div className="button-row">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={livePaperTrialTrendLoading || livePaperTrialRequestLoading}
+                      onClick={() => void loadLivePaperTrialTrend()}
+                    >
+                      Refresh trend
                     </button>
                   </div>
                 </SectionCard>

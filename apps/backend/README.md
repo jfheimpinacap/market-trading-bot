@@ -257,6 +257,29 @@ This adds no new models/scheduler/runtime authority, keeps strict `REAL_READ_ONL
 
 Scope remains unchanged: operational observability only for recent paper checks, strict `REAL_READ_ONLY` + `PAPER_ONLY`, and no live trading enablement.
 
+## Live Paper Trial Trend Digest (new)
+
+`apps.mission_control` now includes a compact deterministic trend/readiness digest built directly from recent trial history.
+
+- service: `apps/mission_control/services/live_paper_trial_trend.py`
+- endpoint:
+  - `GET /api/mission-control/live-paper-trial-trend/`
+  - query params:
+    - `limit` (optional, default `5`, max `20`)
+    - `preset` (optional filter by preset name)
+- output:
+  - `sample_size`
+  - `latest_trial_status`
+  - `latest_validation_status`
+  - `trend_status` (`IMPROVING` / `STABLE` / `DEGRADING` / `INSUFFICIENT_DATA`)
+  - `readiness_status` (`READY_FOR_EXTENDED_RUN` / `NEEDS_REVIEW` / `NOT_READY`)
+  - `trend_summary`
+  - `next_action_hint`
+  - `counts` (`pass_count`, `warn_count`, `fail_count`)
+  - optional `recent_statuses`
+
+Implementation explicitly reuses `live_paper_trial_history` (aggregation-only, no new authority), introduces no new models/migrations, and keeps strict `REAL_READ_ONLY` + `PAPER_ONLY` safety boundaries.
+
 ## Live Paper Autonomy Funnel Snapshot (new)
 
 `apps.mission_control` now includes a compact autonomy-funnel digest to validate whether the recent flow is progressing across:

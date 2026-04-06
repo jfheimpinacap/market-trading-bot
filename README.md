@@ -158,6 +158,18 @@ Cockpit also includes a compact **Live Paper Trial History** card that consumes:
 - manual action: `Refresh history`
 - automatic refresh right after `Run trial` completes
 
+Cockpit now also includes a compact **Trial Trend** card that consumes:
+- `GET /api/mission-control/live-paper-trial-trend/?limit=5`
+- manual action: `Refresh trend`
+- automatic refresh on cockpit load and immediately after `Run trial`
+
+The card adds deterministic trend/readiness signals over recent trial history:
+- trend: `IMPROVING` / `STABLE` / `DEGRADING` / `INSUFFICIENT_DATA`
+- readiness: `READY_FOR_EXTENDED_RUN` / `NEEDS_REVIEW` / `NOT_READY`
+- compact digest: summary, next action hint, PASS/WARN/FAIL counts, and recent statuses line
+
+This remains operational-only aggregation for paper runs and keeps strict `REAL_READ_ONLY` + `PAPER_ONLY` scope.
+
 ### Live Paper Trial Run History (backend, new)
 
 `mission_control` now keeps a compact in-memory history of recent Live Paper Trial runs for quick operational comparison across the latest V1 paper checks.
@@ -174,6 +186,29 @@ Cockpit also includes a compact **Live Paper Trial History** card that consumes:
   - returns compact payload: `count`, `latest_trial_status`, deterministic `history_summary`, and `items`
 
 This is operational evidence only for recent paper runs, remains strictly `REAL_READ_ONLY` + `PAPER_ONLY`, and does not enable live trading.
+
+### Live Paper Trial Trend Digest (backend + cockpit, new)
+
+`mission_control` now exposes a compact trend/readiness digest over the existing recent trial history to answer quickly whether V1 paper checks are improving, stable, degrading, or insufficient.
+
+- service: `apps/backend/apps/mission_control/services/live_paper_trial_trend.py`
+- API:
+  - `GET /api/mission-control/live-paper-trial-trend/`
+  - query params:
+    - `limit` (optional, default `5`, max `20`)
+    - `preset` (optional, filters the sampled history items)
+- payload:
+  - `sample_size`
+  - `latest_trial_status`
+  - `latest_validation_status`
+  - `trend_status`
+  - `readiness_status`
+  - `trend_summary`
+  - `next_action_hint`
+  - `counts` (`pass_count`, `warn_count`, `fail_count`)
+  - optional `recent_statuses`
+
+This layer is deterministic and explainable, reuses live-paper trial history as its source, adds no new screen/analytics architecture, and remains strictly `REAL_READ_ONLY` + `PAPER_ONLY`.
 
 ### Live Paper Autonomy Funnel Snapshot (backend + cockpit, new)
 
