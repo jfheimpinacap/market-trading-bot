@@ -113,6 +113,8 @@ from apps.mission_control.serializers import (
     LivePaperSmokeTestStatusSerializer,
     LivePaperTrialRunRequestSerializer,
     LivePaperTrialRunResultSerializer,
+    LivePaperTrialRunHistoryQuerySerializer,
+    LivePaperTrialRunHistorySerializer,
     LivePaperTrialRunStatusSerializer,
     LivePaperAutonomyFunnelSerializer,
     LivePaperAttentionAlertSyncSerializer,
@@ -212,6 +214,7 @@ from apps.mission_control.services.live_paper_trial_run import (
     get_last_live_paper_trial_run_result,
     run_live_paper_trial_run,
 )
+from apps.mission_control.services.live_paper_trial_history import list_live_paper_trial_history
 from apps.mission_control.services.live_paper_autonomy_funnel import build_live_paper_autonomy_funnel_snapshot
 
 
@@ -504,6 +507,18 @@ class LivePaperTrialRunStatusView(APIView):
             'next_action_hint': latest.get('next_action_hint'),
         }
         return Response(LivePaperTrialRunStatusSerializer(payload).data, status=status.HTTP_200_OK)
+
+
+class LivePaperTrialRunHistoryView(APIView):
+    def get(self, request, *args, **kwargs):
+        serializer = LivePaperTrialRunHistoryQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        history = list_live_paper_trial_history(
+            limit=payload.get('limit', 5),
+            status=payload.get('status'),
+        )
+        return Response(LivePaperTrialRunHistorySerializer(history).data, status=status.HTTP_200_OK)
 
 
 class LivePaperAutonomyFunnelView(APIView):

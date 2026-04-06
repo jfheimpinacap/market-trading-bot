@@ -233,6 +233,30 @@ This remains strictly real-market read-only + paper-only money simulation, intro
 
 This adds no new models/scheduler/runtime authority, keeps strict `REAL_READ_ONLY` + `PAPER_ONLY` scope, reduces frontend operational orchestration, and does not enable live trading.
 
+## Live Paper Trial Run History (new)
+
+`apps.mission_control` now includes a compact backend-only recent-history layer for Live Paper Trial runs so operators can compare short V1 paper checks quickly.
+
+- service: `apps/mission_control/services/live_paper_trial_history.py`
+- endpoint:
+  - `GET /api/mission-control/live-paper-trial-history/`
+  - query params:
+    - `limit` (optional, default `5`, max `20`)
+    - `status` (optional: `PASS` / `WARN` / `FAIL`)
+- integration:
+  - history recording is automatic on each successful `POST /api/mission-control/run-live-paper-trial/`
+  - no manual insert endpoint
+- storage model:
+  - in-memory thread-safe bounded buffer (newest first)
+  - no new persistent model/migration
+- payload:
+  - `count`
+  - `latest_trial_status`
+  - deterministic `history_summary`
+  - compact `items` with trial status/action/evidence fields
+
+Scope remains unchanged: operational observability only for recent paper checks, strict `REAL_READ_ONLY` + `PAPER_ONLY`, and no live trading enablement.
+
 ## Live Paper Autonomy Funnel Snapshot (new)
 
 `apps.mission_control` now includes a compact autonomy-funnel digest to validate whether the recent flow is progressing across:

@@ -34,6 +34,11 @@ from apps.mission_control.models import (
 )
 from apps.runtime_governor.models import RuntimeMode
 from apps.mission_control.services.collect import collect_governance_review_candidates
+from apps.mission_control.services.live_paper_trial_history import (
+    _clear_live_paper_trial_history_for_tests,
+    _HISTORY_CAPACITY,
+    record_live_paper_trial_result,
+)
 from apps.mission_control.services.prioritize import assign_severity_and_priority
 from apps.portfolio_governor.models import (
     PortfolioExposureClusterSnapshot,
@@ -2136,6 +2141,9 @@ class LivePaperSmokeTestApiTests(TestCase):
 
 
 class LivePaperTrialRunApiTests(TestCase):
+    def setUp(self):
+        _clear_live_paper_trial_history_for_tests()
+
     def _validation_payload(self, status: str, *, activity: bool, trades: bool, snapshot: bool) -> dict:
         return {
             'preset_name': 'live_read_only_paper_conservative',
@@ -2327,6 +2335,164 @@ class LivePaperTrialRunApiTests(TestCase):
     def test_existing_mission_control_summary_flow_still_works(self):
         response = self.client.get(reverse('mission_control:autonomous-session-summary'))
         self.assertEqual(response.status_code, 200)
+
+
+class LivePaperTrialRunHistoryApiTests(TestCase):
+    def setUp(self):
+        _clear_live_paper_trial_history_for_tests()
+
+    def _record_item(self, *, status: str, created_at, preset_name: str = 'live_read_only_paper_conservative'):
+        record_live_paper_trial_result(
+            {
+                'executed_at': created_at,
+                'preset_name': preset_name,
+                'trial_status': status,
+                'bootstrap_action': 'REUSED_EXISTING_SESSION',
+                'smoke_test_status': 'PASS' if status == 'PASS' else ('WARN' if status == 'WARN' else 'FAIL'),
+                'validation_status_after': 'READY' if status == 'PASS' else ('WARNING' if status == 'WARN' else 'BLOCKED'),
+                'heartbeat_passes_completed': 1,
+                'next_action_hint': f'{status} hint',
+                'trial_summary': f'{status} summary',
+                'recent_activity_detected': status != 'FAIL',
+                'recent_trades_detected': status == 'PASS',
+                'portfolio_snapshot_ready': status != 'FAIL',
+            }
+        )
+
+    def _patch_trial_run_to_pass(self):
+        validation_before = {
+            'preset_name': 'live_read_only_paper_conservative',
+            'validation_status': 'WARNING',
+            'session_active': True,
+            'heartbeat_active': True,
+            'attention_mode': 'HEALTHY',
+            'paper_account_ready': True,
+            'market_data_ready': True,
+            'portfolio_snapshot_ready': True,
+            'recent_activity_present': True,
+            'recent_trades_present': False,
+            'cash_available': 10000.0,
+            'equity_available': 10000.0,
+            'next_action_hint': 'hint',
+            'validation_summary': 'before',
+            'checks': [],
+        }
+        validation_after = {**validation_before, 'validation_status': 'READY', 'recent_trades_present': True, 'validation_summary': 'after'}
+        smoke_payload = {'smoke_test_status': 'PASS', 'smoke_test_summary': 'PASS: summary', 'heartbeat_passes_completed': 1}
+        return patch('apps.mission_control.services.live_paper_trial_run.build_live_paper_validation_digest', side_effect=[validation_before, validation_after]), patch(
+            'apps.mission_control.services.live_paper_trial_run.bootstrap_live_read_only_paper_session',
+            return_value={'bootstrap_action': 'REUSED_EXISTING_SESSION', 'bootstrap_summary': 'reused'},
+        ), patch(
+            'apps.mission_control.services.live_paper_trial_run.get_live_paper_bootstrap_status',
+            return_value={'status_summary': 'ok'},
+        ), patch(
+            'apps.mission_control.services.live_paper_trial_run.run_live_paper_smoke_test',
+            return_value=smoke_payload,
+        ), patch(
+            'apps.mission_control.services.live_paper_trial_run.get_last_live_paper_smoke_test_result',
+            return_value=smoke_payload,
+        )
+
+    def test_history_records_after_trial_post(self):
+        p1, p2, p3, p4, p5 = self._patch_trial_run_to_pass()
+        with p1, p2, p3, p4, p5:
+            run_response = self.client.post(reverse('mission_control:run-live-paper-trial'), data='{}', content_type='application/json')
+        self.assertEqual(run_response.status_code, 200)
+
+        history_response = self.client.get(reverse('mission_control:live-paper-trial-history'))
+        self.assertEqual(history_response.status_code, 200)
+        payload = history_response.json()
+        self.assertEqual(payload['count'], 1)
+        self.assertEqual(payload['latest_trial_status'], 'PASS')
+        self.assertEqual(payload['items'][0]['trial_status'], run_response.json()['trial_status'])
+
+    def test_history_is_ordered_with_most_recent_first(self):
+        now = timezone.now()
+        self._record_item(status='PASS', created_at=now - timedelta(minutes=2))
+        self._record_item(status='WARN', created_at=now - timedelta(minutes=1))
+        self._record_item(status='FAIL', created_at=now)
+
+        response = self.client.get(reverse('mission_control:live-paper-trial-history'))
+        self.assertEqual(response.status_code, 200)
+        statuses = [item['trial_status'] for item in response.json()['items']]
+        self.assertEqual(statuses[:3], ['FAIL', 'WARN', 'PASS'])
+
+    def test_history_limit_works(self):
+        now = timezone.now()
+        self._record_item(status='PASS', created_at=now - timedelta(minutes=3))
+        self._record_item(status='WARN', created_at=now - timedelta(minutes=2))
+        self._record_item(status='FAIL', created_at=now - timedelta(minutes=1))
+
+        response = self.client.get(reverse('mission_control:live-paper-trial-history'), {'limit': 2})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['count'], 2)
+        self.assertEqual(len(payload['items']), 2)
+
+    def test_history_status_filter_works(self):
+        now = timezone.now()
+        self._record_item(status='PASS', created_at=now - timedelta(minutes=3))
+        self._record_item(status='WARN', created_at=now - timedelta(minutes=2))
+        self._record_item(status='WARN', created_at=now - timedelta(minutes=1))
+
+        response = self.client.get(reverse('mission_control:live-paper-trial-history'), {'status': 'WARN'})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['count'], 2)
+        self.assertTrue(all(item['trial_status'] == 'WARN' for item in payload['items']))
+        self.assertEqual(payload['history_summary'], 'Recent trial history shows warnings in the last 2 runs')
+
+    def test_history_payload_contract_is_compact(self):
+        self._record_item(status='PASS', created_at=timezone.now())
+        response = self.client.get(reverse('mission_control:live-paper-trial-history'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        expected_root = {'count', 'latest_trial_status', 'history_summary', 'items'}
+        expected_item = {
+            'created_at',
+            'preset_name',
+            'trial_status',
+            'bootstrap_action',
+            'smoke_test_status',
+            'validation_status_after',
+            'heartbeat_passes_completed',
+            'next_action_hint',
+            'trial_summary',
+        }
+        self.assertTrue(expected_root.issubset(payload.keys()))
+        self.assertTrue(expected_item.issubset(payload['items'][0].keys()))
+
+    def test_history_summary_is_stable_for_empty_and_failures(self):
+        empty = self.client.get(reverse('mission_control:live-paper-trial-history'))
+        self.assertEqual(empty.status_code, 200)
+        self.assertEqual(empty.json()['history_summary'], 'No live paper trial history recorded yet')
+
+        now = timezone.now()
+        self._record_item(status='PASS', created_at=now - timedelta(minutes=2))
+        self._record_item(status='FAIL', created_at=now - timedelta(minutes=1))
+        failure = self.client.get(reverse('mission_control:live-paper-trial-history'))
+        self.assertEqual(failure.status_code, 200)
+        self.assertEqual(failure.json()['history_summary'], 'Recent trial history shows failures in the last 2 runs')
+
+    def test_history_buffer_is_bounded(self):
+        baseline = timezone.now()
+        for idx in range(_HISTORY_CAPACITY + 3):
+            self._record_item(status='PASS', created_at=baseline + timedelta(seconds=idx), preset_name=f'preset-{idx}')
+
+        response = self.client.get(reverse('mission_control:live-paper-trial-history'), {'limit': _HISTORY_CAPACITY})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['count'], _HISTORY_CAPACITY)
+        self.assertEqual(payload['items'][0]['preset_name'], f'preset-{_HISTORY_CAPACITY + 2}')
+        self.assertEqual(payload['items'][-1]['preset_name'], 'preset-3')
+
+    def test_existing_trial_status_endpoint_still_works(self):
+        p1, p2, p3, p4, p5 = self._patch_trial_run_to_pass()
+        with p1, p2, p3, p4, p5:
+            self.client.post(reverse('mission_control:run-live-paper-trial'), data='{}', content_type='application/json')
+        response = self.client.get(reverse('mission_control:live-paper-trial-status'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['trial_status'], 'PASS')
 
 
 class LivePaperAutonomyFunnelApiTests(TestCase):

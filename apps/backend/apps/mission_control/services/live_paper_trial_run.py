@@ -19,6 +19,7 @@ from apps.mission_control.services.live_paper_smoke_test import (
     get_last_live_paper_smoke_test_result,
     run_live_paper_smoke_test,
 )
+from apps.mission_control.services.live_paper_trial_history import record_live_paper_trial_result
 from apps.mission_control.services.live_paper_validation import build_live_paper_validation_digest
 
 TRIAL_STATUS_PASS = 'PASS'
@@ -208,4 +209,5 @@ def run_live_paper_trial_run(*, preset_name: str | None = None, heartbeat_passes
     }
 
     _store_last_trial_result(response_payload)
+    record_live_paper_trial_result(response_payload)
     return response_payload
