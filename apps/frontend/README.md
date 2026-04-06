@@ -39,6 +39,28 @@ Límites explícitos: sigue siendo `REAL_READ_ONLY` + `PAPER_ONLY`, no habilita 
   - `history_summary`
   - lista newest-first de corridas recientes con status + resumen
 
+## Cockpit Trial Trend card (new)
+
+`/cockpit` ahora incluye una card compacta **Trial Trend** como capa rápida de lectura operativa por encima de `Live Paper Trial History`.
+
+- integración backend:
+  - `GET /api/mission-control/live-paper-trial-trend/?limit=5`
+  - query opcional soportada por cliente: `preset`
+- comportamiento:
+  - auto-carga al abrir cockpit
+  - botón manual `Refresh trend`
+  - refresh automático después de `Run trial` (junto con status + history)
+  - fallback no bloqueante si falla endpoint: `Trial trend unavailable`
+- salida compacta:
+  - badge fuerte de `trend_status` (`IMPROVING` / `STABLE` / `DEGRADING` / `INSUFFICIENT_DATA`)
+  - badge de `readiness_status` (`READY_FOR_EXTENDED_RUN` / `NEEDS_REVIEW` / `NOT_READY`)
+  - `trend_summary`
+  - `next_action_hint`
+  - conteo `PASS/WARN/FAIL`
+  - línea compacta de recientes (ej. `PASS → PASS → WARN`)
+
+Esta card complementa (no reemplaza) Trial Run + Trial History y mantiene alcance `REAL_READ_ONLY` + `PAPER_ONLY`.
+
 ## Mission control autonomous session UX (new)
 
 La vista `/mission-control` ahora incluye una sección explícita de **Autonomous Session Control** para operación persistente gobernada:

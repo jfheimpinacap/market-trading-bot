@@ -80,6 +80,7 @@ import type {
   LivePaperSmokeTestStatusResponse,
   LivePaperTrialRunRequest,
   LivePaperTrialHistoryResponse,
+  LivePaperTrialTrendResponse,
   LivePaperTrialRunResultResponse,
   LivePaperTrialRunStatusResponse,
   LivePaperValidationDigestResponse,
@@ -201,6 +202,18 @@ export function getLivePaperTrialHistory(params?: { limit?: number; status?: 'PA
   }
   const suffix = query.size ? `?${query.toString()}` : '';
   return requestJson<LivePaperTrialHistoryResponse>(`/api/mission-control/live-paper-trial-history/${suffix}`);
+}
+
+export function getLivePaperTrialTrend(params?: { limit?: number; preset?: string }) {
+  const query = new URLSearchParams();
+  if (params?.limit) {
+    query.set('limit', String(params.limit));
+  }
+  if (params?.preset) {
+    query.set('preset', params.preset);
+  }
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return requestJson<LivePaperTrialTrendResponse>(`/api/mission-control/live-paper-trial-trend/${suffix}`);
 }
 
 export function getLivePaperAutonomyFunnel(params?: { preset?: string; window_minutes?: number }) {

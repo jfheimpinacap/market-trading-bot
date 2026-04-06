@@ -345,6 +345,32 @@ class LivePaperTrialRunHistorySerializer(serializers.Serializer):
     items = LivePaperTrialRunHistoryItemSerializer(many=True)
 
 
+class LivePaperTrialTrendQuerySerializer(serializers.Serializer):
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=20, default=5)
+    preset = serializers.CharField(required=False, allow_blank=False)
+
+
+class LivePaperTrialTrendCountsSerializer(serializers.Serializer):
+    pass_count = serializers.IntegerField(min_value=0)
+    warn_count = serializers.IntegerField(min_value=0)
+    fail_count = serializers.IntegerField(min_value=0)
+
+
+class LivePaperTrialTrendDigestSerializer(serializers.Serializer):
+    sample_size = serializers.IntegerField(min_value=0)
+    latest_trial_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'], required=False, allow_null=True)
+    latest_validation_status = serializers.ChoiceField(choices=['READY', 'WARNING', 'BLOCKED'], required=False, allow_null=True)
+    trend_status = serializers.ChoiceField(choices=['IMPROVING', 'STABLE', 'DEGRADING', 'INSUFFICIENT_DATA'])
+    readiness_status = serializers.ChoiceField(choices=['READY_FOR_EXTENDED_RUN', 'NEEDS_REVIEW', 'NOT_READY'])
+    trend_summary = serializers.CharField()
+    next_action_hint = serializers.CharField()
+    counts = LivePaperTrialTrendCountsSerializer()
+    recent_statuses = serializers.ListField(
+        child=serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL']),
+        required=False,
+    )
+
+
 class LivePaperAutonomyFunnelStageSerializer(serializers.Serializer):
     stage_name = serializers.ChoiceField(choices=['scan', 'research', 'prediction', 'risk', 'paper_execution'])
     count = serializers.IntegerField(min_value=0)

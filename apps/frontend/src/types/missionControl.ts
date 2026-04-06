@@ -332,6 +332,27 @@ export type LivePaperTrialHistoryResponse = {
   items: LivePaperTrialHistoryItem[];
 };
 
+export type LivePaperTrialTrendStatus = 'IMPROVING' | 'STABLE' | 'DEGRADING' | 'INSUFFICIENT_DATA';
+export type LivePaperTrialReadinessStatus = 'READY_FOR_EXTENDED_RUN' | 'NEEDS_REVIEW' | 'NOT_READY';
+
+export type LivePaperTrialTrendCounts = {
+  pass_count: number;
+  warn_count: number;
+  fail_count: number;
+};
+
+export type LivePaperTrialTrendResponse = {
+  sample_size: number;
+  latest_trial_status: LivePaperTrialHistoryStatus | null;
+  latest_validation_status: 'READY' | 'WARNING' | 'BLOCKED' | null;
+  trend_status: LivePaperTrialTrendStatus;
+  readiness_status: LivePaperTrialReadinessStatus;
+  trend_summary: string;
+  next_action_hint: string;
+  counts: LivePaperTrialTrendCounts;
+  recent_statuses?: LivePaperTrialHistoryStatus[];
+};
+
 export type LivePaperAutonomyFunnelStatus = 'ACTIVE' | 'THIN_FLOW' | 'STALLED';
 export type LivePaperAutonomyFunnelStageStatus = 'ACTIVE' | 'LOW' | 'EMPTY';
 
