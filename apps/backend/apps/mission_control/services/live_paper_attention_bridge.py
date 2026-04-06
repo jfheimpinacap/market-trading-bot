@@ -48,6 +48,22 @@ MATERIAL_CHANGE_FIELDS = (
     'attention_reason_codes',
 )
 
+FUNNEL_STATUS_ACTIVE = 'ACTIVE'
+FUNNEL_STATUS_THIN_FLOW = 'THIN_FLOW'
+FUNNEL_STATUS_STALLED = 'STALLED'
+
+FUNNEL_REASON_ACTIVE = 'funnel_active'
+FUNNEL_REASON_THIN_FLOW = 'funnel_thin_flow'
+FUNNEL_REASON_STALLED = 'funnel_stalled'
+FUNNEL_REASON_SIGNAL_UNAVAILABLE = 'funnel_signal_unavailable'
+
+_STALLED_STAGE_REASON_CODE_MAP = {
+    'research': 'funnel_stalled_at_research',
+    'prediction': 'funnel_stalled_at_prediction',
+    'risk': 'funnel_stalled_at_risk',
+    'paper_execution': 'funnel_stalled_at_paper_execution',
+}
+
 
 def _active_bridge_alerts():
     return OperatorAlert.objects.filter(dedupe_key=LIVE_PAPER_ATTENTION_ALERT_DEDUPE_KEY).exclude(status=OperatorAlertStatus.RESOLVED)
@@ -61,12 +77,38 @@ def _normalize_reason_codes(reason_codes: list[str]) -> list[str]:
     return sorted({str(code).strip().lower() for code in reason_codes if str(code).strip()})
 
 
-def _resolve_attention_mode(*, status_payload: dict[str, Any], heartbeat_summary: dict[str, Any]) -> tuple[str, list[str]]:
+def _build_funnel_signal() -> dict[str, Any]:
+    from apps.mission_control.services.live_paper_autonomy_funnel import build_live_paper_autonomy_funnel_snapshot
+
+    try:
+        funnel_snapshot = build_live_paper_autonomy_funnel_snapshot()
+    except Exception:
+        return {
+            'funnel_status': None,
+            'stalled_stage': None,
+            'top_stage': None,
+            'funnel_summary': None,
+            'signal_available': False,
+        }
+
+    return {
+        'funnel_status': str(funnel_snapshot.get('funnel_status') or '').upper() or None,
+        'stalled_stage': str(funnel_snapshot.get('stalled_stage') or '').lower() or None,
+        'top_stage': str(funnel_snapshot.get('top_stage') or '').lower() or None,
+        'funnel_summary': str(funnel_snapshot.get('funnel_summary') or ''),
+        'signal_available': True,
+    }
+
+
+def _resolve_attention_mode(*, status_payload: dict[str, Any], heartbeat_summary: dict[str, Any], funnel_signal: dict[str, Any]) -> tuple[str, list[str]]:
     reason_codes: list[str] = []
     session_active = bool(status_payload.get('session_active'))
     heartbeat_active = bool(status_payload.get('heartbeat_active'))
     current_session_status = str(status_payload.get('current_session_status') or '').upper()
     operator_hint = str(status_payload.get('operator_attention_hint') or '').lower()
+    funnel_status = str(funnel_signal.get('funnel_status') or '').upper()
+    stalled_stage = str(funnel_signal.get('stalled_stage') or '').lower()
+    funnel_signal_available = bool(funnel_signal.get('signal_available'))
 
     latest_decision = AutonomousHeartbeatDecision.objects.order_by('-created_at', '-id').first()
     latest_decision_type = str(latest_decision.decision_type or '') if latest_decision else ''
@@ -95,6 +137,10 @@ def _resolve_attention_mode(*, status_payload: dict[str, Any], heartbeat_summary
         reason_codes.append('latest_heartbeat_needs_review')
     if (latest_run_metadata.get('runtime_tuning_attention_sync') or {}).get('human_attention_mode') == 'REVIEW_NOW':
         reason_codes.append('runtime_tuning_review_now')
+    if session_active and heartbeat_active and funnel_status == FUNNEL_STATUS_STALLED:
+        reason_codes.append(FUNNEL_REASON_STALLED)
+        if stalled_stage in _STALLED_STAGE_REASON_CODE_MAP:
+            reason_codes.append(_STALLED_STAGE_REASON_CODE_MAP[stalled_stage])
     if reason_codes:
         return ATTENTION_MODE_REVIEW_NOW, _normalize_reason_codes(reason_codes)
 
@@ -106,8 +152,20 @@ def _resolve_attention_mode(*, status_payload: dict[str, Any], heartbeat_summary
         reason_codes.append('session_recovery_attention')
     if runtime_tuning_sync.get('human_attention_mode') == 'REVIEW_SOON':
         reason_codes.append('runtime_tuning_review_soon')
+    if funnel_status == FUNNEL_STATUS_THIN_FLOW:
+        reason_codes.append(FUNNEL_REASON_THIN_FLOW)
+    elif session_active and heartbeat_active and funnel_status == FUNNEL_STATUS_STALLED:
+        reason_codes.append(FUNNEL_REASON_STALLED)
+        if stalled_stage in _STALLED_STAGE_REASON_CODE_MAP:
+            reason_codes.append(_STALLED_STAGE_REASON_CODE_MAP[stalled_stage])
     if reason_codes:
         return ATTENTION_MODE_DEGRADED, _normalize_reason_codes(reason_codes)
+
+    if not funnel_signal_available:
+        return ATTENTION_MODE_HEALTHY, _normalize_reason_codes([FUNNEL_REASON_SIGNAL_UNAVAILABLE])
+
+    if funnel_status == FUNNEL_STATUS_ACTIVE:
+        return ATTENTION_MODE_HEALTHY, _normalize_reason_codes([FUNNEL_REASON_ACTIVE])
 
     return ATTENTION_MODE_HEALTHY, []
 
@@ -163,13 +221,18 @@ def _detect_material_change(*, existing_alert: OperatorAlert | None, material_si
 def sync_live_paper_attention_alert() -> dict[str, Any]:
     bootstrap_status = get_live_paper_bootstrap_status()
     heartbeat_summary = build_heartbeat_summary()
+    funnel_signal = _build_funnel_signal()
 
     session_active = bool(bootstrap_status.get('session_active'))
     heartbeat_active = bool(bootstrap_status.get('heartbeat_active'))
     current_session_status = str(bootstrap_status.get('current_session_status') or 'MISSING')
     status_summary = str(bootstrap_status.get('status_summary') or '')
 
-    attention_mode, reason_codes = _resolve_attention_mode(status_payload=bootstrap_status, heartbeat_summary=heartbeat_summary)
+    attention_mode, reason_codes = _resolve_attention_mode(
+        status_payload=bootstrap_status,
+        heartbeat_summary=heartbeat_summary,
+        funnel_signal=funnel_signal,
+    )
     attention_needed = attention_mode != ATTENTION_MODE_HEALTHY
     alert_severity = _resolve_alert_severity(attention_mode)
 
@@ -271,18 +334,27 @@ def sync_live_paper_attention_alert() -> dict[str, Any]:
         'update_suppressed': update_suppressed,
         'suppression_reason': suppression_reason,
         'active_alert_present': active_alert is not None,
+        'funnel_status': funnel_signal.get('funnel_status'),
+        'stalled_stage': funnel_signal.get('stalled_stage'),
+        'top_stage': funnel_signal.get('top_stage'),
+        'funnel_summary': funnel_signal.get('funnel_summary'),
     }
 
 
 def get_live_paper_attention_alert_status() -> dict[str, Any]:
     bootstrap_status = get_live_paper_bootstrap_status()
     heartbeat_summary = build_heartbeat_summary()
+    funnel_signal = _build_funnel_signal()
 
     session_active = bool(bootstrap_status.get('session_active'))
     heartbeat_active = bool(bootstrap_status.get('heartbeat_active'))
     current_session_status = str(bootstrap_status.get('current_session_status') or 'MISSING')
     status_summary = str(bootstrap_status.get('status_summary') or '')
-    attention_mode, _reason_codes = _resolve_attention_mode(status_payload=bootstrap_status, heartbeat_summary=heartbeat_summary)
+    attention_mode, _reason_codes = _resolve_attention_mode(
+        status_payload=bootstrap_status,
+        heartbeat_summary=heartbeat_summary,
+        funnel_signal=funnel_signal,
+    )
     attention_needed = attention_mode != ATTENTION_MODE_HEALTHY
 
     active_alert = _active_signal_alert()
@@ -303,6 +375,10 @@ def get_live_paper_attention_alert_status() -> dict[str, Any]:
         'heartbeat_active': heartbeat_active,
         'current_session_status': current_session_status,
         'status_summary': status_summary,
+        'funnel_status': funnel_signal.get('funnel_status'),
+        'stalled_stage': funnel_signal.get('stalled_stage'),
+        'top_stage': funnel_signal.get('top_stage'),
+        'funnel_summary': funnel_signal.get('funnel_summary'),
         'last_alert_action': last_alert_action,
         'last_sync_summary': last_sync_summary,
         'last_auto_sync': (heartbeat_summary.get('live_paper_attention_sync') or {}) if isinstance(heartbeat_summary, dict) else {},

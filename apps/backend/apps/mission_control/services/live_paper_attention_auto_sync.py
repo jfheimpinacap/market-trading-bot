@@ -28,5 +28,7 @@ def run_live_paper_attention_auto_sync() -> dict[str, Any]:
         'session_active': bool(payload.get('session_active', False)),
         'heartbeat_active': bool(payload.get('heartbeat_active', False)),
         'current_session_status': payload.get('current_session_status'),
+        'funnel_status': payload.get('funnel_status'),
+        'stalled_stage': payload.get('stalled_stage'),
         'sync_summary': payload.get('alert_status_summary', ''),
     }

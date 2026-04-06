@@ -601,6 +601,24 @@ class AutonomousHeartbeatRunnerTests(TestCase):
 
 
 class LivePaperAttentionBridgeTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self._funnel_patcher = patch(
+            'apps.mission_control.services.live_paper_attention_bridge._build_funnel_signal',
+            return_value={
+                'funnel_status': 'ACTIVE',
+                'stalled_stage': None,
+                'top_stage': 'paper_execution',
+                'funnel_summary': 'ACTIVE: baseline flow present.',
+                'signal_available': True,
+            },
+        )
+        self._funnel_patcher.start()
+
+    def tearDown(self):
+        self._funnel_patcher.stop()
+        super().tearDown()
+
     def _sync(self) -> dict:
         response = self.client.post(reverse('mission_control:sync-live-paper-attention-alert'), data='{}', content_type='application/json')
         self.assertEqual(response.status_code, 200)
@@ -625,6 +643,8 @@ class LivePaperAttentionBridgeTests(TestCase):
     def test_healthy_without_session_keeps_no_active_alert(self, *_mocks):
         payload = self._sync()
         self.assertEqual(payload['attention_mode'], 'HEALTHY')
+        self.assertEqual(payload['funnel_status'], 'ACTIVE')
+        self.assertIn('funnel_active', payload['attention_reason_codes'])
         self.assertIn(payload['alert_action'], {'NOOP', 'RESOLVED'})
         self.assertFalse(OperatorAlert.objects.filter(dedupe_key='live_paper_autopilot_attention_global', status=OperatorAlertStatus.OPEN).exists())
 
@@ -686,6 +706,122 @@ class LivePaperAttentionBridgeTests(TestCase):
         self.assertEqual(payload['alert_severity'], OperatorAlertSeverity.WARNING)
         alert = OperatorAlert.objects.get(dedupe_key='live_paper_autopilot_attention_global')
         self.assertEqual(alert.severity, OperatorAlertSeverity.WARNING)
+
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge._build_funnel_signal',
+        return_value={
+            'funnel_status': 'THIN_FLOW',
+            'stalled_stage': None,
+            'top_stage': 'prediction',
+            'funnel_summary': 'THIN_FLOW: weak progression.',
+            'signal_available': True,
+        },
+    )
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary', return_value={'runtime_tuning_attention_sync': {}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': True,
+            'heartbeat_active': True,
+            'current_session_status': 'RUNNING',
+            'operator_attention_hint': 'Session is active',
+            'status_summary': 'session healthy',
+        },
+    )
+    def test_funnel_thin_flow_marks_degraded_attention(self, *_mocks):
+        payload = self._sync()
+        self.assertEqual(payload['attention_mode'], 'DEGRADED')
+        self.assertEqual(payload['funnel_status'], 'THIN_FLOW')
+        self.assertIn('funnel_thin_flow', payload['attention_reason_codes'])
+
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge._build_funnel_signal',
+        return_value={
+            'funnel_status': 'STALLED',
+            'stalled_stage': 'prediction',
+            'top_stage': 'research',
+            'funnel_summary': 'STALLED: no prediction progression.',
+            'signal_available': True,
+        },
+    )
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary', return_value={'runtime_tuning_attention_sync': {}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': True,
+            'heartbeat_active': True,
+            'current_session_status': 'RUNNING',
+            'operator_attention_hint': 'Session is active',
+            'status_summary': 'session healthy',
+        },
+    )
+    def test_funnel_stalled_with_live_session_escalates_review_now(self, *_mocks):
+        payload = self._sync()
+        self.assertEqual(payload['attention_mode'], 'REVIEW_NOW')
+        self.assertEqual(payload['funnel_status'], 'STALLED')
+        self.assertIn('funnel_stalled', payload['attention_reason_codes'])
+        self.assertIn('funnel_stalled_at_prediction', payload['attention_reason_codes'])
+
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge._build_funnel_signal',
+        return_value={
+            'funnel_status': 'STALLED',
+            'stalled_stage': 'risk',
+            'top_stage': 'prediction',
+            'funnel_summary': 'STALLED: risk stage not progressing.',
+            'signal_available': True,
+        },
+    )
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary', return_value={'runtime_tuning_attention_sync': {}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': True,
+            'heartbeat_active': True,
+            'current_session_status': 'BLOCKED',
+            'operator_attention_hint': 'Session blocked by safety stop.',
+            'status_summary': 'session blocked',
+        },
+    )
+    def test_blocked_signal_has_priority_over_funnel_state(self, *_mocks):
+        payload = self._sync()
+        self.assertEqual(payload['attention_mode'], 'BLOCKED')
+        self.assertNotIn('funnel_stalled', payload['attention_reason_codes'])
+
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge._build_funnel_signal',
+        return_value={
+            'funnel_status': None,
+            'stalled_stage': None,
+            'top_stage': None,
+            'funnel_summary': None,
+            'signal_available': False,
+        },
+    )
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_heartbeat_summary', return_value={'runtime_tuning_attention_sync': {}})
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status',
+        return_value={
+            'session_active': False,
+            'heartbeat_active': False,
+            'current_session_status': 'MISSING',
+            'operator_attention_hint': 'Bootstrap has not created a reusable session yet.',
+            'status_summary': 'session missing',
+        },
+    )
+    def test_funnel_signal_unavailable_falls_back_without_noise(self, *_mocks):
+        payload = self._sync()
+        self.assertEqual(payload['attention_mode'], 'HEALTHY')
+        self.assertIsNone(payload['funnel_status'])
+        self.assertIn('funnel_signal_unavailable', payload['attention_reason_codes'])
 
     @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
     @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
@@ -777,6 +913,10 @@ class LivePaperAttentionBridgeTests(TestCase):
             'attention_reason_codes',
             'status_summary',
             'alert_status_summary',
+            'funnel_status',
+            'stalled_stage',
+            'top_stage',
+            'funnel_summary',
         }
         self.assertTrue(required_keys.issubset(payload.keys()))
 
@@ -807,6 +947,10 @@ class LivePaperAttentionBridgeTests(TestCase):
             'heartbeat_active',
             'current_session_status',
             'status_summary',
+            'funnel_status',
+            'stalled_stage',
+            'top_stage',
+            'funnel_summary',
         }
         self.assertTrue(required_keys.issubset(payload.keys()))
 
@@ -846,6 +990,35 @@ class LivePaperAttentionBridgeTests(TestCase):
         payload = response.json()
         self.assertIn('last_auto_sync', payload)
         self.assertIn(payload['last_auto_sync'].get('alert_action'), {None, 'NOOP'})
+        self.assertIn(payload.get('funnel_status'), {'ACTIVE', 'THIN_FLOW', 'STALLED', None})
+
+    @patch(
+        'apps.mission_control.services.live_paper_attention_bridge._build_funnel_signal',
+        return_value={
+            'funnel_status': 'STALLED',
+            'stalled_stage': 'research',
+            'top_stage': 'scan',
+            'funnel_summary': 'STALLED: research stage empty.',
+            'signal_available': True,
+        },
+    )
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_recovery_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.build_session_health_summary', return_value={'summary': {}})
+    @patch('apps.mission_control.services.live_paper_attention_bridge.get_live_paper_bootstrap_status', return_value={
+        'session_active': True,
+        'heartbeat_active': True,
+        'current_session_status': 'RUNNING',
+        'operator_attention_hint': 'session healthy',
+        'status_summary': 'session healthy',
+    })
+    def test_heartbeat_auto_sync_reflects_extended_funnel_logic(self, *_mocks):
+        AutonomousRuntimeSession.objects.create(session_status='RUNNING', runtime_mode='PAPER')
+        response = self.client.post(reverse('mission_control:run-autonomous-heartbeat'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = (response.json().get('metadata') or {}).get('live_paper_attention_sync') or {}
+        self.assertEqual(payload.get('attention_mode'), 'REVIEW_NOW')
+        self.assertEqual(payload.get('funnel_status'), 'STALLED')
+        self.assertEqual(payload.get('stalled_stage'), 'research')
 
     def test_sync_does_not_affect_alerts_from_other_sources(self, *_mocks):
         other = OperatorAlert.objects.create(
