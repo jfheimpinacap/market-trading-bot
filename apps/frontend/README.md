@@ -2,6 +2,31 @@
 
 Frontend local-first para `market-trading-bot`, construido con React + Vite + TypeScript.
 
+## Cockpit Live Paper Trial Run UX (new)
+
+La vista `/cockpit` ahora incluye una card compacta **Live Paper Trial Run** para ejecutar una prueba corta y repetible de la V1 paper con una sola acción principal.
+
+- acciones:
+  - `Run trial`
+  - `Refresh trial status` (sin rerun completo)
+- la orquestación ocurre en frontend y reutiliza endpoints existentes:
+  - `POST /api/mission-control/bootstrap-live-paper-session/`
+  - `GET /api/mission-control/live-paper-bootstrap-status/`
+  - `POST /api/mission-control/run-live-paper-smoke-test/`
+  - `GET /api/mission-control/live-paper-smoke-test-status/`
+  - `GET /api/mission-control/live-paper-validation/`
+- al finalizar muestra estado compacto calculado en frontend:
+  - `IDLE`, `RUNNING`, `PASS`, `WARN`, `FAIL`
+  - `trial_summary` determinístico
+  - último `bootstrap_action`, `smoke_test_status`, `validation_status`
+  - hint corto de siguiente paso
+- además, en `Run trial`, reutiliza refresh ya conectados en cockpit para:
+  - operational snapshot
+  - paper portfolio snapshot
+  - contexto de live paper attention bridge
+
+Límites explícitos: sigue siendo `REAL_READ_ONLY` + `PAPER_ONLY`, no habilita live trading real, no crea pantalla nueva y no modifica backend.
+
 ## Mission control autonomous session UX (new)
 
 La vista `/mission-control` ahora incluye una sección explícita de **Autonomous Session Control** para operación persistente gobernada:

@@ -131,6 +131,66 @@ const toneFromAttentionFunnelStatus = (status: LivePaperFunnelStatus | null | un
   return 'neutral';
 };
 
+type LivePaperTrialStatus = 'IDLE' | 'RUNNING' | 'PASS' | 'WARN' | 'FAIL';
+type TrialFailureStage = 'bootstrap' | 'smoke' | 'validation' | 'sequence' | null;
+
+function computeLivePaperTrialResult(params: {
+  bootstrapAction: LivePaperBootstrapResponse['bootstrap_action'] | null;
+  smokeStatus: LivePaperSmokeTestStatusResponse['smoke_test_status'] | null;
+  validationStatus: LivePaperValidationDigestResponse['validation_status'] | null;
+  failureStage: TrialFailureStage;
+  hasSequenceError: boolean;
+}) {
+  const { bootstrapAction, smokeStatus, validationStatus, failureStage, hasSequenceError } = params;
+  if (hasSequenceError || failureStage === 'sequence') {
+    return {
+      status: 'FAIL' as const,
+      summary: 'Trial run failed during execution sequence',
+      nextHint: 'Retry trial run and review cockpit endpoint availability',
+    };
+  }
+  if (bootstrapAction === 'BLOCKED' || bootstrapAction === 'FAILED' || failureStage === 'bootstrap') {
+    return {
+      status: 'FAIL' as const,
+      summary: 'Trial run failed at bootstrap',
+      nextHint: 'Resolve bootstrap blockers before re-running trial',
+    };
+  }
+  if (smokeStatus === 'FAIL' || failureStage === 'smoke') {
+    return {
+      status: 'FAIL' as const,
+      summary: 'Trial run failed during smoke test',
+      nextHint: 'Review smoke test details and re-run after fixes',
+    };
+  }
+  if (validationStatus === 'BLOCKED' || failureStage === 'validation') {
+    return {
+      status: 'FAIL' as const,
+      summary: 'Trial run failed due to blocked validation',
+      nextHint: 'Resolve validation blockers and refresh trial status',
+    };
+  }
+  if (smokeStatus === 'PASS' && (validationStatus === 'READY' || validationStatus === 'WARNING')) {
+    return {
+      status: 'PASS' as const,
+      summary: 'Trial run passed with healthy paper setup',
+      nextHint: 'Monitor operational snapshot and portfolio movement',
+    };
+  }
+  if (smokeStatus === 'WARN' || validationStatus === 'WARNING') {
+    return {
+      status: 'WARN' as const,
+      summary: 'Trial run completed with warnings',
+      nextHint: 'Inspect validation checks and smoke hints before trusting full readiness',
+    };
+  }
+  return {
+    status: 'WARN' as const,
+    summary: 'Trial run completed with partial signals',
+    nextHint: 'Refresh trial status after additional heartbeat activity',
+  };
+}
+
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
@@ -246,6 +306,13 @@ export function CockpitPage() {
   const [paperPortfolioSnapshots, setPaperPortfolioSnapshots] = useState<PaperPortfolioSnapshot[]>([]);
   const [paperPortfolioLoading, setPaperPortfolioLoading] = useState(true);
   const [paperPortfolioError, setPaperPortfolioError] = useState<string | null>(null);
+  const [livePaperTrialStatus, setLivePaperTrialStatus] = useState<LivePaperTrialStatus>('IDLE');
+  const [livePaperTrialSummary, setLivePaperTrialSummary] = useState('Trial run not started in this cockpit session');
+  const [livePaperTrialHint, setLivePaperTrialHint] = useState('Run trial to execute bootstrap + smoke + validation in one flow');
+  const [livePaperTrialError, setLivePaperTrialError] = useState<string | null>(null);
+  const [livePaperTrialBootstrapAction, setLivePaperTrialBootstrapAction] = useState<LivePaperBootstrapResponse['bootstrap_action'] | null>(null);
+  const [livePaperTrialSmokeStatus, setLivePaperTrialSmokeStatus] = useState<LivePaperSmokeTestStatusResponse['smoke_test_status'] | null>(null);
+  const [livePaperTrialValidationStatus, setLivePaperTrialValidationStatus] = useState<LivePaperValidationDigestResponse['validation_status'] | null>(null);
   const heartbeatAutoSyncHint = useMemo(() => {
     const heartbeatSync = autonomousHeartbeatSummary?.live_paper_attention_sync;
     const lastAutoSync = livePaperAttentionStatus?.last_auto_sync;
@@ -268,40 +335,45 @@ export function CockpitPage() {
   const latestPaperSnapshot = paperPortfolioSnapshots[0] ?? null;
   const recentPaperTrades = useMemo(() => (paperPortfolioSummary?.recent_trades ?? []).slice(0, 5), [paperPortfolioSummary]);
 
-  const loadLivePaperStatus = useCallback(async () => {
+  const loadLivePaperStatus = useCallback(async (): Promise<LivePaperBootstrapStatusResponse | null> => {
     setLivePaperStatusLoading(true);
     setLivePaperStatusError(null);
     try {
       const payload = await getLivePaperBootstrapStatus();
       setLivePaperStatus(payload);
+      return payload;
     } catch (statusError) {
       setLivePaperStatus(null);
       setLivePaperStatusError(getErrorMessage(statusError, 'Could not load live paper autopilot status.'));
+      return null;
     } finally {
       setLivePaperStatusLoading(false);
     }
   }, []);
 
-  const loadLivePaperValidation = useCallback(async () => {
+  const loadLivePaperValidation = useCallback(async (): Promise<LivePaperValidationDigestResponse | null> => {
     setLivePaperValidationLoading(true);
     setLivePaperValidationError(null);
     try {
       const payload = await getLivePaperValidation();
       setLivePaperValidation(payload);
+      return payload;
     } catch (validationError) {
       setLivePaperValidation(null);
       setLivePaperValidationError(getErrorMessage(validationError, 'Live paper validation unavailable'));
+      return null;
     } finally {
       setLivePaperValidationLoading(false);
     }
   }, []);
 
-  const loadLivePaperSmokeTestStatus = useCallback(async () => {
+  const loadLivePaperSmokeTestStatus = useCallback(async (): Promise<LivePaperSmokeTestStatusResponse | null> => {
     setLivePaperSmokeStatusLoading(true);
     setLivePaperSmokeStatusError(null);
     try {
       const payload = await getLivePaperSmokeTestStatus();
       setLivePaperSmokeStatus(payload);
+      return payload;
     } catch (smokeStatusError) {
       setLivePaperSmokeStatus(null);
       const message = getErrorMessage(smokeStatusError, 'Live paper smoke test unavailable');
@@ -310,6 +382,7 @@ export function CockpitPage() {
       } else {
         setLivePaperSmokeStatusError('Live paper smoke test unavailable');
       }
+      return null;
     } finally {
       setLivePaperSmokeStatusLoading(false);
     }
@@ -446,6 +519,143 @@ export function CockpitPage() {
       setLivePaperSmokeRunLoading(false);
     }
   }, [loadLivePaperSmokeTestStatus, loadLivePaperValidation, loadLivePaperAutonomyFunnel]);
+
+  const runLivePaperTrial = useCallback(async () => {
+    setLivePaperTrialStatus('RUNNING');
+    setLivePaperTrialError(null);
+    setLivePaperTrialSummary('Running live paper trial sequence…');
+    setLivePaperTrialHint('Executing bootstrap, smoke test, validation, and operational refresh');
+    let bootstrapAction: LivePaperBootstrapResponse['bootstrap_action'] | null = null;
+    let smokeStatus: LivePaperSmokeTestStatusResponse['smoke_test_status'] | null = null;
+    let validationStatus: LivePaperValidationDigestResponse['validation_status'] | null = null;
+    let failureStage: TrialFailureStage = null;
+
+    try {
+      const bootstrapResult = await bootstrapLivePaperSession({
+        preset: 'live_read_only_paper_conservative',
+        auto_start_heartbeat: true,
+        start_now: true,
+      });
+      bootstrapAction = bootstrapResult.bootstrap_action;
+      setLivePaperStartResult(bootstrapResult);
+      setLivePaperTrialBootstrapAction(bootstrapResult.bootstrap_action);
+
+      await loadLivePaperStatus();
+
+      if (bootstrapResult.bootstrap_action === 'BLOCKED' || bootstrapResult.bootstrap_action === 'FAILED') {
+        failureStage = 'bootstrap';
+      } else {
+        const smokeResult = await runLivePaperSmokeTest({
+          preset: 'live_read_only_paper_conservative',
+          heartbeat_passes: 1,
+        });
+        smokeStatus = smokeResult.smoke_test_status;
+        setLivePaperSmokeRunResult(smokeResult);
+        setLivePaperSmokeStatus({
+          preset_name: smokeResult.preset_name,
+          smoke_test_status: smokeResult.smoke_test_status,
+          executed_at: smokeResult.executed_at,
+          validation_status_after: smokeResult.validation_status_after,
+          heartbeat_passes_completed: smokeResult.heartbeat_passes_completed,
+          smoke_test_summary: smokeResult.smoke_test_summary,
+          next_action_hint: smokeResult.next_action_hint,
+        });
+        setLivePaperTrialSmokeStatus(smokeResult.smoke_test_status);
+        if (smokeResult.smoke_test_status === 'FAIL') {
+          failureStage = 'smoke';
+        }
+      }
+
+      const [smokeStatusPayload, validationPayload] = await Promise.all([
+        loadLivePaperSmokeTestStatus(),
+        loadLivePaperValidation(),
+      ]);
+      smokeStatus = smokeStatusPayload?.smoke_test_status ?? smokeStatus;
+      validationStatus = validationPayload?.validation_status ?? null;
+      setLivePaperTrialSmokeStatus(smokeStatus ?? null);
+      setLivePaperTrialValidationStatus(validationStatus ?? null);
+      if (validationStatus === 'BLOCKED') {
+        failureStage = 'validation';
+      }
+
+      await Promise.all([
+        loadLivePaperOperationalSnapshot(),
+        loadPaperPortfolioSnapshot(),
+        loadLivePaperAutonomyFunnel(),
+      ]);
+
+      const result = computeLivePaperTrialResult({
+        bootstrapAction,
+        smokeStatus,
+        validationStatus,
+        failureStage,
+        hasSequenceError: false,
+      });
+      setLivePaperTrialStatus(result.status);
+      setLivePaperTrialSummary(result.summary);
+      setLivePaperTrialHint(result.nextHint);
+    } catch (trialError) {
+      setLivePaperTrialStatus('FAIL');
+      setLivePaperTrialError(getErrorMessage(trialError, 'Live paper trial run failed.'));
+      const result = computeLivePaperTrialResult({
+        bootstrapAction,
+        smokeStatus,
+        validationStatus,
+        failureStage: failureStage ?? 'sequence',
+        hasSequenceError: true,
+      });
+      setLivePaperTrialSummary(result.summary);
+      setLivePaperTrialHint(result.nextHint);
+    }
+  }, [loadLivePaperAutonomyFunnel, loadLivePaperOperationalSnapshot, loadLivePaperSmokeTestStatus, loadLivePaperStatus, loadLivePaperValidation, loadPaperPortfolioSnapshot]);
+
+  const refreshLivePaperTrialStatus = useCallback(async () => {
+    setLivePaperTrialStatus('RUNNING');
+    setLivePaperTrialError(null);
+    setLivePaperTrialSummary('Refreshing live paper trial status…');
+    setLivePaperTrialHint('Fetching bootstrap status, smoke status, and validation digest');
+    try {
+      const [smokeStatusPayload, validationPayload] = await Promise.all([
+        loadLivePaperSmokeTestStatus(),
+        loadLivePaperValidation(),
+        loadLivePaperStatus(),
+      ]);
+      const smokeStatus = smokeStatusPayload?.smoke_test_status ?? null;
+      const validationStatus = validationPayload?.validation_status ?? null;
+      setLivePaperTrialSmokeStatus(smokeStatus);
+      setLivePaperTrialValidationStatus(validationStatus);
+      const result = computeLivePaperTrialResult({
+        bootstrapAction: livePaperTrialBootstrapAction ?? livePaperStartResult?.bootstrap_action ?? null,
+        smokeStatus,
+        validationStatus,
+        failureStage: null,
+        hasSequenceError: false,
+      });
+      setLivePaperTrialStatus(result.status);
+      setLivePaperTrialSummary(result.summary);
+      setLivePaperTrialHint(result.nextHint);
+    } catch (refreshError) {
+      setLivePaperTrialStatus('FAIL');
+      setLivePaperTrialError(getErrorMessage(refreshError, 'Could not refresh live paper trial status.'));
+      const result = computeLivePaperTrialResult({
+        bootstrapAction: livePaperTrialBootstrapAction ?? livePaperStartResult?.bootstrap_action ?? null,
+        smokeStatus: livePaperTrialSmokeStatus,
+        validationStatus: livePaperTrialValidationStatus,
+        failureStage: 'sequence',
+        hasSequenceError: true,
+      });
+      setLivePaperTrialSummary(result.summary);
+      setLivePaperTrialHint(result.nextHint);
+    }
+  }, [
+    livePaperStartResult?.bootstrap_action,
+    livePaperTrialBootstrapAction,
+    livePaperTrialSmokeStatus,
+    livePaperTrialValidationStatus,
+    loadLivePaperSmokeTestStatus,
+    loadLivePaperStatus,
+    loadLivePaperValidation,
+  ]);
 
   const loadCockpit = useCallback(async () => {
     setLoading(true);
@@ -849,6 +1059,45 @@ export function CockpitPage() {
                       Refresh portfolio
                     </button>
                     <button className="ghost-button" type="button" onClick={() => navigate('/portfolio')}>Open portfolio</button>
+                  </div>
+                </SectionCard>
+                <SectionCard
+                  eyebrow="One-click V1 trial"
+                  title="Live Paper Trial Run"
+                  description="Single action orchestration for bootstrap + smoke + validation using existing live paper endpoints."
+                >
+                  <div className="button-row">
+                    <StatusBadge tone={toneFromSmokeStatus(livePaperTrialStatus === 'PASS' ? 'PASS' : livePaperTrialStatus === 'WARN' ? 'WARN' : livePaperTrialStatus === 'FAIL' ? 'FAIL' : null)}>
+                      {livePaperTrialStatus}
+                    </StatusBadge>
+                    <StatusBadge tone="ready">REAL_READ_ONLY</StatusBadge>
+                    <StatusBadge tone="ready">PAPER_ONLY</StatusBadge>
+                  </div>
+                  <ul className="key-value-list">
+                    <li><span>Trial summary</span><strong>{livePaperTrialSummary}</strong></li>
+                    <li><span>Last bootstrap action</span><strong>{livePaperTrialBootstrapAction ?? livePaperStartResult?.bootstrap_action ?? 'n/a'}</strong></li>
+                    <li><span>Last smoke test status</span><strong>{livePaperTrialSmokeStatus ?? livePaperSmokeStatus?.smoke_test_status ?? 'n/a'}</strong></li>
+                    <li><span>Last validation status</span><strong>{livePaperTrialValidationStatus ?? livePaperValidation?.validation_status ?? 'n/a'}</strong></li>
+                    <li><span>Next step hint</span><strong>{livePaperTrialHint}</strong></li>
+                  </ul>
+                  {livePaperTrialError ? <p className="warning-text">{livePaperTrialError}</p> : null}
+                  <div className="button-row">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={livePaperTrialStatus === 'RUNNING'}
+                      onClick={() => void runLivePaperTrial()}
+                    >
+                      {livePaperTrialStatus === 'RUNNING' ? 'Running…' : 'Run trial'}
+                    </button>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      disabled={livePaperTrialStatus === 'RUNNING'}
+                      onClick={() => void refreshLivePaperTrialStatus()}
+                    >
+                      Refresh trial status
+                    </button>
                   </div>
                 </SectionCard>
                 <SectionCard
