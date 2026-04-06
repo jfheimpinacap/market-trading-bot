@@ -396,6 +396,29 @@ class LivePaperAutonomyFunnelSerializer(serializers.Serializer):
     stages = LivePaperAutonomyFunnelStageSerializer(many=True)
 
 
+class ExtendedPaperRunGateCheckSerializer(serializers.Serializer):
+    check_name = serializers.ChoiceField(
+        choices=['validation', 'trial_trend', 'operational_attention', 'autonomy_funnel', 'recent_trial_quality']
+    )
+    status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])
+    summary = serializers.CharField()
+
+
+class ExtendedPaperRunGateSerializer(serializers.Serializer):
+    preset_name = serializers.CharField()
+    gate_status = serializers.ChoiceField(choices=['ALLOW', 'ALLOW_WITH_CAUTION', 'BLOCK'])
+    latest_trial_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'], allow_null=True, required=False)
+    trend_status = serializers.ChoiceField(choices=['IMPROVING', 'STABLE', 'DEGRADING', 'INSUFFICIENT_DATA'])
+    readiness_status = serializers.ChoiceField(choices=['READY_FOR_EXTENDED_RUN', 'NEEDS_REVIEW', 'NOT_READY'])
+    validation_status = serializers.ChoiceField(choices=['READY', 'WARNING', 'BLOCKED'])
+    attention_mode = serializers.ChoiceField(choices=['HEALTHY', 'DEGRADED', 'REVIEW_NOW', 'BLOCKED'])
+    funnel_status = serializers.ChoiceField(choices=['ACTIVE', 'THIN_FLOW', 'STALLED'])
+    next_action_hint = serializers.CharField()
+    gate_summary = serializers.CharField()
+    reason_codes = serializers.ListField(child=serializers.CharField())
+    checks = ExtendedPaperRunGateCheckSerializer(many=True)
+
+
 class AutonomousRunnerStateSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousRunnerState
