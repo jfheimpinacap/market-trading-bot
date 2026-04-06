@@ -2892,3 +2892,176 @@ class ExtendedPaperRunGateApiTests(TestCase):
         self.assertTrue(mock_attention.called)
         self.assertTrue(mock_funnel.called)
         self.assertTrue(mock_bootstrap.called)
+
+
+class ExtendedPaperRunLauncherApiTests(TestCase):
+    def _bootstrap_status(self, *, session_active=True, heartbeat_active=True, current_session_status='RUNNING'):
+        return {
+            'session_active': session_active,
+            'heartbeat_active': heartbeat_active,
+            'current_session_status': current_session_status,
+            'market_data_mode': 'REAL_READ_ONLY',
+            'paper_execution_mode': 'PAPER_ONLY',
+        }
+
+    def _gate(self, status='ALLOW'):
+        return {
+            'gate_status': status,
+            'reason_codes': ['VALIDATION_READY'] if status == 'ALLOW' else ['RECENT_WARNINGS'],
+        }
+
+    @patch('apps.mission_control.services.extended_paper_run_launcher.get_live_paper_bootstrap_status')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.build_extended_paper_run_gate')
+    def test_gate_block_returns_blocked_without_bootstrap_launch(self, mock_gate, mock_bootstrap_status):
+        mock_gate.return_value = self._gate('BLOCK')
+        mock_bootstrap_status.return_value = self._bootstrap_status(session_active=False, heartbeat_active=False, current_session_status='MISSING')
+
+        with patch('apps.mission_control.services.extended_paper_run_launcher.bootstrap_live_read_only_paper_session') as mock_bootstrap:
+            response = self.client.post(reverse('mission_control:start-extended-paper-run'), data='{}', content_type='application/json')
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['launch_status'], 'BLOCKED')
+        self.assertIsNone(payload['caution_mode'])
+        self.assertIn('GATE_BLOCKED', payload['reason_codes'])
+        mock_bootstrap.assert_not_called()
+
+    @patch('apps.mission_control.services.extended_paper_run_launcher.get_live_paper_bootstrap_status')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.bootstrap_live_read_only_paper_session')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.build_extended_paper_run_gate')
+    def test_gate_allow_starts_or_reuses_session(self, mock_gate, mock_bootstrap, mock_bootstrap_status):
+        mock_gate.return_value = self._gate('ALLOW')
+        mock_bootstrap.return_value = {'bootstrap_action': 'CREATED_AND_STARTED', 'session_id': None}
+        mock_bootstrap_status.return_value = self._bootstrap_status()
+
+        response = self.client.post(reverse('mission_control:start-extended-paper-run'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['launch_status'], 'STARTED')
+        self.assertEqual(payload['gate_status'], 'ALLOW')
+        self.assertFalse(payload['caution_mode'])
+        self.assertEqual(payload['next_action_hint'], 'Extended run active; keep monitoring heartbeat cadence and paper risk posture')
+
+    @patch('apps.mission_control.services.extended_paper_run_launcher.get_live_paper_bootstrap_status')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.bootstrap_live_read_only_paper_session')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.build_extended_paper_run_gate')
+    def test_gate_allow_with_caution_marks_caution_mode(self, mock_gate, mock_bootstrap, mock_bootstrap_status):
+        mock_gate.return_value = self._gate('ALLOW_WITH_CAUTION')
+        mock_bootstrap.return_value = {'bootstrap_action': 'STARTED_EXISTING_SAFE_SESSION', 'session_id': None}
+        mock_bootstrap_status.return_value = self._bootstrap_status()
+
+        response = self.client.post(reverse('mission_control:start-extended-paper-run'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['launch_status'], 'REUSED_PAUSED_SESSION')
+        self.assertTrue(payload['caution_mode'])
+        self.assertEqual(
+            payload['next_action_hint'],
+            'Extended run active in caution mode; monitor first cycles and attention bridge closely',
+        )
+
+    @patch('apps.mission_control.services.extended_paper_run_launcher.get_live_paper_bootstrap_status')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.bootstrap_live_read_only_paper_session')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.build_extended_paper_run_gate')
+    def test_does_not_duplicate_session_or_heartbeat_path(self, mock_gate, mock_bootstrap, mock_bootstrap_status):
+        mock_gate.return_value = self._gate('ALLOW')
+        mock_bootstrap.return_value = {'bootstrap_action': 'REUSED_EXISTING_SESSION', 'session_id': None}
+        mock_bootstrap_status.return_value = self._bootstrap_status()
+
+        response = self.client.post(reverse('mission_control:start-extended-paper-run'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['launch_status'], 'REUSED_RUNNING_SESSION')
+        mock_bootstrap.assert_called_once()
+        kwargs = mock_bootstrap.call_args.kwargs
+        self.assertTrue(kwargs['auto_start_heartbeat'])
+        self.assertTrue(kwargs['start_now'])
+
+    @patch('apps.mission_control.services.extended_paper_run_launcher.get_live_paper_bootstrap_status')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.bootstrap_live_read_only_paper_session')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.build_extended_paper_run_gate')
+    def test_post_payload_contract(self, mock_gate, mock_bootstrap, mock_bootstrap_status):
+        mock_gate.return_value = self._gate('ALLOW')
+        mock_bootstrap.return_value = {'bootstrap_action': 'CREATED_AND_STARTED', 'session_id': None}
+        mock_bootstrap_status.return_value = self._bootstrap_status()
+        response = self.client.post(reverse('mission_control:start-extended-paper-run'), data='{}', content_type='application/json')
+        payload = response.json()
+        expected = {
+            'preset_name',
+            'launch_status',
+            'gate_status',
+            'session_active',
+            'heartbeat_active',
+            'current_session_status',
+            'caution_mode',
+            'next_action_hint',
+            'launch_summary',
+            'reason_codes',
+        }
+        self.assertTrue(expected.issubset(payload.keys()))
+
+    @patch('apps.mission_control.services.extended_paper_run_launcher.get_live_paper_bootstrap_status')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.bootstrap_live_read_only_paper_session')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.build_extended_paper_run_gate')
+    def test_status_payload_contract(self, mock_gate, mock_bootstrap, mock_bootstrap_status):
+        mock_gate.return_value = self._gate('ALLOW')
+        mock_bootstrap.return_value = {'bootstrap_action': 'CREATED_AND_STARTED', 'session_id': None}
+        mock_bootstrap_status.return_value = self._bootstrap_status()
+        self.client.post(reverse('mission_control:start-extended-paper-run'), data='{}', content_type='application/json')
+
+        response = self.client.get(reverse('mission_control:extended-paper-run-status'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        expected = {
+            'preset_name',
+            'extended_run_active',
+            'gate_status',
+            'session_active',
+            'heartbeat_active',
+            'current_session_status',
+            'caution_mode',
+            'status_summary',
+            'next_action_hint',
+        }
+        self.assertTrue(expected.issubset(payload.keys()))
+        self.assertTrue(payload['extended_run_active'])
+
+    @patch('apps.mission_control.services.extended_paper_run_launcher.get_live_paper_bootstrap_status')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.bootstrap_live_read_only_paper_session')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.build_extended_paper_run_gate')
+    def test_summary_and_hint_are_deterministic(self, mock_gate, mock_bootstrap, mock_bootstrap_status):
+        mock_gate.return_value = self._gate('BLOCK')
+        mock_bootstrap.return_value = {'bootstrap_action': 'CREATED_AND_STARTED', 'session_id': None}
+        mock_bootstrap_status.return_value = self._bootstrap_status(session_active=False, heartbeat_active=False, current_session_status='MISSING')
+        response = self.client.post(reverse('mission_control:start-extended-paper-run'), data='{}', content_type='application/json')
+        payload = response.json()
+        self.assertEqual(payload['launch_summary'], 'BLOCKED: gate=BLOCK; launch not executed.')
+        self.assertEqual(payload['next_action_hint'], 'Extended run blocked by gate; resolve validation/trial/attention blockers first')
+
+    @patch('apps.mission_control.services.extended_paper_run_launcher.get_live_paper_bootstrap_status')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.bootstrap_live_read_only_paper_session')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.build_extended_paper_run_gate')
+    def test_launcher_does_not_break_gate_flow(self, mock_gate, mock_bootstrap, mock_bootstrap_status):
+        mock_gate.return_value = self._gate('ALLOW')
+        mock_bootstrap.return_value = {'bootstrap_action': 'REUSED_EXISTING_SESSION', 'session_id': None}
+        mock_bootstrap_status.return_value = self._bootstrap_status()
+        launch = self.client.post(reverse('mission_control:start-extended-paper-run'), data='{}', content_type='application/json')
+        gate = self.client.get(reverse('mission_control:extended-paper-run-gate'))
+        self.assertEqual(launch.status_code, 200)
+        self.assertEqual(gate.status_code, 200)
+
+    @patch('apps.mission_control.services.extended_paper_run_launcher.get_live_paper_bootstrap_status')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.bootstrap_live_read_only_paper_session')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.build_extended_paper_run_gate')
+    def test_preserves_real_read_only_and_paper_only_boundaries(self, mock_gate, mock_bootstrap, mock_bootstrap_status):
+        mock_gate.return_value = self._gate('ALLOW')
+        mock_bootstrap.return_value = {'bootstrap_action': 'CREATED_AND_STARTED', 'session_id': None}
+        mock_bootstrap_status.return_value = {
+            **self._bootstrap_status(),
+            'market_data_mode': 'REAL_READ_ONLY',
+            'paper_execution_mode': 'PAPER_ONLY',
+        }
+        response = self.client.post(reverse('mission_control:start-extended-paper-run'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['launch_status'], 'STARTED')
+        self.assertNotIn('INVALID_MARKET_DATA_MODE', response.json()['reason_codes'])
+        self.assertNotIn('INVALID_EXECUTION_MODE', response.json()['reason_codes'])

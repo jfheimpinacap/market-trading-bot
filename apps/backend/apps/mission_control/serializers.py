@@ -174,6 +174,37 @@ class LivePaperBootstrapRequestSerializer(serializers.Serializer):
     start_now = serializers.BooleanField(required=False, default=True)
 
 
+class ExtendedPaperRunLaunchRequestSerializer(serializers.Serializer):
+    preset = serializers.CharField(required=False, allow_blank=True, default='live_read_only_paper_conservative')
+
+
+class ExtendedPaperRunLaunchSerializer(serializers.Serializer):
+    preset_name = serializers.CharField()
+    launch_status = serializers.ChoiceField(
+        choices=['STARTED', 'REUSED_RUNNING_SESSION', 'REUSED_PAUSED_SESSION', 'BLOCKED', 'FAILED']
+    )
+    gate_status = serializers.ChoiceField(choices=['ALLOW', 'ALLOW_WITH_CAUTION', 'BLOCK'])
+    session_active = serializers.BooleanField()
+    heartbeat_active = serializers.BooleanField()
+    current_session_status = serializers.CharField()
+    caution_mode = serializers.BooleanField(required=False, allow_null=True)
+    next_action_hint = serializers.CharField()
+    launch_summary = serializers.CharField()
+    reason_codes = serializers.ListField(child=serializers.CharField())
+
+
+class ExtendedPaperRunStatusSerializer(serializers.Serializer):
+    preset_name = serializers.CharField()
+    extended_run_active = serializers.BooleanField()
+    gate_status = serializers.ChoiceField(choices=['ALLOW', 'ALLOW_WITH_CAUTION', 'BLOCK'])
+    session_active = serializers.BooleanField()
+    heartbeat_active = serializers.BooleanField()
+    current_session_status = serializers.CharField()
+    caution_mode = serializers.BooleanField(required=False, allow_null=True)
+    status_summary = serializers.CharField()
+    next_action_hint = serializers.CharField()
+
+
 class LivePaperAttentionAlertSyncSerializer(serializers.Serializer):
     attention_needed = serializers.BooleanField()
     attention_mode = serializers.ChoiceField(choices=['HEALTHY', 'DEGRADED', 'REVIEW_NOW', 'BLOCKED'])

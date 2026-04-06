@@ -183,6 +183,25 @@ The card provides a concise operational decision for a longer paper run:
 
 This remains read-only/paper-only (`REAL_READ_ONLY` + `PAPER_ONLY`), complements existing cockpit cards, and does not enable live trading.
 
+### Extended Paper Run Launcher (backend, new)
+
+`mission_control` now exposes a compact backend launcher for extended paper runs guarded directly by the existing Extended Paper Run Gate decision.
+
+- service: `apps/backend/apps/mission_control/services/extended_paper_run_launcher.py`
+- endpoints:
+  - `POST /api/mission-control/start-extended-paper-run/`
+    - optional body: `preset` (default `live_read_only_paper_conservative`)
+  - `GET /api/mission-control/extended-paper-run-status/`
+- guardrail behavior:
+  - gate `BLOCK` => launch denied (`launch_status=BLOCKED`)
+  - gate `ALLOW` => normal start/reuse (`caution_mode=false`)
+  - gate `ALLOW_WITH_CAUTION` => cautious start/reuse (`caution_mode=true`)
+- reuses existing live-paper bootstrap/session/heartbeat stack (no new scheduler, no parallel authority).
+- boundaries remain strict:
+  - real market data read-only (`REAL_READ_ONLY`)
+  - execution paper-only (`PAPER_ONLY`)
+  - no live trading enablement.
+
 ### Live Paper Trial Run History (backend, new)
 
 `mission_control` now keeps a compact in-memory history of recent Live Paper Trial runs for quick operational comparison across the latest V1 paper checks.

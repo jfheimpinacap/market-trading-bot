@@ -328,6 +328,27 @@ Implementation is aggregation/observability only: it reuses existing scan/resear
 
 This gate is deterministic and explainable aggregation-only logic. It introduces no new models, no mutative endpoint, no scheduler changes, and preserves strict `REAL_READ_ONLY` + `PAPER_ONLY` behavior with no live-trading enablement.
 
+## Extended Paper Run Launcher (new)
+
+`apps.mission_control` now includes a compact backend-only launcher that starts (or reuses) an extended paper run only when the existing Extended Paper Run Gate allows it.
+
+- service: `apps/mission_control/services/extended_paper_run_launcher.py`
+- endpoints:
+  - `POST /api/mission-control/start-extended-paper-run/`
+    - optional body: `preset` (default `live_read_only_paper_conservative`)
+  - `GET /api/mission-control/extended-paper-run-status/`
+- launch behavior:
+  - gate `BLOCK` => returns `launch_status=BLOCKED` and does not bootstrap.
+  - gate `ALLOW` => starts/reuses normal live paper session (`caution_mode=false`).
+  - gate `ALLOW_WITH_CAUTION` => starts/reuses in caution mode (`caution_mode=true`).
+- reuse behavior:
+  - reuses existing running session when compatible
+  - resumes compatible paused session
+  - starts a new session only when needed
+  - keeps single heartbeat runner behavior (no duplication logic added)
+
+Implementation explicitly reuses existing `extended_paper_run_gate`, `bootstrap_live_read_only_paper_session`, and `get_live_paper_bootstrap_status` services. No new scheduler, no new persistent model, and no live-trading enablement are introduced. Scope remains strict `REAL_READ_ONLY` + `PAPER_ONLY`.
+
 ## Runtime feedback apply bridge (new)
 
 `apps.runtime_governor` now includes `runtime_feedback_apply/services/` to transform runtime feedback decisions into conservative, auditable mode actions:
