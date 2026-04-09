@@ -1,4 +1,5 @@
 import { requestJson } from './api/client';
+import { API_BASE_URL } from '../lib/config';
 import type {
   AutonomousCycleExecution,
   AutonomousHeartbeatDecision,
@@ -89,6 +90,9 @@ import type {
   LivePaperTrialRunStatusResponse,
   LivePaperValidationDigestResponse,
   LivePaperAutonomyFunnelResponse,
+  TestConsoleExportLogFormat,
+  TestConsoleRunRequest,
+  TestConsoleStatusResponse,
 } from '../types/missionControl';
 
 export function getMissionControlStatus() {
@@ -261,6 +265,32 @@ export function getLivePaperAutonomyFunnel(params?: { preset?: string; window_mi
   }
   const suffix = query.size ? `?${query.toString()}` : '';
   return requestJson<LivePaperAutonomyFunnelResponse>(`/api/mission-control/live-paper-autonomy-funnel/${suffix}`);
+}
+
+export function startTestConsoleRun(payload: TestConsoleRunRequest = {}) {
+  return requestJson<TestConsoleStatusResponse>('/api/mission-control/test-console/start/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function stopTestConsoleRun() {
+  return requestJson<TestConsoleStatusResponse>('/api/mission-control/test-console/stop/', {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+export function getTestConsoleStatus() {
+  return requestJson<TestConsoleStatusResponse>('/api/mission-control/test-console/status/');
+}
+
+export async function getTestConsoleExportLog(format: TestConsoleExportLogFormat = 'text') {
+  const response = await fetch(`${API_BASE_URL}/api/mission-control/test-console/export-log/?format=${encodeURIComponent(format)}`);
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+  return format === 'json' ? (await response.json()) as unknown : response.text();
 }
 
 export function getLivePaperAttentionAlertStatus() {

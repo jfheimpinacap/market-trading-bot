@@ -24,6 +24,34 @@ La vista `/cockpit` ahora incluye una card compacta **Live Paper Trial Run** par
 
 Límites explícitos: sigue siendo `REAL_READ_ONLY` + `PAPER_ONLY`, no habilita live trading real, no crea pantalla nueva y no modifica backend.
 
+## Cockpit Test Console card (new)
+
+`/cockpit` ahora incluye una card compacta **Test Console** como flujo recomendado para pruebas V1 paper en un solo lugar.
+
+- integración backend:
+  - `POST /api/mission-control/test-console/start/`
+  - `POST /api/mission-control/test-console/stop/`
+  - `GET /api/mission-control/test-console/status/`
+  - `GET /api/mission-control/test-console/export-log/?format=text`
+- acciones:
+  - `Start test`
+  - `Stop test`
+  - `Refresh status`
+  - `Export log`
+  - `Copy log`
+- salida compacta:
+  - `test_status`, `current_phase`, `started_at`, `ended_at`
+  - `validation_status`, `trial_status`, `trend_status`, `readiness_status`
+  - `gate_status`, `extended_run_status`, `attention_mode`, `funnel_status`
+  - `scan_summary`, `portfolio_summary`, `next_action_hint`, `blocker_summary` (si existe)
+  - zona de log en texto para copiar/pegar en chat sin depender de screenshots
+- fallbacks:
+  - sin log: `No log exported yet`
+  - error export: `Unable to export test log`
+  - error status: `Test Console unavailable`
+
+Mantiene límites de seguridad: `REAL_READ_ONLY` + `PAPER_ONLY`; no habilita live trading real y convive con las cards existentes.
+
 ## Cockpit Live Paper Trial History UX (new)
 
 `/cockpit` también incluye una card compacta **Live Paper Trial History** como evidencia operativa rápida de corridas recientes.
