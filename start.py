@@ -99,6 +99,7 @@ STARTUP_TIMEOUTS = {
 DEFAULT_BROWSER_OPEN = True
 DEFAULT_STARTUP_MODE = 'single-console'
 DEFAULT_BROWSER_URL = f"http://localhost:{DEFAULT_PORTS['frontend']}/system"
+VERBOSE_ENV_VARS = ('START_VERBOSE', 'MTB_START_VERBOSE')
 FULL_MODE = RuntimeMode(
     name='FULL',
     app_mode='full',
@@ -131,6 +132,21 @@ def warn(message: str) -> None:
 
 def fail(message: str) -> None:
     raise LauncherError(message)
+
+
+def env_truthy(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {'1', 'true', 'yes', 'on', 'y'}
+
+
+def verbose_logging_enabled(args: argparse.Namespace) -> bool:
+    if getattr(args, 'verbose', False):
+        return True
+    for name in VERBOSE_ENV_VARS:
+        if env_truthy(os.environ.get(name)):
+            return True
+    return False
 
 
 def build_paths() -> ProjectPaths:
@@ -1090,6 +1106,56 @@ def build_dev_process_specs(
     return process_specs
 
 
+def start_dev_servers_verbose(
+    process_specs: Sequence[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], subprocess.Popen[str] | None]:
+    launched: list[dict[str, Any]] = []
+    backend_process: subprocess.Popen[str] | None = None
+    try:
+        for spec in process_specs:
+            if spec['label'] == 'backend':
+                process = spawn_process(
+                    spec['label'],
+                    spec['command'],
+                    spec['cwd'],
+                    env=spec.get('env'),
+                )
+                backend_process = process
+                launched.append(
+                    {
+                        'label': spec['label'],
+                        'pid': process.pid,
+                        'command': ' '.join(str(part) for part in spec['command']),
+                        'cwd': str(spec['cwd']),
+                        'mode': 'console-attached',
+                        'log_file': None,
+                    }
+                )
+                continue
+
+            process, log_path = spawn_detached_process(
+                spec['label'],
+                spec['command'],
+                spec['cwd'],
+                env=spec.get('env'),
+                log_name=spec.get('log_name'),
+            )
+            launched.append(
+                {
+                    'label': spec['label'],
+                    'pid': process.pid,
+                    'command': ' '.join(str(part) for part in spec['command']),
+                    'cwd': str(spec['cwd']),
+                    'mode': 'detached-process',
+                    'log_file': str(log_path),
+                }
+            )
+    except Exception:
+        stop_process_entries(launched)
+        raise
+    return launched, backend_process
+
+
 def start_dev_servers(
     process_specs: Sequence[dict[str, Any]],
     *,
@@ -1179,14 +1245,32 @@ def command_up(args: argparse.Namespace) -> int:
 
         startup_mode = 'separate-windows' if args.separate_windows else DEFAULT_STARTUP_MODE
         browser_url = DEFAULT_BROWSER_URL
+        verbose_logs = verbose_logging_enabled(args)
+        attached_backend: subprocess.Popen[str] | None = None
         started_processes: list[dict[str, Any]] = []
         if process_specs:
-            started_processes = start_dev_servers(
-                process_specs,
-                startup_mode=startup_mode,
-                browser_auto_open=not args.no_browser,
-                browser_url=browser_url,
-            )
+            if verbose_logs and startup_mode != 'separate-windows':
+                started_processes, attached_backend = start_dev_servers_verbose(process_specs)
+                write_state_file(
+                    started_processes,
+                    startup_mode='verbose-console',
+                    browser_auto_open=not args.no_browser,
+                    browser_url=browser_url,
+                    metadata={'verbose_logging': True},
+                )
+                info('Verbose logging enabled: backend logs are attached to this terminal.')
+            else:
+                if verbose_logs and startup_mode == 'separate-windows':
+                    warn(
+                        'Verbose logging is ignored with --separate-windows '
+                        'because each service already has its own console.'
+                    )
+                started_processes = start_dev_servers(
+                    process_specs,
+                    startup_mode=startup_mode,
+                    browser_auto_open=not args.no_browser,
+                    browser_url=browser_url,
+                )
         else:
             warn('Both backend and frontend startup were skipped; nothing was started.')
 
@@ -1216,6 +1300,13 @@ def command_up(args: argparse.Namespace) -> int:
                 'Launcher finished successfully in '
                 f'{startup_mode} mode. Use `{"py" if os.name == "nt" else "python"} start.py down` when you want to stop everything.'
             )
+        if attached_backend is not None:
+            info('Backend is running in foreground for live logs. Press Ctrl+C to stop launcher-managed services.')
+            attached_backend.wait()
+            stop_managed_processes()
+            if not args.skip_infra:
+                stop_infrastructure(paths, prereqs['docker_compose'])
+            return 0
         return 0
     except KeyboardInterrupt:
         warn('Startup interrupted. Stopping launcher-managed processes...')
@@ -1431,13 +1522,31 @@ def command_backend(args: argparse.Namespace) -> int:
         }
     ]
     startup_mode = 'separate-windows' if args.separate_windows else DEFAULT_STARTUP_MODE
+    verbose_logs = verbose_logging_enabled(args)
+    attached_backend: subprocess.Popen[str] | None = None
     try:
-        start_dev_servers(
-            process_specs,
-            startup_mode=startup_mode,
-            browser_auto_open=False,
-            browser_url=service_urls()['backend_health'],
-        )
+        if verbose_logs and startup_mode != 'separate-windows':
+            started_processes, attached_backend = start_dev_servers_verbose(process_specs)
+            write_state_file(
+                started_processes,
+                startup_mode='verbose-console',
+                browser_auto_open=False,
+                browser_url=service_urls()['backend_health'],
+                metadata={'verbose_logging': True},
+            )
+            info('Verbose logging enabled: backend logs are attached to this terminal.')
+        else:
+            if verbose_logs and startup_mode == 'separate-windows':
+                warn(
+                    'Verbose logging is ignored with --separate-windows '
+                    'because each service already has its own console.'
+                )
+            start_dev_servers(
+                process_specs,
+                startup_mode=startup_mode,
+                browser_auto_open=False,
+                browser_url=service_urls()['backend_health'],
+            )
         wait_for_http(
             service_urls()['backend_health'],
             timeout=STARTUP_TIMEOUTS['backend_http'],
@@ -1454,6 +1563,13 @@ def command_backend(args: argparse.Namespace) -> int:
             'Backend launched successfully in '
             f'{startup_mode} mode. Use `{"py" if os.name == "nt" else "python"} start.py down` to stop it.'
         )
+        if attached_backend is not None:
+            info('Backend is running in foreground for live logs. Press Ctrl+C to stop launcher-managed services.')
+            attached_backend.wait()
+            stop_managed_processes()
+            if not args.skip_infra:
+                stop_infrastructure(paths, prereqs['docker_compose'])
+            return 0
         return 0
     except LauncherError:
         stop_managed_processes()
@@ -1517,6 +1633,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--with-sim-loop', action='store_true', help='Start simulate_markets_loop alongside backend startup.')
     parser.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup for postgres/redis.')
     parser.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed.')
+    parser.add_argument('--verbose', action='store_true', help='Attach backend logs to this terminal for paper-testing diagnostics.')
     subparsers = parser.add_subparsers(dest='command')
 
     common_setup = argparse.ArgumentParser(add_help=False)
@@ -1526,6 +1643,7 @@ def build_parser() -> argparse.ArgumentParser:
     common_setup.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup for postgres/redis.')
     common_setup.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed.')
     common_setup.add_argument('--lite', action='store_true', help='Run in lite mode (SQLite, no Docker-required infra).')
+    common_setup.add_argument('--verbose', action='store_true', help='Attach backend logs to this terminal for paper-testing diagnostics.')
 
     backend_only = argparse.ArgumentParser(add_help=False)
     backend_only.add_argument('--skip-install', action='store_true', help='Skip pip install before running the command.')
@@ -1533,6 +1651,7 @@ def build_parser() -> argparse.ArgumentParser:
     backend_only.add_argument('--separate-windows', action='store_true', help='Open the backend in a separate console window instead of detached mode.')
     backend_only.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed before backend startup.')
     backend_only.add_argument('--lite', action='store_true', help='Run in lite mode (SQLite, no Docker-required infra).')
+    backend_only.add_argument('--verbose', action='store_true', help='Attach backend logs to this terminal for paper-testing diagnostics.')
 
     frontend_only = argparse.ArgumentParser(add_help=False)
     frontend_only.add_argument('--skip-install', action='store_true', help='Skip npm install before running the command.')
@@ -1583,6 +1702,7 @@ def build_parser() -> argparse.ArgumentParser:
         separate_windows=False,
         skip_infra=False,
         lite=False,
+        verbose=False,
     )
     return parser
 
