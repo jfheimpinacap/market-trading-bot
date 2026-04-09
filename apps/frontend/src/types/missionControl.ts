@@ -462,6 +462,44 @@ export type LivePaperAttentionAlertSyncResponse = {
   funnel_summary?: string | null;
 };
 
+export type TestConsoleRunRequest = {
+  preset?: string;
+  heartbeat_passes?: 1 | 2;
+};
+
+export type TestConsoleScanSummary = {
+  summary?: string | null;
+  count?: number | null;
+};
+
+export type TestConsolePortfolioSummary = {
+  summary?: string | null;
+  equity?: number | string | null;
+  cash?: number | string | null;
+  open_positions?: number | null;
+};
+
+export type TestConsoleStatusResponse = {
+  test_status: string;
+  current_phase: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  validation_status: string | null;
+  trial_status: string | null;
+  trend_status: string | null;
+  readiness_status: string | null;
+  gate_status: string | null;
+  extended_run_status: string | null;
+  attention_mode: string | null;
+  funnel_status: string | null;
+  scan_summary?: TestConsoleScanSummary | string | null;
+  portfolio_summary?: TestConsolePortfolioSummary | string | null;
+  next_action_hint: string | null;
+  blocker_summary?: string | null;
+};
+
+export type TestConsoleExportLogFormat = 'text' | 'json';
+
 export type AutonomousRuntimeSummary = {
   latest_runtime_run_id: number | null;
   runtime_run_count: number;

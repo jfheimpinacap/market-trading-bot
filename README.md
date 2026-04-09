@@ -153,6 +153,33 @@ Scope remains strictly real-market read-only + fake-money paper execution and do
 
 Scope remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` changes, no scheduler additions, no live trading enablement, and no parallel trial orchestration logic in frontend.
 
+### Test Console cockpit card (frontend, new)
+
+`/cockpit` now includes a compact **Test Console** panel that centralizes the V1 paper operational flow in one place (without creating a new page).
+
+- backend endpoints used by frontend:
+  - `POST /api/mission-control/test-console/start/`
+  - `POST /api/mission-control/test-console/stop/`
+  - `GET /api/mission-control/test-console/status/`
+  - `GET /api/mission-control/test-console/export-log/?format=text`
+- operator actions in a single card:
+  - `Start test`
+  - `Stop test`
+  - `Refresh status`
+  - `Export log`
+  - `Copy log`
+- status summary shown in-card:
+  - `test_status`, `current_phase`, `started_at`, `ended_at`
+  - validation/trial/trend/readiness/gate/extended-run/attention/funnel
+  - compact `scan_summary`, `portfolio_summary`, `next_action_hint`, optional `blocker_summary`
+- compact log pane:
+  - log text is rendered directly in the card for easy copy/paste into chat
+  - fallback: `No log exported yet`
+  - export failure fallback: `Unable to export test log`
+  - status failure fallback: `Test Console unavailable`
+
+Scope and safety remain unchanged: strictly `REAL_READ_ONLY` + `PAPER_ONLY`; this does **not** enable live trading.
+
 Cockpit also includes a compact **Live Paper Trial History** card that consumes:
 - `GET /api/mission-control/live-paper-trial-history/?limit=5`
 - manual action: `Refresh history`

@@ -21,8 +21,12 @@ import {
   getLivePaperTrialTrend,
   getLivePaperTrialStatus,
   getLivePaperValidation,
+  getTestConsoleExportLog,
+  getTestConsoleStatus,
   runLivePaperSmokeTest,
   startExtendedPaperRun,
+  startTestConsoleRun,
+  stopTestConsoleRun,
   runLivePaperTrial as runLivePaperTrialRequest,
   syncLivePaperAttentionAlert,
 } from '../services/missionControl';
@@ -67,6 +71,7 @@ import type {
   LivePaperTrialRunStatus,
   LivePaperTrialRunStatusResponse,
   LivePaperValidationDigestResponse,
+  TestConsoleStatusResponse,
 } from '../types/missionControl';
 import type {
   RuntimeTuningCockpitPanel,
@@ -322,6 +327,16 @@ export function CockpitPage() {
   const [extendedPaperRunStartLoading, setExtendedPaperRunStartLoading] = useState(false);
   const [extendedPaperRunStartError, setExtendedPaperRunStartError] = useState<string | null>(null);
   const [extendedPaperRunLaunch, setExtendedPaperRunLaunch] = useState<ExtendedPaperRunLaunchResponse | null>(null);
+  const [testConsoleStatus, setTestConsoleStatus] = useState<TestConsoleStatusResponse | null>(null);
+  const [testConsoleStatusLoading, setTestConsoleStatusLoading] = useState(true);
+  const [testConsoleStatusError, setTestConsoleStatusError] = useState<string | null>(null);
+  const [testConsoleStartLoading, setTestConsoleStartLoading] = useState(false);
+  const [testConsoleStopLoading, setTestConsoleStopLoading] = useState(false);
+  const [testConsoleExportLoading, setTestConsoleExportLoading] = useState(false);
+  const [testConsoleLog, setTestConsoleLog] = useState('No log exported yet');
+  const [testConsoleLogError, setTestConsoleLogError] = useState<string | null>(null);
+  const [testConsoleCopyMessage, setTestConsoleCopyMessage] = useState<string | null>(null);
+  const [testConsoleRawJsonOpen, setTestConsoleRawJsonOpen] = useState(false);
   const heartbeatAutoSyncHint = useMemo(() => {
     const heartbeatSync = autonomousHeartbeatSummary?.live_paper_attention_sync;
     const lastAutoSync = livePaperAttentionStatus?.last_auto_sync;
@@ -355,6 +370,12 @@ export function CockpitPage() {
     : toneFromExtendedGateStatus(extendedPaperRunStatus?.gate_status ?? extendedRunGate?.gate_status);
   const extendedPaperRunSummary = extendedPaperRunLaunch?.launch_summary ?? extendedPaperRunStatus?.status_summary ?? 'No extended run launch yet.';
   const extendedPaperRunHint = extendedPaperRunLaunch?.next_action_hint ?? extendedPaperRunStatus?.next_action_hint ?? 'Refresh status to get latest hint.';
+  const testConsoleScanSummary = typeof testConsoleStatus?.scan_summary === 'string'
+    ? testConsoleStatus.scan_summary
+    : testConsoleStatus?.scan_summary?.summary ?? 'n/a';
+  const testConsolePortfolioSummary = typeof testConsoleStatus?.portfolio_summary === 'string'
+    ? testConsoleStatus.portfolio_summary
+    : testConsoleStatus?.portfolio_summary?.summary ?? 'n/a';
 
   const loadLivePaperStatus = useCallback(async (): Promise<LivePaperBootstrapStatusResponse | null> => {
     setLivePaperStatusLoading(true);
@@ -371,6 +392,76 @@ export function CockpitPage() {
       setLivePaperStatusLoading(false);
     }
   }, []);
+
+  const loadTestConsoleStatus = useCallback(async (): Promise<TestConsoleStatusResponse | null> => {
+    setTestConsoleStatusLoading(true);
+    setTestConsoleStatusError(null);
+    try {
+      const payload = await getTestConsoleStatus();
+      setTestConsoleStatus(payload);
+      return payload;
+    } catch {
+      setTestConsoleStatus(null);
+      setTestConsoleStatusError('Test Console unavailable');
+      return null;
+    } finally {
+      setTestConsoleStatusLoading(false);
+    }
+  }, []);
+
+  const exportTestConsoleLog = useCallback(async () => {
+    setTestConsoleExportLoading(true);
+    setTestConsoleLogError(null);
+    try {
+      const payload = await getTestConsoleExportLog('text');
+      const textPayload = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+      setTestConsoleLog(textPayload || 'No log exported yet');
+    } catch {
+      setTestConsoleLog('Unable to export test log');
+      setTestConsoleLogError('Unable to export test log');
+    } finally {
+      setTestConsoleExportLoading(false);
+    }
+  }, []);
+
+  const startTestConsoleFromCockpit = useCallback(async () => {
+    setTestConsoleStartLoading(true);
+    setTestConsoleStatusError(null);
+    setTestConsoleCopyMessage(null);
+    try {
+      const payload = await startTestConsoleRun();
+      setTestConsoleStatus(payload);
+      await loadTestConsoleStatus();
+      await exportTestConsoleLog();
+    } catch {
+      setTestConsoleStatusError('Test Console unavailable');
+    } finally {
+      setTestConsoleStartLoading(false);
+    }
+  }, [exportTestConsoleLog, loadTestConsoleStatus]);
+
+  const stopTestConsoleFromCockpit = useCallback(async () => {
+    setTestConsoleStopLoading(true);
+    setTestConsoleStatusError(null);
+    try {
+      const payload = await stopTestConsoleRun();
+      setTestConsoleStatus(payload);
+      await loadTestConsoleStatus();
+    } catch {
+      setTestConsoleStatusError('Test Console unavailable');
+    } finally {
+      setTestConsoleStopLoading(false);
+    }
+  }, [loadTestConsoleStatus]);
+
+  const copyTestConsoleLog = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(testConsoleLog || 'No log exported yet');
+      setTestConsoleCopyMessage('Log copied');
+    } catch {
+      setTestConsoleCopyMessage('Unable to copy log');
+    }
+  }, [testConsoleLog]);
 
   const loadLivePaperValidation = useCallback(async (): Promise<LivePaperValidationDigestResponse | null> => {
     setLivePaperValidationLoading(true);
@@ -766,6 +857,10 @@ export function CockpitPage() {
   }, [loadLivePaperStatus]);
 
   useEffect(() => {
+    void loadTestConsoleStatus();
+  }, [loadTestConsoleStatus]);
+
+  useEffect(() => {
     void loadLivePaperOperationalSnapshot();
   }, [loadLivePaperOperationalSnapshot]);
 
@@ -1056,6 +1151,73 @@ export function CockpitPage() {
                   <StatusBadge tone="ready">PAPER_ONLY</StatusBadge>
                   <StatusBadge tone="ready">live_execution_enabled = false</StatusBadge>
                 </div>
+                <SectionCard
+                  eyebrow="Single-pane V1 operator flow"
+                  title="Test Console"
+                  description="Compact supervised runner for V1 paper validation: start, stop, refresh status, export/copy logs. This does not enable live trading."
+                >
+                  <div className="button-row">
+                    <StatusBadge tone={toneFromStatus(testConsoleStatus?.test_status)}>{testConsoleStatus?.test_status ?? 'UNKNOWN'}</StatusBadge>
+                    <StatusBadge tone={toneFromStatus(testConsoleStatus?.validation_status)}>{testConsoleStatus?.validation_status ?? 'n/a'}</StatusBadge>
+                    <StatusBadge tone={toneFromStatus(testConsoleStatus?.trial_status)}>{testConsoleStatus?.trial_status ?? 'n/a'}</StatusBadge>
+                    <StatusBadge tone={toneFromStatus(testConsoleStatus?.gate_status)}>{testConsoleStatus?.gate_status ?? 'n/a'}</StatusBadge>
+                  </div>
+                  {testConsoleStatusLoading ? <p>Loading Test Console status…</p> : null}
+                  {!testConsoleStatusLoading && testConsoleStatusError ? <p className="warning-text">{testConsoleStatusError}</p> : null}
+                  {testConsoleStatus ? (
+                    <ul className="key-value-list">
+                      <li><span>Current phase</span><strong>{testConsoleStatus.current_phase ?? 'n/a'}</strong></li>
+                      <li><span>Started at</span><strong>{formatDate(testConsoleStatus.started_at)}</strong></li>
+                      <li><span>Ended at</span><strong>{formatDate(testConsoleStatus.ended_at)}</strong></li>
+                      <li><span>Validation status</span><strong>{testConsoleStatus.validation_status ?? 'n/a'}</strong></li>
+                      <li><span>Trial status</span><strong>{testConsoleStatus.trial_status ?? 'n/a'}</strong></li>
+                      <li><span>Trend status</span><strong>{testConsoleStatus.trend_status ?? 'n/a'}</strong></li>
+                      <li><span>Readiness status</span><strong>{testConsoleStatus.readiness_status ?? 'n/a'}</strong></li>
+                      <li><span>Gate status</span><strong>{testConsoleStatus.gate_status ?? 'n/a'}</strong></li>
+                      <li><span>Extended run status</span><strong>{testConsoleStatus.extended_run_status ?? 'n/a'}</strong></li>
+                      <li><span>Attention mode</span><strong>{testConsoleStatus.attention_mode ?? 'n/a'}</strong></li>
+                      <li><span>Funnel status</span><strong>{testConsoleStatus.funnel_status ?? 'n/a'}</strong></li>
+                      <li><span>Scan summary</span><strong>{testConsoleScanSummary}</strong></li>
+                      <li><span>Portfolio summary</span><strong>{testConsolePortfolioSummary}</strong></li>
+                      <li><span>Next action hint</span><strong>{testConsoleStatus.next_action_hint ?? 'n/a'}</strong></li>
+                      {testConsoleStatus.blocker_summary ? (
+                        <li><span>Blocker summary</span><strong>{testConsoleStatus.blocker_summary}</strong></li>
+                      ) : null}
+                    </ul>
+                  ) : null}
+                  <div className="button-row">
+                    <button className="secondary-button" type="button" disabled={testConsoleStartLoading || testConsoleStopLoading} onClick={() => void startTestConsoleFromCockpit()}>
+                      {testConsoleStartLoading ? 'Starting…' : 'Start test'}
+                    </button>
+                    <button className="secondary-button" type="button" disabled={testConsoleStopLoading || testConsoleStartLoading} onClick={() => void stopTestConsoleFromCockpit()}>
+                      {testConsoleStopLoading ? 'Stopping…' : 'Stop test'}
+                    </button>
+                    <button className="ghost-button" type="button" disabled={testConsoleStatusLoading} onClick={() => void loadTestConsoleStatus()}>
+                      Refresh status
+                    </button>
+                    <button className="ghost-button" type="button" disabled={testConsoleExportLoading} onClick={() => void exportTestConsoleLog()}>
+                      {testConsoleExportLoading ? 'Exporting…' : 'Export log'}
+                    </button>
+                    <button className="ghost-button" type="button" disabled={testConsoleExportLoading} onClick={() => void copyTestConsoleLog()}>
+                      Copy log
+                    </button>
+                    <button className="ghost-button" type="button" onClick={() => setTestConsoleRawJsonOpen((value) => !value)}>
+                      {testConsoleRawJsonOpen ? 'Hide raw JSON' : 'View raw JSON'}
+                    </button>
+                  </div>
+                  {testConsoleCopyMessage ? <p className="muted-text">{testConsoleCopyMessage}</p> : null}
+                  {testConsoleLogError ? <p className="warning-text">{testConsoleLogError}</p> : null}
+                  <div className="subsection">
+                    <p className="section-label">Exported log</p>
+                    <pre>{testConsoleLog || 'No log exported yet'}</pre>
+                  </div>
+                  {testConsoleRawJsonOpen ? (
+                    <div className="subsection">
+                      <p className="section-label">Raw status JSON</p>
+                      <pre>{JSON.stringify(testConsoleStatus ?? {}, null, 2)}</pre>
+                    </div>
+                  ) : null}
+                </SectionCard>
                 <SectionCard
                   eyebrow="Economic snapshot"
                   title="Paper Portfolio Snapshot"
