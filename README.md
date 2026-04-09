@@ -1104,6 +1104,7 @@ Useful optional flags:
 
 ```bash
 python start.py --no-browser
+python start.py --verbose
 python start.py --separate-windows
 python start.py up --no-seed
 python start.py up --skip-seed
@@ -1115,9 +1116,25 @@ python start.py setup --skip-install
 python start.py up --lite
 ```
 
+For V1 paper diagnostics where backend visibility matters (Run scan / Trial run / Extended run / Test Console start-stop), use:
+
+```bash
+python start.py up --verbose
+```
+
+That mode keeps Django attached to the current terminal so request logs, prints, errors, and tracebacks are visible live.  
+You can also enable it through environment variables:
+
+```bash
+START_VERBOSE=1 python start.py up
+# or
+MTB_START_VERBOSE=1 python start.py up
+```
+
 ### What each command does
 
 - `python start.py` / `python start.py up`: validates prerequisites first, prepares the local environment, starts Postgres + Redis, runs migrations, seeds demo data if needed, launches backend + frontend in detached mode, waits for both services to respond, opens the browser by default, and then returns control to the same console.
+- `python start.py up --verbose`: same setup flow, but keeps the backend process attached to the terminal so backend request/debug logs stay visible during live paper testing.
 - `python start.py setup`: prepares `.env`, `.venv`, backend/frontend dependencies, infra (or skips infra in lite mode), migrations, and auto-seed logic without starting the dev servers.
 - `python start.py status`: prints the current Python interpreter, backend venv python, Node/npm resolution, Docker Compose mode, env/dependency presence, process/runtime readiness, startup mode, and URLs.
 - `python start.py down`: stops launcher-managed backend/frontend processes and runs `docker compose down` (or `docker-compose down`).
