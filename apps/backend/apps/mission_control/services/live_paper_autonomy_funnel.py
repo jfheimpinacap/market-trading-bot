@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from apps.autonomous_trader.models import AutonomousTradeCycleRun
 from apps.mission_control.services.live_paper_bootstrap import PRESET_NAME
+from apps.mission_control.services.live_paper_handoff_diagnostics import build_live_paper_handoff_diagnostics
 from apps.mission_control.services.live_paper_validation import build_live_paper_validation_digest
 from apps.mission_control.services.session_heartbeat import build_heartbeat_summary
 from apps.paper_trading.models import PaperTrade, PaperTradeStatus
@@ -165,6 +166,11 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
     top_stage = _infer_top_stage(counts=counts)
     stalled_stage = _infer_stalled_stage(counts=counts)
     next_action_hint = _infer_hint(status=status, counts=counts, stalled_stage=stalled_stage)
+    handoff = build_live_paper_handoff_diagnostics(
+        window_minutes=safe_window,
+        validation_status=str(validation.get('validation_status') or ''),
+        funnel_status=status,
+    )
 
     stages = [
         {
@@ -200,11 +206,30 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
     ]
 
     heartbeat_alive = bool(heartbeat_summary.get('latest_run'))
+    stalled_missing_counter = {
+        'research': 'research_count',
+        'prediction': 'prediction_count',
+        'risk': 'risk_decision_count',
+        'paper_execution': 'paper_execution_count',
+    }.get(stalled_stage)
+
+    stalled_reason_code = None
+    if status == FUNNEL_STALLED:
+        if stalled_stage == 'research':
+            stalled_reason_code = 'SHORTLIST_PRESENT_NO_HANDOFF'
+        elif stalled_stage == 'prediction':
+            stalled_reason_code = 'PREDICTION_STAGE_EMPTY'
+        elif stalled_stage == 'risk':
+            stalled_reason_code = 'RISK_STAGE_EMPTY'
+        elif stalled_stage == 'paper_execution':
+            stalled_reason_code = 'DOWNSTREAM_EVIDENCE_INSUFFICIENT'
+
     funnel_summary = (
         f'{status}: scan={counts.scan_count}, research={counts.research_count}, prediction={counts.prediction_count}, '
         f'risk_approved={counts.risk_approved_count}, risk_blocked={counts.risk_blocked_count}, '
         f'paper_execution={counts.paper_execution_count}, recent_trades={counts.recent_trades_count}, '
-        f'heartbeat_alive={heartbeat_alive}, validation={validation.get("validation_status")}.'
+        f'heartbeat_alive={heartbeat_alive}, validation={validation.get("validation_status")}, '
+        f'bottleneck={handoff.get("bottleneck_stage")}, stage_source_mismatch={handoff.get("stage_source_mismatch")}.'
     )
 
     return {
@@ -220,7 +245,11 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'recent_trades_count': counts.recent_trades_count,
         'top_stage': top_stage,
         'stalled_stage': stalled_stage,
+        'stalled_reason_code': stalled_reason_code,
+        'stalled_missing_counter': stalled_missing_counter,
         'next_action_hint': next_action_hint,
         'funnel_summary': funnel_summary,
+        'handoff_reason_codes': handoff.get('handoff_reason_codes') or [],
+        'stage_source_mismatch': bool(handoff.get('stage_source_mismatch')),
         'stages': stages,
     }
