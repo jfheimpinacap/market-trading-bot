@@ -21,6 +21,7 @@ from apps.mission_control.services.live_paper_bootstrap import (
     bootstrap_live_read_only_paper_session,
     get_live_paper_bootstrap_status,
 )
+from apps.mission_control.services.live_paper_handoff_diagnostics import build_live_paper_handoff_diagnostics
 from apps.mission_control.services.live_paper_trial_run import run_live_paper_trial_run
 from apps.mission_control.services.live_paper_trial_trend import build_live_paper_trial_trend_digest
 from apps.mission_control.services.live_paper_validation import build_live_paper_validation_digest
@@ -87,6 +88,7 @@ _state = _ConsoleState(
         'warnings': [],
         'errors': [],
         'reason_codes': [],
+        'handoff_summary': {},
     },
     last_log=None,
     history=deque(maxlen=_HISTORY_SIZE),
@@ -192,6 +194,13 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
     extended = get_extended_paper_run_status(preset_name=preset_name)
     attention = get_live_paper_attention_alert_status()
     funnel = build_live_paper_autonomy_funnel_snapshot(window_minutes=60, preset_name=preset_name)
+    handoff = build_live_paper_handoff_diagnostics(
+        scan_run=scan_run,
+        window_minutes=60,
+        validation_status=str(validation.get('validation_status') or ''),
+        gate_status=str(gate.get('gate_status') or ''),
+        funnel_status=str(funnel.get('funnel_status') or ''),
+    )
 
     payload.update(
         {
@@ -208,7 +217,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'portfolio_summary': _build_portfolio_summary(),
             'scan_summary': _build_scan_summary(scan_run=scan_run),
             'next_action_hint': str(gate.get('next_action_hint') or validation.get('next_action_hint') or 'Review test console log'),
-            'reason_codes': list(dict.fromkeys(gate.get('reason_codes') or [])),
+            'reason_codes': list(dict.fromkeys([*(gate.get('reason_codes') or []), *(handoff.get('handoff_reason_codes') or [])])),
+            'handoff_summary': handoff,
         }
     )
 
@@ -219,6 +229,7 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     warnings = payload.get('warnings') or []
     errors = payload.get('errors') or []
     blockers = payload.get('blocker_summary') or []
+    handoff = payload.get('handoff_summary') or {}
 
     lines = [
         '=== Mission Control Test Console Export ===',
@@ -244,6 +255,10 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         f"  cash={portfolio.get('cash')} equity={portfolio.get('equity')} realized_pnl={portfolio.get('realized_pnl')} unrealized_pnl={portfolio.get('unrealized_pnl')}",
         f"  open_positions={portfolio.get('open_positions')} recent_trades_count={portfolio.get('recent_trades_count')}",
         f"reason_codes: {', '.join(payload.get('reason_codes') or []) or 'none'}",
+        'handoff_summary:',
+        f"  shortlisted_signals={handoff.get('shortlisted_signals', 0)} handoff_candidates={handoff.get('handoff_candidates', 0)} consensus_reviews={handoff.get('consensus_reviews', 0)}",
+        f"  prediction_candidates={handoff.get('prediction_candidates', 0)} risk_decisions={handoff.get('risk_decisions', 0)} paper_execution_candidates={handoff.get('paper_execution_candidates', 0)}",
+        f"  handoff_reason_codes={', '.join(handoff.get('handoff_reason_codes') or []) or 'none'}",
         f"blockers: {', '.join(blockers) or 'none'}",
         f"warnings: {len(warnings)}",
     ]
@@ -283,6 +298,7 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         'errors': [],
         'blocker_summary': [],
         'reason_codes': [],
+        'handoff_summary': {},
         'step_results': [],
         'next_action_hint': 'Running test console pipeline',
     }
