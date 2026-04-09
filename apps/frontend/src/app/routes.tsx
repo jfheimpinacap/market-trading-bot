@@ -375,13 +375,6 @@ export const appRoutes: AppRoute[] = [
   },
 
   {
-    label: 'Autonomy Interventions',
-    path: '/autonomy-interventions',
-    description: 'Manual remediation gateway for active autonomy campaigns with auditable pause/resume/escalate/review controls.',
-    component: AutonomyInterventionsPage,
-  },
-
-  {
     label: 'Approvals',
     path: '/approvals',
     description: 'Unified human-in-the-loop approval center centralizing decision gates across runbooks, go-live, and operator queue in paper/sandbox mode.',
