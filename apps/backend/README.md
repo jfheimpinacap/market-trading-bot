@@ -54,6 +54,41 @@ Toggle via env:
 
 This exists only to unblock local V1 paper pipeline verification and does **not** enable live trading.
 
+## Handoff diagnostics + funnel stall explainability (new)
+
+`mission_control` now includes a compact downstream diagnostics layer for the path:
+
+`scan -> research handoff -> consensus -> prediction -> risk -> paper execution`
+
+New helper:
+- `apps.mission_control.services.live_paper_handoff_diagnostics`
+
+It provides a reusable summary with:
+- `shortlisted_signals`
+- `handoff_candidates`
+- `consensus_reviews`
+- `prediction_candidates`
+- `risk_decisions`
+- `paper_execution_candidates`
+- `handoff_reason_codes`
+- `handoff_summary`
+
+Reason codes include:
+- `SHORTLIST_PRESENT_NO_HANDOFF`
+- `HANDOFF_CREATED`
+- `CONSENSUS_NOT_RUN`
+- `CONSENSUS_RAN_NO_PROMOTION`
+- `PREDICTION_STAGE_EMPTY`
+- `RISK_STAGE_EMPTY`
+- `FUNNEL_STAGE_SOURCE_MISMATCH`
+- `DOWNSTREAM_EVIDENCE_INSUFFICIENT`
+
+Integration points:
+- live paper autonomy funnel snapshot now reports `stalled_reason_code`, `stalled_missing_counter`, and mismatch context.
+- mission-control Test Console export log now appends a compact `handoff_summary` block for backend debugging.
+
+Scope is diagnostics-only for local V1 paper testing. It does **not** enable live trading or real-money execution.
+
 ## Runtime governor downstream mode enforcement (new)
 
 `apps.runtime_governor` now includes `mode_enforcement/` services to make global operating mode operational across downstream modules (instead of descriptive-only):

@@ -208,6 +208,32 @@ Scope remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` changes,
 
 Scope and safety remain unchanged: strictly `REAL_READ_ONLY` + `PAPER_ONLY`; this does **not** enable live trading.
 
+### Backend handoff + funnel diagnostics for local V1 paper (new)
+
+`mission_control` now emits compact downstream diagnostics after scan so `BLOCKED/STALLED` states are explainable when shortlist signals already exist.
+
+- new backend helper: `apps/backend/apps/mission_control/services/live_paper_handoff_diagnostics.py`
+- compact counters:
+  - `shortlisted_signals`
+  - `handoff_candidates`
+  - `consensus_reviews`
+  - `prediction_candidates`
+  - `risk_decisions`
+  - `paper_execution_candidates`
+- explicit reason codes:
+  - `SHORTLIST_PRESENT_NO_HANDOFF`
+  - `HANDOFF_CREATED`
+  - `CONSENSUS_NOT_RUN`
+  - `CONSENSUS_RAN_NO_PROMOTION`
+  - `PREDICTION_STAGE_EMPTY`
+  - `RISK_STAGE_EMPTY`
+  - `FUNNEL_STAGE_SOURCE_MISMATCH`
+  - `DOWNSTREAM_EVIDENCE_INSUFFICIENT`
+
+The live paper autonomy funnel digest now includes explicit `stalled_reason_code`, `stalled_missing_counter`, and stage source mismatch context, and Test Console export logs include a compact `handoff_summary` block for copy/paste debugging.
+
+This is observability-only for local V1 paper verification and does **not** enable live trading or real-money execution.
+
 Cockpit also includes a compact **Live Paper Trial History** card that consumes:
 - `GET /api/mission-control/live-paper-trial-history/?limit=5`
 - manual action: `Refresh history`
