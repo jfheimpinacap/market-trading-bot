@@ -3065,3 +3065,177 @@ class ExtendedPaperRunLauncherApiTests(TestCase):
         self.assertEqual(response.json()['launch_status'], 'STARTED')
         self.assertNotIn('INVALID_MARKET_DATA_MODE', response.json()['reason_codes'])
         self.assertNotIn('INVALID_EXECUTION_MODE', response.json()['reason_codes'])
+
+
+class TestConsoleApiTests(TestCase):
+    def _status_payload(self):
+        return {
+            'test_status': 'COMPLETED',
+            'current_phase': 'finalize',
+            'started_at': timezone.now(),
+            'ended_at': timezone.now(),
+            'preset_name': 'live_read_only_paper_conservative',
+            'session_active': True,
+            'heartbeat_active': True,
+            'current_session_status': 'RUNNING',
+            'validation_status': 'READY',
+            'trial_status': 'PASS',
+            'trend_status': 'STABLE',
+            'readiness_status': 'READY_FOR_EXTENDED_RUN',
+            'gate_status': 'ALLOW',
+            'extended_run_status': 'ACTIVE',
+            'funnel_status': 'ACTIVE',
+            'attention_mode': 'HEALTHY',
+            'portfolio_summary': {
+                'cash': 10000.0,
+                'equity': 10000.0,
+                'realized_pnl': 0.0,
+                'unrealized_pnl': 0.0,
+                'open_positions': 0,
+                'recent_trades_count': 0,
+            },
+            'scan_summary': {
+                'runs': 1,
+                'rss_items': 3,
+                'reddit_items': 1,
+                'x_items': 0,
+                'deduped_items': 3,
+                'clusters': 2,
+                'shortlisted_signals': 1,
+            },
+            'blocker_summary': [],
+            'next_action_hint': 'Proceed to extended paper run',
+            'warnings': [],
+            'errors': [],
+            'reason_codes': ['VALIDATION_READY'],
+            'summary': 'COMPLETED',
+            'text_export': 'console text export',
+        }
+
+    @patch('apps.mission_control.views.start_test_console')
+    def test_start_test_console_generates_status_and_log(self, mock_start):
+        payload = self._status_payload()
+        mock_start.return_value = payload
+
+        response = self.client.post(reverse('mission_control:test-console-start'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body['test_status'], 'COMPLETED')
+        self.assertEqual(body['trial_status'], 'PASS')
+        self.assertIn('scan_summary', body)
+        self.assertIn('portfolio_summary', body)
+
+    @patch('apps.mission_control.views.stop_test_console')
+    def test_stop_test_console_is_explicit_and_safe(self, mock_stop):
+        payload = self._status_payload()
+        payload['test_status'] = 'STOPPED'
+        payload['summary'] = 'Stop applied conservatively.'
+        mock_stop.return_value = payload
+
+        response = self.client.post(reverse('mission_control:test-console-stop'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body['test_status'], 'STOPPED')
+        self.assertEqual(body['summary'], 'Stop applied conservatively.')
+
+    @patch('apps.mission_control.views.export_test_console_log')
+    def test_export_log_text_works(self, mock_export):
+        mock_export.return_value = 'copy paste friendly log'
+        response = self.client.get(reverse('mission_control:test-console-export-log'), {'format': 'text'})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('copy paste friendly', response.content.decode())
+
+    @patch('apps.mission_control.views.export_test_console_log')
+    def test_export_log_json_works(self, mock_export):
+        mock_export.return_value = {'test_status': 'COMPLETED', 'summary': 'ok'}
+        response = self.client.get(reverse('mission_control:test-console-export-log'), {'format': 'json'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['test_status'], 'COMPLETED')
+
+    @patch('apps.mission_control.views.get_test_console_status')
+    def test_status_consolidated_payload_contract(self, mock_status):
+        mock_status.return_value = self._status_payload()
+        response = self.client.get(reverse('mission_control:test-console-status'))
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        expected_keys = {
+            'test_status',
+            'current_phase',
+            'started_at',
+            'ended_at',
+            'preset_name',
+            'session_active',
+            'heartbeat_active',
+            'current_session_status',
+            'validation_status',
+            'trial_status',
+            'trend_status',
+            'readiness_status',
+            'gate_status',
+            'extended_run_status',
+            'funnel_status',
+            'attention_mode',
+            'portfolio_summary',
+            'scan_summary',
+            'blocker_summary',
+            'next_action_hint',
+            'warnings',
+            'errors',
+            'reason_codes',
+        }
+        self.assertTrue(expected_keys.issubset(set(body.keys())))
+
+    @patch('apps.mission_control.views.start_test_console')
+    def test_scan_without_signals_is_logged_as_warning_blocker(self, mock_start):
+        payload = self._status_payload()
+        payload['test_status'] = 'COMPLETED_WITH_WARNINGS'
+        payload['scan_summary']['shortlisted_signals'] = 0
+        payload['warnings'] = ['scan produced zero signals']
+        payload['blocker_summary'] = ['SCAN_ZERO_SIGNALS']
+        mock_start.return_value = payload
+
+        response = self.client.post(reverse('mission_control:test-console-start'), data='{}', content_type='application/json')
+        body = response.json()
+        self.assertEqual(body['test_status'], 'COMPLETED_WITH_WARNINGS')
+        self.assertIn('SCAN_ZERO_SIGNALS', body['blocker_summary'])
+
+    @patch('apps.mission_control.views.start_test_console')
+    def test_gate_block_is_reflected_in_status(self, mock_start):
+        payload = self._status_payload()
+        payload['test_status'] = 'BLOCKED'
+        payload['gate_status'] = 'BLOCK'
+        payload['blocker_summary'] = ['GATE_BLOCKED']
+        payload['extended_run_status'] = 'SKIPPED_GATE_BLOCKED'
+        mock_start.return_value = payload
+
+        response = self.client.post(reverse('mission_control:test-console-start'), data='{}', content_type='application/json')
+        body = response.json()
+        self.assertEqual(body['test_status'], 'BLOCKED')
+        self.assertEqual(body['gate_status'], 'BLOCK')
+        self.assertIn('GATE_BLOCKED', body['blocker_summary'])
+
+    @patch('apps.mission_control.views.start_test_console')
+    def test_preserves_real_read_only_and_paper_only_boundaries(self, mock_start):
+        payload = self._status_payload()
+        payload['reason_codes'] = ['VALIDATION_READY', 'BOUNDARY_REAL_READ_ONLY', 'BOUNDARY_PAPER_ONLY']
+        mock_start.return_value = payload
+
+        response = self.client.post(reverse('mission_control:test-console-start'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('BOUNDARY_REAL_READ_ONLY', response.json()['reason_codes'])
+        self.assertIn('BOUNDARY_PAPER_ONLY', response.json()['reason_codes'])
+
+    @patch('apps.mission_control.services.live_paper_bootstrap.bootstrap_live_read_only_paper_session')
+    @patch('apps.mission_control.services.live_paper_trial_run.bootstrap_live_read_only_paper_session')
+    def test_does_not_enable_live_trading_real(self, mock_trial_bootstrap, mock_console_bootstrap):
+        safe_payload = {
+            'bootstrap_action': 'CREATED_AND_STARTED',
+            'stack_snapshot': {'paper_trading': {'paper_only': True}},
+        }
+        mock_console_bootstrap.return_value = safe_payload
+        mock_trial_bootstrap.return_value = safe_payload
+        from apps.mission_control.services.live_paper_bootstrap import bootstrap_live_read_only_paper_session
+
+        result = bootstrap_live_read_only_paper_session()
+        self.assertIn('stack_snapshot', result)
+        self.assertTrue(result['stack_snapshot']['paper_trading']['paper_only'])

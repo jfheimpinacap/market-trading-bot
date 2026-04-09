@@ -3155,3 +3155,18 @@ Digest modes are deterministic and explainable:
 - `NO_ACTION`
 
 This reduces manual scanning across multiple tuning review subsections by publishing one next-action signal (`next_recommended_scope`) plus up to 3 top scopes. The layer is read-only, paper-only, and does not change runtime/tuning operational behavior.
+
+## Mission Control Test Console (Backend, V1 paper)
+
+Se agregó un **Test Console** backend-only para diagnóstico operativo de V1 paper en un solo flujo consolidado.
+
+Nuevos endpoints (`/api/mission-control/...`):
+- `POST test-console/start/` inicia una prueba orquestada (bootstrap, scan, trial, validation, trend, gate, extended-run opcional).
+- `POST test-console/stop/` aplica una detención conservadora y explícita (pausa sesión/heartbeat si existe mecanismo seguro).
+- `GET test-console/status/` devuelve estado consolidado compacto del ciclo de prueba.
+- `GET test-console/export-log/?format=text|json` exporta resumen copy-paste friendly (`text`) o estructurado (`json`).
+
+Boundary de seguridad:
+- Mantiene postura **REAL_READ_ONLY + PAPER_ONLY**.
+- No habilita live trading real.
+- No crea scheduler nuevo ni arquitectura pesada de auditoría.
