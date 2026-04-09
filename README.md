@@ -12,6 +12,34 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
 - **Precedent-aware decision support (new):** research, prediction, risk, signal-fusion, and postmortem now consume semantic precedents automatically in internal flows with conservative influence and explicit audit trails (`AgentPrecedentUse`).
 
+### Scan diagnostics + demo narrative fallback (backend, local V1 paper)
+
+`research_agent` scan runs now persist explicit diagnostics in `SourceScanRun.metadata.scan_diagnostics` so local V1 paper tests can explain zero-signal stalls instead of failing silently.
+
+- diagnostics include:
+  - `source_mode`
+  - `rss_enabled` / `reddit_enabled` / `x_enabled`
+  - `rss_fetch_attempted` / `reddit_fetch_attempted` / `x_fetch_attempted`
+  - `zero_signal_reason_codes`
+  - `diagnostic_summary`
+- compact reason codes used:
+  - `NO_RSS_SOURCE_CONFIGURED`
+  - `NO_REDDIT_SOURCE_CONFIGURED`
+  - `NO_X_SOURCE_CONFIGURED`
+  - `ALL_SOURCES_EMPTY`
+  - `DEMO_MODE_NO_NARRATIVE_FIXTURES`
+  - `DEMO_FALLBACK_USED`
+  - `DEMO_FALLBACK_DISABLED`
+
+For local/demo runs only, an optional deterministic fallback can generate a small synthetic narrative intake from eligible demo paper-tradable markets when real narrative sources are empty. Synthetic signals are clearly marked in metadata/reason codes (`is_demo`, `is_synthetic`, `is_fallback`, `DEMO_SYNTHETIC_FALLBACK`) and source labels (`DEMO_NARRATIVE_*`) so they are not confused with RSS/Reddit/X.
+
+Config toggle:
+- `SCAN_DEMO_NARRATIVE_FALLBACK_ENABLED`
+  - default: `true` in `local`/`test`
+  - default: `false` otherwise
+
+This is strictly for unblocking local V1 paper pipeline testing and does **not** enable live trading or real-money execution.
+
 ### Live Read-Only Paper Autopilot Bootstrap (backend, new)
 
 `mission_control` now exposes a compact backend bootstrap for autonomous paper sessions using real-market read-only data without enabling live trading execution.

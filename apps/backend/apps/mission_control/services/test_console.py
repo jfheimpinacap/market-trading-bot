@@ -156,6 +156,7 @@ def _build_scan_summary(scan_run: SourceScanRun | None = None) -> dict[str, Any]
         }
 
     source_counts = latest.source_counts or {}
+    diagnostics = (latest.metadata or {}).get('scan_diagnostics') or {}
     shortlisted_signals = latest.signals.filter(status=NarrativeSignalStatus.SHORTLISTED).count()
 
     return {
@@ -169,6 +170,16 @@ def _build_scan_summary(scan_run: SourceScanRun | None = None) -> dict[str, Any]
         'clusters': int(latest.clustered_count or 0),
         'shortlisted_signals': int(shortlisted_signals),
         'signals_total': int(latest.signal_count or 0),
+        'source_mode': str(diagnostics.get('source_mode') or ''),
+        'rss_enabled': bool(diagnostics.get('rss_enabled')),
+        'reddit_enabled': bool(diagnostics.get('reddit_enabled')),
+        'x_enabled': bool(diagnostics.get('x_enabled')),
+        'rss_fetch_attempted': bool(diagnostics.get('rss_fetch_attempted')),
+        'reddit_fetch_attempted': bool(diagnostics.get('reddit_fetch_attempted')),
+        'x_fetch_attempted': bool(diagnostics.get('x_fetch_attempted')),
+        'zero_signal_reason_codes': list(diagnostics.get('zero_signal_reason_codes') or []),
+        'diagnostic_summary': str(diagnostics.get('diagnostic_summary') or ''),
+        'demo_fallback_used': bool((latest.metadata or {}).get('demo_fallback_used')),
         'summary': str(getattr(latest, 'summary', '') or ''),
     }
 

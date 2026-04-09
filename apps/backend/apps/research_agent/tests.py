@@ -2,6 +2,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from django.test import TestCase
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -15,6 +16,7 @@ from apps.research_agent.models import (
     NarrativeAnalysis,
     NarrativeConsensusState,
     NarrativeItem,
+    NarrativeSignalStatus,
     NarrativeSource,
     ResearchPursuitScoreStatus,
     ResearchCandidate,
@@ -313,6 +315,88 @@ class ResearchAgentTests(TestCase):
         self.assertEqual(clusters_response.status_code, 200)
         self.assertEqual(recommendations_response.status_code, 200)
         self.assertIn('latest_run', summary_response.json())
+
+
+class ScanAgentDiagnosticsFallbackTests(TestCase):
+    def setUp(self):
+        seed_demo_markets()
+        self.client = APIClient()
+
+    def test_empty_real_scan_has_explicit_diagnostics(self):
+        with override_settings(ENVIRONMENT='production', SCAN_DEMO_NARRATIVE_FALLBACK_ENABLED=False):
+            run = run_scan_agent()
+
+        diagnostics = (run.metadata or {}).get('scan_diagnostics') or {}
+        self.assertEqual(run.signal_count, 0)
+        self.assertIn('NO_RSS_SOURCE_CONFIGURED', diagnostics.get('zero_signal_reason_codes', []))
+        self.assertIn('NO_REDDIT_SOURCE_CONFIGURED', diagnostics.get('zero_signal_reason_codes', []))
+        self.assertIn('NO_X_SOURCE_CONFIGURED', diagnostics.get('zero_signal_reason_codes', []))
+        self.assertIn('ALL_SOURCES_EMPTY', diagnostics.get('zero_signal_reason_codes', []))
+        self.assertTrue(diagnostics.get('diagnostic_summary'))
+
+    def test_demo_mode_uses_fallback_when_enabled_and_no_real_sources(self):
+        with override_settings(ENVIRONMENT='local', SCAN_DEMO_NARRATIVE_FALLBACK_ENABLED=True):
+            run = run_scan_agent()
+
+        diagnostics = (run.metadata or {}).get('scan_diagnostics') or {}
+        self.assertGreater(run.signal_count, 0)
+        self.assertGreater(run.clustered_count, 0)
+        self.assertIn('DEMO_FALLBACK_USED', diagnostics.get('zero_signal_reason_codes', []))
+        self.assertTrue((run.metadata or {}).get('demo_fallback_used'))
+
+        signal = run.signals.order_by('-total_signal_score', '-id').first()
+        self.assertIsNotNone(signal)
+        self.assertEqual(signal.status, NarrativeSignalStatus.SHORTLISTED)
+        self.assertTrue(signal.metadata.get('is_demo'))
+        self.assertTrue(signal.metadata.get('is_synthetic'))
+        self.assertTrue(signal.metadata.get('is_fallback'))
+        self.assertIn('DEMO_SYNTHETIC_FALLBACK', signal.reason_codes)
+
+    def test_demo_mode_disabled_fallback_stays_zero_with_reason_code(self):
+        with override_settings(ENVIRONMENT='local', SCAN_DEMO_NARRATIVE_FALLBACK_ENABLED=False):
+            run = run_scan_agent()
+
+        diagnostics = (run.metadata or {}).get('scan_diagnostics') or {}
+        self.assertEqual(run.signal_count, 0)
+        self.assertIn('DEMO_FALLBACK_DISABLED', diagnostics.get('zero_signal_reason_codes', []))
+        self.assertFalse((run.metadata or {}).get('demo_fallback_used'))
+
+    @patch('apps.research_agent.services.run.fetch_parallel_source_items')
+    def test_real_sources_take_precedence_and_do_not_mark_fallback(self, mock_fetch):
+        item = ScanRawItem(
+            source_type='rss',
+            source_slug='real-rss',
+            source_name='Real RSS',
+            title='rates macro outlook upside',
+            url='https://example.com/real-source',
+            raw_text='Macro upside narrative with rise in conviction.',
+            snippet='upside rise conviction',
+            author='wire',
+            published_at=timezone.now(),
+            metadata={},
+        )
+        mock_fetch.return_value = ([item], {'rss_count': 1, 'reddit_count': 0, 'x_count': 0}, [])
+
+        with override_settings(ENVIRONMENT='local', SCAN_DEMO_NARRATIVE_FALLBACK_ENABLED=True):
+            run = run_scan_agent()
+
+        diagnostics = (run.metadata or {}).get('scan_diagnostics') or {}
+        self.assertGreater(run.raw_item_count, 0)
+        self.assertFalse((run.metadata or {}).get('demo_fallback_used'))
+        self.assertNotIn('DEMO_FALLBACK_USED', diagnostics.get('zero_signal_reason_codes', []))
+
+    def test_summary_endpoint_exposes_diagnostics_and_reason_codes(self):
+        with override_settings(ENVIRONMENT='local', SCAN_DEMO_NARRATIVE_FALLBACK_ENABLED=False):
+            run = run_scan_agent()
+
+        self.assertIsNotNone(run)
+        response = self.client.get(reverse('scan_agent:summary'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        latest = payload.get('latest_run') or {}
+        diagnostics = (latest.get('metadata') or {}).get('scan_diagnostics') or {}
+        self.assertIn('zero_signal_reason_codes', diagnostics)
+        self.assertTrue(diagnostics.get('diagnostic_summary'))
 
 
 class ResearchUniverseHardeningTests(TestCase):
