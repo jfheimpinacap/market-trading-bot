@@ -2,6 +2,7 @@ from rest_framework import generics, status
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.renderers import BaseRenderer, JSONRenderer
 
 from apps.mission_control.models import (
     AutonomousCadenceDecision,
@@ -125,6 +126,10 @@ from apps.mission_control.serializers import (
     ExtendedPaperRunLaunchRequestSerializer,
     ExtendedPaperRunLaunchSerializer,
     ExtendedPaperRunStatusSerializer,
+    TestConsoleStartRequestSerializer,
+    TestConsoleStopRequestSerializer,
+    TestConsoleStatusSerializer,
+    TestConsoleExportLogQuerySerializer,
     AutonomousTickDispatchAttemptSerializer,
     MissionControlCycleSerializer,
     MissionControlSessionSerializer,
@@ -228,6 +233,23 @@ from apps.mission_control.services.extended_paper_run_launcher import (
     get_extended_paper_run_status,
     launch_extended_paper_run,
 )
+from apps.mission_control.services.test_console import (
+    export_test_console_log,
+    get_test_console_status,
+    start_test_console,
+    stop_test_console,
+)
+
+
+class PlainTextRenderer(BaseRenderer):
+    media_type = 'text/plain'
+    format = 'text'
+    charset = 'utf-8'
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        if data is None:
+            return b''
+        return str(data).encode(self.charset)
 
 
 class MissionControlStatusView(APIView):
@@ -578,6 +600,38 @@ class ExtendedPaperRunStatusView(APIView):
         preset_name = request.query_params.get('preset') or request.query_params.get('preset_name')
         payload = get_extended_paper_run_status(preset_name=preset_name)
         return Response(ExtendedPaperRunStatusSerializer(payload).data, status=status.HTTP_200_OK)
+
+
+class StartTestConsoleView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = TestConsoleStartRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = start_test_console(preset_name=serializer.validated_data.get('preset'))
+        return Response(TestConsoleStatusSerializer(payload).data, status=status.HTTP_200_OK)
+
+
+class StopTestConsoleView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = TestConsoleStopRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        payload = stop_test_console(preset_name=serializer.validated_data.get('preset'))
+        return Response(TestConsoleStatusSerializer(payload).data, status=status.HTTP_200_OK)
+
+
+class TestConsoleStatusView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response(TestConsoleStatusSerializer(get_test_console_status()).data, status=status.HTTP_200_OK)
+
+
+class TestConsoleExportLogView(APIView):
+    renderer_classes = [JSONRenderer, PlainTextRenderer]
+
+    def get(self, request, *args, **kwargs):
+        serializer = TestConsoleExportLogQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        fmt = serializer.validated_data.get('format', 'text')
+        export_payload = export_test_console_log(fmt=fmt)
+        return Response(export_payload, status=status.HTTP_200_OK)
 
 
 class StartAutonomousRunnerView(APIView):

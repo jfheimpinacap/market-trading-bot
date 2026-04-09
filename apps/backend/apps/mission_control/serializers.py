@@ -450,6 +450,47 @@ class ExtendedPaperRunGateSerializer(serializers.Serializer):
     checks = ExtendedPaperRunGateCheckSerializer(many=True)
 
 
+
+
+class TestConsoleStartRequestSerializer(serializers.Serializer):
+    preset = serializers.CharField(required=False, allow_blank=True, default='live_read_only_paper_conservative')
+
+
+class TestConsoleStopRequestSerializer(serializers.Serializer):
+    preset = serializers.CharField(required=False, allow_blank=True, default='live_read_only_paper_conservative')
+
+
+class TestConsoleStatusSerializer(serializers.Serializer):
+    test_status = serializers.ChoiceField(choices=['IDLE', 'RUNNING', 'STOPPED', 'COMPLETED', 'COMPLETED_WITH_WARNINGS', 'BLOCKED', 'FAILED'])
+    current_phase = serializers.CharField(required=False, allow_null=True)
+    started_at = serializers.DateTimeField(required=False, allow_null=True)
+    ended_at = serializers.DateTimeField(required=False, allow_null=True)
+    preset_name = serializers.CharField()
+    session_active = serializers.BooleanField()
+    heartbeat_active = serializers.BooleanField()
+    current_session_status = serializers.CharField()
+    validation_status = serializers.CharField()
+    trial_status = serializers.CharField()
+    trend_status = serializers.CharField()
+    readiness_status = serializers.CharField()
+    gate_status = serializers.CharField()
+    extended_run_status = serializers.CharField()
+    funnel_status = serializers.CharField()
+    attention_mode = serializers.CharField()
+    portfolio_summary = serializers.DictField(required=False)
+    scan_summary = serializers.DictField(required=False)
+    blocker_summary = serializers.ListField(child=serializers.CharField(), required=False)
+    next_action_hint = serializers.CharField()
+    warnings = serializers.ListField(child=serializers.CharField(), required=False)
+    errors = serializers.ListField(child=serializers.CharField(), required=False)
+    reason_codes = serializers.ListField(child=serializers.CharField(), required=False)
+    summary = serializers.CharField(required=False)
+
+
+class TestConsoleExportLogQuerySerializer(serializers.Serializer):
+    format = serializers.ChoiceField(choices=['text', 'json'], required=False, default='text')
+
+
 class AutonomousRunnerStateSerializer(serializers.ModelSerializer):
     class Meta:
         model = AutonomousRunnerState

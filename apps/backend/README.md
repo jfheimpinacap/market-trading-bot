@@ -4297,3 +4297,22 @@ Implementation: `apps/runtime_governor/services/tuning_autotriage.py`, explicitl
 - `tuning_review_activity.py`
 
 No new persistent models and no mutative endpoints were added.
+
+## Mission Control — Test Console (V1 paper diagnostics)
+
+El backend incorpora un módulo compacto `mission_control.services.test_console` para centralizar pruebas V1 paper:
+
+- Run control: start / stop.
+- Estado consolidado: validation, trial, trend, gate, extended run, funnel, attention, scan y portfolio.
+- Exportable log: `text` (copy-paste friendly) y `json` (debug estructurado).
+- Persistencia liviana in-memory: estado actual + último log + buffer corto histórico.
+
+Endpoints:
+- `POST /api/mission-control/test-console/start/`
+- `POST /api/mission-control/test-console/stop/`
+- `GET /api/mission-control/test-console/status/`
+- `GET /api/mission-control/test-console/export-log/?format=text|json`
+
+Scope de seguridad:
+- Sigue en modo **REAL_READ_ONLY + PAPER_ONLY**.
+- No habilita live trading real.
