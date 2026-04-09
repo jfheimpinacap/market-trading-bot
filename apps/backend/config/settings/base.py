@@ -43,6 +43,10 @@ SECRET_KEY = get_env('DJANGO_SECRET_KEY', 'change-me')
 DEBUG = get_bool('DJANGO_DEBUG', default=False)
 ENVIRONMENT = get_env('DJANGO_ENV', 'local')
 APP_MODE = get_env('APP_MODE', 'full')
+SCAN_DEMO_NARRATIVE_FALLBACK_ENABLED = get_bool(
+    'SCAN_DEMO_NARRATIVE_FALLBACK_ENABLED',
+    default=ENVIRONMENT in {'local', 'test'},
+)
 ALLOWED_HOSTS = get_list('DJANGO_ALLOWED_HOSTS', default=['127.0.0.1', 'localhost'])
 
 DJANGO_APPS = [

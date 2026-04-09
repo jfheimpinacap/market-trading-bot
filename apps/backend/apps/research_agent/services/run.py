@@ -24,6 +24,11 @@ from apps.research_agent.models import (
 )
 from apps.research_agent.services.clustering import cluster_narratives
 from apps.research_agent.services.dedup import deduplicate_narratives
+from apps.research_agent.services.demo_fallback import (
+    build_demo_narrative_fallback_items,
+    is_local_demo_environment,
+    is_scan_demo_fallback_enabled,
+)
 from apps.research_agent.services.filtering import evaluate_structural_filters
 from apps.research_agent.services.market_context import infer_target_market, narrative_market_divergence
 from apps.research_agent.services.narrative_linking import link_narrative_signals
@@ -31,6 +36,14 @@ from apps.research_agent.services.recommendation import decision_for_candidate, 
 from apps.research_agent.services.scoring import compute_pursue_worthiness, score_cluster
 from apps.research_agent.services.source_fetch import fetch_parallel_source_items
 from apps.research_agent.services.universe_fetch import fetch_market_universe
+
+SCAN_REASON_NO_RSS_SOURCE_CONFIGURED = 'NO_RSS_SOURCE_CONFIGURED'
+SCAN_REASON_NO_REDDIT_SOURCE_CONFIGURED = 'NO_REDDIT_SOURCE_CONFIGURED'
+SCAN_REASON_NO_X_SOURCE_CONFIGURED = 'NO_X_SOURCE_CONFIGURED'
+SCAN_REASON_ALL_SOURCES_EMPTY = 'ALL_SOURCES_EMPTY'
+SCAN_REASON_DEMO_MODE_NO_NARRATIVE_FIXTURES = 'DEMO_MODE_NO_NARRATIVE_FIXTURES'
+SCAN_REASON_DEMO_FALLBACK_USED = 'DEMO_FALLBACK_USED'
+SCAN_REASON_DEMO_FALLBACK_DISABLED = 'DEMO_FALLBACK_DISABLED'
 
 
 def _cluster_status(*, source_types: set[str], item_count: int, last_seen_at):
@@ -53,11 +66,89 @@ def _signal_status(total: Decimal, direction: str, divergence: Decimal) -> str:
     return NarrativeSignalStatus.CANDIDATE
 
 
+def _source_type_flags(*, source_ids: list[int] | None = None) -> dict[str, bool]:
+    from apps.research_agent.models import NarrativeSource, NarrativeSourceType
+
+    queryset = NarrativeSource.objects.filter(is_enabled=True)
+    if source_ids:
+        queryset = queryset.filter(id__in=source_ids)
+    source_types = set(queryset.values_list('source_type', flat=True))
+    return {
+        'rss_enabled': NarrativeSourceType.RSS in source_types,
+        'reddit_enabled': NarrativeSourceType.REDDIT in source_types,
+        'x_enabled': NarrativeSourceType.TWITTER in source_types,
+    }
+
+
+def _base_diagnostics(*, source_ids: list[int] | None = None) -> dict:
+    flags = _source_type_flags(source_ids=source_ids)
+    return {
+        'source_mode': 'local_demo' if is_local_demo_environment() else 'standard',
+        **flags,
+        'rss_fetch_attempted': flags['rss_enabled'],
+        'reddit_fetch_attempted': flags['reddit_enabled'],
+        'x_fetch_attempted': flags['x_enabled'],
+        'zero_signal_reason_codes': [],
+        'diagnostic_summary': '',
+    }
+
+
+def _finalize_diagnostics(*, diagnostics: dict, source_counts: dict[str, int], signal_count: int) -> None:
+    reasons: list[str] = []
+    if not diagnostics.get('rss_enabled'):
+        reasons.append(SCAN_REASON_NO_RSS_SOURCE_CONFIGURED)
+    if not diagnostics.get('reddit_enabled'):
+        reasons.append(SCAN_REASON_NO_REDDIT_SOURCE_CONFIGURED)
+    if not diagnostics.get('x_enabled'):
+        reasons.append(SCAN_REASON_NO_X_SOURCE_CONFIGURED)
+
+    real_item_total = int(source_counts.get('rss_count') or 0) + int(source_counts.get('reddit_count') or 0) + int(source_counts.get('x_count') or 0)
+    if real_item_total == 0 and signal_count == 0:
+        reasons.append(SCAN_REASON_ALL_SOURCES_EMPTY)
+
+    reasons.extend(diagnostics.get('zero_signal_reason_codes') or [])
+    diagnostics['zero_signal_reason_codes'] = list(dict.fromkeys(reasons))
+
+    if signal_count > 0:
+        diagnostics['diagnostic_summary'] = (
+            f"Scan produced {signal_count} signal(s). "
+            f"Real source items: rss={int(source_counts.get('rss_count') or 0)}, "
+            f"reddit={int(source_counts.get('reddit_count') or 0)}, x={int(source_counts.get('x_count') or 0)}."
+        )
+        return
+
+    diagnostics['diagnostic_summary'] = (
+        'Scan produced zero signals; review reason codes for source configuration, empty inputs, '
+        'or demo fallback decision details.'
+    )
+
+
 def run_scan_agent(*, source_ids: list[int] | None = None, triggered_by: str = 'manual') -> SourceScanRun:
     started_at = timezone.now()
     scan_run = SourceScanRun.objects.create(started_at=started_at, metadata={'triggered_by': triggered_by})
+    diagnostics = _base_diagnostics(source_ids=source_ids)
 
-    raw_items, source_counts, fetch_errors = fetch_parallel_source_items(source_ids=source_ids)
+    fetch_result = fetch_parallel_source_items(source_ids=source_ids)
+    if len(fetch_result) == 4:
+        raw_items, source_counts, fetch_errors, _ = fetch_result
+    else:
+        raw_items, source_counts, fetch_errors = fetch_result
+
+    fallback_used = False
+    fallback_market_ids: list[int] = []
+    if not raw_items and is_local_demo_environment():
+        if is_scan_demo_fallback_enabled():
+            fallback = build_demo_narrative_fallback_items()
+            raw_items.extend(fallback.items)
+            fallback_market_ids = fallback.market_ids
+            if fallback.items:
+                fallback_used = True
+                diagnostics['zero_signal_reason_codes'].append(SCAN_REASON_DEMO_FALLBACK_USED)
+            else:
+                diagnostics['zero_signal_reason_codes'].append(SCAN_REASON_DEMO_MODE_NO_NARRATIVE_FIXTURES)
+        else:
+            diagnostics['zero_signal_reason_codes'].append(SCAN_REASON_DEMO_FALLBACK_DISABLED)
+
     dedup = deduplicate_narratives(raw_items)
     clusters = cluster_narratives(dedup.deduped_items)
 
@@ -129,6 +220,16 @@ def run_scan_agent(*, source_ids: list[int] | None = None, triggered_by: str = '
             linked_market=market,
             metadata={'precedent_summary': influence.summary if influence else {}, 'source_errors': fetch_errors[:4]},
         )
+        if fallback_used:
+            signal.metadata = {
+                **(signal.metadata or {}),
+                'fallback_type': 'demo_narrative',
+                'is_demo': True,
+                'is_synthetic': True,
+                'is_fallback': True,
+            }
+            signal.reason_codes = list(dict.fromkeys([*signal.reason_codes, 'DEMO_SYNTHETIC_FALLBACK']))
+            signal.save(update_fields=['metadata', 'reason_codes', 'updated_at'])
         if status == NarrativeSignalStatus.IGNORE:
             ignored_count += 1
 
@@ -144,6 +245,19 @@ def run_scan_agent(*, source_ids: list[int] | None = None, triggered_by: str = '
         )
         recommendations_counter[recommendation_type] += 1
 
+    if fallback_used and not scan_run.signals.filter(status=NarrativeSignalStatus.SHORTLISTED).exists():
+        top_fallback_signal = scan_run.signals.order_by('-total_signal_score', '-id').first()
+        if top_fallback_signal is not None:
+            top_fallback_signal.status = NarrativeSignalStatus.SHORTLISTED
+            top_fallback_signal.reason_codes = list(
+                dict.fromkeys([*top_fallback_signal.reason_codes, 'DEMO_FALLBACK_SHORTLIST_OVERRIDE'])
+            )
+            top_fallback_signal.metadata = {
+                **(top_fallback_signal.metadata or {}),
+                'demo_shortlist_override': True,
+            }
+            top_fallback_signal.save(update_fields=['status', 'reason_codes', 'metadata', 'updated_at'])
+
     scan_run.completed_at = timezone.now()
     scan_run.source_counts = source_counts
     scan_run.raw_item_count = len(raw_items)
@@ -152,10 +266,15 @@ def run_scan_agent(*, source_ids: list[int] | None = None, triggered_by: str = '
     scan_run.signal_count = scan_run.signals.count()
     scan_run.ignored_count = ignored_count + len(dedup.ignored_items)
     scan_run.recommendation_summary = dict(recommendations_counter)
+
+    _finalize_diagnostics(diagnostics=diagnostics, source_counts=source_counts, signal_count=scan_run.signal_count)
     scan_run.metadata = {
         **(scan_run.metadata or {}),
         'fetch_errors': fetch_errors,
         'dedup_ignored': len(dedup.ignored_items),
+        'scan_diagnostics': diagnostics,
+        'demo_fallback_used': fallback_used,
+        'demo_fallback_market_ids': fallback_market_ids,
     }
     scan_run.save(
         update_fields=[

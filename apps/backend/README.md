@@ -11,6 +11,49 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 - Make the demo dataset feel alive locally without real provider integrations, trading, or websockets.
 - Provide precedent-aware agent support via `memory_retrieval` with conservative and auditable influence on research/prediction/risk/signals/postmortem.
 
+## Scan diagnostics + demo narrative fallback (new)
+
+`apps.research_agent.services.run.run_scan_agent` now writes explicit scan diagnostics under `SourceScanRun.metadata.scan_diagnostics`.
+
+Included diagnostics fields:
+- `source_mode`
+- `rss_enabled` / `reddit_enabled` / `x_enabled`
+- `rss_fetch_attempted` / `reddit_fetch_attempted` / `x_fetch_attempted`
+- `zero_signal_reason_codes`
+- `diagnostic_summary`
+
+Reason codes are compact and explicit:
+- `NO_RSS_SOURCE_CONFIGURED`
+- `NO_REDDIT_SOURCE_CONFIGURED`
+- `NO_X_SOURCE_CONFIGURED`
+- `ALL_SOURCES_EMPTY`
+- `DEMO_MODE_NO_NARRATIVE_FIXTURES`
+- `DEMO_FALLBACK_USED`
+- `DEMO_FALLBACK_DISABLED`
+
+### Local/demo fallback behavior
+
+When all of the following are true:
+1. environment is local/test,
+2. no real narrative items were fetched,
+3. there are active demo markets that are paper-tradable,
+4. fallback is enabled,
+
+the scan run can generate a small deterministic synthetic narrative intake (`DEMO_NARRATIVE_*` sources) derived from demo market catalog entries.
+
+Synthetic fallback records are explicitly tagged in signal metadata/reason codes:
+- `is_demo=true`
+- `is_synthetic=true`
+- `is_fallback=true`
+- `DEMO_SYNTHETIC_FALLBACK`
+
+Toggle via env:
+- `SCAN_DEMO_NARRATIVE_FALLBACK_ENABLED`
+  - default `true` on `ENVIRONMENT in {local, test}`
+  - default `false` otherwise
+
+This exists only to unblock local V1 paper pipeline verification and does **not** enable live trading.
+
 ## Runtime governor downstream mode enforcement (new)
 
 `apps.runtime_governor` now includes `mode_enforcement/` services to make global operating mode operational across downstream modules (instead of descriptive-only):
