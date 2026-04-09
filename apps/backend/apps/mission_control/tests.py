@@ -2658,8 +2658,12 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
             'recent_trades_count',
             'top_stage',
             'stalled_stage',
+            'stalled_reason_code',
+            'stalled_missing_counter',
             'next_action_hint',
             'funnel_summary',
+            'handoff_reason_codes',
+            'stage_source_mismatch',
             'stages',
         }
         self.assertTrue(required.issubset(payload.keys()))
@@ -2680,7 +2684,17 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload['funnel_status'], 'STALLED')
         self.assertEqual(payload['top_stage'], 'scan')
+        self.assertIsNone(payload['stalled_reason_code'])
         self.assertEqual(payload['next_action_hint'], 'No recent scan activity detected')
+
+    def test_stalled_stage_reports_missing_counter_and_reason(self):
+        response = self._call_with_counts(
+            counts=self._funnel_counts(scan=4, research=0, prediction=0, risk_approved=0, risk_blocked=0, execution=0, recent_trades=0)
+        )
+        payload = response.json()
+        self.assertEqual(payload['stalled_stage'], 'research')
+        self.assertEqual(payload['stalled_missing_counter'], 'research_count')
+        self.assertEqual(payload['stalled_reason_code'], 'SHORTLIST_PRESENT_NO_HANDOFF')
 
     def test_stage_rows_are_present_and_readable(self):
         response = self._call_with_counts(
@@ -2699,6 +2713,70 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         )
         payload = response.json()
         self.assertEqual(payload['next_action_hint'], 'Risk is blocking most candidates')
+
+
+class LivePaperHandoffDiagnosticsTests(TestCase):
+    def _counts(self, **overrides):
+        from apps.mission_control.services.live_paper_handoff_diagnostics import HandoffDiagnosticsCounts
+
+        base = {
+            'shortlisted_signal_count': 1,
+            'handoff_candidate_count': 0,
+            'consensus_review_count': 0,
+            'prediction_candidate_count': 0,
+            'risk_decision_count': 0,
+            'paper_execution_candidate_count': 0,
+            'shortlist_market_ids': {101},
+            'handoff_market_ids': set(),
+        }
+        base.update(overrides)
+        return HandoffDiagnosticsCounts(**base)
+
+    def test_shortlist_present_but_handoff_missing(self):
+        from apps.mission_control.services.live_paper_handoff_diagnostics import build_handoff_diagnostics_from_counts
+
+        payload = build_handoff_diagnostics_from_counts(counts=self._counts(), validation_status='BLOCKED')
+        self.assertIn('SHORTLIST_PRESENT_NO_HANDOFF', payload['handoff_reason_codes'])
+
+    def test_handoff_present_but_consensus_not_run(self):
+        from apps.mission_control.services.live_paper_handoff_diagnostics import build_handoff_diagnostics_from_counts
+
+        payload = build_handoff_diagnostics_from_counts(
+            counts=self._counts(handoff_candidate_count=2, consensus_review_count=0),
+            validation_status='WARNING',
+        )
+        self.assertIn('HANDOFF_CREATED', payload['handoff_reason_codes'])
+        self.assertIn('CONSENSUS_NOT_RUN', payload['handoff_reason_codes'])
+
+    def test_consensus_runs_but_no_promotion(self):
+        from apps.mission_control.services.live_paper_handoff_diagnostics import build_handoff_diagnostics_from_counts
+
+        payload = build_handoff_diagnostics_from_counts(counts=self._counts(consensus_review_count=1))
+        self.assertIn('CONSENSUS_RAN_NO_PROMOTION', payload['handoff_reason_codes'])
+
+    def test_prediction_and_risk_empty_are_explicit(self):
+        from apps.mission_control.services.live_paper_handoff_diagnostics import build_handoff_diagnostics_from_counts
+
+        payload = build_handoff_diagnostics_from_counts(
+            counts=self._counts(handoff_candidate_count=3, consensus_review_count=1, prediction_candidate_count=0, risk_decision_count=0),
+            validation_status='BLOCKED',
+        )
+        self.assertIn('PREDICTION_STAGE_EMPTY', payload['handoff_reason_codes'])
+        self.assertIn('DOWNSTREAM_EVIDENCE_INSUFFICIENT', payload['handoff_reason_codes'])
+
+    def test_source_mismatch_reason_code_is_explicit(self):
+        from apps.mission_control.services.live_paper_handoff_diagnostics import build_handoff_diagnostics_from_counts
+
+        payload = build_handoff_diagnostics_from_counts(
+            counts=self._counts(
+                handoff_candidate_count=2,
+                consensus_review_count=1,
+                shortlist_market_ids={101},
+                handoff_market_ids={202},
+            )
+        )
+        self.assertTrue(payload['stage_source_mismatch'])
+        self.assertIn('FUNNEL_STAGE_SOURCE_MISMATCH', payload['handoff_reason_codes'])
 
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'recent_trades': []})
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
@@ -3104,6 +3182,16 @@ class TestConsoleApiTests(TestCase):
                 'shortlisted_signals': 1,
             },
             'blocker_summary': [],
+            'handoff_summary': {
+                'shortlisted_signals': 1,
+                'handoff_candidates': 0,
+                'consensus_reviews': 0,
+                'prediction_candidates': 0,
+                'risk_decisions': 0,
+                'paper_execution_candidates': 0,
+                'handoff_reason_codes': ['SHORTLIST_PRESENT_NO_HANDOFF'],
+                'handoff_summary': 'bottleneck=research_handoff',
+            },
             'next_action_hint': 'Proceed to extended paper run',
             'warnings': [],
             'errors': [],
@@ -3177,6 +3265,7 @@ class TestConsoleApiTests(TestCase):
             'attention_mode',
             'portfolio_summary',
             'scan_summary',
+            'handoff_summary',
             'blocker_summary',
             'next_action_hint',
             'warnings',
@@ -3224,6 +3313,16 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('BOUNDARY_REAL_READ_ONLY', response.json()['reason_codes'])
         self.assertIn('BOUNDARY_PAPER_ONLY', response.json()['reason_codes'])
+
+    def test_text_export_includes_compact_handoff_summary(self):
+        from apps.mission_control.services.test_console import _log_line_items
+
+        payload = self._status_payload()
+        text = _log_line_items(payload)
+        self.assertIn('handoff_summary:', text)
+        self.assertIn('deduped_items=3 clusters=2 shortlisted_signals=1', text)
+        self.assertIn('shortlisted_signals=1', text)
+        self.assertIn('handoff_reason_codes=SHORTLIST_PRESENT_NO_HANDOFF', text)
 
     @patch('apps.mission_control.services.live_paper_bootstrap.bootstrap_live_read_only_paper_session')
     @patch('apps.mission_control.services.live_paper_trial_run.bootstrap_live_read_only_paper_session')
