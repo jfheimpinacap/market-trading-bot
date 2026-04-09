@@ -422,8 +422,12 @@ class LivePaperAutonomyFunnelSerializer(serializers.Serializer):
     recent_trades_count = serializers.IntegerField(min_value=0)
     top_stage = serializers.ChoiceField(choices=['scan', 'research', 'prediction', 'risk', 'paper_execution'])
     stalled_stage = serializers.ChoiceField(choices=['scan', 'research', 'prediction', 'risk', 'paper_execution'], allow_null=True)
+    stalled_reason_code = serializers.CharField(required=False, allow_null=True)
+    stalled_missing_counter = serializers.CharField(required=False, allow_null=True)
     next_action_hint = serializers.CharField()
     funnel_summary = serializers.CharField()
+    handoff_reason_codes = serializers.ListField(child=serializers.CharField(), required=False)
+    stage_source_mismatch = serializers.BooleanField(required=False)
     stages = LivePaperAutonomyFunnelStageSerializer(many=True)
 
 
@@ -479,6 +483,7 @@ class TestConsoleStatusSerializer(serializers.Serializer):
     attention_mode = serializers.CharField()
     portfolio_summary = serializers.DictField(required=False)
     scan_summary = serializers.DictField(required=False)
+    handoff_summary = serializers.DictField(required=False)
     blocker_summary = serializers.ListField(child=serializers.CharField(), required=False)
     next_action_hint = serializers.CharField()
     warnings = serializers.ListField(child=serializers.CharField(), required=False)
