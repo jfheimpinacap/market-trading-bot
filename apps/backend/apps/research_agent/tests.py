@@ -583,3 +583,27 @@ class ScanConsensusHandoffTests(TestCase):
             any(item['handoff_status'] in {ResearchHandoffStatus.READY_FOR_RESEARCH, 'deferred', 'blocked', 'watchlist'} for item in priorities_response.json())
         )
         self.assertTrue(any(item['consensus_state'] in {NarrativeConsensusState.STRONG_CONSENSUS, 'conflicted', 'weak_consensus', 'mixed', 'insufficient_signal'} for item in records_response.json()))
+
+
+class MarketContextLinkingTests(TestCase):
+    def test_infer_target_market_returns_none_for_ambiguous_top_candidates(self):
+        from apps.markets.models import Provider
+        from apps.research_agent.services.market_context import infer_target_market
+
+        provider = Provider.objects.create(name='Ambiguous Link Provider', slug='amb-link-provider')
+        Market.objects.create(provider=provider, title='Election Senate Winner 2026', slug='amb-election-2026', is_active=True, status=MarketStatus.OPEN)
+        Market.objects.create(provider=provider, title='Election Senate Winner 2027', slug='amb-election-2027', is_active=True, status=MarketStatus.OPEN)
+
+        resolved = infer_target_market('Election Senate Winner')
+        self.assertIsNone(resolved)
+
+    def test_infer_target_market_resolves_unique_candidate(self):
+        from apps.markets.models import Provider
+        from apps.research_agent.services.market_context import infer_target_market
+
+        provider = Provider.objects.create(name='Resolved Link Provider', slug='resolved-link-provider')
+        expected = Market.objects.create(provider=provider, title='Fed rate cut June decision', slug='fed-cut-june', is_active=True, status=MarketStatus.OPEN)
+        Market.objects.create(provider=provider, title='World Cup winner 2026', slug='world-cup-winner-2026', is_active=True, status=MarketStatus.OPEN)
+
+        resolved = infer_target_market('Fed rate cut June decision')
+        self.assertEqual(getattr(resolved, 'id', None), expected.id)

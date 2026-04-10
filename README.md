@@ -40,6 +40,19 @@ Config toggle:
 
 This is strictly for unblocking local V1 paper pipeline testing and does **not** enable live trading or real-money execution.
 
+### Shortlist → handoff market-link diagnostics (backend, V1 paper/local-test)
+
+Mission Control export logs now include a compact `market_link_summary` block to explain exactly why shortlisted signals do or do not reach handoff:
+
+- `shortlisted_signals`
+- `market_link_attempted`
+- `market_link_resolved`
+- `market_link_missing`
+- `market_link_ambiguous`
+- `market_link_reason_codes` + `market_link_examples` (max 3)
+
+`research_agent` market inference was also tightened conservatively to reduce false negatives in demo/local topics while still refusing ambiguous ties. The flow remains observability-first and strictly `REAL_READ_ONLY + PAPER_ONLY` (no live execution enablement).
+
 ### Live Read-Only Paper Autopilot Bootstrap (backend, new)
 
 `mission_control` now exposes a compact backend bootstrap for autonomous paper sessions using real-market read-only data without enabling live trading execution.

@@ -4359,6 +4359,14 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
 - Incluye `shortlist_handoff_summary` para diagnóstico explícito del tramo `shortlist -> handoff`:
   - `shortlisted_signals`, `handoff_attempted`, `handoff_created`, `handoff_blocked`
   - reason codes compactos + ejemplos limitados (máx 3) para evitar payload grande.
+- Incluye `market_link_summary` para diagnóstico explícito del bloqueo de enlace de mercado antes de handoff:
+  - `shortlisted_signals`, `market_link_attempted`, `market_link_resolved`, `market_link_missing`, `market_link_ambiguous`
+  - `market_link_reason_codes` (`MARKET_LINK_NO_CANDIDATES`, `MARKET_LINK_AMBIGUOUS`, `MARKET_LINK_BELOW_CONFIDENCE_THRESHOLD`, etc.)
+  - `market_link_examples` compactos (máx 3: `signal_id`, `candidate_count`, `chosen_market_id`, `reason_code`)
+- Claridad de ventanas en export:
+  - `handoff_summary.summary_window=rolling_60m`
+  - `scan_summary.summary_window=latest_scan_run`
+  - evita confundir contadores de shortlist entre ventana temporal y último scan puntual.
 - Incluye `consensus_alignment` para distinguir si `consensus_reviews` representa el mismo flujo del shortlist reciente o evidencia desacoplada.
 
 Endpoints:
@@ -4370,3 +4378,4 @@ Endpoints:
 Scope de seguridad:
 - Sigue en modo **REAL_READ_ONLY + PAPER_ONLY**.
 - No habilita live trading real.
+- Observability-first para V1 local/test: si shortlist se bloquea antes de handoff, el export muestra causa explícita de market linking sin bypass de consensus/risk/policy/safety.
