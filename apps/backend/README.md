@@ -4384,6 +4384,12 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - cuando la ruta está disponible, el export diferencia explícitamente: `PREDICTION_INTAKE_ROUTE_AVAILABLE`, `PREDICTION_INTAKE_ATTEMPTED`, `PREDICTION_INTAKE_CREATED`, `PREDICTION_INTAKE_REUSED_EXISTING_CANDIDATE`.
   - si no se crea candidate, reporta bloqueo estructural real (`PREDICTION_INTAKE_BLOCKED_BY_FILTER` / `PREDICTION_INTAKE_BLOCKED_BY_GUARDRAIL`) en vez de “route missing” falso.
   - mantiene **REAL_READ_ONLY + PAPER_ONLY** y no habilita live trading.
+- **Prompt 233 (diagnóstico explícito guardrail/filter para intake):**
+  - añade breakdown reusable en `prediction_intake_summary`: `prediction_intake_guardrail_reason_codes`, `prediction_intake_filter_reason_codes`, `prediction_intake_guardrail_summary`.
+  - añade conteos operacionales: `prediction_intake_eligible_count`, `prediction_intake_ineligible_count`, `prediction_intake_reused_count`.
+  - separa causalidad: guardrail real (pre-check Mission Control), filter interno de elegibilidad y reuse/dedupe.
+  - `prediction_intake_examples` agrega campos compactos para depuración accionable: `handoff_status`, `handoff_confidence`, `guardrail_name`/`filter_name`, `observed_value`, `threshold`, `blocking_stage`.
+  - sigue en modo observability-first paper local/test; no bypass de policy/safety/risk y sin live trading real.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

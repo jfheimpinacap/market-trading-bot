@@ -324,10 +324,16 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"prediction_intake_attempted={prediction_intake.get('prediction_intake_attempted', 0)} "
             f"prediction_intake_created={prediction_intake.get('prediction_intake_created', 0)} "
             f"prediction_intake_blocked={prediction_intake.get('prediction_intake_blocked', 0)} "
+            f"prediction_intake_eligible_count={prediction_intake.get('prediction_intake_eligible_count', 0)} "
+            f"prediction_intake_ineligible_count={prediction_intake.get('prediction_intake_ineligible_count', 0)} "
+            f"prediction_intake_reused_count={prediction_intake.get('prediction_intake_reused_count', 0)} "
             f"prediction_intake_missing_fields={prediction_intake.get('prediction_intake_missing_fields', 0)} "
             f"prediction_intake_guardrail_blocked={prediction_intake.get('prediction_intake_guardrail_blocked', 0)}"
         ),
         f"  prediction_intake_reason_codes={','.join(prediction_intake.get('prediction_intake_reason_codes') or []) or 'none'}",
+        f"  prediction_intake_guardrail_reason_codes={','.join(prediction_intake.get('prediction_intake_guardrail_reason_codes') or []) or 'none'}",
+        f"  prediction_intake_filter_reason_codes={','.join(prediction_intake.get('prediction_intake_filter_reason_codes') or []) or 'none'}",
+        f"  prediction_intake_guardrail_summary={prediction_intake.get('prediction_intake_guardrail_summary') or ''}",
         f"  prediction_intake_examples={prediction_intake_examples or []}",
         'scan_summary:',
         f"  summary_window={scan.get('summary_window') or 'latest_scan_run'}",
