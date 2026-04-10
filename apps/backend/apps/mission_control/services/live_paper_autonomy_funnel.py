@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
+from decimal import Decimal
+import re
 from typing import Any
 
 from django.db.models import Sum
 from django.utils import timezone
 
 from apps.autonomous_trader.models import AutonomousTradeCycleRun
+from apps.markets.models import Market
 from apps.mission_control.services.live_paper_bootstrap import PRESET_NAME
 from apps.mission_control.services.live_paper_validation import build_live_paper_validation_digest
 from apps.mission_control.services.session_heartbeat import build_heartbeat_summary
@@ -28,6 +31,8 @@ STAGE_LOW = 'LOW'
 STAGE_EMPTY = 'EMPTY'
 
 _LOW_THRESHOLD = 3
+_MARKET_LINK_CONFIDENCE_THRESHOLD = Decimal('1.00')
+_TOKEN_STOPWORDS = {'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'will', 'over'}
 
 
 @dataclass(frozen=True)
@@ -155,6 +160,122 @@ def _infer_hint(*, status: str, counts: FunnelCounts, stalled_stage: str | None)
     return 'Wait for another cycle and refresh'
 
 
+def _signal_market_link_tokens(*, signal_row: dict[str, Any]) -> list[str]:
+    joined = ' '.join([str(signal_row.get('topic') or ''), str(signal_row.get('canonical_label') or '')]).lower()
+    normalized = re.sub(r'[^a-z0-9\s]+', ' ', joined)
+    return [token for token in normalized.split() if len(token) >= 3 and token not in _TOKEN_STOPWORDS]
+
+
+def _candidate_market_scores(*, signal_row: dict[str, Any], active_markets: list[dict[str, Any]]) -> list[tuple[Decimal, int]]:
+    tokens = _signal_market_link_tokens(signal_row=signal_row)
+    if not tokens:
+        return []
+
+    scored: list[tuple[Decimal, int]] = []
+    for market in active_markets:
+        market_id = market.get('id')
+        if market_id is None:
+            continue
+        corpus = ' '.join(
+            [
+                str(market.get('title') or ''),
+                str(market.get('category') or ''),
+                str(market.get('ticker') or ''),
+                str(market.get('slug') or ''),
+            ]
+        ).lower()
+        token_hits = sum(1 for token in tokens if token in corpus)
+        if token_hits == 0:
+            continue
+        score = Decimal(token_hits)
+        if str(market.get('source_type') or '') == 'demo':
+            score += Decimal('0.20')
+        if str(market.get('status') or '') == 'open':
+            score += Decimal('0.20')
+        scored.append((score, int(market_id)))
+    scored.sort(key=lambda row: (row[0], row[1]), reverse=True)
+    return scored
+
+
+def _resolve_market_link_for_shortlist_signal(*, signal_row: dict[str, Any], active_markets: list[dict[str, Any]]) -> dict[str, Any]:
+    linked_market_id = signal_row.get('linked_market_id')
+    if linked_market_id is not None:
+        return {
+            'attempted': False,
+            'resolved': True,
+            'ambiguous': False,
+            'chosen_market_id': int(linked_market_id),
+            'candidate_count': 1,
+            'reason_code': 'MARKET_LINK_REUSED_EXISTING_MATCH',
+        }
+
+    target_market_id = signal_row.get('target_market_id')
+    if target_market_id is not None:
+        return {
+            'attempted': True,
+            'resolved': True,
+            'ambiguous': False,
+            'chosen_market_id': int(target_market_id),
+            'candidate_count': 1,
+            'reason_code': 'MARKET_LINK_REUSED_EXISTING_MATCH',
+        }
+
+    if not str(signal_row.get('topic') or '').strip() and not str(signal_row.get('canonical_label') or '').strip():
+        return {
+            'attempted': True,
+            'resolved': False,
+            'ambiguous': False,
+            'chosen_market_id': None,
+            'candidate_count': 0,
+            'reason_code': 'MARKET_LINK_MISSING_REQUIRED_FIELDS',
+        }
+
+    scored_candidates = _candidate_market_scores(signal_row=signal_row, active_markets=active_markets)
+    if not scored_candidates:
+        return {
+            'attempted': True,
+            'resolved': False,
+            'ambiguous': False,
+            'chosen_market_id': None,
+            'candidate_count': 0,
+            'reason_code': 'MARKET_LINK_NO_CANDIDATES',
+        }
+
+    top_score, chosen_market_id = scored_candidates[0]
+    second_score = scored_candidates[1][0] if len(scored_candidates) > 1 else Decimal('0')
+    if top_score < _MARKET_LINK_CONFIDENCE_THRESHOLD:
+        return {
+            'attempted': True,
+            'resolved': False,
+            'ambiguous': False,
+            'chosen_market_id': None,
+            'candidate_count': len(scored_candidates),
+            'reason_code': 'MARKET_LINK_BELOW_CONFIDENCE_THRESHOLD',
+        }
+    if len(scored_candidates) > 1 and top_score == second_score:
+        return {
+            'attempted': True,
+            'resolved': False,
+            'ambiguous': True,
+            'chosen_market_id': None,
+            'candidate_count': len(scored_candidates),
+            'reason_code': 'MARKET_LINK_AMBIGUOUS',
+        }
+
+    metadata = signal_row.get('metadata') or {}
+    fallback_reason = 'MARKET_LINK_RESOLVED'
+    if bool(metadata.get('is_demo')) or bool(metadata.get('demo_shortlist_override')):
+        fallback_reason = 'MARKET_LINK_DEMO_FALLBACK_USED'
+    return {
+        'attempted': True,
+        'resolved': True,
+        'ambiguous': False,
+        'chosen_market_id': int(chosen_market_id),
+        'candidate_count': len(scored_candidates),
+        'reason_code': fallback_reason,
+    }
+
+
 def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
     shortlisted_qs = NarrativeSignal.objects.filter(
         status=NarrativeSignalStatus.SHORTLISTED,
@@ -166,7 +287,10 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
     risk_qs = RiskApprovalDecision.objects.filter(created_at__gte=window_start)
     paper_qs = AutonomousTradeCycleRun.objects.filter(started_at__gte=window_start)
 
-    shortlisted_count = shortlisted_qs.count()
+    shortlisted_rows = list(
+        shortlisted_qs.values('id', 'linked_market_id', 'target_market_id', 'topic', 'canonical_label', 'metadata')[:50]
+    )
+    shortlisted_count = len(shortlisted_rows)
     handoff_count = handoff_qs.count()
     consensus_count = consensus_qs.count()
     prediction_count = prediction_qs.count()
@@ -175,7 +299,7 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
 
     shortlist_market_ids = {
         market_id
-        for market_id in shortlisted_qs.values_list('linked_market_id', flat=True)
+        for market_id in [row.get('linked_market_id') for row in shortlisted_rows]
         if market_id is not None
     }
     shortlist_cluster_ids = {
@@ -203,7 +327,7 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
     stage_source_mismatch: dict[str, Any] = {}
     shortlist_handoff_summary = {
         'shortlisted_signals': int(shortlisted_count),
-        'shortlisted_signal_ids': list(shortlisted_qs.values_list('id', flat=True)[:3]),
+        'shortlisted_signal_ids': [int(row.get('id') or 0) for row in shortlisted_rows[:3]],
         'shortlisted_market_ids': sorted(list(shortlist_market_ids))[:3],
         'handoff_attempted': 0,
         'handoff_created': 0,
@@ -211,6 +335,58 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         'shortlist_handoff_reason_codes': [],
         'shortlist_handoff_examples': [],
         'summary': '',
+    }
+    active_markets = list(
+        Market.objects.filter(is_active=True).values('id', 'title', 'category', 'ticker', 'slug', 'source_type', 'status')[:300]
+    )
+    market_link_attempted = 0
+    market_link_resolved = 0
+    market_link_missing = 0
+    market_link_ambiguous = 0
+    market_link_reason_codes: list[str] = []
+    market_link_examples: list[dict[str, Any]] = []
+    resolved_market_by_signal_id: dict[int, int] = {}
+
+    for row in shortlisted_rows:
+        signal_id = int(row.get('id') or 0)
+        outcome = _resolve_market_link_for_shortlist_signal(signal_row=row, active_markets=active_markets)
+        if outcome['attempted']:
+            market_link_attempted += 1
+        if outcome['resolved']:
+            market_link_resolved += 1
+            chosen_id = outcome.get('chosen_market_id')
+            if chosen_id is not None:
+                resolved_market_by_signal_id[signal_id] = int(chosen_id)
+                shortlist_market_ids.add(int(chosen_id))
+        else:
+            market_link_missing += 1
+        if outcome['ambiguous']:
+            market_link_ambiguous += 1
+        market_link_reason_codes.append(str(outcome.get('reason_code') or 'MARKET_LINK_FILTERED_OUT'))
+        if len(market_link_examples) < 3:
+            market_link_examples.append(
+                {
+                    'signal_id': signal_id,
+                    'candidate_count': int(outcome.get('candidate_count') or 0),
+                    'chosen_market_id': outcome.get('chosen_market_id'),
+                    'reason_code': str(outcome.get('reason_code') or ''),
+                }
+            )
+
+    normalized_market_link_codes = list(dict.fromkeys(market_link_reason_codes))
+    market_link_summary = {
+        'shortlisted_signals': int(shortlisted_count),
+        'market_link_attempted': int(market_link_attempted),
+        'market_link_resolved': int(market_link_resolved),
+        'market_link_missing': int(market_link_missing),
+        'market_link_ambiguous': int(market_link_ambiguous),
+        'market_link_reason_codes': normalized_market_link_codes,
+        'market_link_summary': (
+            f"shortlisted_signals={shortlisted_count} market_link_attempted={market_link_attempted} "
+            f"market_link_resolved={market_link_resolved} market_link_missing={market_link_missing} "
+            f"market_link_ambiguous={market_link_ambiguous} "
+            f"market_link_reason_codes={','.join(normalized_market_link_codes) or 'none'}"
+        ),
     }
 
     recent_pursuit_run_count = ResearchPursuitRun.objects.filter(started_at__gte=window_start).count()
@@ -239,10 +415,9 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
     attempted_count = 0
     created_count = 0
     blocked_count = 0
-    shortlisted_rows = list(shortlisted_qs.values('id', 'linked_market_id')[:50])
     for row in shortlisted_rows:
         signal_id = int(row.get('id') or 0)
-        market_id = row.get('linked_market_id')
+        market_id = row.get('linked_market_id') or resolved_market_by_signal_id.get(signal_id)
         reason = 'SHORTLIST_BLOCKED_BY_FILTER'
         blocked = True
         attempted = False
@@ -361,6 +536,8 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         'stage_source_mismatch': stage_source_mismatch,
         'handoff_summary': handoff_summary,
         'shortlist_handoff_summary': shortlist_handoff_summary,
+        'market_link_summary': market_link_summary,
+        'market_link_examples': market_link_examples,
         'consensus_alignment': consensus_alignment,
     }
 
@@ -471,6 +648,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'stage_source_mismatch': handoff_diagnostics.get('stage_source_mismatch', {}),
         'handoff_summary': handoff_diagnostics.get('handoff_summary', ''),
         'shortlist_handoff_summary': handoff_diagnostics.get('shortlist_handoff_summary', {}),
+        'market_link_summary': handoff_diagnostics.get('market_link_summary', {}),
+        'market_link_examples': handoff_diagnostics.get('market_link_examples', []),
         'consensus_alignment': handoff_diagnostics.get('consensus_alignment', {}),
         'shortlisted_signals': handoff_diagnostics.get('shortlisted_signals', 0),
         'handoff_candidates': handoff_diagnostics.get('handoff_candidates', 0),

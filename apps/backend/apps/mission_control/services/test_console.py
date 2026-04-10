@@ -163,6 +163,7 @@ def _build_scan_summary(scan_run: SourceScanRun | None = None) -> dict[str, Any]
     return {
         'runs': SourceScanRun.objects.count(),
         'latest_run_id': latest.id,
+        'summary_window': 'latest_scan_run',
         'rss_items': int(source_counts.get('rss_count') or 0),
         'reddit_items': int(source_counts.get('reddit_count') or 0),
         'x_items': int(source_counts.get('x_count') or 0),
@@ -206,6 +207,7 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'extended_run_status': 'ACTIVE' if bool(extended.get('extended_run_active')) else str(extended.get('gate_status') or 'INACTIVE'),
             'funnel_status': str(funnel.get('funnel_status') or 'UNKNOWN'),
             'handoff_summary': {
+                'summary_window': f"rolling_{int(funnel.get('window_minutes') or 60)}m",
                 'shortlisted_signals': int(funnel.get('shortlisted_signals') or 0),
                 'handoff_candidates': int(funnel.get('handoff_candidates') or 0),
                 'consensus_reviews': int(funnel.get('consensus_reviews') or 0),
@@ -215,6 +217,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
                 'handoff_reason_codes': list(funnel.get('handoff_reason_codes') or []),
             },
             'shortlist_handoff_summary': dict(funnel.get('shortlist_handoff_summary') or {}),
+            'market_link_summary': dict(funnel.get('market_link_summary') or {}),
+            'market_link_examples': list(funnel.get('market_link_examples') or []),
             'consensus_alignment': dict(funnel.get('consensus_alignment') or {}),
             'attention_mode': str(attention.get('attention_mode') or 'UNKNOWN'),
             'portfolio_summary': _build_portfolio_summary(),
@@ -233,6 +237,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     blockers = payload.get('blocker_summary') or []
     handoff_summary = payload.get('handoff_summary') or {}
     shortlist_handoff = payload.get('shortlist_handoff_summary') or {}
+    market_link = payload.get('market_link_summary') or {}
+    market_link_examples = payload.get('market_link_examples') or []
     consensus_alignment = payload.get('consensus_alignment') or {}
 
     lines = [
@@ -253,6 +259,7 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         f"attention_mode: {payload.get('attention_mode')}",
         f"funnel_status: {payload.get('funnel_status')}",
         'handoff_summary:',
+        f"  summary_window={handoff_summary.get('summary_window') or 'rolling_60m'}",
         (
             f"  shortlisted_signals={handoff_summary.get('shortlisted_signals', 0)} "
             f"handoff_candidates={handoff_summary.get('handoff_candidates', 0)} "
@@ -274,12 +281,23 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"  shortlist_handoff_examples="
             f"{shortlist_handoff.get('shortlist_handoff_examples') or []}"
         ),
+        'market_link_summary:',
+        (
+            f"  shortlisted_signals={market_link.get('shortlisted_signals', 0)} "
+            f"market_link_attempted={market_link.get('market_link_attempted', 0)} "
+            f"market_link_resolved={market_link.get('market_link_resolved', 0)} "
+            f"market_link_missing={market_link.get('market_link_missing', 0)} "
+            f"market_link_ambiguous={market_link.get('market_link_ambiguous', 0)}"
+        ),
+        f"  market_link_reason_codes={','.join(market_link.get('market_link_reason_codes') or []) or 'none'}",
+        f"  market_link_examples={market_link_examples or []}",
         (
             f"  consensus_alignment=consensus_reviews={consensus_alignment.get('consensus_reviews', 0)} "
             f"shortlist_aligned={consensus_alignment.get('shortlist_aligned_consensus_reviews', 0)} "
             f"aligned_with_shortlist={consensus_alignment.get('consensus_aligned_with_shortlist', True)}"
         ),
         'scan_summary:',
+        f"  summary_window={scan.get('summary_window') or 'latest_scan_run'}",
         f"  runs={scan.get('runs', 0)} rss_items={scan.get('rss_items', 0)} reddit_items={scan.get('reddit_items', 0)} x_items={scan.get('x_items', 0)}",
         f"  deduped_items={scan.get('deduped_items', 0)} clusters={scan.get('clusters', 0)} shortlisted_signals={scan.get('shortlisted_signals', 0)}",
         'portfolio_summary:',

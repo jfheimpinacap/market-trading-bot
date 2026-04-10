@@ -2888,6 +2888,18 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
             linked_market=market,
         )
 
+    def _active_market(self, *, suffix: str, title: str):
+        from apps.markets.models import Market, MarketStatus, Provider
+
+        provider = Provider.objects.create(name=f'Link Provider {suffix}', slug=f'link-provider-{suffix}')
+        return Market.objects.create(
+            provider=provider,
+            title=title,
+            slug=f'link-market-{suffix}',
+            status=MarketStatus.OPEN,
+            is_active=True,
+        )
+
     def test_shortlist_present_without_pursuit_attempt_reports_no_downstream_route(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
 
@@ -2957,6 +2969,39 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(shortlist.get('handoff_created'), 1)
         self.assertEqual(shortlist.get('handoff_blocked'), 0)
         self.assertIn('SHORTLIST_PROMOTED_TO_HANDOFF', shortlist.get('shortlist_handoff_reason_codes', []))
+
+    def test_market_link_diagnostics_reports_no_candidates(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+
+        self._shortlisted_signal(topic='zzqxv no matching market token')
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        market_link = diagnostics.get('market_link_summary') or {}
+        self.assertEqual(market_link.get('market_link_resolved'), 0)
+        self.assertIn('MARKET_LINK_NO_CANDIDATES', market_link.get('market_link_reason_codes', []))
+
+    def test_market_link_diagnostics_reports_ambiguous_candidates(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+
+        self._active_market(suffix='amb-1', title='Election Senate Winner 2026')
+        self._active_market(suffix='amb-2', title='Election Senate Winner 2027')
+        self._shortlisted_signal(topic='Election Senate Winner')
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        market_link = diagnostics.get('market_link_summary') or {}
+        self.assertGreaterEqual(market_link.get('market_link_ambiguous', 0), 1)
+        self.assertIn('MARKET_LINK_AMBIGUOUS', market_link.get('market_link_reason_codes', []))
+
+    def test_market_link_diagnostics_resolves_single_candidate_and_unblocks_handoff_attempt(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+
+        self._active_market(suffix='resolved', title='Fed rate cut June decision')
+        self._shortlisted_signal(topic='Fed rate cut June decision')
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        market_link = diagnostics.get('market_link_summary') or {}
+        shortlist = diagnostics.get('shortlist_handoff_summary') or {}
+        self.assertEqual(market_link.get('market_link_resolved'), 1)
+        self.assertIn('MARKET_LINK_RESOLVED', market_link.get('market_link_reason_codes', []))
+        self.assertEqual(shortlist.get('handoff_attempted'), 0)
+        self.assertIn('SHORTLIST_BLOCKED_NO_DOWNSTREAM_ROUTE', shortlist.get('shortlist_handoff_reason_codes', []))
 
     def test_consensus_decoupled_from_shortlist_is_explicit(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
@@ -3358,6 +3403,7 @@ class TestConsoleApiTests(TestCase):
             'extended_run_status': 'ACTIVE',
             'funnel_status': 'ACTIVE',
             'handoff_summary': {
+                'summary_window': 'rolling_60m',
                 'shortlisted_signals': 2,
                 'handoff_candidates': 1,
                 'consensus_reviews': 1,
@@ -3374,6 +3420,15 @@ class TestConsoleApiTests(TestCase):
                 'shortlist_handoff_reason_codes': ['SHORTLIST_PROMOTED_TO_HANDOFF'],
                 'shortlist_handoff_examples': [{'signal_id': 10, 'market_id': 20, 'reason_code': 'SHORTLIST_PROMOTED_TO_HANDOFF'}],
             },
+            'market_link_summary': {
+                'shortlisted_signals': 2,
+                'market_link_attempted': 2,
+                'market_link_resolved': 1,
+                'market_link_missing': 1,
+                'market_link_ambiguous': 0,
+                'market_link_reason_codes': ['MARKET_LINK_RESOLVED', 'MARKET_LINK_NO_CANDIDATES'],
+            },
+            'market_link_examples': [{'signal_id': 10, 'candidate_count': 1, 'chosen_market_id': 20, 'reason_code': 'MARKET_LINK_RESOLVED'}],
             'consensus_alignment': {
                 'consensus_reviews': 1,
                 'shortlist_aligned_consensus_reviews': 1,
@@ -3389,6 +3444,7 @@ class TestConsoleApiTests(TestCase):
                 'recent_trades_count': 0,
             },
             'scan_summary': {
+                'summary_window': 'latest_scan_run',
                 'runs': 1,
                 'rss_items': 3,
                 'reddit_items': 1,
@@ -3451,6 +3507,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('shortlisted_signals=', text_payload)
         self.assertIn('shortlist_handoff_summary:', text_payload)
         self.assertIn('handoff_attempted=', text_payload)
+        self.assertIn('market_link_summary:', text_payload)
+        self.assertIn('market_link_reason_codes=', text_payload)
 
     @patch('apps.mission_control.views.export_test_console_log')
     def test_export_log_json_works(self, mock_export):
