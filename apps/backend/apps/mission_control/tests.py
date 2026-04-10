@@ -2907,9 +2907,13 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self._shortlisted_signal(market=market, topic='no-route')
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         shortlist = diagnostics.get('shortlist_handoff_summary') or {}
+        downstream = diagnostics.get('downstream_route_summary') or {}
         self.assertEqual(shortlist.get('handoff_attempted'), 0)
         self.assertEqual(shortlist.get('handoff_created'), 0)
         self.assertIn('SHORTLIST_BLOCKED_NO_DOWNSTREAM_ROUTE', shortlist.get('shortlist_handoff_reason_codes', []))
+        self.assertEqual(downstream.get('route_expected'), 1)
+        self.assertEqual(downstream.get('route_missing'), 1)
+        self.assertIn('DOWNSTREAM_ROUTE_MISSING', downstream.get('downstream_route_reason_codes', []))
 
     def test_shortlist_attempted_but_not_promoted_reports_blocked_reason(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
@@ -2965,10 +2969,24 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         )
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         shortlist = diagnostics.get('shortlist_handoff_summary') or {}
+        downstream = diagnostics.get('downstream_route_summary') or {}
         self.assertEqual(shortlist.get('handoff_attempted'), 1)
         self.assertEqual(shortlist.get('handoff_created'), 1)
         self.assertEqual(shortlist.get('handoff_blocked'), 0)
         self.assertIn('SHORTLIST_PROMOTED_TO_HANDOFF', shortlist.get('shortlist_handoff_reason_codes', []))
+        self.assertEqual(downstream.get('route_created'), 1)
+        self.assertIn('DOWNSTREAM_ROUTE_CREATED_HANDOFF', downstream.get('downstream_route_reason_codes', []))
+
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel._is_downstream_route_handler_available', return_value=False)
+    def test_shortlist_route_without_handler_reports_explicit_reason(self, _mock_handler):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+
+        market = self._provider_and_market('no-handler')
+        self._shortlisted_signal(market=market, topic='no-handler')
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        downstream = diagnostics.get('downstream_route_summary') or {}
+        self.assertEqual(downstream.get('route_missing'), 1)
+        self.assertIn('DOWNSTREAM_ROUTE_NO_ELIGIBLE_HANDLER', downstream.get('downstream_route_reason_codes', []))
 
     def test_market_link_diagnostics_reports_no_candidates(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
@@ -3420,6 +3438,18 @@ class TestConsoleApiTests(TestCase):
                 'shortlist_handoff_reason_codes': ['SHORTLIST_PROMOTED_TO_HANDOFF'],
                 'shortlist_handoff_examples': [{'signal_id': 10, 'market_id': 20, 'reason_code': 'SHORTLIST_PROMOTED_TO_HANDOFF'}],
             },
+            'downstream_route_summary': {
+                'route_expected': 2,
+                'route_available': 1,
+                'route_missing': 1,
+                'route_attempted': 1,
+                'route_created': 1,
+                'route_blocked': 0,
+                'downstream_route_reason_codes': ['DOWNSTREAM_ROUTE_CREATED_HANDOFF', 'DOWNSTREAM_ROUTE_MISSING'],
+            },
+            'downstream_route_examples': [
+                {'signal_id': 10, 'market_id': 20, 'expected_route': 'research_pursuit_review', 'reason_code': 'DOWNSTREAM_ROUTE_CREATED_HANDOFF'}
+            ],
             'market_link_summary': {
                 'shortlisted_signals': 2,
                 'market_link_attempted': 2,
@@ -3507,6 +3537,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('shortlisted_signals=', text_payload)
         self.assertIn('shortlist_handoff_summary:', text_payload)
         self.assertIn('handoff_attempted=', text_payload)
+        self.assertIn('downstream_route_summary:', text_payload)
+        self.assertIn('downstream_route_reason_codes=', text_payload)
         self.assertIn('market_link_summary:', text_payload)
         self.assertIn('market_link_reason_codes=', text_payload)
 

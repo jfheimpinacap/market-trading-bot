@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 from django.db.models import Sum
+from django.conf import settings
 from django.utils import timezone
 
 from apps.autonomous_trader.models import AutonomousTradeCycleRun
@@ -33,6 +34,20 @@ STAGE_EMPTY = 'EMPTY'
 _LOW_THRESHOLD = 3
 _MARKET_LINK_CONFIDENCE_THRESHOLD = Decimal('1.00')
 _TOKEN_STOPWORDS = {'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'will', 'over'}
+_DOWNSTREAM_ROUTE_NAME = 'research_pursuit_review'
+
+
+def _is_downstream_route_disabled() -> bool:
+    return bool(getattr(settings, 'MISSION_CONTROL_DISABLE_RESEARCH_HANDOFF_ROUTE', False))
+
+
+def _is_downstream_route_handler_available() -> bool:
+    try:
+        from apps.research_agent.services.pursuit_scoring.run import run_pursuit_review
+
+        return callable(run_pursuit_review)
+    except Exception:
+        return False
 
 
 @dataclass(frozen=True)
@@ -415,9 +430,22 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
     attempted_count = 0
     created_count = 0
     blocked_count = 0
+    route_expected_count = 0
+    route_available_count = 0
+    route_missing_count = 0
+    route_attempted_count = 0
+    route_created_count = 0
+    route_blocked_count = 0
+    downstream_route_reason_codes: list[str] = []
+    downstream_route_examples: list[dict[str, Any]] = []
+    route_disabled = _is_downstream_route_disabled()
+    route_handler_available = _is_downstream_route_handler_available()
+
     for row in shortlisted_rows:
         signal_id = int(row.get('id') or 0)
         market_id = row.get('linked_market_id') or resolved_market_by_signal_id.get(signal_id)
+        downstream_reason = 'DOWNSTREAM_ROUTE_FILTERED_OUT'
+        expected_route = _DOWNSTREAM_ROUTE_NAME if market_id is not None else None
         reason = 'SHORTLIST_BLOCKED_BY_FILTER'
         blocked = True
         attempted = False
@@ -425,28 +453,48 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
 
         if market_id is None:
             reason = 'SHORTLIST_BLOCKED_NO_MARKET_LINK'
+            downstream_reason = 'DOWNSTREAM_ROUTE_FILTERED_OUT'
+        elif route_disabled:
+            reason = 'SHORTLIST_BLOCKED_NO_DOWNSTREAM_ROUTE'
+            downstream_reason = 'DOWNSTREAM_ROUTE_DISABLED'
+        elif not route_handler_available:
+            reason = 'SHORTLIST_BLOCKED_NO_DOWNSTREAM_ROUTE'
+            downstream_reason = 'DOWNSTREAM_ROUTE_NO_ELIGIBLE_HANDLER'
         elif market_id in handoff_market_ids:
             reason = 'SHORTLIST_PROMOTED_TO_HANDOFF'
             attempted = True
             created = True
             blocked = False
+            downstream_reason = 'DOWNSTREAM_ROUTE_CREATED_HANDOFF'
         elif market_id in assessed_market_ids:
             reason = 'SHORTLIST_BLOCKED_BY_FILTER'
             attempted = True
+            downstream_reason = 'DOWNSTREAM_ROUTE_BLOCKED_BY_GUARDRAIL'
         elif recent_pursuit_run_count == 0:
             reason = 'SHORTLIST_BLOCKED_NO_DOWNSTREAM_ROUTE'
+            downstream_reason = 'DOWNSTREAM_ROUTE_MISSING'
         elif market_id in previous_handoff_market_ids:
             reason = 'SHORTLIST_BLOCKED_DUPLICATE_HANDOFF'
+            downstream_reason = 'DOWNSTREAM_ROUTE_REUSED_EXISTING_HANDOFF'
         elif priority_by_market.get(market_id) == ResearchHandoffStatus.WATCHLIST:
             reason = 'SHORTLIST_BLOCKED_LOW_PRIORITY'
+            attempted = True
+            downstream_reason = 'DOWNSTREAM_ROUTE_BLOCKED_BY_GUARDRAIL'
         elif priority_by_market.get(market_id) == ResearchHandoffStatus.DEFERRED:
             reason = 'SHORTLIST_BLOCKED_CONSENSUS_REQUIRED'
+            attempted = True
+            downstream_reason = 'DOWNSTREAM_ROUTE_BLOCKED_BY_GUARDRAIL'
         elif priority_by_market.get(market_id) == ResearchHandoffStatus.BLOCKED:
             reason = 'SHORTLIST_BLOCKED_BY_FILTER'
+            attempted = True
+            downstream_reason = 'DOWNSTREAM_ROUTE_BLOCKED_BY_GUARDRAIL'
         elif priority_by_market.get(market_id) == ResearchHandoffStatus.READY_FOR_RESEARCH:
             reason = 'SHORTLIST_ELIGIBLE_FOR_HANDOFF'
+            attempted = True
+            downstream_reason = 'DOWNSTREAM_ROUTE_AVAILABLE'
         else:
             reason = 'SHORTLIST_BLOCKED_BY_FILTER'
+            downstream_reason = 'DOWNSTREAM_ROUTE_MISSING'
 
         if attempted:
             attempted_count += 1
@@ -454,9 +502,31 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
             created_count += 1
         if blocked:
             blocked_count += 1
+        if market_id is not None:
+            route_expected_count += 1
+        if downstream_reason in {'DOWNSTREAM_ROUTE_AVAILABLE', 'DOWNSTREAM_ROUTE_CREATED_HANDOFF', 'DOWNSTREAM_ROUTE_REUSED_EXISTING_HANDOFF'}:
+            route_available_count += 1
+        if downstream_reason in {'DOWNSTREAM_ROUTE_MISSING', 'DOWNSTREAM_ROUTE_DISABLED', 'DOWNSTREAM_ROUTE_NO_ELIGIBLE_HANDLER'}:
+            route_missing_count += 1
+        if attempted:
+            route_attempted_count += 1
+        if created:
+            route_created_count += 1
+        if downstream_reason in {'DOWNSTREAM_ROUTE_BLOCKED_BY_GUARDRAIL', 'DOWNSTREAM_ROUTE_FILTERED_OUT'}:
+            route_blocked_count += 1
+        downstream_route_reason_codes.append(downstream_reason)
         shortlist_reason_codes.append(reason)
         if len(shortlist_examples) < 3:
             shortlist_examples.append({'signal_id': signal_id, 'market_id': market_id, 'reason_code': reason})
+        if len(downstream_route_examples) < 3:
+            downstream_route_examples.append(
+                {
+                    'signal_id': signal_id,
+                    'market_id': market_id,
+                    'expected_route': expected_route,
+                    'reason_code': downstream_reason,
+                }
+            )
 
     shortlist_reason_codes = list(dict.fromkeys(shortlist_reason_codes))
     shortlist_handoff_summary = {
@@ -471,9 +541,27 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
             f"handoff_blocked={blocked_count} shortlist_handoff_reason_codes={','.join(shortlist_reason_codes) or 'none'}"
         ),
     }
+    normalized_downstream_route_codes = list(dict.fromkeys(downstream_route_reason_codes))
+    downstream_route_summary = {
+        'route_expected': int(route_expected_count),
+        'route_available': int(route_available_count),
+        'route_missing': int(route_missing_count),
+        'route_attempted': int(route_attempted_count),
+        'route_created': int(route_created_count),
+        'route_blocked': int(route_blocked_count),
+        'downstream_route_reason_codes': normalized_downstream_route_codes,
+        'downstream_route_summary': (
+            f"route_expected={route_expected_count} route_available={route_available_count} "
+            f"route_missing={route_missing_count} route_attempted={route_attempted_count} "
+            f"route_created={route_created_count} route_blocked={route_blocked_count} "
+            f"downstream_route_reason_codes={','.join(normalized_downstream_route_codes) or 'none'}"
+        ),
+    }
 
     if shortlisted_count > 0 and handoff_count == 0:
         handoff_reason_codes.append('SHORTLIST_PRESENT_NO_HANDOFF')
+    if route_missing_count > 0:
+        handoff_reason_codes.append('DOWNSTREAM_ROUTE_MISSING')
     if handoff_count > 0:
         handoff_reason_codes.append('HANDOFF_CREATED')
     if handoff_count > 0 and consensus_count == 0:
@@ -536,6 +624,8 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         'stage_source_mismatch': stage_source_mismatch,
         'handoff_summary': handoff_summary,
         'shortlist_handoff_summary': shortlist_handoff_summary,
+        'downstream_route_summary': downstream_route_summary,
+        'downstream_route_examples': downstream_route_examples,
         'market_link_summary': market_link_summary,
         'market_link_examples': market_link_examples,
         'consensus_alignment': consensus_alignment,
