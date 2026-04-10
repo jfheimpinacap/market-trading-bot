@@ -14,7 +14,7 @@ from apps.mission_control.services.session_heartbeat import build_heartbeat_summ
 from apps.paper_trading.models import PaperTrade, PaperTradeStatus
 from apps.paper_trading.services.portfolio import build_account_summary, get_active_account
 from apps.prediction_agent.models import PredictionConvictionReview
-from apps.research_agent.models import MarketUniverseScanRun, PredictionHandoffCandidate
+from apps.research_agent.models import MarketUniverseScanRun, NarrativeSignal, NarrativeSignalStatus, PredictionHandoffCandidate
 from apps.risk_agent.models import RiskApprovalDecision
 
 FUNNEL_ACTIVE = 'ACTIVE'
@@ -153,6 +153,35 @@ def _infer_hint(*, status: str, counts: FunnelCounts, stalled_stage: str | None)
     return 'Wait for another cycle and refresh'
 
 
+def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
+    shortlisted_count = NarrativeSignal.objects.filter(
+        status=NarrativeSignalStatus.SHORTLISTED,
+        created_at__gte=window_start,
+    ).count()
+    handoff_count = PredictionHandoffCandidate.objects.filter(created_at__gte=window_start).count()
+
+    handoff_reason_codes: list[str] = []
+    if shortlisted_count > 0 and handoff_count == 0:
+        handoff_reason_codes.append('SHORTLIST_PRESENT_NO_HANDOFF')
+
+    return {
+        'shortlisted_count': int(shortlisted_count),
+        'handoff_count': int(handoff_count),
+        'handoff_reason_codes': handoff_reason_codes,
+    }
+
+
+def _infer_stalled_reason_code(*, stalled_stage: str | None, handoff_diagnostics: dict[str, Any]) -> str | None:
+    if not stalled_stage:
+        return None
+    if (
+        stalled_stage == 'research'
+        and 'SHORTLIST_PRESENT_NO_HANDOFF' in list(handoff_diagnostics.get('handoff_reason_codes') or [])
+    ):
+        return 'SHORTLIST_PRESENT_NO_HANDOFF'
+    return f'{stalled_stage.upper()}_STAGE_EMPTY'
+
+
 def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, preset_name: str | None = None) -> dict[str, Any]:
     safe_window = max(5, min(int(window_minutes or 60), 24 * 60))
     target_preset = (preset_name or PRESET_NAME).strip() or PRESET_NAME
@@ -164,6 +193,16 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
     status = _infer_status(counts=counts)
     top_stage = _infer_top_stage(counts=counts)
     stalled_stage = _infer_stalled_stage(counts=counts)
+    risk_decision_count = counts.risk_approved_count + counts.risk_blocked_count
+    handoff_diagnostics = _build_handoff_diagnostics(window_start=window_start)
+    stalled_reason_code = _infer_stalled_reason_code(stalled_stage=stalled_stage, handoff_diagnostics=handoff_diagnostics)
+    stalled_missing_counter = {
+        'scan': 'scan_count',
+        'research': 'research_count',
+        'prediction': 'prediction_count',
+        'risk': 'risk_decision_count',
+        'paper_execution': 'paper_execution_count',
+    }.get(stalled_stage or '')
     next_action_hint = _infer_hint(status=status, counts=counts, stalled_stage=stalled_stage)
 
     stages = [
@@ -216,10 +255,14 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'prediction_count': counts.prediction_count,
         'risk_approved_count': counts.risk_approved_count,
         'risk_blocked_count': counts.risk_blocked_count,
+        'risk_decision_count': risk_decision_count,
         'paper_execution_count': counts.paper_execution_count,
         'recent_trades_count': counts.recent_trades_count,
         'top_stage': top_stage,
         'stalled_stage': stalled_stage,
+        'stalled_reason_code': stalled_reason_code,
+        'stalled_missing_counter': stalled_missing_counter,
+        'handoff_reason_codes': handoff_diagnostics.get('handoff_reason_codes', []),
         'next_action_hint': next_action_hint,
         'funnel_summary': funnel_summary,
         'stages': stages,

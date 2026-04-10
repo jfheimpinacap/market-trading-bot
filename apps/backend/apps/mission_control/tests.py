@@ -2634,7 +2634,11 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         with patch('apps.mission_control.services.live_paper_autonomy_funnel._collect_funnel_counts', return_value=counts):
             with patch('apps.mission_control.services.live_paper_autonomy_funnel.build_live_paper_validation_digest', return_value={'validation_status': 'READY'}):
                 with patch('apps.mission_control.services.live_paper_autonomy_funnel.build_heartbeat_summary', return_value={'latest_run': 999}):
-                    return self.client.get(reverse('mission_control:live-paper-autonomy-funnel'))
+                    with patch(
+                        'apps.mission_control.services.live_paper_autonomy_funnel._build_handoff_diagnostics',
+                        return_value={'shortlisted_count': 0, 'handoff_count': 0, 'handoff_reason_codes': []},
+                    ):
+                        return self.client.get(reverse('mission_control:live-paper-autonomy-funnel'))
 
     def test_active_case_returns_expected_status_and_contract(self):
         response = self._call_with_counts(
@@ -2654,10 +2658,14 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
             'prediction_count',
             'risk_approved_count',
             'risk_blocked_count',
+            'risk_decision_count',
             'paper_execution_count',
             'recent_trades_count',
             'top_stage',
             'stalled_stage',
+            'stalled_reason_code',
+            'stalled_missing_counter',
+            'handoff_reason_codes',
             'next_action_hint',
             'funnel_summary',
             'stages',
@@ -2699,6 +2707,43 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         )
         payload = response.json()
         self.assertEqual(payload['next_action_hint'], 'Risk is blocking most candidates')
+
+    def test_does_not_mark_shortlist_reason_without_real_shortlist(self):
+        counts = self._funnel_counts(scan=7, research=0, prediction=0, risk_approved=0, risk_blocked=0, execution=0, recent_trades=0)
+        with patch('apps.mission_control.services.live_paper_autonomy_funnel._collect_funnel_counts', return_value=counts), patch(
+            'apps.mission_control.services.live_paper_autonomy_funnel.build_live_paper_validation_digest',
+            return_value={'validation_status': 'READY'},
+        ), patch('apps.mission_control.services.live_paper_autonomy_funnel.build_heartbeat_summary', return_value={'latest_run': 999}), patch(
+            'apps.mission_control.services.live_paper_autonomy_funnel._build_handoff_diagnostics',
+            return_value={'shortlisted_count': 0, 'handoff_count': 0, 'handoff_reason_codes': []},
+        ):
+            payload = self.client.get(reverse('mission_control:live-paper-autonomy-funnel')).json()
+        self.assertEqual(payload['stalled_stage'], 'research')
+        self.assertNotEqual(payload.get('stalled_reason_code'), 'SHORTLIST_PRESENT_NO_HANDOFF')
+
+    def test_marks_shortlist_reason_when_shortlist_exists_without_handoff(self):
+        counts = self._funnel_counts(scan=7, research=0, prediction=0, risk_approved=0, risk_blocked=0, execution=0, recent_trades=0)
+        with patch('apps.mission_control.services.live_paper_autonomy_funnel._collect_funnel_counts', return_value=counts), patch(
+            'apps.mission_control.services.live_paper_autonomy_funnel.build_live_paper_validation_digest',
+            return_value={'validation_status': 'READY'},
+        ), patch('apps.mission_control.services.live_paper_autonomy_funnel.build_heartbeat_summary', return_value={'latest_run': 999}), patch(
+            'apps.mission_control.services.live_paper_autonomy_funnel._build_handoff_diagnostics',
+            return_value={'shortlisted_count': 3, 'handoff_count': 0, 'handoff_reason_codes': ['SHORTLIST_PRESENT_NO_HANDOFF']},
+        ):
+            payload = self.client.get(reverse('mission_control:live-paper-autonomy-funnel')).json()
+        self.assertEqual(payload['stalled_stage'], 'research')
+        self.assertEqual(payload.get('stalled_reason_code'), 'SHORTLIST_PRESENT_NO_HANDOFF')
+
+    def test_risk_stalled_missing_counter_points_to_real_payload_field(self):
+        response = self._call_with_counts(
+            counts=self._funnel_counts(scan=9, research=5, prediction=4, risk_approved=0, risk_blocked=0, execution=0, recent_trades=0)
+        )
+        payload = response.json()
+        pointer = payload.get('stalled_missing_counter')
+        self.assertEqual(payload.get('stalled_stage'), 'risk')
+        self.assertEqual(pointer, 'risk_decision_count')
+        self.assertIn(pointer, payload)
+        self.assertEqual(payload[pointer], 0)
 
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'recent_trades': []})
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
