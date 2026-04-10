@@ -14,6 +14,7 @@ from apps.mission_control.services.session_heartbeat import build_heartbeat_summ
 from apps.paper_trading.models import PaperTrade, PaperTradeStatus
 from apps.paper_trading.services.portfolio import build_account_summary, get_active_account
 from apps.prediction_agent.models import PredictionConvictionReview
+from apps.research_agent.models import NarrativeConsensusRecord
 from apps.research_agent.models import MarketUniverseScanRun, NarrativeSignal, NarrativeSignalStatus, PredictionHandoffCandidate
 from apps.risk_agent.models import RiskApprovalDecision
 
@@ -154,20 +155,96 @@ def _infer_hint(*, status: str, counts: FunnelCounts, stalled_stage: str | None)
 
 
 def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
-    shortlisted_count = NarrativeSignal.objects.filter(
+    shortlisted_qs = NarrativeSignal.objects.filter(
         status=NarrativeSignalStatus.SHORTLISTED,
         created_at__gte=window_start,
-    ).count()
-    handoff_count = PredictionHandoffCandidate.objects.filter(created_at__gte=window_start).count()
+    )
+    handoff_qs = PredictionHandoffCandidate.objects.filter(created_at__gte=window_start)
+    consensus_qs = NarrativeConsensusRecord.objects.filter(created_at__gte=window_start)
+    prediction_qs = PredictionConvictionReview.objects.filter(created_at__gte=window_start)
+    risk_qs = RiskApprovalDecision.objects.filter(created_at__gte=window_start)
+    paper_qs = AutonomousTradeCycleRun.objects.filter(started_at__gte=window_start)
+
+    shortlisted_count = shortlisted_qs.count()
+    handoff_count = handoff_qs.count()
+    consensus_count = consensus_qs.count()
+    prediction_count = prediction_qs.count()
+    risk_count = risk_qs.count()
+    paper_execution_count = paper_qs.count()
+
+    shortlist_market_ids = {
+        market_id
+        for market_id in shortlisted_qs.values_list('linked_market_id', flat=True)
+        if market_id is not None
+    }
+    handoff_market_ids = {
+        market_id
+        for market_id in handoff_qs.values_list('linked_market_id', flat=True)
+        if market_id is not None
+    }
+    prediction_market_ids = {
+        market_id
+        for market_id in prediction_qs.values_list('linked_intake_candidate__linked_market_id', flat=True)
+        if market_id is not None
+    }
+    risk_market_ids = {
+        market_id
+        for market_id in risk_qs.values_list('linked_candidate__linked_market_id', flat=True)
+        if market_id is not None
+    }
 
     handoff_reason_codes: list[str] = []
+    stage_source_mismatch: dict[str, Any] = {}
+
     if shortlisted_count > 0 and handoff_count == 0:
         handoff_reason_codes.append('SHORTLIST_PRESENT_NO_HANDOFF')
+    if handoff_count > 0:
+        handoff_reason_codes.append('HANDOFF_CREATED')
+    if handoff_count > 0 and consensus_count == 0:
+        handoff_reason_codes.append('CONSENSUS_NOT_RUN')
+    if consensus_count > 0 and handoff_count > 0 and prediction_count == 0:
+        handoff_reason_codes.append('CONSENSUS_RAN_NO_PROMOTION')
+    if handoff_count > 0 and prediction_count == 0:
+        handoff_reason_codes.append('PREDICTION_STAGE_EMPTY')
+    if prediction_count > 0 and risk_count == 0:
+        handoff_reason_codes.append('RISK_STAGE_EMPTY')
+
+    if shortlist_market_ids and handoff_market_ids:
+        missing_from_handoff = sorted(shortlist_market_ids - handoff_market_ids)
+        if missing_from_handoff:
+            stage_source_mismatch['research_to_handoff_missing_market_ids'] = missing_from_handoff
+    if handoff_market_ids and prediction_market_ids:
+        missing_from_prediction = sorted(handoff_market_ids - prediction_market_ids)
+        if missing_from_prediction:
+            stage_source_mismatch['handoff_to_prediction_missing_market_ids'] = missing_from_prediction
+    if prediction_market_ids and risk_market_ids:
+        missing_from_risk = sorted(prediction_market_ids - risk_market_ids)
+        if missing_from_risk:
+            stage_source_mismatch['prediction_to_risk_missing_market_ids'] = missing_from_risk
+    if stage_source_mismatch:
+        handoff_reason_codes.append('FUNNEL_STAGE_SOURCE_MISMATCH')
+
+    if shortlisted_count > 0 and prediction_count == 0 and risk_count == 0 and paper_execution_count == 0:
+        handoff_reason_codes.append('DOWNSTREAM_EVIDENCE_INSUFFICIENT')
+
+    normalized_codes = list(dict.fromkeys(handoff_reason_codes))
+    handoff_summary = (
+        f"shortlisted_signals={shortlisted_count} handoff_candidates={handoff_count} "
+        f"consensus_reviews={consensus_count} prediction_candidates={prediction_count} "
+        f"risk_decisions={risk_count} paper_execution_candidates={paper_execution_count} "
+        f"handoff_reason_codes={','.join(normalized_codes) or 'none'}"
+    )
 
     return {
-        'shortlisted_count': int(shortlisted_count),
-        'handoff_count': int(handoff_count),
-        'handoff_reason_codes': handoff_reason_codes,
+        'shortlisted_signals': int(shortlisted_count),
+        'handoff_candidates': int(handoff_count),
+        'consensus_reviews': int(consensus_count),
+        'prediction_candidates': int(prediction_count),
+        'risk_decisions': int(risk_count),
+        'paper_execution_candidates': int(paper_execution_count),
+        'handoff_reason_codes': normalized_codes,
+        'stage_source_mismatch': stage_source_mismatch,
+        'handoff_summary': handoff_summary,
     }
 
 
@@ -196,6 +273,16 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
     risk_decision_count = counts.risk_approved_count + counts.risk_blocked_count
     handoff_diagnostics = _build_handoff_diagnostics(window_start=window_start)
     stalled_reason_code = _infer_stalled_reason_code(stalled_stage=stalled_stage, handoff_diagnostics=handoff_diagnostics)
+    if not stalled_reason_code and stalled_stage:
+        stage_reason_map = {
+            'prediction': 'PREDICTION_STAGE_EMPTY',
+            'risk': 'RISK_STAGE_EMPTY',
+        }
+        reason_candidate = stage_reason_map.get(stalled_stage)
+        if reason_candidate and reason_candidate in handoff_diagnostics.get('handoff_reason_codes', []):
+            stalled_reason_code = reason_candidate
+        elif 'DOWNSTREAM_EVIDENCE_INSUFFICIENT' in handoff_diagnostics.get('handoff_reason_codes', []):
+            stalled_reason_code = 'DOWNSTREAM_EVIDENCE_INSUFFICIENT'
     stalled_missing_counter = {
         'scan': 'scan_count',
         'research': 'research_count',
@@ -243,7 +330,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         f'{status}: scan={counts.scan_count}, research={counts.research_count}, prediction={counts.prediction_count}, '
         f'risk_approved={counts.risk_approved_count}, risk_blocked={counts.risk_blocked_count}, '
         f'paper_execution={counts.paper_execution_count}, recent_trades={counts.recent_trades_count}, '
-        f'heartbeat_alive={heartbeat_alive}, validation={validation.get("validation_status")}.'
+        f'heartbeat_alive={heartbeat_alive}, validation={validation.get("validation_status")}, '
+        f'handoff={handoff_diagnostics.get("handoff_summary")}.'
     )
 
     return {
@@ -263,6 +351,14 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'stalled_reason_code': stalled_reason_code,
         'stalled_missing_counter': stalled_missing_counter,
         'handoff_reason_codes': handoff_diagnostics.get('handoff_reason_codes', []),
+        'stage_source_mismatch': handoff_diagnostics.get('stage_source_mismatch', {}),
+        'handoff_summary': handoff_diagnostics.get('handoff_summary', ''),
+        'shortlisted_signals': handoff_diagnostics.get('shortlisted_signals', 0),
+        'handoff_candidates': handoff_diagnostics.get('handoff_candidates', 0),
+        'consensus_reviews': handoff_diagnostics.get('consensus_reviews', 0),
+        'prediction_candidates': handoff_diagnostics.get('prediction_candidates', 0),
+        'risk_decisions': handoff_diagnostics.get('risk_decisions', 0),
+        'paper_execution_candidates': handoff_diagnostics.get('paper_execution_candidates', 0),
         'next_action_hint': next_action_hint,
         'funnel_summary': funnel_summary,
         'stages': stages,

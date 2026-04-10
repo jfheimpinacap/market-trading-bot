@@ -343,7 +343,13 @@ Implementation explicitly reuses `live_paper_trial_history` (aggregation-only, n
   - `funnel_status` (`ACTIVE`, `THIN_FLOW`, `STALLED`)
   - compact counts (`scan_count`, `research_count`, `prediction_count`, `risk_approved_count`, `risk_blocked_count`, `paper_execution_count`, `recent_trades_count`)
   - `top_stage`, optional `stalled_stage`, deterministic `next_action_hint`, concise `funnel_summary`
+  - downstream explainability: `stalled_reason_code`, `stalled_missing_counter`, `handoff_reason_codes`, `stage_source_mismatch`
+  - compact handoff packet: `handoff_summary` + counters (`shortlisted_signals`, `handoff_candidates`, `consensus_reviews`, `prediction_candidates`, `risk_decisions`, `paper_execution_candidates`)
   - per-stage compact list with `status` (`ACTIVE`, `LOW`, `EMPTY`)
+
+Consolidated funnel fix included:
+- `SHORTLIST_PRESENT_NO_HANDOFF` is emitted only when shortlist evidence is real and handoff is absent.
+- `stalled_missing_counter` for `risk` points to the real payload field `risk_decision_count`.
 
 Implementation is aggregation/observability only: it reuses existing scan/research/prediction/risk/paper/heartbeat/validation signals, introduces no new models, does not alter decision authority, and keeps strict real-market read-only + paper-only boundaries.
 
@@ -4349,6 +4355,7 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
 - Estado consolidado: validation, trial, trend, gate, extended run, funnel, attention, scan y portfolio.
 - Exportable log: `text` (copy-paste friendly) y `json` (debug estructurado).
 - Persistencia liviana in-memory: estado actual + último log + buffer corto histórico.
+- Incluye bloque `handoff_summary` reutilizable para ubicar rápidamente dónde se corta el downstream después de scan exitoso.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`
