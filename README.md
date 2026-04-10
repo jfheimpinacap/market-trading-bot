@@ -3247,6 +3247,14 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - `risk_decisions`
   - `paper_execution_candidates`
   - `handoff_reason_codes`
+- Se añade `shortlist_handoff_summary` para aislar el primer corte real `shortlist -> handoff`:
+  - `shortlisted_signals`, `handoff_attempted`, `handoff_created`, `handoff_blocked`
+  - `shortlist_handoff_reason_codes` (compactos) y hasta 3 ejemplos (`signal_id`/`market_id` + `reason_code`)
+  - permite distinguir explícitamente: shortlist sin intento, intento bloqueado, promoción creada
+- Se añade `consensus_alignment` para evitar diagnóstico engañoso:
+  - `consensus_reviews`
+  - `shortlist_aligned_consensus_reviews`
+  - `consensus_aligned_with_shortlist` (si `false`, consensus reciente está desacoplado del shortlist actual)
 - El funnel agrega explainability para `STALLED/BLOCKED` con:
   - `stalled_reason_code`
   - `stalled_missing_counter` (incluye puntero real para `risk` vía `risk_decision_count`)

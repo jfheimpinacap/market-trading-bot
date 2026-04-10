@@ -2858,6 +2858,134 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         self.assertTrue(mock_heartbeat.called)
 
 
+class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
+    def _provider_and_market(self, suffix: str = 'base'):
+        from apps.markets.models import Market, Provider
+
+        provider = Provider.objects.create(name=f'Demo Provider {suffix}', slug=f'demo-provider-{suffix}')
+        market = Market.objects.create(provider=provider, title=f'Market {suffix}', slug=f'market-{suffix}')
+        return market
+
+    def _shortlisted_signal(self, *, market=None, topic: str = 'topic-a'):
+        from apps.research_agent.models import NarrativeCluster, NarrativeSignal, NarrativeSignalStatus, SourceScanRun
+
+        scan_run = SourceScanRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        cluster = NarrativeCluster.objects.create(
+            scan_run=scan_run,
+            canonical_topic=topic,
+            representative_headline=f'headline-{topic}',
+            source_types=['rss'],
+            item_count=3,
+            first_seen_at=timezone.now(),
+            last_seen_at=timezone.now(),
+        )
+        return NarrativeSignal.objects.create(
+            scan_run=scan_run,
+            canonical_label=f'signal-{topic}',
+            topic=topic,
+            status=NarrativeSignalStatus.SHORTLISTED,
+            linked_cluster=cluster,
+            linked_market=market,
+        )
+
+    def test_shortlist_present_without_pursuit_attempt_reports_no_downstream_route(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+
+        market = self._provider_and_market('no-route')
+        self._shortlisted_signal(market=market, topic='no-route')
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        shortlist = diagnostics.get('shortlist_handoff_summary') or {}
+        self.assertEqual(shortlist.get('handoff_attempted'), 0)
+        self.assertEqual(shortlist.get('handoff_created'), 0)
+        self.assertIn('SHORTLIST_BLOCKED_NO_DOWNSTREAM_ROUTE', shortlist.get('shortlist_handoff_reason_codes', []))
+
+    def test_shortlist_attempted_but_not_promoted_reports_blocked_reason(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.research_agent.models import ResearchPursuitRun, ResearchStructuralAssessment, ResearchStructuralStatus
+
+        market = self._provider_and_market('blocked')
+        self._shortlisted_signal(market=market, topic='blocked')
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.BLOCKED,
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        shortlist = diagnostics.get('shortlist_handoff_summary') or {}
+        self.assertEqual(shortlist.get('handoff_attempted'), 1)
+        self.assertEqual(shortlist.get('handoff_created'), 0)
+        self.assertEqual(shortlist.get('handoff_blocked'), 1)
+        self.assertIn('SHORTLIST_BLOCKED_BY_FILTER', shortlist.get('shortlist_handoff_reason_codes', []))
+
+    def test_shortlist_promoted_to_handoff_reports_counters(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('promoted')
+        self._shortlisted_signal(market=market, topic='promoted')
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION,
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.READY,
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        shortlist = diagnostics.get('shortlist_handoff_summary') or {}
+        self.assertEqual(shortlist.get('handoff_attempted'), 1)
+        self.assertEqual(shortlist.get('handoff_created'), 1)
+        self.assertEqual(shortlist.get('handoff_blocked'), 0)
+        self.assertIn('SHORTLIST_PROMOTED_TO_HANDOFF', shortlist.get('shortlist_handoff_reason_codes', []))
+
+    def test_consensus_decoupled_from_shortlist_is_explicit(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.research_agent.models import NarrativeCluster, NarrativeConsensusRecord, NarrativeConsensusRun, SourceScanRun
+
+        self._shortlisted_signal(topic='aligned-cluster-missing')
+        scan_run = SourceScanRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        decoupled_cluster = NarrativeCluster.objects.create(
+            scan_run=scan_run,
+            canonical_topic='decoupled',
+            representative_headline='decoupled-headline',
+            source_types=['reddit'],
+            item_count=2,
+            first_seen_at=timezone.now(),
+            last_seen_at=timezone.now(),
+        )
+        consensus_run = NarrativeConsensusRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        NarrativeConsensusRecord.objects.create(
+            consensus_run=consensus_run,
+            linked_cluster=decoupled_cluster,
+            topic_label='decoupled',
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertIn('CONSENSUS_DECOUPLED_FROM_SHORTLIST', diagnostics.get('handoff_reason_codes', []))
+        alignment = diagnostics.get('consensus_alignment') or {}
+        self.assertFalse(alignment.get('consensus_aligned_with_shortlist', True))
+        self.assertEqual(alignment.get('shortlist_aligned_consensus_reviews'), 0)
+
+
 class ExtendedPaperRunGateApiTests(TestCase):
     def _base_validation(self, status: str):
         return {
@@ -3238,6 +3366,19 @@ class TestConsoleApiTests(TestCase):
                 'paper_execution_candidates': 0,
                 'handoff_reason_codes': ['HANDOFF_CREATED'],
             },
+            'shortlist_handoff_summary': {
+                'shortlisted_signals': 2,
+                'handoff_attempted': 1,
+                'handoff_created': 1,
+                'handoff_blocked': 0,
+                'shortlist_handoff_reason_codes': ['SHORTLIST_PROMOTED_TO_HANDOFF'],
+                'shortlist_handoff_examples': [{'signal_id': 10, 'market_id': 20, 'reason_code': 'SHORTLIST_PROMOTED_TO_HANDOFF'}],
+            },
+            'consensus_alignment': {
+                'consensus_reviews': 1,
+                'shortlist_aligned_consensus_reviews': 1,
+                'consensus_aligned_with_shortlist': True,
+            },
             'attention_mode': 'HEALTHY',
             'portfolio_summary': {
                 'cash': 10000.0,
@@ -3308,6 +3449,8 @@ class TestConsoleApiTests(TestCase):
         text_payload = export_test_console_log(fmt='text')
         self.assertIn('handoff_summary:', text_payload)
         self.assertIn('shortlisted_signals=', text_payload)
+        self.assertIn('shortlist_handoff_summary:', text_payload)
+        self.assertIn('handoff_attempted=', text_payload)
 
     @patch('apps.mission_control.views.export_test_console_log')
     def test_export_log_json_works(self, mock_export):

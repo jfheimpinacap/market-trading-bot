@@ -214,6 +214,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
                 'paper_execution_candidates': int(funnel.get('paper_execution_candidates') or 0),
                 'handoff_reason_codes': list(funnel.get('handoff_reason_codes') or []),
             },
+            'shortlist_handoff_summary': dict(funnel.get('shortlist_handoff_summary') or {}),
+            'consensus_alignment': dict(funnel.get('consensus_alignment') or {}),
             'attention_mode': str(attention.get('attention_mode') or 'UNKNOWN'),
             'portfolio_summary': _build_portfolio_summary(),
             'scan_summary': _build_scan_summary(scan_run=scan_run),
@@ -230,6 +232,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     errors = payload.get('errors') or []
     blockers = payload.get('blocker_summary') or []
     handoff_summary = payload.get('handoff_summary') or {}
+    shortlist_handoff = payload.get('shortlist_handoff_summary') or {}
+    consensus_alignment = payload.get('consensus_alignment') or {}
 
     lines = [
         '=== Mission Control Test Console Export ===',
@@ -258,6 +262,23 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"paper_execution_candidates={handoff_summary.get('paper_execution_candidates', 0)}"
         ),
         f"  handoff_reason_codes={','.join(handoff_summary.get('handoff_reason_codes') or []) or 'none'}",
+        'shortlist_handoff_summary:',
+        (
+            f"  shortlisted_signals={shortlist_handoff.get('shortlisted_signals', 0)} "
+            f"handoff_attempted={shortlist_handoff.get('handoff_attempted', 0)} "
+            f"handoff_created={shortlist_handoff.get('handoff_created', 0)} "
+            f"handoff_blocked={shortlist_handoff.get('handoff_blocked', 0)}"
+        ),
+        f"  shortlist_handoff_reason_codes={','.join(shortlist_handoff.get('shortlist_handoff_reason_codes') or []) or 'none'}",
+        (
+            f"  shortlist_handoff_examples="
+            f"{shortlist_handoff.get('shortlist_handoff_examples') or []}"
+        ),
+        (
+            f"  consensus_alignment=consensus_reviews={consensus_alignment.get('consensus_reviews', 0)} "
+            f"shortlist_aligned={consensus_alignment.get('shortlist_aligned_consensus_reviews', 0)} "
+            f"aligned_with_shortlist={consensus_alignment.get('consensus_aligned_with_shortlist', True)}"
+        ),
         'scan_summary:',
         f"  runs={scan.get('runs', 0)} rss_items={scan.get('rss_items', 0)} reddit_items={scan.get('reddit_items', 0)} x_items={scan.get('x_items', 0)}",
         f"  deduped_items={scan.get('deduped_items', 0)} clusters={scan.get('clusters', 0)} shortlisted_signals={scan.get('shortlisted_signals', 0)}",
@@ -301,6 +322,8 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         'attention_mode': 'UNKNOWN',
         'funnel_status': 'UNKNOWN',
         'handoff_summary': {},
+        'shortlist_handoff_summary': {},
+        'consensus_alignment': {},
         'warnings': [],
         'errors': [],
         'blocker_summary': [],

@@ -4356,6 +4356,10 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
 - Exportable log: `text` (copy-paste friendly) y `json` (debug estructurado).
 - Persistencia liviana in-memory: estado actual + último log + buffer corto histórico.
 - Incluye bloque `handoff_summary` reutilizable para ubicar rápidamente dónde se corta el downstream después de scan exitoso.
+- Incluye `shortlist_handoff_summary` para diagnóstico explícito del tramo `shortlist -> handoff`:
+  - `shortlisted_signals`, `handoff_attempted`, `handoff_created`, `handoff_blocked`
+  - reason codes compactos + ejemplos limitados (máx 3) para evitar payload grande.
+- Incluye `consensus_alignment` para distinguir si `consensus_reviews` representa el mismo flujo del shortlist reciente o evidencia desacoplada.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`
