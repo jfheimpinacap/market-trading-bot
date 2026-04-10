@@ -3298,6 +3298,12 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - diferencia explícitamente `PREDICTION_INTAKE_ROUTE_AVAILABLE`, `PREDICTION_INTAKE_ATTEMPTED`, `PREDICTION_INTAKE_CREATED`, `PREDICTION_INTAKE_REUSED_EXISTING_CANDIDATE` y bloqueos reales (`..._BLOCKED_BY_FILTER`, `..._BLOCKED_BY_GUARDRAIL`, `..._NO_ELIGIBLE_HANDLER`).
   - evita falsos “route missing” por falta de intake run reciente cuando el handler existe.
   - mantiene enfoque observability-first y postura **REAL_READ_ONLY + PAPER_ONLY** (sin live trading real).
+- **Prompt 233** agrega diagnóstico explícito de guardrails/filtros de prediction intake:
+  - `prediction_intake_guardrail_reason_codes`, `prediction_intake_filter_reason_codes`, `prediction_intake_guardrail_summary`.
+  - separación semántica entre guardrail real (`mission_control_precheck`) vs filtro de elegibilidad/reuse/dedupe.
+  - `prediction_intake_eligible_count`, `prediction_intake_ineligible_count`, `prediction_intake_reused_count` para distinguir creación útil vs reuse vs bloqueo.
+  - `prediction_intake_examples` ahora incluye `handoff_status`, `handoff_confidence`, `guardrail_name`/`filter_name`, `observed_value`, `threshold`, `blocking_stage`.
+  - mantiene postura **observability-first + REAL_READ_ONLY + PAPER_ONLY**; no relaja safety/risk de forma indiscriminada.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.

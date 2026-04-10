@@ -3250,8 +3250,131 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         summary = diagnostics.get('prediction_intake_summary') or {}
         self.assertIn('PREDICTION_INTAKE_ROUTE_AVAILABLE', summary.get('prediction_intake_reason_codes', []))
-        self.assertIn('PREDICTION_INTAKE_BLOCKED_BY_FILTER', summary.get('prediction_intake_reason_codes', []))
+        self.assertIn('PREDICTION_INTAKE_CONFIDENCE_BELOW_THRESHOLD', summary.get('prediction_intake_reason_codes', []))
+        self.assertIn('PREDICTION_INTAKE_CONFIDENCE_BELOW_THRESHOLD', summary.get('prediction_intake_filter_reason_codes', []))
         self.assertNotIn('PREDICTION_INTAKE_ROUTE_MISSING', summary.get('prediction_intake_reason_codes', []))
+
+    def test_prediction_intake_blocks_ineligible_status_with_explicit_filter_reason(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-status-ineligible')
+        market.current_market_probability = Decimal('0.6400')
+        market.save(update_fields=['current_market_probability'])
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION,
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status='paused',
+            handoff_confidence=Decimal('0.8000'),
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        summary = diagnostics.get('prediction_intake_summary') or {}
+        self.assertIn('PREDICTION_INTAKE_HANDOFF_STATUS_INELIGIBLE', summary.get('prediction_intake_filter_reason_codes', []))
+        self.assertEqual(summary.get('prediction_intake_ineligible_count'), 1)
+
+    def test_prediction_intake_blocks_missing_market_probability_with_explicit_filter_reason(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-market-probability-missing')
+        market.current_market_probability = None
+        market.save(update_fields=['current_market_probability'])
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION,
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.READY,
+            handoff_confidence=Decimal('0.8000'),
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        summary = diagnostics.get('prediction_intake_summary') or {}
+        self.assertIn('PREDICTION_INTAKE_MARKET_PROBABILITY_MISSING', summary.get('prediction_intake_filter_reason_codes', []))
+
+    def test_prediction_intake_reuse_is_not_counted_as_guardrail(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.prediction_agent.services.run import run_prediction_intake_review
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-reuse-no-guardrail')
+        market.current_market_probability = Decimal('0.5100')
+        market.save(update_fields=['current_market_probability'])
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION,
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.READY,
+            handoff_confidence=Decimal('0.7700'),
+        )
+        run_prediction_intake_review(triggered_by='prediction-reuse-no-guardrail')
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        summary = diagnostics.get('prediction_intake_summary') or {}
+        self.assertEqual(summary.get('prediction_intake_guardrail_blocked'), 0)
+        self.assertGreaterEqual(summary.get('prediction_intake_reused_count', 0), 1)
+        self.assertIn('PREDICTION_INTAKE_REUSED_EXISTING_CANDIDATE', summary.get('prediction_intake_reason_codes', []))
 
 
 class ExtendedPaperRunGateApiTests(TestCase):
@@ -3748,6 +3871,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('market_link_reason_codes=', text_payload)
         self.assertIn('prediction_intake_summary:', text_payload)
         self.assertIn('prediction_intake_reason_codes=', text_payload)
+        self.assertIn('prediction_intake_guardrail_reason_codes=', text_payload)
+        self.assertIn('prediction_intake_filter_reason_codes=', text_payload)
 
     @patch('apps.mission_control.views.export_test_console_log')
     def test_export_log_json_works(self, mock_export):

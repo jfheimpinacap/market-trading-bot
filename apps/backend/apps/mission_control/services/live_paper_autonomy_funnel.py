@@ -34,6 +34,7 @@ STAGE_EMPTY = 'EMPTY'
 
 _LOW_THRESHOLD = 3
 _MARKET_LINK_CONFIDENCE_THRESHOLD = Decimal('1.00')
+_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD = Decimal('0.5500')
 _TOKEN_STOPWORDS = {'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'will', 'over'}
 _DOWNSTREAM_ROUTE_NAME = 'research_pursuit_review'
 _PREDICTION_INTAKE_ROUTE_NAME = 'prediction_intake_review'
@@ -696,18 +697,35 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
     prediction_intake_blocked = 0
     prediction_intake_missing_fields = 0
     prediction_intake_guardrail_blocked = 0
+    prediction_intake_eligible_count = 0
+    prediction_intake_ineligible_count = 0
+    prediction_intake_reused_count = 0
+    prediction_intake_guardrail_reason_codes: list[str] = []
+    prediction_intake_filter_reason_codes: list[str] = []
 
     for handoff in handoff_rows:
+        diagnosis: dict[str, Any] = {
+            'reason_code': 'PREDICTION_INTAKE_FILTER_REJECTED',
+            'reason_type': 'filter',
+            'guardrail_name': None,
+            'filter_name': None,
+            'observed_value': None,
+            'threshold': None,
+            'blocking_stage': 'mission_control_precheck',
+        }
         missing_fields = _missing_prediction_intake_fields(handoff=handoff)
         if route_available:
             prediction_intake_reason_codes.append('PREDICTION_INTAKE_ROUTE_AVAILABLE')
         if handoff.id in intake_candidate_by_handoff:
             prediction_intake_attempted += 1
             prediction_intake_created += 1
+            prediction_intake_eligible_count += 1
             if handoff.id in bridge_created_handoff_ids:
                 reason_code = 'PREDICTION_INTAKE_CREATED'
             else:
                 reason_code = 'PREDICTION_INTAKE_REUSED_EXISTING_CANDIDATE'
+                prediction_intake_reused_count += 1
+            prediction_intake_reason_codes.append('PREDICTION_INTAKE_ELIGIBLE')
             prediction_intake_reason_codes.append(reason_code)
             if len(prediction_intake_examples) < 3:
                 prediction_intake_examples.append(
@@ -715,46 +733,118 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
                         'handoff_id': handoff.id,
                         'signal_id': None,
                         'market_id': _safe_int(handoff.linked_market_id),
+                        'handoff_status': str(getattr(handoff, 'handoff_status', '') or ''),
+                        'handoff_confidence': str(getattr(handoff, 'handoff_confidence', '') or ''),
                         'expected_route': _PREDICTION_INTAKE_ROUTE_NAME,
                         'reason_code': reason_code,
+                        'blocking_stage': 'existing_candidate',
+                        'guardrail_name': None,
+                        'filter_name': 'existing_candidate_reuse',
+                        'observed_value': handoff.id,
+                        'threshold': None,
                         'missing_fields': [],
                     }
                 )
             continue
 
         if prediction_intake_route_disabled:
-            reason_code = 'PREDICTION_INTAKE_ROUTE_MISSING'
+            diagnosis.update(
+                reason_code='PREDICTION_INTAKE_ROUTE_MISSING',
+                reason_type='guardrail',
+                guardrail_name='prediction_intake_route_enabled',
+                observed_value=False,
+                threshold=True,
+            )
             prediction_intake_blocked += 1
         elif not prediction_intake_handler_available:
-            reason_code = 'PREDICTION_INTAKE_NO_ELIGIBLE_HANDLER'
+            diagnosis.update(
+                reason_code='PREDICTION_INTAKE_NO_ELIGIBLE_HANDLER',
+                reason_type='guardrail',
+                guardrail_name='prediction_intake_handler_available',
+                observed_value=False,
+                threshold=True,
+            )
             prediction_intake_blocked += 1
         elif missing_fields:
-            reason_code = 'PREDICTION_INTAKE_MISSING_REQUIRED_FIELDS'
+            diagnosis.update(
+                reason_code='PREDICTION_INTAKE_MISSING_REQUIRED_FIELDS',
+                reason_type='guardrail',
+                guardrail_name='prediction_intake_required_fields',
+                observed_value=missing_fields,
+                threshold='[]',
+            )
             prediction_intake_blocked += 1
             prediction_intake_missing_fields += 1
         elif handoff.handoff_status in {PredictionHandoffStatus.BLOCKED, PredictionHandoffStatus.DEFERRED}:
-            reason_code = 'PREDICTION_INTAKE_BLOCKED_BY_GUARDRAIL'
+            diagnosis.update(
+                reason_code='PREDICTION_INTAKE_GUARDRAIL_REJECTED',
+                reason_type='guardrail',
+                guardrail_name='handoff_status_guardrail',
+                observed_value=handoff.handoff_status,
+                threshold='READY',
+            )
             prediction_intake_blocked += 1
             prediction_intake_guardrail_blocked += 1
         elif getattr(handoff, 'linked_market_id', None) is None or getattr(getattr(handoff, 'linked_market', None), 'current_market_probability', None) is None:
-            reason_code = 'PREDICTION_INTAKE_BLOCKED_BY_FILTER'
+            diagnosis.update(
+                reason_code='PREDICTION_INTAKE_MARKET_PROBABILITY_MISSING',
+                reason_type='filter',
+                filter_name='market_probability_presence',
+                observed_value=getattr(getattr(handoff, 'linked_market', None), 'current_market_probability', None),
+                threshold='not_none',
+            )
             prediction_intake_blocked += 1
-        elif handoff.handoff_confidence is None or Decimal(str(handoff.handoff_confidence)) < Decimal('0.5500'):
-            reason_code = 'PREDICTION_INTAKE_BLOCKED_BY_FILTER'
+        elif handoff.handoff_confidence is None or Decimal(str(handoff.handoff_confidence)) < _PREDICTION_INTAKE_CONFIDENCE_THRESHOLD:
+            diagnosis.update(
+                reason_code='PREDICTION_INTAKE_CONFIDENCE_BELOW_THRESHOLD',
+                reason_type='filter',
+                filter_name='handoff_confidence_threshold',
+                observed_value=str(getattr(handoff, 'handoff_confidence', None)),
+                threshold=str(_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD),
+            )
             prediction_intake_blocked += 1
         elif handoff.handoff_status != PredictionHandoffStatus.READY:
-            reason_code = 'PREDICTION_INTAKE_BLOCKED_BY_FILTER'
+            diagnosis.update(
+                reason_code='PREDICTION_INTAKE_HANDOFF_STATUS_INELIGIBLE',
+                reason_type='filter',
+                filter_name='handoff_status_eligibility',
+                observed_value=handoff.handoff_status,
+                threshold=PredictionHandoffStatus.READY,
+            )
             prediction_intake_blocked += 1
         elif handoff.linked_consensus_record_id is None and consensus_count > 0:
-            reason_code = 'PREDICTION_INTAKE_CONSENSUS_NOT_PROMOTED'
+            diagnosis.update(
+                reason_code='PREDICTION_INTAKE_FILTER_REJECTED',
+                reason_type='filter',
+                filter_name='consensus_link_required_when_consensus_exists',
+                observed_value=False,
+                threshold=True,
+            )
             prediction_intake_blocked += 1
         elif bridge_attempted:
-            reason_code = 'PREDICTION_INTAKE_ATTEMPTED'
+            diagnosis.update(
+                reason_code='PREDICTION_INTAKE_RECENT_DEDUPE_ACTIVE',
+                reason_type='filter',
+                filter_name='recent_intake_dedupe_window',
+                observed_value=True,
+                threshold=False,
+                blocking_stage='handler_internal',
+            )
             prediction_intake_attempted += 1
             prediction_intake_blocked += 1
         else:
-            reason_code = 'PREDICTION_INTAKE_BLOCKED_BY_FILTER'
+            diagnosis.update(
+                reason_code='PREDICTION_INTAKE_FILTER_REJECTED',
+                reason_type='filter',
+                filter_name='fallback_eligibility_filter',
+            )
             prediction_intake_blocked += 1
+        reason_code = diagnosis['reason_code']
+        if diagnosis['reason_type'] == 'guardrail':
+            prediction_intake_guardrail_reason_codes.append(reason_code)
+        else:
+            prediction_intake_filter_reason_codes.append(reason_code)
+        prediction_intake_ineligible_count += 1
         prediction_intake_reason_codes.append(reason_code)
         if len(prediction_intake_examples) < 3:
             prediction_intake_examples.append(
@@ -762,8 +852,15 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
                     'handoff_id': handoff.id,
                     'signal_id': None,
                     'market_id': _safe_int(handoff.linked_market_id),
+                    'handoff_status': str(getattr(handoff, 'handoff_status', '') or ''),
+                    'handoff_confidence': str(getattr(handoff, 'handoff_confidence', '') or ''),
                     'expected_route': _PREDICTION_INTAKE_ROUTE_NAME,
                     'reason_code': reason_code,
+                    'blocking_stage': diagnosis.get('blocking_stage'),
+                    'guardrail_name': diagnosis.get('guardrail_name'),
+                    'filter_name': diagnosis.get('filter_name'),
+                    'observed_value': diagnosis.get('observed_value'),
+                    'threshold': diagnosis.get('threshold'),
                     'missing_fields': missing_fields,
                 }
             )
@@ -774,9 +871,11 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         prediction_intake_reason_codes.append('PREDICTION_INTAKE_CREATED')
     if prediction_intake_attempted == 0 and handoff_count > 0:
         if route_available:
-            prediction_intake_reason_codes.append('PREDICTION_INTAKE_BLOCKED_BY_FILTER')
+            prediction_intake_reason_codes.append('PREDICTION_INTAKE_FILTER_REJECTED')
         else:
             prediction_intake_reason_codes.append('PREDICTION_INTAKE_ROUTE_MISSING')
+    prediction_intake_guardrail_reason_codes = list(dict.fromkeys(prediction_intake_guardrail_reason_codes))
+    prediction_intake_filter_reason_codes = list(dict.fromkeys(prediction_intake_filter_reason_codes))
     prediction_intake_summary = {
         'handoff_candidates': int(handoff_count),
         'prediction_intake_attempted': int(prediction_intake_attempted),
@@ -784,10 +883,23 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         'prediction_intake_blocked': int(prediction_intake_blocked),
         'prediction_intake_missing_fields': int(prediction_intake_missing_fields),
         'prediction_intake_guardrail_blocked': int(prediction_intake_guardrail_blocked),
+        'prediction_intake_eligible_count': int(prediction_intake_eligible_count),
+        'prediction_intake_ineligible_count': int(prediction_intake_ineligible_count),
+        'prediction_intake_reused_count': int(prediction_intake_reused_count),
         'prediction_intake_reason_codes': list(dict.fromkeys(prediction_intake_reason_codes)),
+        'prediction_intake_guardrail_reason_codes': prediction_intake_guardrail_reason_codes,
+        'prediction_intake_filter_reason_codes': prediction_intake_filter_reason_codes,
+        'prediction_intake_guardrail_summary': (
+            f"guardrail_blocked={prediction_intake_guardrail_blocked} "
+            f"guardrail_reasons={','.join(prediction_intake_guardrail_reason_codes) or 'none'} "
+            f"filter_reasons={','.join(prediction_intake_filter_reason_codes) or 'none'}"
+        ),
         'prediction_intake_summary': (
             f"handoff_candidates={handoff_count} prediction_intake_attempted={prediction_intake_attempted} "
             f"prediction_intake_created={prediction_intake_created} prediction_intake_blocked={prediction_intake_blocked} "
+            f"prediction_intake_eligible_count={prediction_intake_eligible_count} "
+            f"prediction_intake_ineligible_count={prediction_intake_ineligible_count} "
+            f"prediction_intake_reused_count={prediction_intake_reused_count} "
             f"prediction_intake_missing_fields={prediction_intake_missing_fields} "
             f"prediction_intake_guardrail_blocked={prediction_intake_guardrail_blocked} "
             f"prediction_intake_reason_codes={','.join(list(dict.fromkeys(prediction_intake_reason_codes))) or 'none'}"
