@@ -53,6 +53,21 @@ Mission Control export logs now include a compact `market_link_summary` block to
 
 `research_agent` market inference was also tightened conservatively to reduce false negatives in demo/local topics while still refusing ambiguous ties. The flow remains observability-first and strictly `REAL_READ_ONLY + PAPER_ONLY` (no live execution enablement).
 
+### Downstream route diagnostics (market link OK, handoff still missing)
+
+Mission Control funnel/Test Console now also emits `downstream_route_summary` so “linked but no handoff” is explicit instead of hidden behind generic blockage:
+
+- `route_expected`
+- `route_available`
+- `route_missing`
+- `route_attempted`
+- `route_created`
+- `route_blocked`
+- `downstream_route_reason_codes`
+- `downstream_route_examples` (max 3: `signal_id`, `market_id`, `expected_route`, `reason_code`)
+
+This is observability-first for V1 local/test paper runs and keeps strict boundaries (`REAL_READ_ONLY + PAPER_ONLY`). It does not bypass consensus/risk/policy/safety guardrails.
+
 ### Live Read-Only Paper Autopilot Bootstrap (backend, new)
 
 `mission_control` now exposes a compact backend bootstrap for autonomous paper sessions using real-market read-only data without enabling live trading execution.

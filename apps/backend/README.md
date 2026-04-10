@@ -4363,6 +4363,10 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - `shortlisted_signals`, `market_link_attempted`, `market_link_resolved`, `market_link_missing`, `market_link_ambiguous`
   - `market_link_reason_codes` (`MARKET_LINK_NO_CANDIDATES`, `MARKET_LINK_AMBIGUOUS`, `MARKET_LINK_BELOW_CONFIDENCE_THRESHOLD`, etc.)
   - `market_link_examples` compactos (máx 3: `signal_id`, `candidate_count`, `chosen_market_id`, `reason_code`)
+- Incluye `downstream_route_summary` para separar explícitamente el cuello `shortlist-linked -> handoff route`:
+  - `route_expected`, `route_available`, `route_missing`, `route_attempted`, `route_created`, `route_blocked`
+  - `downstream_route_reason_codes` (`DOWNSTREAM_ROUTE_MISSING`, `DOWNSTREAM_ROUTE_DISABLED`, `DOWNSTREAM_ROUTE_NO_ELIGIBLE_HANDLER`, `DOWNSTREAM_ROUTE_BLOCKED_BY_GUARDRAIL`, `DOWNSTREAM_ROUTE_CREATED_HANDOFF`, etc.)
+  - `downstream_route_examples` compactos (máx 3: `signal_id`, `market_id`, `expected_route`, `reason_code`)
 - Claridad de ventanas en export:
   - `handoff_summary.summary_window=rolling_60m`
   - `scan_summary.summary_window=latest_scan_run`
@@ -4378,4 +4382,4 @@ Endpoints:
 Scope de seguridad:
 - Sigue en modo **REAL_READ_ONLY + PAPER_ONLY**.
 - No habilita live trading real.
-- Observability-first para V1 local/test: si shortlist se bloquea antes de handoff, el export muestra causa explícita de market linking sin bypass de consensus/risk/policy/safety.
+- Observability-first para V1 local/test: si shortlist se bloquea antes de handoff, el export muestra causas explícitas de market linking y downstream route (incluyendo bridge a pursuit review) sin bypass de consensus/risk/policy/safety.

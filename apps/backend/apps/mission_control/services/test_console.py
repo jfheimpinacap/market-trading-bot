@@ -29,6 +29,7 @@ from apps.mission_control.services.session_runtime import pause_session
 from apps.paper_trading.services.portfolio import build_account_summary, get_active_account
 from apps.research_agent.models import NarrativeSignal, NarrativeSignalStatus, SourceScanRun
 from apps.research_agent.services.intelligence_handoff.run import run_consensus_review
+from apps.research_agent.services.pursuit_scoring.run import run_pursuit_review
 from apps.research_agent.services.run import run_scan_agent
 
 TEST_STATUS_IDLE = 'IDLE'
@@ -43,6 +44,7 @@ _PHASES = [
     'bootstrap',
     'scan',
     'consensus_review',
+    'pursuit_review',
     'trial',
     'validation',
     'trend',
@@ -80,6 +82,7 @@ _state = _ConsoleState(
         'extended_run_status': 'UNKNOWN',
         'funnel_status': 'UNKNOWN',
         'handoff_summary': {},
+        'downstream_route_summary': {},
         'attention_mode': 'UNKNOWN',
         'portfolio_summary': {},
         'scan_summary': {},
@@ -217,6 +220,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
                 'handoff_reason_codes': list(funnel.get('handoff_reason_codes') or []),
             },
             'shortlist_handoff_summary': dict(funnel.get('shortlist_handoff_summary') or {}),
+            'downstream_route_summary': dict(funnel.get('downstream_route_summary') or {}),
+            'downstream_route_examples': list(funnel.get('downstream_route_examples') or []),
             'market_link_summary': dict(funnel.get('market_link_summary') or {}),
             'market_link_examples': list(funnel.get('market_link_examples') or []),
             'consensus_alignment': dict(funnel.get('consensus_alignment') or {}),
@@ -237,6 +242,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     blockers = payload.get('blocker_summary') or []
     handoff_summary = payload.get('handoff_summary') or {}
     shortlist_handoff = payload.get('shortlist_handoff_summary') or {}
+    downstream_route = payload.get('downstream_route_summary') or {}
+    downstream_route_examples = payload.get('downstream_route_examples') or []
     market_link = payload.get('market_link_summary') or {}
     market_link_examples = payload.get('market_link_examples') or []
     consensus_alignment = payload.get('consensus_alignment') or {}
@@ -281,6 +288,17 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"  shortlist_handoff_examples="
             f"{shortlist_handoff.get('shortlist_handoff_examples') or []}"
         ),
+        'downstream_route_summary:',
+        (
+            f"  route_expected={downstream_route.get('route_expected', 0)} "
+            f"route_available={downstream_route.get('route_available', 0)} "
+            f"route_missing={downstream_route.get('route_missing', 0)} "
+            f"route_attempted={downstream_route.get('route_attempted', 0)} "
+            f"route_created={downstream_route.get('route_created', 0)} "
+            f"route_blocked={downstream_route.get('route_blocked', 0)}"
+        ),
+        f"  downstream_route_reason_codes={','.join(downstream_route.get('downstream_route_reason_codes') or []) or 'none'}",
+        f"  downstream_route_examples={downstream_route_examples or []}",
         'market_link_summary:',
         (
             f"  shortlisted_signals={market_link.get('shortlisted_signals', 0)} "
@@ -341,6 +359,7 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         'funnel_status': 'UNKNOWN',
         'handoff_summary': {},
         'shortlist_handoff_summary': {},
+        'downstream_route_summary': {},
         'consensus_alignment': {},
         'warnings': [],
         'errors': [],
@@ -403,8 +422,28 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
             except Exception as exc:  # pragma: no cover
                 payload['warnings'].append(f'consensus review failed: {exc}')
                 payload['step_results'].append({'phase': 'consensus_review', 'status': 'warning', 'result': {'error': str(exc)}})
+            try:
+                pursuit = run_pursuit_review(
+                    triggered_by='mission_control_test_console',
+                    market_limit=max(int(shortlisted_count), 1),
+                )
+                payload['step_results'].append(
+                    {
+                        'phase': 'pursuit_review',
+                        'status': 'ok',
+                        'result': {
+                            'pursuit_run_id': pursuit.id,
+                            'considered_market_count': pursuit.considered_market_count,
+                            'prediction_ready_count': pursuit.prediction_ready_count,
+                        },
+                    }
+                )
+            except Exception as exc:  # pragma: no cover
+                payload['warnings'].append(f'pursuit review failed: {exc}')
+                payload['step_results'].append({'phase': 'pursuit_review', 'status': 'warning', 'result': {'error': str(exc)}})
         else:
             payload['step_results'].append({'phase': 'consensus_review', 'status': 'skipped', 'result': {'reason': 'no_shortlisted_signals'}})
+            payload['step_results'].append({'phase': 'pursuit_review', 'status': 'skipped', 'result': {'reason': 'no_shortlisted_signals'}})
 
         payload['current_phase'] = 'trial'
         trial = run_live_paper_trial_run(preset_name=target_preset, heartbeat_passes=1)
