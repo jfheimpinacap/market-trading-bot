@@ -79,6 +79,7 @@ _state = _ConsoleState(
         'gate_status': 'UNKNOWN',
         'extended_run_status': 'UNKNOWN',
         'funnel_status': 'UNKNOWN',
+        'handoff_summary': {},
         'attention_mode': 'UNKNOWN',
         'portfolio_summary': {},
         'scan_summary': {},
@@ -204,6 +205,15 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'gate_status': str(gate.get('gate_status') or 'UNKNOWN'),
             'extended_run_status': 'ACTIVE' if bool(extended.get('extended_run_active')) else str(extended.get('gate_status') or 'INACTIVE'),
             'funnel_status': str(funnel.get('funnel_status') or 'UNKNOWN'),
+            'handoff_summary': {
+                'shortlisted_signals': int(funnel.get('shortlisted_signals') or 0),
+                'handoff_candidates': int(funnel.get('handoff_candidates') or 0),
+                'consensus_reviews': int(funnel.get('consensus_reviews') or 0),
+                'prediction_candidates': int(funnel.get('prediction_candidates') or 0),
+                'risk_decisions': int(funnel.get('risk_decisions') or 0),
+                'paper_execution_candidates': int(funnel.get('paper_execution_candidates') or 0),
+                'handoff_reason_codes': list(funnel.get('handoff_reason_codes') or []),
+            },
             'attention_mode': str(attention.get('attention_mode') or 'UNKNOWN'),
             'portfolio_summary': _build_portfolio_summary(),
             'scan_summary': _build_scan_summary(scan_run=scan_run),
@@ -219,6 +229,7 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     warnings = payload.get('warnings') or []
     errors = payload.get('errors') or []
     blockers = payload.get('blocker_summary') or []
+    handoff_summary = payload.get('handoff_summary') or {}
 
     lines = [
         '=== Mission Control Test Console Export ===',
@@ -237,6 +248,16 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         f"current_session_status: {payload.get('current_session_status')}",
         f"attention_mode: {payload.get('attention_mode')}",
         f"funnel_status: {payload.get('funnel_status')}",
+        'handoff_summary:',
+        (
+            f"  shortlisted_signals={handoff_summary.get('shortlisted_signals', 0)} "
+            f"handoff_candidates={handoff_summary.get('handoff_candidates', 0)} "
+            f"consensus_reviews={handoff_summary.get('consensus_reviews', 0)} "
+            f"prediction_candidates={handoff_summary.get('prediction_candidates', 0)} "
+            f"risk_decisions={handoff_summary.get('risk_decisions', 0)} "
+            f"paper_execution_candidates={handoff_summary.get('paper_execution_candidates', 0)}"
+        ),
+        f"  handoff_reason_codes={','.join(handoff_summary.get('handoff_reason_codes') or []) or 'none'}",
         'scan_summary:',
         f"  runs={scan.get('runs', 0)} rss_items={scan.get('rss_items', 0)} reddit_items={scan.get('reddit_items', 0)} x_items={scan.get('x_items', 0)}",
         f"  deduped_items={scan.get('deduped_items', 0)} clusters={scan.get('clusters', 0)} shortlisted_signals={scan.get('shortlisted_signals', 0)}",
@@ -279,6 +300,7 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         'current_session_status': 'UNKNOWN',
         'attention_mode': 'UNKNOWN',
         'funnel_status': 'UNKNOWN',
+        'handoff_summary': {},
         'warnings': [],
         'errors': [],
         'blocker_summary': [],

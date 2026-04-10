@@ -3238,6 +3238,24 @@ Nuevos endpoints (`/api/mission-control/...`):
 - `GET test-console/status/` devuelve estado consolidado compacto del ciclo de prueba.
 - `GET test-console/export-log/?format=text|json` exporta resumen copy-paste friendly (`text`) o estructurado (`json`).
 
+Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
+- El funnel y el Test Console ahora publican `handoff_summary` compacto con:
+  - `shortlisted_signals`
+  - `handoff_candidates`
+  - `consensus_reviews`
+  - `prediction_candidates`
+  - `risk_decisions`
+  - `paper_execution_candidates`
+  - `handoff_reason_codes`
+- El funnel agrega explainability para `STALLED/BLOCKED` con:
+  - `stalled_reason_code`
+  - `stalled_missing_counter` (incluye puntero real para `risk` vía `risk_decision_count`)
+  - `stage_source_mismatch` (mismatch entre entidades producidas/leídas downstream)
+  - `funnel_summary` enriquecido con contexto de handoff
+- Esta consolidación ya integra el fix posterior de funnel:
+  - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
+  - No depende sólo de `stalled_stage == "research"`.
+
 Boundary de seguridad:
 - Mantiene postura **REAL_READ_ONLY + PAPER_ONLY**.
 - No habilita live trading real.

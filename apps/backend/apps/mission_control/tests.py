@@ -2636,7 +2636,17 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
                 with patch('apps.mission_control.services.live_paper_autonomy_funnel.build_heartbeat_summary', return_value={'latest_run': 999}):
                     with patch(
                         'apps.mission_control.services.live_paper_autonomy_funnel._build_handoff_diagnostics',
-                        return_value={'shortlisted_count': 0, 'handoff_count': 0, 'handoff_reason_codes': []},
+                        return_value={
+                            'shortlisted_signals': 0,
+                            'handoff_candidates': 0,
+                            'consensus_reviews': 0,
+                            'prediction_candidates': 0,
+                            'risk_decisions': 0,
+                            'paper_execution_candidates': 0,
+                            'handoff_reason_codes': [],
+                            'stage_source_mismatch': {},
+                            'handoff_summary': 'shortlisted_signals=0 handoff_candidates=0 consensus_reviews=0 prediction_candidates=0 risk_decisions=0 paper_execution_candidates=0 handoff_reason_codes=none',
+                        },
                     ):
                         return self.client.get(reverse('mission_control:live-paper-autonomy-funnel'))
 
@@ -2666,6 +2676,8 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
             'stalled_reason_code',
             'stalled_missing_counter',
             'handoff_reason_codes',
+            'stage_source_mismatch',
+            'handoff_summary',
             'next_action_hint',
             'funnel_summary',
             'stages',
@@ -2715,7 +2727,17 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
             return_value={'validation_status': 'READY'},
         ), patch('apps.mission_control.services.live_paper_autonomy_funnel.build_heartbeat_summary', return_value={'latest_run': 999}), patch(
             'apps.mission_control.services.live_paper_autonomy_funnel._build_handoff_diagnostics',
-            return_value={'shortlisted_count': 0, 'handoff_count': 0, 'handoff_reason_codes': []},
+            return_value={
+                'shortlisted_signals': 0,
+                'handoff_candidates': 0,
+                'consensus_reviews': 0,
+                'prediction_candidates': 0,
+                'risk_decisions': 0,
+                'paper_execution_candidates': 0,
+                'handoff_reason_codes': [],
+                'stage_source_mismatch': {},
+                'handoff_summary': '',
+            },
         ):
             payload = self.client.get(reverse('mission_control:live-paper-autonomy-funnel')).json()
         self.assertEqual(payload['stalled_stage'], 'research')
@@ -2728,7 +2750,17 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
             return_value={'validation_status': 'READY'},
         ), patch('apps.mission_control.services.live_paper_autonomy_funnel.build_heartbeat_summary', return_value={'latest_run': 999}), patch(
             'apps.mission_control.services.live_paper_autonomy_funnel._build_handoff_diagnostics',
-            return_value={'shortlisted_count': 3, 'handoff_count': 0, 'handoff_reason_codes': ['SHORTLIST_PRESENT_NO_HANDOFF']},
+            return_value={
+                'shortlisted_signals': 3,
+                'handoff_candidates': 0,
+                'consensus_reviews': 0,
+                'prediction_candidates': 0,
+                'risk_decisions': 0,
+                'paper_execution_candidates': 0,
+                'handoff_reason_codes': ['SHORTLIST_PRESENT_NO_HANDOFF'],
+                'stage_source_mismatch': {},
+                'handoff_summary': '',
+            },
         ):
             payload = self.client.get(reverse('mission_control:live-paper-autonomy-funnel')).json()
         self.assertEqual(payload['stalled_stage'], 'research')
@@ -2744,6 +2776,73 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         self.assertEqual(pointer, 'risk_decision_count')
         self.assertIn(pointer, payload)
         self.assertEqual(payload[pointer], 0)
+
+    def test_handoff_present_without_consensus_is_explicit(self):
+        counts = self._funnel_counts(scan=7, research=2, prediction=0, risk_approved=0, risk_blocked=0, execution=0, recent_trades=0)
+        with patch('apps.mission_control.services.live_paper_autonomy_funnel._collect_funnel_counts', return_value=counts), patch(
+            'apps.mission_control.services.live_paper_autonomy_funnel.build_live_paper_validation_digest',
+            return_value={'validation_status': 'READY'},
+        ), patch('apps.mission_control.services.live_paper_autonomy_funnel.build_heartbeat_summary', return_value={'latest_run': 999}), patch(
+            'apps.mission_control.services.live_paper_autonomy_funnel._build_handoff_diagnostics',
+            return_value={
+                'shortlisted_signals': 3,
+                'handoff_candidates': 2,
+                'consensus_reviews': 0,
+                'prediction_candidates': 0,
+                'risk_decisions': 0,
+                'paper_execution_candidates': 0,
+                'handoff_reason_codes': ['HANDOFF_CREATED', 'CONSENSUS_NOT_RUN', 'PREDICTION_STAGE_EMPTY'],
+                'stage_source_mismatch': {},
+                'handoff_summary': '',
+            },
+        ):
+            payload = self.client.get(reverse('mission_control:live-paper-autonomy-funnel')).json()
+        self.assertIn('CONSENSUS_NOT_RUN', payload.get('handoff_reason_codes', []))
+
+    def test_consensus_without_promotion_is_explicit(self):
+        counts = self._funnel_counts(scan=9, research=4, prediction=0, risk_approved=0, risk_blocked=0, execution=0, recent_trades=0)
+        with patch('apps.mission_control.services.live_paper_autonomy_funnel._collect_funnel_counts', return_value=counts), patch(
+            'apps.mission_control.services.live_paper_autonomy_funnel.build_live_paper_validation_digest',
+            return_value={'validation_status': 'READY'},
+        ), patch('apps.mission_control.services.live_paper_autonomy_funnel.build_heartbeat_summary', return_value={'latest_run': 999}), patch(
+            'apps.mission_control.services.live_paper_autonomy_funnel._build_handoff_diagnostics',
+            return_value={
+                'shortlisted_signals': 5,
+                'handoff_candidates': 4,
+                'consensus_reviews': 4,
+                'prediction_candidates': 0,
+                'risk_decisions': 0,
+                'paper_execution_candidates': 0,
+                'handoff_reason_codes': ['HANDOFF_CREATED', 'CONSENSUS_RAN_NO_PROMOTION', 'PREDICTION_STAGE_EMPTY'],
+                'stage_source_mismatch': {},
+                'handoff_summary': '',
+            },
+        ):
+            payload = self.client.get(reverse('mission_control:live-paper-autonomy-funnel')).json()
+        self.assertIn('CONSENSUS_RAN_NO_PROMOTION', payload.get('handoff_reason_codes', []))
+
+    def test_prediction_and_risk_empty_with_shortlist_is_explicit(self):
+        counts = self._funnel_counts(scan=12, research=3, prediction=0, risk_approved=0, risk_blocked=0, execution=0, recent_trades=0)
+        with patch('apps.mission_control.services.live_paper_autonomy_funnel._collect_funnel_counts', return_value=counts), patch(
+            'apps.mission_control.services.live_paper_autonomy_funnel.build_live_paper_validation_digest',
+            return_value={'validation_status': 'WARNING'},
+        ), patch('apps.mission_control.services.live_paper_autonomy_funnel.build_heartbeat_summary', return_value={'latest_run': 999}), patch(
+            'apps.mission_control.services.live_paper_autonomy_funnel._build_handoff_diagnostics',
+            return_value={
+                'shortlisted_signals': 4,
+                'handoff_candidates': 3,
+                'consensus_reviews': 3,
+                'prediction_candidates': 0,
+                'risk_decisions': 0,
+                'paper_execution_candidates': 0,
+                'handoff_reason_codes': ['PREDICTION_STAGE_EMPTY', 'DOWNSTREAM_EVIDENCE_INSUFFICIENT'],
+                'stage_source_mismatch': {},
+                'handoff_summary': '',
+            },
+        ):
+            payload = self.client.get(reverse('mission_control:live-paper-autonomy-funnel')).json()
+        self.assertIn('PREDICTION_STAGE_EMPTY', payload.get('handoff_reason_codes', []))
+        self.assertIn('DOWNSTREAM_EVIDENCE_INSUFFICIENT', payload.get('handoff_reason_codes', []))
 
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'recent_trades': []})
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
@@ -3130,6 +3229,15 @@ class TestConsoleApiTests(TestCase):
             'gate_status': 'ALLOW',
             'extended_run_status': 'ACTIVE',
             'funnel_status': 'ACTIVE',
+            'handoff_summary': {
+                'shortlisted_signals': 2,
+                'handoff_candidates': 1,
+                'consensus_reviews': 1,
+                'prediction_candidates': 1,
+                'risk_decisions': 1,
+                'paper_execution_candidates': 0,
+                'handoff_reason_codes': ['HANDOFF_CREATED'],
+            },
             'attention_mode': 'HEALTHY',
             'portfolio_summary': {
                 'cash': 10000.0,
@@ -3185,10 +3293,21 @@ class TestConsoleApiTests(TestCase):
 
     @patch('apps.mission_control.views.export_test_console_log')
     def test_export_log_text_works(self, mock_export):
-        mock_export.return_value = 'copy paste friendly log'
+        mock_export.return_value = 'copy paste friendly log\nhandoff_summary:\n  shortlisted_signals=1'
         response = self.client.get(reverse('mission_control:test-console-export-log'), {'format': 'text'})
         self.assertEqual(response.status_code, 200)
         self.assertIn('copy paste friendly', response.content.decode())
+
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_export_log_text_includes_handoff_summary_section(self, mock_state_snapshot):
+        from apps.mission_control.services.test_console import export_test_console_log
+
+        payload = self._status_payload()
+        payload['text_export'] = ''
+        mock_state_snapshot.return_value = (payload, payload, [])
+        text_payload = export_test_console_log(fmt='text')
+        self.assertIn('handoff_summary:', text_payload)
+        self.assertIn('shortlisted_signals=', text_payload)
 
     @patch('apps.mission_control.views.export_test_console_log')
     def test_export_log_json_works(self, mock_export):
