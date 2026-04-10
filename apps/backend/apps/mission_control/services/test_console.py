@@ -225,6 +225,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'market_link_summary': dict(funnel.get('market_link_summary') or {}),
             'market_link_examples': list(funnel.get('market_link_examples') or []),
             'consensus_alignment': dict(funnel.get('consensus_alignment') or {}),
+            'prediction_intake_summary': dict(funnel.get('prediction_intake_summary') or {}),
+            'prediction_intake_examples': list(funnel.get('prediction_intake_examples') or []),
             'attention_mode': str(attention.get('attention_mode') or 'UNKNOWN'),
             'portfolio_summary': _build_portfolio_summary(),
             'scan_summary': _build_scan_summary(scan_run=scan_run),
@@ -247,6 +249,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     market_link = payload.get('market_link_summary') or {}
     market_link_examples = payload.get('market_link_examples') or []
     consensus_alignment = payload.get('consensus_alignment') or {}
+    prediction_intake = payload.get('prediction_intake_summary') or {}
+    prediction_intake_examples = payload.get('prediction_intake_examples') or []
 
     lines = [
         '=== Mission Control Test Console Export ===',
@@ -314,6 +318,17 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"shortlist_aligned={consensus_alignment.get('shortlist_aligned_consensus_reviews', 0)} "
             f"aligned_with_shortlist={consensus_alignment.get('consensus_aligned_with_shortlist', True)}"
         ),
+        'prediction_intake_summary:',
+        (
+            f"  handoff_candidates={prediction_intake.get('handoff_candidates', 0)} "
+            f"prediction_intake_attempted={prediction_intake.get('prediction_intake_attempted', 0)} "
+            f"prediction_intake_created={prediction_intake.get('prediction_intake_created', 0)} "
+            f"prediction_intake_blocked={prediction_intake.get('prediction_intake_blocked', 0)} "
+            f"prediction_intake_missing_fields={prediction_intake.get('prediction_intake_missing_fields', 0)} "
+            f"prediction_intake_guardrail_blocked={prediction_intake.get('prediction_intake_guardrail_blocked', 0)}"
+        ),
+        f"  prediction_intake_reason_codes={','.join(prediction_intake.get('prediction_intake_reason_codes') or []) or 'none'}",
+        f"  prediction_intake_examples={prediction_intake_examples or []}",
         'scan_summary:',
         f"  summary_window={scan.get('summary_window') or 'latest_scan_run'}",
         f"  runs={scan.get('runs', 0)} rss_items={scan.get('rss_items', 0)} reddit_items={scan.get('reddit_items', 0)} x_items={scan.get('x_items', 0)}",
