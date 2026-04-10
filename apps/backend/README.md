@@ -4379,6 +4379,11 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
 - Bridge conservador `handoff -> prediction intake`:
   - si hay handoff elegible (`READY`, confianza suficiente, market probability disponible) y no hubo intake reciente, Mission Control dispara una pasada puntual de `prediction_intake_review`
   - mantiene dedupe, no bypass de risk/policy/safety y sigue en observability-first paper-local.
+- **Prompt 231 (route handoff -> prediction_intake_review):**
+  - corrige el diagnóstico para que `PREDICTION_INTAKE_ROUTE_MISSING` represente ausencia real de ruta (disabled) o handler no disponible.
+  - cuando la ruta está disponible, el export diferencia explícitamente: `PREDICTION_INTAKE_ROUTE_AVAILABLE`, `PREDICTION_INTAKE_ATTEMPTED`, `PREDICTION_INTAKE_CREATED`, `PREDICTION_INTAKE_REUSED_EXISTING_CANDIDATE`.
+  - si no se crea candidate, reporta bloqueo estructural real (`PREDICTION_INTAKE_BLOCKED_BY_FILTER` / `PREDICTION_INTAKE_BLOCKED_BY_GUARDRAIL`) en vez de “route missing” falso.
+  - mantiene **REAL_READ_ONLY + PAPER_ONLY** y no habilita live trading.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

@@ -400,22 +400,42 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
     market_link_examples: list[dict[str, Any]] = []
     resolved_market_by_signal_id: dict[int, int] = {}
 
-    if handoff_count > 0 and prediction_count == 0 and intake_run_count == 0 and not prediction_intake_route_disabled and prediction_intake_handler_available:
-        eligible_handoffs = PredictionHandoffCandidate.objects.filter(
+    route_available = not prediction_intake_route_disabled and prediction_intake_handler_available
+    eligible_handoff_rows = list(
+        PredictionHandoffCandidate.objects.filter(
             created_at__gte=window_start,
             handoff_status=PredictionHandoffStatus.READY,
             handoff_confidence__gte=Decimal('0.5500'),
             linked_market__current_market_probability__isnull=False,
-        )
-        if eligible_handoffs.exists():
-            run_prediction_intake_review(triggered_by='mission_control_prediction_bridge')
-            prediction_qs = PredictionConvictionReview.objects.filter(created_at__gte=window_start)
-            intake_run_qs = PredictionIntakeRun.objects.filter(created_at__gte=window_start)
-            intake_candidate_qs = PredictionIntakeCandidate.objects.filter(created_at__gte=window_start)
-            prediction_count = prediction_qs.count()
-            intake_run_count = intake_run_qs.count()
-            intake_candidate_count = intake_candidate_qs.count()
-            prediction_intake_reason_codes.append('PREDICTION_INTAKE_ATTEMPTED')
+        ).values_list('id', flat=True)
+    )
+    eligible_handoff_ids = {int(handoff_id) for handoff_id in eligible_handoff_rows}
+    existing_intake_handoff_ids = {
+        int(handoff_id)
+        for handoff_id in PredictionIntakeCandidate.objects.filter(
+            linked_prediction_handoff_candidate_id__in=list(eligible_handoff_ids)
+        ).values_list('linked_prediction_handoff_candidate_id', flat=True)
+        if handoff_id is not None
+    }
+    bridge_attempted = False
+    bridge_created_handoff_ids: set[int] = set()
+    if handoff_count > 0 and prediction_count == 0 and route_available and eligible_handoff_ids and not existing_intake_handoff_ids:
+        bridge_attempted = True
+        run_prediction_intake_review(triggered_by='mission_control_prediction_bridge')
+        prediction_qs = PredictionConvictionReview.objects.filter(created_at__gte=window_start)
+        intake_run_qs = PredictionIntakeRun.objects.filter(created_at__gte=window_start)
+        intake_candidate_qs = PredictionIntakeCandidate.objects.filter(created_at__gte=window_start)
+        prediction_count = prediction_qs.count()
+        intake_run_count = intake_run_qs.count()
+        intake_candidate_count = intake_candidate_qs.count()
+        intake_after_ids = {
+            int(handoff_id)
+            for handoff_id in PredictionIntakeCandidate.objects.filter(
+                linked_prediction_handoff_candidate_id__in=list(eligible_handoff_ids)
+            ).values_list('linked_prediction_handoff_candidate_id', flat=True)
+            if handoff_id is not None
+        }
+        bridge_created_handoff_ids = intake_after_ids - existing_intake_handoff_ids
 
     for row in shortlisted_rows:
         signal_id = int(row.get('id') or 0)
@@ -679,10 +699,16 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
 
     for handoff in handoff_rows:
         missing_fields = _missing_prediction_intake_fields(handoff=handoff)
+        if route_available:
+            prediction_intake_reason_codes.append('PREDICTION_INTAKE_ROUTE_AVAILABLE')
         if handoff.id in intake_candidate_by_handoff:
             prediction_intake_attempted += 1
             prediction_intake_created += 1
-            prediction_intake_reason_codes.append('PREDICTION_INTAKE_REUSED_EXISTING_CANDIDATE')
+            if handoff.id in bridge_created_handoff_ids:
+                reason_code = 'PREDICTION_INTAKE_CREATED'
+            else:
+                reason_code = 'PREDICTION_INTAKE_REUSED_EXISTING_CANDIDATE'
+            prediction_intake_reason_codes.append(reason_code)
             if len(prediction_intake_examples) < 3:
                 prediction_intake_examples.append(
                     {
@@ -690,7 +716,7 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
                         'signal_id': None,
                         'market_id': _safe_int(handoff.linked_market_id),
                         'expected_route': _PREDICTION_INTAKE_ROUTE_NAME,
-                        'reason_code': 'PREDICTION_INTAKE_REUSED_EXISTING_CANDIDATE',
+                        'reason_code': reason_code,
                         'missing_fields': [],
                     }
                 )
@@ -706,18 +732,25 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
             reason_code = 'PREDICTION_INTAKE_MISSING_REQUIRED_FIELDS'
             prediction_intake_blocked += 1
             prediction_intake_missing_fields += 1
-        elif intake_run_count == 0:
-            reason_code = 'PREDICTION_INTAKE_ROUTE_MISSING'
-            prediction_intake_blocked += 1
         elif handoff.handoff_status in {PredictionHandoffStatus.BLOCKED, PredictionHandoffStatus.DEFERRED}:
             reason_code = 'PREDICTION_INTAKE_BLOCKED_BY_GUARDRAIL'
             prediction_intake_blocked += 1
             prediction_intake_guardrail_blocked += 1
+        elif getattr(handoff, 'linked_market_id', None) is None or getattr(getattr(handoff, 'linked_market', None), 'current_market_probability', None) is None:
+            reason_code = 'PREDICTION_INTAKE_BLOCKED_BY_FILTER'
+            prediction_intake_blocked += 1
+        elif handoff.handoff_confidence is None or Decimal(str(handoff.handoff_confidence)) < Decimal('0.5500'):
+            reason_code = 'PREDICTION_INTAKE_BLOCKED_BY_FILTER'
+            prediction_intake_blocked += 1
         elif handoff.handoff_status != PredictionHandoffStatus.READY:
             reason_code = 'PREDICTION_INTAKE_BLOCKED_BY_FILTER'
             prediction_intake_blocked += 1
         elif handoff.linked_consensus_record_id is None and consensus_count > 0:
             reason_code = 'PREDICTION_INTAKE_CONSENSUS_NOT_PROMOTED'
+            prediction_intake_blocked += 1
+        elif bridge_attempted:
+            reason_code = 'PREDICTION_INTAKE_ATTEMPTED'
+            prediction_intake_attempted += 1
             prediction_intake_blocked += 1
         else:
             reason_code = 'PREDICTION_INTAKE_BLOCKED_BY_FILTER'
@@ -735,13 +768,15 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
                 }
             )
 
-    if intake_run_count > 0:
-        prediction_intake_attempted = max(prediction_intake_attempted, handoff_count)
+    if bridge_attempted:
         prediction_intake_reason_codes.append('PREDICTION_INTAKE_ATTEMPTED')
     if prediction_intake_created > 0:
         prediction_intake_reason_codes.append('PREDICTION_INTAKE_CREATED')
     if prediction_intake_attempted == 0 and handoff_count > 0:
-        prediction_intake_reason_codes.append('PREDICTION_INTAKE_ROUTE_MISSING')
+        if route_available:
+            prediction_intake_reason_codes.append('PREDICTION_INTAKE_BLOCKED_BY_FILTER')
+        else:
+            prediction_intake_reason_codes.append('PREDICTION_INTAKE_ROUTE_MISSING')
     prediction_intake_summary = {
         'handoff_candidates': int(handoff_count),
         'prediction_intake_attempted': int(prediction_intake_attempted),

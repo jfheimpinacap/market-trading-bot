@@ -3294,6 +3294,10 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - `prediction_intake_reason_codes` + `prediction_intake_examples` (máx 3: `handoff_id`, `market_id`, `expected_route`, `reason_code`, `missing_fields`)
   - distingue “handoff creado pero intake no intentado” vs “intentado y bloqueado por guardrail/filtro/campos”.
 - Bridge conservador: cuando hay handoff elegible y no existe intake reciente, se intenta `prediction_intake_review` con dedupe natural por candidato existente, sin bypass de guardrails posteriores.
+- **Prompt 231** repara el bridge real `handoff -> prediction_intake_review` para que no etiquete como `PREDICTION_INTAKE_ROUTE_MISSING` cuando la ruta sí está disponible:
+  - diferencia explícitamente `PREDICTION_INTAKE_ROUTE_AVAILABLE`, `PREDICTION_INTAKE_ATTEMPTED`, `PREDICTION_INTAKE_CREATED`, `PREDICTION_INTAKE_REUSED_EXISTING_CANDIDATE` y bloqueos reales (`..._BLOCKED_BY_FILTER`, `..._BLOCKED_BY_GUARDRAIL`, `..._NO_ELIGIBLE_HANDLER`).
+  - evita falsos “route missing” por falta de intake run reciente cuando el handler existe.
+  - mantiene enfoque observability-first y postura **REAL_READ_ONLY + PAPER_ONLY** (sin live trading real).
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.
