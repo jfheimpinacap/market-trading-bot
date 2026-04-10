@@ -4372,6 +4372,13 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - `scan_summary.summary_window=latest_scan_run`
   - evita confundir contadores de shortlist entre ventana temporal y último scan puntual.
 - Incluye `consensus_alignment` para distinguir si `consensus_reviews` representa el mismo flujo del shortlist reciente o evidencia desacoplada.
+- Incluye `prediction_intake_summary` para explicar el cuello `handoff creado pero prediction_candidates=0`:
+  - `handoff_candidates`, `prediction_intake_attempted`, `prediction_intake_created`, `prediction_intake_blocked`
+  - `prediction_intake_missing_fields`, `prediction_intake_guardrail_blocked`
+  - `prediction_intake_reason_codes` y `prediction_intake_examples` compactos (máx 3).
+- Bridge conservador `handoff -> prediction intake`:
+  - si hay handoff elegible (`READY`, confianza suficiente, market probability disponible) y no hubo intake reciente, Mission Control dispara una pasada puntual de `prediction_intake_review`
+  - mantiene dedupe, no bypass de risk/policy/safety y sigue en observability-first paper-local.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

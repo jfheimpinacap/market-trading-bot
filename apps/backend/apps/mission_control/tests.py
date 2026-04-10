@@ -1,6 +1,7 @@
 from unittest.mock import patch
 import json
 from datetime import timedelta
+from decimal import Decimal
 
 from django.test import TestCase
 from django.urls import reverse
@@ -3048,6 +3049,125 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertFalse(alignment.get('consensus_aligned_with_shortlist', True))
         self.assertEqual(alignment.get('shortlist_aligned_consensus_reviews'), 0)
 
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel._is_prediction_intake_handler_available', return_value=False)
+    def test_prediction_intake_route_missing_is_explicit(self, _mock_handler):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-route-missing')
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION,
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.READY,
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        summary = diagnostics.get('prediction_intake_summary') or {}
+        self.assertEqual(summary.get('prediction_intake_attempted'), 0)
+        self.assertIn('PREDICTION_INTAKE_ROUTE_MISSING', summary.get('prediction_intake_reason_codes', []))
+
+    def test_prediction_intake_missing_required_fields_is_explicit(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-missing-fields')
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION,
+        )
+        handoff = PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.READY,
+        )
+        handoff.handoff_status = ''
+        handoff.save(update_fields=['handoff_status'])
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        summary = diagnostics.get('prediction_intake_summary') or {}
+        self.assertEqual(summary.get('prediction_intake_missing_fields'), 1)
+        self.assertIn('PREDICTION_INTAKE_MISSING_REQUIRED_FIELDS', summary.get('prediction_intake_reason_codes', []))
+
+    def test_prediction_intake_bridge_creates_prediction_candidate_for_eligible_handoff(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.prediction_agent.models import PredictionConvictionReview
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-bridge')
+        market.current_market_probability = Decimal('0.4900')
+        market.save(update_fields=['current_market_probability'])
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION,
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.READY,
+            handoff_confidence=Decimal('0.7700'),
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        summary = diagnostics.get('prediction_intake_summary') or {}
+        self.assertGreaterEqual(summary.get('prediction_intake_created', 0), 1)
+        self.assertTrue(PredictionConvictionReview.objects.exists())
+
 
 class ExtendedPaperRunGateApiTests(TestCase):
     def _base_validation(self, status: str):
@@ -3541,6 +3661,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('downstream_route_reason_codes=', text_payload)
         self.assertIn('market_link_summary:', text_payload)
         self.assertIn('market_link_reason_codes=', text_payload)
+        self.assertIn('prediction_intake_summary:', text_payload)
+        self.assertIn('prediction_intake_reason_codes=', text_payload)
 
     @patch('apps.mission_control.views.export_test_console_log')
     def test_export_log_json_works(self, mock_export):

@@ -17,10 +17,11 @@ from apps.mission_control.services.live_paper_validation import build_live_paper
 from apps.mission_control.services.session_heartbeat import build_heartbeat_summary
 from apps.paper_trading.models import PaperTrade, PaperTradeStatus
 from apps.paper_trading.services.portfolio import build_account_summary, get_active_account
-from apps.prediction_agent.models import PredictionConvictionReview
+from apps.prediction_agent.models import PredictionConvictionReview, PredictionIntakeCandidate, PredictionIntakeRun
+from apps.prediction_agent.services.run import run_prediction_intake_review
 from apps.research_agent.models import NarrativeConsensusRecord
 from apps.research_agent.models import MarketUniverseScanRun, NarrativeSignal, NarrativeSignalStatus, PredictionHandoffCandidate
-from apps.research_agent.models import ResearchHandoffPriority, ResearchHandoffStatus, ResearchPursuitRun, ResearchStructuralAssessment
+from apps.research_agent.models import PredictionHandoffStatus, ResearchHandoffPriority, ResearchHandoffStatus, ResearchPursuitRun, ResearchStructuralAssessment
 from apps.risk_agent.models import RiskApprovalDecision
 
 FUNNEL_ACTIVE = 'ACTIVE'
@@ -35,6 +36,7 @@ _LOW_THRESHOLD = 3
 _MARKET_LINK_CONFIDENCE_THRESHOLD = Decimal('1.00')
 _TOKEN_STOPWORDS = {'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'will', 'over'}
 _DOWNSTREAM_ROUTE_NAME = 'research_pursuit_review'
+_PREDICTION_INTAKE_ROUTE_NAME = 'prediction_intake_review'
 
 
 def _is_downstream_route_disabled() -> bool:
@@ -48,6 +50,34 @@ def _is_downstream_route_handler_available() -> bool:
         return callable(run_pursuit_review)
     except Exception:
         return False
+
+
+def _is_prediction_intake_route_disabled() -> bool:
+    return bool(getattr(settings, 'MISSION_CONTROL_DISABLE_PREDICTION_INTAKE_ROUTE', False))
+
+
+def _is_prediction_intake_handler_available() -> bool:
+    return callable(run_prediction_intake_review)
+
+
+def _safe_int(value: Any) -> int | None:
+    try:
+        if value is None:
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _missing_prediction_intake_fields(*, handoff: PredictionHandoffCandidate) -> list[str]:
+    missing: list[str] = []
+    if getattr(handoff, 'linked_market_id', None) is None:
+        missing.append('linked_market_id')
+    if getattr(handoff, 'handoff_confidence', None) is None:
+        missing.append('handoff_confidence')
+    if not str(getattr(handoff, 'handoff_status', '') or '').strip():
+        missing.append('handoff_status')
+    return missing
 
 
 @dataclass(frozen=True)
@@ -292,6 +322,8 @@ def _resolve_market_link_for_shortlist_signal(*, signal_row: dict[str, Any], act
 
 
 def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
+    prediction_intake_route_disabled = _is_prediction_intake_route_disabled()
+    prediction_intake_handler_available = _is_prediction_intake_handler_available()
     shortlisted_qs = NarrativeSignal.objects.filter(
         status=NarrativeSignalStatus.SHORTLISTED,
         created_at__gte=window_start,
@@ -299,6 +331,8 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
     handoff_qs = PredictionHandoffCandidate.objects.filter(created_at__gte=window_start)
     consensus_qs = NarrativeConsensusRecord.objects.filter(created_at__gte=window_start)
     prediction_qs = PredictionConvictionReview.objects.filter(created_at__gte=window_start)
+    intake_run_qs = PredictionIntakeRun.objects.filter(created_at__gte=window_start)
+    intake_candidate_qs = PredictionIntakeCandidate.objects.filter(created_at__gte=window_start)
     risk_qs = RiskApprovalDecision.objects.filter(created_at__gte=window_start)
     paper_qs = AutonomousTradeCycleRun.objects.filter(started_at__gte=window_start)
 
@@ -309,6 +343,8 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
     handoff_count = handoff_qs.count()
     consensus_count = consensus_qs.count()
     prediction_count = prediction_qs.count()
+    intake_run_count = intake_run_qs.count()
+    intake_candidate_count = intake_candidate_qs.count()
     risk_count = risk_qs.count()
     paper_execution_count = paper_qs.count()
 
@@ -340,6 +376,8 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
 
     handoff_reason_codes: list[str] = []
     stage_source_mismatch: dict[str, Any] = {}
+    prediction_intake_reason_codes: list[str] = []
+    prediction_intake_examples: list[dict[str, Any]] = []
     shortlist_handoff_summary = {
         'shortlisted_signals': int(shortlisted_count),
         'shortlisted_signal_ids': [int(row.get('id') or 0) for row in shortlisted_rows[:3]],
@@ -361,6 +399,23 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
     market_link_reason_codes: list[str] = []
     market_link_examples: list[dict[str, Any]] = []
     resolved_market_by_signal_id: dict[int, int] = {}
+
+    if handoff_count > 0 and prediction_count == 0 and intake_run_count == 0 and not prediction_intake_route_disabled and prediction_intake_handler_available:
+        eligible_handoffs = PredictionHandoffCandidate.objects.filter(
+            created_at__gte=window_start,
+            handoff_status=PredictionHandoffStatus.READY,
+            handoff_confidence__gte=Decimal('0.5500'),
+            linked_market__current_market_probability__isnull=False,
+        )
+        if eligible_handoffs.exists():
+            run_prediction_intake_review(triggered_by='mission_control_prediction_bridge')
+            prediction_qs = PredictionConvictionReview.objects.filter(created_at__gte=window_start)
+            intake_run_qs = PredictionIntakeRun.objects.filter(created_at__gte=window_start)
+            intake_candidate_qs = PredictionIntakeCandidate.objects.filter(created_at__gte=window_start)
+            prediction_count = prediction_qs.count()
+            intake_run_count = intake_run_qs.count()
+            intake_candidate_count = intake_candidate_qs.count()
+            prediction_intake_reason_codes.append('PREDICTION_INTAKE_ATTEMPTED')
 
     for row in shortlisted_rows:
         signal_id = int(row.get('id') or 0)
@@ -605,6 +660,105 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         'consensus_aligned_with_shortlist': bool(consensus_count == 0 or aligned_consensus_count > 0),
     }
 
+    handoff_rows = list(
+        PredictionHandoffCandidate.objects.select_related('linked_consensus_record')
+        .filter(created_at__gte=window_start)
+        .order_by('-created_at', '-id')[:40]
+    )
+    handoff_ids = [handoff.id for handoff in handoff_rows]
+    intake_candidate_by_handoff = set(
+        PredictionIntakeCandidate.objects.filter(linked_prediction_handoff_candidate_id__in=handoff_ids)
+        .exclude(linked_prediction_handoff_candidate_id__isnull=True)
+        .values_list('linked_prediction_handoff_candidate_id', flat=True)
+    )
+    prediction_intake_attempted = 0
+    prediction_intake_created = 0
+    prediction_intake_blocked = 0
+    prediction_intake_missing_fields = 0
+    prediction_intake_guardrail_blocked = 0
+
+    for handoff in handoff_rows:
+        missing_fields = _missing_prediction_intake_fields(handoff=handoff)
+        if handoff.id in intake_candidate_by_handoff:
+            prediction_intake_attempted += 1
+            prediction_intake_created += 1
+            prediction_intake_reason_codes.append('PREDICTION_INTAKE_REUSED_EXISTING_CANDIDATE')
+            if len(prediction_intake_examples) < 3:
+                prediction_intake_examples.append(
+                    {
+                        'handoff_id': handoff.id,
+                        'signal_id': None,
+                        'market_id': _safe_int(handoff.linked_market_id),
+                        'expected_route': _PREDICTION_INTAKE_ROUTE_NAME,
+                        'reason_code': 'PREDICTION_INTAKE_REUSED_EXISTING_CANDIDATE',
+                        'missing_fields': [],
+                    }
+                )
+            continue
+
+        if prediction_intake_route_disabled:
+            reason_code = 'PREDICTION_INTAKE_ROUTE_MISSING'
+            prediction_intake_blocked += 1
+        elif not prediction_intake_handler_available:
+            reason_code = 'PREDICTION_INTAKE_NO_ELIGIBLE_HANDLER'
+            prediction_intake_blocked += 1
+        elif missing_fields:
+            reason_code = 'PREDICTION_INTAKE_MISSING_REQUIRED_FIELDS'
+            prediction_intake_blocked += 1
+            prediction_intake_missing_fields += 1
+        elif intake_run_count == 0:
+            reason_code = 'PREDICTION_INTAKE_ROUTE_MISSING'
+            prediction_intake_blocked += 1
+        elif handoff.handoff_status in {PredictionHandoffStatus.BLOCKED, PredictionHandoffStatus.DEFERRED}:
+            reason_code = 'PREDICTION_INTAKE_BLOCKED_BY_GUARDRAIL'
+            prediction_intake_blocked += 1
+            prediction_intake_guardrail_blocked += 1
+        elif handoff.handoff_status != PredictionHandoffStatus.READY:
+            reason_code = 'PREDICTION_INTAKE_BLOCKED_BY_FILTER'
+            prediction_intake_blocked += 1
+        elif handoff.linked_consensus_record_id is None and consensus_count > 0:
+            reason_code = 'PREDICTION_INTAKE_CONSENSUS_NOT_PROMOTED'
+            prediction_intake_blocked += 1
+        else:
+            reason_code = 'PREDICTION_INTAKE_BLOCKED_BY_FILTER'
+            prediction_intake_blocked += 1
+        prediction_intake_reason_codes.append(reason_code)
+        if len(prediction_intake_examples) < 3:
+            prediction_intake_examples.append(
+                {
+                    'handoff_id': handoff.id,
+                    'signal_id': None,
+                    'market_id': _safe_int(handoff.linked_market_id),
+                    'expected_route': _PREDICTION_INTAKE_ROUTE_NAME,
+                    'reason_code': reason_code,
+                    'missing_fields': missing_fields,
+                }
+            )
+
+    if intake_run_count > 0:
+        prediction_intake_attempted = max(prediction_intake_attempted, handoff_count)
+        prediction_intake_reason_codes.append('PREDICTION_INTAKE_ATTEMPTED')
+    if prediction_intake_created > 0:
+        prediction_intake_reason_codes.append('PREDICTION_INTAKE_CREATED')
+    if prediction_intake_attempted == 0 and handoff_count > 0:
+        prediction_intake_reason_codes.append('PREDICTION_INTAKE_ROUTE_MISSING')
+    prediction_intake_summary = {
+        'handoff_candidates': int(handoff_count),
+        'prediction_intake_attempted': int(prediction_intake_attempted),
+        'prediction_intake_created': int(prediction_intake_created),
+        'prediction_intake_blocked': int(prediction_intake_blocked),
+        'prediction_intake_missing_fields': int(prediction_intake_missing_fields),
+        'prediction_intake_guardrail_blocked': int(prediction_intake_guardrail_blocked),
+        'prediction_intake_reason_codes': list(dict.fromkeys(prediction_intake_reason_codes)),
+        'prediction_intake_summary': (
+            f"handoff_candidates={handoff_count} prediction_intake_attempted={prediction_intake_attempted} "
+            f"prediction_intake_created={prediction_intake_created} prediction_intake_blocked={prediction_intake_blocked} "
+            f"prediction_intake_missing_fields={prediction_intake_missing_fields} "
+            f"prediction_intake_guardrail_blocked={prediction_intake_guardrail_blocked} "
+            f"prediction_intake_reason_codes={','.join(list(dict.fromkeys(prediction_intake_reason_codes))) or 'none'}"
+        ),
+    }
+
     normalized_codes = list(dict.fromkeys(handoff_reason_codes))
     handoff_summary = (
         f"shortlisted_signals={shortlisted_count} handoff_candidates={handoff_count} "
@@ -629,6 +783,8 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         'market_link_summary': market_link_summary,
         'market_link_examples': market_link_examples,
         'consensus_alignment': consensus_alignment,
+        'prediction_intake_summary': prediction_intake_summary,
+        'prediction_intake_examples': prediction_intake_examples,
     }
 
 
@@ -741,6 +897,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'market_link_summary': handoff_diagnostics.get('market_link_summary', {}),
         'market_link_examples': handoff_diagnostics.get('market_link_examples', []),
         'consensus_alignment': handoff_diagnostics.get('consensus_alignment', {}),
+        'prediction_intake_summary': handoff_diagnostics.get('prediction_intake_summary', {}),
+        'prediction_intake_examples': handoff_diagnostics.get('prediction_intake_examples', []),
         'shortlisted_signals': handoff_diagnostics.get('shortlisted_signals', 0),
         'handoff_candidates': handoff_diagnostics.get('handoff_candidates', 0),
         'consensus_reviews': handoff_diagnostics.get('consensus_reviews', 0),

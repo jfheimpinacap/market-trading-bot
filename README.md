@@ -3288,6 +3288,12 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - `stalled_missing_counter` (incluye puntero real para `risk` vía `risk_decision_count`)
   - `stage_source_mismatch` (mismatch entre entidades producidas/leídas downstream)
   - `funnel_summary` enriquecido con contexto de handoff
+- Se añade `prediction_intake_summary` para diagnosticar explícitamente el tramo `handoff -> prediction`:
+  - `handoff_candidates`, `prediction_intake_attempted`, `prediction_intake_created`, `prediction_intake_blocked`
+  - `prediction_intake_missing_fields`, `prediction_intake_guardrail_blocked`
+  - `prediction_intake_reason_codes` + `prediction_intake_examples` (máx 3: `handoff_id`, `market_id`, `expected_route`, `reason_code`, `missing_fields`)
+  - distingue “handoff creado pero intake no intentado” vs “intentado y bloqueado por guardrail/filtro/campos”.
+- Bridge conservador: cuando hay handoff elegible y no existe intake reciente, se intenta `prediction_intake_review` con dedupe natural por candidato existente, sin bypass de guardrails posteriores.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.
