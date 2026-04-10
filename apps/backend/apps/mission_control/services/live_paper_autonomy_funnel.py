@@ -16,6 +16,7 @@ from apps.paper_trading.services.portfolio import build_account_summary, get_act
 from apps.prediction_agent.models import PredictionConvictionReview
 from apps.research_agent.models import NarrativeConsensusRecord
 from apps.research_agent.models import MarketUniverseScanRun, NarrativeSignal, NarrativeSignalStatus, PredictionHandoffCandidate
+from apps.research_agent.models import ResearchHandoffPriority, ResearchHandoffStatus, ResearchPursuitRun, ResearchStructuralAssessment
 from apps.risk_agent.models import RiskApprovalDecision
 
 FUNNEL_ACTIVE = 'ACTIVE'
@@ -177,6 +178,11 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         for market_id in shortlisted_qs.values_list('linked_market_id', flat=True)
         if market_id is not None
     }
+    shortlist_cluster_ids = {
+        cluster_id
+        for cluster_id in shortlisted_qs.values_list('linked_cluster_id', flat=True)
+        if cluster_id is not None
+    }
     handoff_market_ids = {
         market_id
         for market_id in handoff_qs.values_list('linked_market_id', flat=True)
@@ -195,6 +201,101 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
 
     handoff_reason_codes: list[str] = []
     stage_source_mismatch: dict[str, Any] = {}
+    shortlist_handoff_summary = {
+        'shortlisted_signals': int(shortlisted_count),
+        'shortlisted_signal_ids': list(shortlisted_qs.values_list('id', flat=True)[:3]),
+        'shortlisted_market_ids': sorted(list(shortlist_market_ids))[:3],
+        'handoff_attempted': 0,
+        'handoff_created': 0,
+        'handoff_blocked': 0,
+        'shortlist_handoff_reason_codes': [],
+        'shortlist_handoff_examples': [],
+        'summary': '',
+    }
+
+    recent_pursuit_run_count = ResearchPursuitRun.objects.filter(started_at__gte=window_start).count()
+    assessed_market_ids = {
+        market_id
+        for market_id in ResearchStructuralAssessment.objects.filter(created_at__gte=window_start).values_list('linked_market_id', flat=True)
+        if market_id is not None
+    }
+    priority_by_market: dict[int, str] = {}
+    for market_id, status in ResearchHandoffPriority.objects.filter(
+        created_at__gte=window_start,
+        linked_market_id__in=list(shortlist_market_ids),
+    ).values_list('linked_market_id', 'handoff_status'):
+        if market_id is not None and market_id not in priority_by_market:
+            priority_by_market[market_id] = status
+    previous_handoff_market_ids = {
+        market_id
+        for market_id in PredictionHandoffCandidate.objects.filter(linked_market_id__in=list(shortlist_market_ids), created_at__lt=window_start).values_list(
+            'linked_market_id', flat=True
+        )
+        if market_id is not None
+    }
+
+    shortlist_reason_codes: list[str] = []
+    shortlist_examples: list[dict[str, Any]] = []
+    attempted_count = 0
+    created_count = 0
+    blocked_count = 0
+    shortlisted_rows = list(shortlisted_qs.values('id', 'linked_market_id')[:50])
+    for row in shortlisted_rows:
+        signal_id = int(row.get('id') or 0)
+        market_id = row.get('linked_market_id')
+        reason = 'SHORTLIST_BLOCKED_BY_FILTER'
+        blocked = True
+        attempted = False
+        created = False
+
+        if market_id is None:
+            reason = 'SHORTLIST_BLOCKED_NO_MARKET_LINK'
+        elif market_id in handoff_market_ids:
+            reason = 'SHORTLIST_PROMOTED_TO_HANDOFF'
+            attempted = True
+            created = True
+            blocked = False
+        elif market_id in assessed_market_ids:
+            reason = 'SHORTLIST_BLOCKED_BY_FILTER'
+            attempted = True
+        elif recent_pursuit_run_count == 0:
+            reason = 'SHORTLIST_BLOCKED_NO_DOWNSTREAM_ROUTE'
+        elif market_id in previous_handoff_market_ids:
+            reason = 'SHORTLIST_BLOCKED_DUPLICATE_HANDOFF'
+        elif priority_by_market.get(market_id) == ResearchHandoffStatus.WATCHLIST:
+            reason = 'SHORTLIST_BLOCKED_LOW_PRIORITY'
+        elif priority_by_market.get(market_id) == ResearchHandoffStatus.DEFERRED:
+            reason = 'SHORTLIST_BLOCKED_CONSENSUS_REQUIRED'
+        elif priority_by_market.get(market_id) == ResearchHandoffStatus.BLOCKED:
+            reason = 'SHORTLIST_BLOCKED_BY_FILTER'
+        elif priority_by_market.get(market_id) == ResearchHandoffStatus.READY_FOR_RESEARCH:
+            reason = 'SHORTLIST_ELIGIBLE_FOR_HANDOFF'
+        else:
+            reason = 'SHORTLIST_BLOCKED_BY_FILTER'
+
+        if attempted:
+            attempted_count += 1
+        if created:
+            created_count += 1
+        if blocked:
+            blocked_count += 1
+        shortlist_reason_codes.append(reason)
+        if len(shortlist_examples) < 3:
+            shortlist_examples.append({'signal_id': signal_id, 'market_id': market_id, 'reason_code': reason})
+
+    shortlist_reason_codes = list(dict.fromkeys(shortlist_reason_codes))
+    shortlist_handoff_summary = {
+        **shortlist_handoff_summary,
+        'handoff_attempted': int(attempted_count),
+        'handoff_created': int(created_count),
+        'handoff_blocked': int(blocked_count),
+        'shortlist_handoff_reason_codes': shortlist_reason_codes,
+        'shortlist_handoff_examples': shortlist_examples,
+        'summary': (
+            f"shortlisted_signals={shortlisted_count} handoff_attempted={attempted_count} handoff_created={created_count} "
+            f"handoff_blocked={blocked_count} shortlist_handoff_reason_codes={','.join(shortlist_reason_codes) or 'none'}"
+        ),
+    }
 
     if shortlisted_count > 0 and handoff_count == 0:
         handoff_reason_codes.append('SHORTLIST_PRESENT_NO_HANDOFF')
@@ -227,6 +328,20 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
     if shortlisted_count > 0 and prediction_count == 0 and risk_count == 0 and paper_execution_count == 0:
         handoff_reason_codes.append('DOWNSTREAM_EVIDENCE_INSUFFICIENT')
 
+    aligned_consensus_count = 0
+    if shortlist_cluster_ids:
+        aligned_consensus_count = NarrativeConsensusRecord.objects.filter(
+            created_at__gte=window_start,
+            linked_cluster_id__in=list(shortlist_cluster_ids),
+        ).count()
+    if consensus_count > 0 and aligned_consensus_count == 0:
+        handoff_reason_codes.append('CONSENSUS_DECOUPLED_FROM_SHORTLIST')
+    consensus_alignment = {
+        'consensus_reviews': int(consensus_count),
+        'shortlist_aligned_consensus_reviews': int(aligned_consensus_count),
+        'consensus_aligned_with_shortlist': bool(consensus_count == 0 or aligned_consensus_count > 0),
+    }
+
     normalized_codes = list(dict.fromkeys(handoff_reason_codes))
     handoff_summary = (
         f"shortlisted_signals={shortlisted_count} handoff_candidates={handoff_count} "
@@ -245,6 +360,8 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         'handoff_reason_codes': normalized_codes,
         'stage_source_mismatch': stage_source_mismatch,
         'handoff_summary': handoff_summary,
+        'shortlist_handoff_summary': shortlist_handoff_summary,
+        'consensus_alignment': consensus_alignment,
     }
 
 
@@ -353,6 +470,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'handoff_reason_codes': handoff_diagnostics.get('handoff_reason_codes', []),
         'stage_source_mismatch': handoff_diagnostics.get('stage_source_mismatch', {}),
         'handoff_summary': handoff_diagnostics.get('handoff_summary', ''),
+        'shortlist_handoff_summary': handoff_diagnostics.get('shortlist_handoff_summary', {}),
+        'consensus_alignment': handoff_diagnostics.get('consensus_alignment', {}),
         'shortlisted_signals': handoff_diagnostics.get('shortlisted_signals', 0),
         'handoff_candidates': handoff_diagnostics.get('handoff_candidates', 0),
         'consensus_reviews': handoff_diagnostics.get('consensus_reviews', 0),
