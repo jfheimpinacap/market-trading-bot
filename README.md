@@ -3327,6 +3327,15 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - reason codes explícitos de visibilidad/ruta (`PREDICTION_VISIBLE_IN_FUNNEL`, `PREDICTION_REUSED_BUT_NOT_COUNTED`, `PREDICTION_HIDDEN_BY_STATUS_FILTER`, `PREDICTION_READY_FOR_RISK`, `PREDICTION_NOT_READY_FOR_RISK`, `PREDICTION_RISK_ROUTE_MISSING`).
   - añade `prediction_risk_summary` compacto (`risk_route_expected`, `risk_route_available`, `risk_route_attempted`, `risk_route_reason_codes`) para exponer el siguiente cuello real sin bypass de risk.
   - mantiene enfoque observability-first y fronteras **REAL_READ_ONLY + PAPER_ONLY**; sin live trading real.
+- **Prompt 243** amplía diagnóstico y bridge conservador `prediction -> risk` en Mission Control:
+  - `prediction_risk_summary` ahora reporta `risk_route_expected`, `risk_route_available`, `risk_route_attempted`, `risk_route_created`, `risk_route_blocked`, `risk_route_missing_status_count`, `risk_route_reason_codes`, `risk_route_summary`.
+  - agrega `prediction_risk_examples` (máx 3) con `candidate_id`, `market_id`, `source_model`, `prediction_status`, `expected_route`, `reason_code`, `blocking_stage`, `observed_value`, `threshold`.
+  - distingue explícitamente la verdad operacional entre:
+    - candidate visible pero sin artefacto esperado por risk (`PredictionIntakeCandidate` sin `PredictionConvictionReview` listo),
+    - filtro de status (`MONITOR_ONLY` o review no `READY_FOR_RISK`),
+    - handler/route no disponible,
+    - bridge intentado, decisión creada, o decisión reutilizada.
+  - incorpora bridge mínimo a `run_risk_runtime_review` **solo** cuando hay candidate visible + elegible + sin decisión previa, manteniendo dedupe, policy/safety y modo **REAL_READ_ONLY + PAPER_ONLY** (sin live trading real).
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.

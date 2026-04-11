@@ -24,6 +24,7 @@ from apps.research_agent.models import NarrativeConsensusRecord
 from apps.research_agent.models import MarketUniverseScanRun, NarrativeSignal, NarrativeSignalStatus, PredictionHandoffCandidate
 from apps.research_agent.models import PredictionHandoffStatus, ResearchHandoffPriority, ResearchHandoffStatus, ResearchPursuitRun, ResearchStructuralAssessment
 from apps.risk_agent.models import RiskApprovalDecision
+from apps.risk_agent.services.run import run_risk_runtime_review
 
 FUNNEL_ACTIVE = 'ACTIVE'
 FUNNEL_THIN_FLOW = 'THIN_FLOW'
@@ -52,6 +53,7 @@ _HANDOFF_SCORING_EXAMPLES_LIMIT = 3
 _TOKEN_STOPWORDS = {'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'will', 'over'}
 _DOWNSTREAM_ROUTE_NAME = 'research_pursuit_review'
 _PREDICTION_INTAKE_ROUTE_NAME = 'prediction_intake_review'
+_PREDICTION_RISK_ROUTE_NAME = 'risk_runtime_review'
 _BORDERLINE_DECISION_SOURCE = 'mission_control_borderline_guardrail_v1'
 
 
@@ -184,6 +186,14 @@ def _is_prediction_intake_route_disabled() -> bool:
 
 def _is_prediction_intake_handler_available() -> bool:
     return callable(run_prediction_intake_review)
+
+
+def _is_prediction_risk_route_disabled() -> bool:
+    return bool(getattr(settings, 'MISSION_CONTROL_DISABLE_PREDICTION_RISK_ROUTE', False))
+
+
+def _is_prediction_risk_handler_available() -> bool:
+    return callable(run_risk_runtime_review)
 
 
 def _safe_int(value: Any) -> int | None:
@@ -1411,8 +1421,16 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
     prediction_candidates_hidden_count = 0
     prediction_visibility_reason_codes = []
     prediction_risk_reason_codes = []
+    prediction_risk_examples: list[dict[str, Any]] = []
     prediction_visibility_examples = []
     visible_candidate_ids = []
+    risk_route_eligible_candidate_ids: list[int] = []
+    risk_route_missing_status_count = 0
+    risk_route_blocked = 0
+    risk_route_created = 0
+    risk_route_reused_existing_decision = 0
+    prediction_risk_route_disabled = _is_prediction_risk_route_disabled()
+    prediction_risk_handler_available = _is_prediction_risk_handler_available()
     for candidate in intake_candidate_rows:
         source = 'created' if candidate.created_at >= window_start else 'reused'
         if source == 'created':
@@ -1430,12 +1448,68 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         prediction_visibility_reason_codes.append(visibility_reason)
 
         linked_review = conviction_by_candidate_id.get(int(candidate.id))
-        if linked_review and linked_review.review_status == PredictionConvictionReviewStatus.READY_FOR_RISK:
-            prediction_risk_reason_codes.append('PREDICTION_READY_FOR_RISK')
-        elif linked_review:
-            prediction_risk_reason_codes.append('PREDICTION_NOT_READY_FOR_RISK')
+        risk_reason_code = 'PREDICTION_RISK_ROUTE_MISSING'
+        blocking_stage = 'prediction_to_risk_bridge'
+        observed_value: Any = str(candidate.intake_status or '')
+        threshold: Any = PredictionConvictionReviewStatus.READY_FOR_RISK
+        if not visible:
+            risk_reason_code = 'PREDICTION_RISK_STATUS_FILTER_REJECTED'
+            blocking_stage = 'prediction_visibility'
+            risk_route_missing_status_count += 1
+            risk_route_blocked += 1
+        elif prediction_risk_route_disabled:
+            risk_reason_code = 'PREDICTION_RISK_ROUTE_MISSING'
+            blocking_stage = 'mission_control_guardrail'
+            observed_value = False
+            threshold = True
+            risk_route_blocked += 1
+        elif not prediction_risk_handler_available:
+            risk_reason_code = 'PREDICTION_RISK_NO_ELIGIBLE_HANDLER'
+            blocking_stage = 'mission_control_handler_lookup'
+            observed_value = False
+            threshold = True
+            risk_route_blocked += 1
+        elif candidate.intake_status == PredictionIntakeStatus.MONITOR_ONLY:
+            risk_reason_code = 'PREDICTION_RISK_STATUS_FILTER_REJECTED'
+            blocking_stage = 'prediction_intake_status'
+            observed_value = str(candidate.intake_status or '')
+            threshold = PredictionIntakeStatus.READY_FOR_RUNTIME
+            risk_route_missing_status_count += 1
+            risk_route_blocked += 1
+        elif not linked_review:
+            risk_reason_code = 'PREDICTION_RISK_ROUTE_MISSING'
+            blocking_stage = 'prediction_artifact_mismatch'
+            observed_value = 'PredictionIntakeCandidate'
+            threshold = 'PredictionConvictionReview'
+            risk_route_blocked += 1
+        elif linked_review.review_status != PredictionConvictionReviewStatus.READY_FOR_RISK:
+            risk_reason_code = 'PREDICTION_RISK_STATUS_FILTER_REJECTED'
+            blocking_stage = 'prediction_conviction_review'
+            observed_value = str(linked_review.review_status or '')
+            threshold = PredictionConvictionReviewStatus.READY_FOR_RISK
+            risk_route_missing_status_count += 1
+            risk_route_blocked += 1
         else:
-            prediction_risk_reason_codes.append('PREDICTION_RISK_ROUTE_MISSING')
+            risk_reason_code = 'PREDICTION_RISK_ROUTE_AVAILABLE'
+            blocking_stage = 'risk_runtime_precheck'
+            observed_value = str(linked_review.review_status or '')
+            threshold = PredictionConvictionReviewStatus.READY_FOR_RISK
+            risk_route_eligible_candidate_ids.append(int(candidate.id))
+        prediction_risk_reason_codes.append(risk_reason_code)
+        if len(prediction_risk_examples) < 3:
+            prediction_risk_examples.append(
+                {
+                    'candidate_id': int(candidate.id),
+                    'market_id': _safe_int(candidate.linked_market_id),
+                    'source_model': 'PredictionIntakeCandidate',
+                    'prediction_status': str(candidate.intake_status or ''),
+                    'expected_route': _PREDICTION_RISK_ROUTE_NAME,
+                    'reason_code': risk_reason_code,
+                    'blocking_stage': blocking_stage,
+                    'observed_value': observed_value,
+                    'threshold': threshold,
+                }
+            )
         if len(prediction_visibility_examples) < 3:
             prediction_visibility_examples.append(
                 {
@@ -1452,22 +1526,59 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
                 }
             )
 
-    risk_route_expected = int(prediction_candidates_visible_count)
-    risk_route_available = sum(
-        1
-        for candidate_id in visible_candidate_ids
-        if conviction_by_candidate_id.get(candidate_id)
-        and conviction_by_candidate_id[candidate_id].review_status == PredictionConvictionReviewStatus.READY_FOR_RISK
+    preexisting_risk_decision_candidate_ids = set(
+        int(candidate_id)
+        for candidate_id in RiskApprovalDecision.objects.filter(
+            linked_candidate__linked_prediction_intake_candidate_id__in=visible_candidate_ids
+        ).values_list('linked_candidate__linked_prediction_intake_candidate_id', flat=True)
+        if candidate_id is not None
     )
-    risk_route_attempted = RiskApprovalDecision.objects.filter(
+    eligible_without_decision_ids = [candidate_id for candidate_id in risk_route_eligible_candidate_ids if candidate_id not in preexisting_risk_decision_candidate_ids]
+    risk_route_attempted = 0
+    if eligible_without_decision_ids and not prediction_risk_route_disabled and prediction_risk_handler_available:
+        risk_route_attempted = len(eligible_without_decision_ids)
+        prediction_risk_reason_codes.append('PREDICTION_RISK_ATTEMPTED')
+        run_risk_runtime_review(triggered_by='mission_control_prediction_risk_bridge')
+
+    current_risk_decision_candidate_ids = set(
+        int(candidate_id)
+        for candidate_id in RiskApprovalDecision.objects.filter(
+            linked_candidate__linked_prediction_intake_candidate_id__in=visible_candidate_ids
+        ).values_list('linked_candidate__linked_prediction_intake_candidate_id', flat=True)
+        if candidate_id is not None
+    )
+    created_risk_decision_candidate_ids = current_risk_decision_candidate_ids - preexisting_risk_decision_candidate_ids
+    risk_route_created = len([candidate_id for candidate_id in risk_route_eligible_candidate_ids if candidate_id in created_risk_decision_candidate_ids])
+    risk_route_reused_existing_decision = len(
+        [candidate_id for candidate_id in risk_route_eligible_candidate_ids if candidate_id in preexisting_risk_decision_candidate_ids]
+    )
+    if risk_route_created > 0:
+        prediction_risk_reason_codes.append('PREDICTION_RISK_CREATED')
+    if risk_route_reused_existing_decision > 0:
+        prediction_risk_reason_codes.append('PREDICTION_RISK_REUSED_EXISTING_DECISION')
+
+    risk_route_expected = int(prediction_candidates_visible_count)
+    risk_route_available = int(len(risk_route_eligible_candidate_ids))
+    risk_route_decision_count_window = RiskApprovalDecision.objects.filter(
         linked_candidate__linked_prediction_intake_candidate_id__in=visible_candidate_ids,
         created_at__gte=window_start,
     ).count()
+    risk_route_blocked = max(0, risk_route_expected - (risk_route_created + risk_route_reused_existing_decision))
     prediction_risk_summary = {
         'risk_route_expected': int(risk_route_expected),
         'risk_route_available': int(risk_route_available),
         'risk_route_attempted': int(risk_route_attempted),
+        'risk_route_created': int(risk_route_created),
+        'risk_route_blocked': int(risk_route_blocked),
+        'risk_route_missing_status_count': int(risk_route_missing_status_count),
+        'risk_route_runtime_decisions_window': int(risk_route_decision_count_window),
         'risk_route_reason_codes': list(dict.fromkeys(prediction_risk_reason_codes)),
+        'risk_route_summary': (
+            f"risk_route_expected={risk_route_expected} risk_route_available={risk_route_available} "
+            f"risk_route_attempted={risk_route_attempted} risk_route_created={risk_route_created} "
+            f"risk_route_blocked={risk_route_blocked} risk_route_missing_status_count={risk_route_missing_status_count} "
+            f"risk_route_reason_codes={','.join(list(dict.fromkeys(prediction_risk_reason_codes))) or 'none'}"
+        ),
     }
     prediction_visibility_summary = {
         'prediction_intake_created_count': int(prediction_intake_created_count),
@@ -1531,6 +1642,7 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'prediction_visibility_summary': prediction_visibility_summary,
         'prediction_visibility_examples': prediction_visibility_examples,
         'prediction_risk_summary': prediction_risk_summary,
+        'prediction_risk_examples': prediction_risk_examples,
     }
 
 
@@ -1652,6 +1764,7 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'prediction_visibility_summary': handoff_diagnostics.get('prediction_visibility_summary', {}),
         'prediction_visibility_examples': handoff_diagnostics.get('prediction_visibility_examples', []),
         'prediction_risk_summary': handoff_diagnostics.get('prediction_risk_summary', {}),
+        'prediction_risk_examples': handoff_diagnostics.get('prediction_risk_examples', []),
         'shortlisted_signals': handoff_diagnostics.get('shortlisted_signals', 0),
         'handoff_candidates': handoff_diagnostics.get('handoff_candidates', 0),
         'consensus_reviews': handoff_diagnostics.get('consensus_reviews', 0),

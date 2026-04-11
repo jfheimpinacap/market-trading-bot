@@ -236,6 +236,7 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'prediction_visibility_summary': dict(funnel.get('prediction_visibility_summary') or {}),
             'prediction_visibility_examples': list(funnel.get('prediction_visibility_examples') or []),
             'prediction_risk_summary': dict(funnel.get('prediction_risk_summary') or {}),
+            'prediction_risk_examples': list(funnel.get('prediction_risk_examples') or []),
             'attention_mode': str(attention.get('attention_mode') or 'UNKNOWN'),
             'portfolio_summary': _build_portfolio_summary(),
             'scan_summary': _build_scan_summary(scan_run=scan_run),
@@ -269,6 +270,7 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     prediction_visibility = payload.get('prediction_visibility_summary') or {}
     prediction_visibility_examples = payload.get('prediction_visibility_examples') or []
     prediction_risk = payload.get('prediction_risk_summary') or {}
+    prediction_risk_examples = payload.get('prediction_risk_examples') or []
 
     lines = [
         '=== Mission Control Test Console Export ===',
@@ -400,9 +402,14 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         (
             f"  risk_route_expected={prediction_risk.get('risk_route_expected', 0)} "
             f"risk_route_available={prediction_risk.get('risk_route_available', 0)} "
-            f"risk_route_attempted={prediction_risk.get('risk_route_attempted', 0)}"
+            f"risk_route_attempted={prediction_risk.get('risk_route_attempted', 0)} "
+            f"risk_route_created={prediction_risk.get('risk_route_created', 0)} "
+            f"risk_route_blocked={prediction_risk.get('risk_route_blocked', 0)} "
+            f"risk_route_missing_status_count={prediction_risk.get('risk_route_missing_status_count', 0)}"
         ),
         f"  risk_route_reason_codes={','.join(prediction_risk.get('risk_route_reason_codes') or []) or 'none'}",
+        f"  risk_route_summary={prediction_risk.get('risk_route_summary') or ''}",
+        f"  prediction_risk_examples={prediction_risk_examples or []}",
         'scan_summary:',
         f"  summary_window={scan.get('summary_window') or 'latest_scan_run'}",
         f"  runs={scan.get('runs', 0)} rss_items={scan.get('rss_items', 0)} reddit_items={scan.get('reddit_items', 0)} x_items={scan.get('x_items', 0)}",

@@ -3893,6 +3893,7 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
 
     def test_prediction_visibility_summary_includes_risk_route_diagnostics(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.prediction_agent.models import PredictionIntakeRun, PredictionIntakeStatus, PredictionIntakeCandidate
         from apps.research_agent.models import (
             PredictionHandoffCandidate,
             PredictionHandoffStatus,
@@ -3921,18 +3922,207 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
             handoff_status=PredictionHandoffStatus.READY,
             handoff_confidence=Decimal('0.7700'),
         )
+        intake_run = PredictionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        handoff = PredictionHandoffCandidate.objects.order_by('-id').first()
+        PredictionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_prediction_handoff_candidate=handoff,
+            intake_status=PredictionIntakeStatus.MONITOR_ONLY,
+        )
 
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         prediction_risk = diagnostics.get('prediction_risk_summary') or {}
         self.assertIn('risk_route_expected', prediction_risk)
         self.assertIn('risk_route_available', prediction_risk)
         self.assertIn('risk_route_attempted', prediction_risk)
+        self.assertIn('risk_route_created', prediction_risk)
+        self.assertIn('risk_route_blocked', prediction_risk)
+        self.assertIn('risk_route_missing_status_count', prediction_risk)
+        self.assertIn('risk_route_summary', prediction_risk)
+        self.assertIn('prediction_risk_examples', diagnostics)
         self.assertTrue(
             any(
                 code in prediction_risk.get('risk_route_reason_codes', [])
-                for code in ['PREDICTION_RISK_ROUTE_MISSING', 'PREDICTION_NOT_READY_FOR_RISK', 'PREDICTION_READY_FOR_RISK']
+                for code in ['PREDICTION_RISK_ROUTE_MISSING', 'PREDICTION_RISK_STATUS_FILTER_REJECTED', 'PREDICTION_RISK_ROUTE_AVAILABLE']
             )
         )
+
+    def test_prediction_risk_summary_marks_status_filter_rejection_for_monitor_only_visible_candidate(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.prediction_agent.models import PredictionIntakeCandidate, PredictionIntakeRun, PredictionIntakeStatus
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-risk-monitor-only-filter')
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run, linked_market=market, structural_status=ResearchStructuralStatus.PREDICTION_READY
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run, linked_assessment=assessment, linked_market=market, score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION
+        )
+        handoff = PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.READY,
+            handoff_confidence=Decimal('0.7600'),
+        )
+        intake_run = PredictionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        PredictionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_prediction_handoff_candidate=handoff,
+            intake_status=PredictionIntakeStatus.MONITOR_ONLY,
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        prediction_risk = diagnostics.get('prediction_risk_summary') or {}
+        self.assertEqual(prediction_risk.get('risk_route_expected'), 1)
+        self.assertEqual(prediction_risk.get('risk_route_available'), 0)
+        self.assertEqual(prediction_risk.get('risk_route_attempted'), 0)
+        self.assertGreaterEqual(prediction_risk.get('risk_route_missing_status_count', 0), 1)
+        self.assertIn('PREDICTION_RISK_STATUS_FILTER_REJECTED', prediction_risk.get('risk_route_reason_codes', []))
+
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.run_risk_runtime_review')
+    def test_prediction_risk_summary_attempts_bridge_when_candidate_is_routable(self, mock_risk_runtime_review):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.prediction_agent.models import PredictionConvictionReview, PredictionConvictionReviewStatus
+        from apps.prediction_agent.services.run import run_prediction_intake_review
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-risk-bridge-attempt')
+        market.current_market_probability = Decimal('0.5000')
+        market.save(update_fields=['current_market_probability'])
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run, linked_market=market, structural_status=ResearchStructuralStatus.PREDICTION_READY
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run, linked_assessment=assessment, linked_market=market, score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.READY,
+            handoff_confidence=Decimal('0.8200'),
+        )
+        run_prediction_intake_review(triggered_by='mission-control-risk-bridge-attempt')
+        review = PredictionConvictionReview.objects.order_by('-id').first()
+        review.review_status = PredictionConvictionReviewStatus.READY_FOR_RISK
+        review.save(update_fields=['review_status', 'updated_at'])
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        prediction_risk = diagnostics.get('prediction_risk_summary') or {}
+        self.assertGreaterEqual(prediction_risk.get('risk_route_available', 0), 1)
+        self.assertGreaterEqual(prediction_risk.get('risk_route_attempted', 0), 1)
+        self.assertIn('PREDICTION_RISK_ATTEMPTED', prediction_risk.get('risk_route_reason_codes', []))
+        mock_risk_runtime_review.assert_called_once()
+
+    def test_prediction_risk_summary_reuses_existing_risk_decision(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.prediction_agent.models import PredictionConvictionReview, PredictionConvictionReviewStatus, RiskReadyPredictionHandoff
+        from apps.prediction_agent.services.run import run_prediction_intake_review
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+        from apps.risk_agent.models import RiskApprovalDecision, RiskRuntimeApprovalStatus, RiskRuntimeCandidate, RiskRuntimeRun
+
+        market = self._provider_and_market('prediction-risk-reused-decision')
+        market.current_market_probability = Decimal('0.5000')
+        market.save(update_fields=['current_market_probability'])
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run, linked_market=market, structural_status=ResearchStructuralStatus.PREDICTION_READY
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run, linked_assessment=assessment, linked_market=market, score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.READY,
+            handoff_confidence=Decimal('0.7900'),
+        )
+        run_prediction_intake_review(triggered_by='mission-control-risk-reused')
+        review = PredictionConvictionReview.objects.order_by('-id').first()
+        review.review_status = PredictionConvictionReviewStatus.READY_FOR_RISK
+        review.save(update_fields=['review_status', 'updated_at'])
+        intake_candidate = review.linked_intake_candidate
+        risk_handoff = RiskReadyPredictionHandoff.objects.filter(linked_conviction_review=review).order_by('-id').first()
+        runtime_run = RiskRuntimeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        runtime_candidate = RiskRuntimeCandidate.objects.create(
+            runtime_run=runtime_run,
+            linked_risk_ready_prediction_handoff=risk_handoff,
+            linked_prediction_conviction_review=review,
+            linked_prediction_intake_candidate=intake_candidate,
+            linked_market=market,
+            market_provider=market.provider.slug,
+            category=market.category or '',
+            calibrated_probability=Decimal('0.6200'),
+            market_probability=Decimal('0.5000'),
+            adjusted_edge=Decimal('0.1200'),
+            intake_status='READY_FOR_RISK_RUNTIME',
+            confidence_score=Decimal('0.8000'),
+            uncertainty_score=Decimal('0.2000'),
+            conviction_bucket='MEDIUM',
+            portfolio_pressure_state='LOW',
+            context_summary='seeded-for-reuse-test',
+            reason_codes=['SEEDED_FOR_TEST'],
+            evidence_quality_score=Decimal('0.7000'),
+            precedent_caution_score=Decimal('0.3000'),
+            linked_portfolio_context={},
+            linked_feedback_context={},
+            market_liquidity_context={},
+            predicted_status='READY',
+            metadata={'paper_demo_only': True},
+        )
+        RiskApprovalDecision.objects.create(
+            linked_candidate=runtime_candidate,
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+            approval_confidence=Decimal('0.7000'),
+            approval_summary='seeded-for-reuse-test',
+            approval_rationale='seeded-for-reuse-test',
+            reason_codes=['SEEDED_FOR_TEST'],
+            blockers=[],
+            risk_score=Decimal('0.3000'),
+            max_allowed_exposure=Decimal('100.00'),
+            watch_required=False,
+            metadata={'seeded_for_test': True},
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        prediction_risk = diagnostics.get('prediction_risk_summary') or {}
+        self.assertGreaterEqual(prediction_risk.get('risk_route_available', 0), 1)
+        self.assertEqual(prediction_risk.get('risk_route_attempted', 0), 0)
+        self.assertIn('PREDICTION_RISK_REUSED_EXISTING_DECISION', prediction_risk.get('risk_route_reason_codes', []))
 
     def test_prediction_intake_reason_code_semantics_keep_guardrail_and_filter_separate(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
@@ -4543,6 +4733,10 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('prediction_visibility_reason_codes=', text_payload)
         self.assertIn('prediction_risk_summary:', text_payload)
         self.assertIn('risk_route_reason_codes=', text_payload)
+        self.assertIn('risk_route_created=', text_payload)
+        self.assertIn('risk_route_blocked=', text_payload)
+        self.assertIn('risk_route_missing_status_count=', text_payload)
+        self.assertIn('prediction_risk_examples=', text_payload)
         self.assertIn('handoff_structural_summary:', text_payload)
         self.assertIn('structural_reason_codes=', text_payload)
         self.assertIn('handoff_structural_examples=', text_payload)
