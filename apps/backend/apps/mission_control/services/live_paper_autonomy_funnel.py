@@ -35,6 +35,7 @@ STAGE_EMPTY = 'EMPTY'
 _LOW_THRESHOLD = 3
 _MARKET_LINK_CONFIDENCE_THRESHOLD = Decimal('1.00')
 _PREDICTION_INTAKE_CONFIDENCE_THRESHOLD = Decimal('0.5500')
+_HANDOFF_SCORING_EXAMPLES_LIMIT = 3
 _TOKEN_STOPWORDS = {'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'will', 'over'}
 _DOWNSTREAM_ROUTE_NAME = 'research_pursuit_review'
 _PREDICTION_INTAKE_ROUTE_NAME = 'prediction_intake_review'
@@ -79,6 +80,81 @@ def _missing_prediction_intake_fields(*, handoff: PredictionHandoffCandidate) ->
     if not str(getattr(handoff, 'handoff_status', '') or '').strip():
         missing.append('handoff_status')
     return missing
+
+
+def _handoff_status_reason(*, handoff: PredictionHandoffCandidate) -> tuple[str, str, Any, Any, dict[str, Any]]:
+    status = str(getattr(handoff, 'handoff_status', '') or '')
+    confidence_raw = getattr(handoff, 'handoff_confidence', None)
+    confidence = Decimal(str(confidence_raw or '0'))
+    score_status = str(getattr(getattr(handoff, 'linked_pursuit_score', None), 'score_status', '') or '')
+    structural_status = str(getattr(getattr(handoff, 'linked_assessment', None), 'structural_status', '') or '')
+    has_consensus = bool(getattr(handoff, 'linked_consensus_record_id', None))
+    score_components = dict(getattr(getattr(handoff, 'linked_pursuit_score', None), 'score_components', {}) or {})
+    base_context = {
+        'score_status': score_status,
+        'structural_status': structural_status,
+        'has_consensus_link': has_consensus,
+        'score_components': score_components,
+    }
+
+    if status == PredictionHandoffStatus.READY:
+        if has_consensus:
+            return (
+                'HANDOFF_STATUS_READY_BY_CONSENSUS',
+                'consensus',
+                True,
+                True,
+                base_context,
+            )
+        return (
+            'HANDOFF_STATUS_READY_BY_PURSUIT',
+            'pursuit',
+            score_status or status,
+            'ready_for_prediction',
+            base_context,
+        )
+
+    if status == PredictionHandoffStatus.BLOCKED:
+        return (
+            'HANDOFF_STATUS_BLOCKED_BY_RULE',
+            'handoff_scoring',
+            structural_status or score_status or status,
+            'non_blocked_structural_status',
+            base_context,
+        )
+
+    if status == PredictionHandoffStatus.DEFERRED:
+        if confidence < _PREDICTION_INTAKE_CONFIDENCE_THRESHOLD:
+            return (
+                'HANDOFF_STATUS_DEFERRED_LOW_CONFIDENCE',
+                'handoff_scoring',
+                str(confidence.quantize(Decimal('0.0001'))),
+                str(_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD),
+                base_context,
+            )
+        if structural_status == 'deferred':
+            return (
+                'HANDOFF_STATUS_DEFERRED_INSUFFICIENT_EVIDENCE',
+                'pursuit',
+                structural_status,
+                'prediction_ready',
+                base_context,
+            )
+        return (
+            'HANDOFF_STATUS_DEFERRED_NO_PROMOTION',
+            'pursuit',
+            score_status or structural_status or status,
+            'ready_for_prediction',
+            base_context,
+        )
+
+    return (
+        'HANDOFF_STATUS_DEFERRED_NO_PROMOTION',
+        'handoff_scoring',
+        status,
+        PredictionHandoffStatus.READY,
+        base_context,
+    )
 
 
 @dataclass(frozen=True)
@@ -682,10 +758,60 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
     }
 
     handoff_rows = list(
-        PredictionHandoffCandidate.objects.select_related('linked_consensus_record')
+        PredictionHandoffCandidate.objects.select_related('linked_consensus_record', 'linked_pursuit_score', 'linked_assessment')
         .filter(created_at__gte=window_start)
         .order_by('-created_at', '-id')[:40]
     )
+    handoff_ready_count = 0
+    handoff_deferred_count = 0
+    handoff_blocked_count = 0
+    handoff_status_reason_codes: list[str] = []
+    deferred_reasons: list[str] = []
+    handoff_scoring_examples: list[dict[str, Any]] = []
+    for handoff in handoff_rows:
+        status_reason_code, source_stage, observed_value, threshold, scoring_context = _handoff_status_reason(handoff=handoff)
+        handoff_status_reason_codes.append(status_reason_code)
+        if status_reason_code == 'HANDOFF_STATUS_DEFERRED_LOW_CONFIDENCE':
+            handoff_status_reason_codes.append('HANDOFF_CONFIDENCE_BELOW_READY_THRESHOLD')
+        if handoff.handoff_status == PredictionHandoffStatus.READY:
+            handoff_ready_count += 1
+        elif handoff.handoff_status == PredictionHandoffStatus.BLOCKED:
+            handoff_blocked_count += 1
+        else:
+            handoff_deferred_count += 1
+            deferred_reasons.append(status_reason_code)
+        if len(handoff_scoring_examples) < _HANDOFF_SCORING_EXAMPLES_LIMIT:
+            handoff_scoring_examples.append(
+                {
+                    'handoff_id': int(handoff.id),
+                    'market_id': _safe_int(handoff.linked_market_id),
+                    'handoff_status': str(getattr(handoff, 'handoff_status', '') or ''),
+                    'handoff_confidence': str(getattr(handoff, 'handoff_confidence', '') or ''),
+                    'status_reason_code': status_reason_code,
+                    'scoring_components': scoring_context.get('score_components') or {},
+                    'score_status': scoring_context.get('score_status'),
+                    'structural_status': scoring_context.get('structural_status'),
+                    'observed_value': observed_value,
+                    'threshold': threshold,
+                    'source_stage': source_stage,
+                }
+            )
+    handoff_status_reason_codes = list(dict.fromkeys(handoff_status_reason_codes))
+    deferred_reasons = list(dict.fromkeys(deferred_reasons))
+    handoff_scoring_summary = {
+        'handoff_ready': int(handoff_ready_count),
+        'handoff_deferred': int(handoff_deferred_count),
+        'handoff_blocked': int(handoff_blocked_count),
+        'handoff_status_reason_codes': handoff_status_reason_codes,
+        'ready_threshold': str(_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD),
+        'deferred_reasons': deferred_reasons,
+        'handoff_scoring_summary': (
+            f"handoff_ready={handoff_ready_count} handoff_deferred={handoff_deferred_count} handoff_blocked={handoff_blocked_count} "
+            f"ready_threshold={_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD} "
+            f"handoff_status_reason_codes={','.join(handoff_status_reason_codes) or 'none'} "
+            f"deferred_reasons={','.join(deferred_reasons) or 'none'}"
+        ),
+    }
     handoff_ids = [handoff.id for handoff in handoff_rows]
     intake_candidate_by_handoff = set(
         PredictionIntakeCandidate.objects.filter(linked_prediction_handoff_candidate_id__in=handoff_ids)
@@ -871,7 +997,9 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         prediction_intake_reason_codes.append('PREDICTION_INTAKE_CREATED')
     if prediction_intake_attempted == 0 and handoff_count > 0:
         if route_available:
-            prediction_intake_reason_codes.append('PREDICTION_INTAKE_FILTER_REJECTED')
+            if not prediction_intake_filter_reason_codes and not prediction_intake_guardrail_reason_codes:
+                prediction_intake_filter_reason_codes.append('PREDICTION_INTAKE_FILTER_REJECTED')
+                prediction_intake_reason_codes.append('PREDICTION_INTAKE_FILTER_REJECTED')
         else:
             prediction_intake_reason_codes.append('PREDICTION_INTAKE_ROUTE_MISSING')
     prediction_intake_guardrail_reason_codes = list(dict.fromkeys(prediction_intake_guardrail_reason_codes))
@@ -930,6 +1058,8 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         'market_link_summary': market_link_summary,
         'market_link_examples': market_link_examples,
         'consensus_alignment': consensus_alignment,
+        'handoff_scoring_summary': handoff_scoring_summary,
+        'handoff_scoring_examples': handoff_scoring_examples,
         'prediction_intake_summary': prediction_intake_summary,
         'prediction_intake_examples': prediction_intake_examples,
     }
@@ -1044,6 +1174,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'market_link_summary': handoff_diagnostics.get('market_link_summary', {}),
         'market_link_examples': handoff_diagnostics.get('market_link_examples', []),
         'consensus_alignment': handoff_diagnostics.get('consensus_alignment', {}),
+        'handoff_scoring_summary': handoff_diagnostics.get('handoff_scoring_summary', {}),
+        'handoff_scoring_examples': handoff_diagnostics.get('handoff_scoring_examples', []),
         'prediction_intake_summary': handoff_diagnostics.get('prediction_intake_summary', {}),
         'prediction_intake_examples': handoff_diagnostics.get('prediction_intake_examples', []),
         'shortlisted_signals': handoff_diagnostics.get('shortlisted_signals', 0),

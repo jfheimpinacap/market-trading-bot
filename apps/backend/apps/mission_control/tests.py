@@ -3254,6 +3254,135 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertIn('PREDICTION_INTAKE_CONFIDENCE_BELOW_THRESHOLD', summary.get('prediction_intake_filter_reason_codes', []))
         self.assertNotIn('PREDICTION_INTAKE_ROUTE_MISSING', summary.get('prediction_intake_reason_codes', []))
 
+    def test_handoff_scoring_summary_explains_deferred_low_confidence(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('handoff-scoring-deferred-low-confidence')
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.DEFERRED,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            pursuit_score=Decimal('0.4500'),
+            score_status=ResearchPursuitScoreStatus.DEFER,
+            score_components={'narrative_priority': '0.6200'},
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.DEFERRED,
+            handoff_confidence=Decimal('0.4500'),
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        summary = diagnostics.get('handoff_scoring_summary') or {}
+        self.assertEqual(summary.get('handoff_deferred'), 1)
+        self.assertIn('HANDOFF_STATUS_DEFERRED_LOW_CONFIDENCE', summary.get('handoff_status_reason_codes', []))
+        self.assertIn('HANDOFF_CONFIDENCE_BELOW_READY_THRESHOLD', summary.get('handoff_status_reason_codes', []))
+        example = (diagnostics.get('handoff_scoring_examples') or [{}])[0]
+        self.assertEqual(example.get('status_reason_code'), 'HANDOFF_STATUS_DEFERRED_LOW_CONFIDENCE')
+        self.assertEqual(example.get('observed_value'), '0.4500')
+        self.assertEqual(example.get('threshold'), '0.5500')
+
+    def test_handoff_scoring_summary_explains_no_promotion(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('handoff-scoring-no-promotion')
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            pursuit_score=Decimal('0.5900'),
+            score_status=ResearchPursuitScoreStatus.KEEP_ON_RESEARCH_WATCHLIST,
+            score_components={'narrative_priority': '0.6200'},
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.WATCH,
+            handoff_confidence=Decimal('0.5900'),
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        summary = diagnostics.get('handoff_scoring_summary') or {}
+        self.assertIn('HANDOFF_STATUS_DEFERRED_NO_PROMOTION', summary.get('handoff_status_reason_codes', []))
+        self.assertIn('HANDOFF_STATUS_DEFERRED_NO_PROMOTION', summary.get('deferred_reasons', []))
+
+    def test_handoff_scoring_summary_explains_ready_and_prediction_can_pass(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('handoff-scoring-ready')
+        market.current_market_probability = Decimal('0.6100')
+        market.save(update_fields=['current_market_probability'])
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            pursuit_score=Decimal('0.7700'),
+            score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION,
+            score_components={'narrative_priority': '0.8200'},
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.READY,
+            handoff_confidence=Decimal('0.7700'),
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        handoff_summary = diagnostics.get('handoff_scoring_summary') or {}
+        intake_summary = diagnostics.get('prediction_intake_summary') or {}
+        self.assertEqual(handoff_summary.get('handoff_ready'), 1)
+        self.assertIn('HANDOFF_STATUS_READY_BY_PURSUIT', handoff_summary.get('handoff_status_reason_codes', []))
+        self.assertGreaterEqual(intake_summary.get('prediction_intake_created', 0), 1)
+
     def test_prediction_intake_blocks_ineligible_status_with_explicit_filter_reason(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.research_agent.models import (
@@ -3375,6 +3504,47 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(summary.get('prediction_intake_guardrail_blocked'), 0)
         self.assertGreaterEqual(summary.get('prediction_intake_reused_count', 0), 1)
         self.assertIn('PREDICTION_INTAKE_REUSED_EXISTING_CANDIDATE', summary.get('prediction_intake_reason_codes', []))
+
+    def test_prediction_intake_reason_code_semantics_keep_guardrail_and_filter_separate(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-semantics-guardrail-filter')
+        market.current_market_probability = Decimal('0.4800')
+        market.save(update_fields=['current_market_probability'])
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.DEFERRED,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            pursuit_score=Decimal('0.4500'),
+            score_status=ResearchPursuitScoreStatus.DEFER,
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.DEFERRED,
+            handoff_confidence=Decimal('0.4500'),
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        summary = diagnostics.get('prediction_intake_summary') or {}
+        self.assertIn('PREDICTION_INTAKE_GUARDRAIL_REJECTED', summary.get('prediction_intake_guardrail_reason_codes', []))
+        self.assertNotIn('PREDICTION_INTAKE_GUARDRAIL_REJECTED', summary.get('prediction_intake_filter_reason_codes', []))
 
 
 class ExtendedPaperRunGateApiTests(TestCase):
@@ -3792,6 +3962,24 @@ class TestConsoleApiTests(TestCase):
                 'shortlist_aligned_consensus_reviews': 1,
                 'consensus_aligned_with_shortlist': True,
             },
+            'handoff_scoring_summary': {
+                'handoff_ready': 1,
+                'handoff_deferred': 0,
+                'handoff_blocked': 0,
+                'handoff_status_reason_codes': ['HANDOFF_STATUS_READY_BY_PURSUIT'],
+                'ready_threshold': '0.5500',
+                'deferred_reasons': [],
+            },
+            'handoff_scoring_examples': [
+                {
+                    'handoff_id': 5,
+                    'market_id': 20,
+                    'handoff_status': 'ready',
+                    'handoff_confidence': '0.7700',
+                    'status_reason_code': 'HANDOFF_STATUS_READY_BY_PURSUIT',
+                    'source_stage': 'pursuit',
+                }
+            ],
             'attention_mode': 'HEALTHY',
             'portfolio_summary': {
                 'cash': 10000.0,
@@ -3869,6 +4057,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('downstream_route_reason_codes=', text_payload)
         self.assertIn('market_link_summary:', text_payload)
         self.assertIn('market_link_reason_codes=', text_payload)
+        self.assertIn('handoff_scoring_summary:', text_payload)
+        self.assertIn('handoff_status_reason_codes=', text_payload)
         self.assertIn('prediction_intake_summary:', text_payload)
         self.assertIn('prediction_intake_reason_codes=', text_payload)
         self.assertIn('prediction_intake_guardrail_reason_codes=', text_payload)
