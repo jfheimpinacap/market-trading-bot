@@ -35,10 +35,15 @@ STAGE_EMPTY = 'EMPTY'
 _LOW_THRESHOLD = 3
 _MARKET_LINK_CONFIDENCE_THRESHOLD = Decimal('1.00')
 _PREDICTION_INTAKE_CONFIDENCE_THRESHOLD = Decimal('0.5500')
+_BORDERLINE_CONFIDENCE_MIN = Decimal('0.4500')
+_BORDERLINE_CONFIDENCE_MAX = Decimal('0.5500')
+_BORDERLINE_MIN_NARRATIVE_PRIORITY = Decimal('0.7000')
+_BORDERLINE_MIN_DIVERGENCE_STRENGTH = Decimal('0.6000')
 _HANDOFF_SCORING_EXAMPLES_LIMIT = 3
 _TOKEN_STOPWORDS = {'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'will', 'over'}
 _DOWNSTREAM_ROUTE_NAME = 'research_pursuit_review'
 _PREDICTION_INTAKE_ROUTE_NAME = 'prediction_intake_review'
+_BORDERLINE_DECISION_SOURCE = 'mission_control_borderline_guardrail_v1'
 
 
 def _is_downstream_route_disabled() -> bool:
@@ -80,6 +85,111 @@ def _missing_prediction_intake_fields(*, handoff: PredictionHandoffCandidate) ->
     if not str(getattr(handoff, 'handoff_status', '') or '').strip():
         missing.append('handoff_status')
     return missing
+
+
+def _as_decimal(value: Any, default: str = '0') -> Decimal:
+    try:
+        return Decimal(str(value if value is not None else default))
+    except Exception:
+        return Decimal(default)
+
+
+def _evaluate_borderline_handoff(*, handoff: PredictionHandoffCandidate, preset_name: str) -> dict[str, Any]:
+    confidence = _as_decimal(getattr(handoff, 'handoff_confidence', None))
+    in_band = _BORDERLINE_CONFIDENCE_MIN <= confidence < _BORDERLINE_CONFIDENCE_MAX
+    if not in_band:
+        return {
+            'eligible': False,
+            'reason_code': 'HANDOFF_BORDERLINE_NOT_IN_BAND',
+            'confidence': confidence,
+            'band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
+            'decision_source': _BORDERLINE_DECISION_SOURCE,
+        }
+    if preset_name != PRESET_NAME:
+        return {
+            'eligible': False,
+            'reason_code': 'HANDOFF_BORDERLINE_BLOCKED_OUT_OF_SCOPE',
+            'confidence': confidence,
+            'band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
+            'decision_source': _BORDERLINE_DECISION_SOURCE,
+        }
+    if getattr(handoff, 'handoff_status', None) != PredictionHandoffStatus.DEFERRED:
+        return {
+            'eligible': False,
+            'reason_code': 'HANDOFF_BORDERLINE_BLOCKED_BY_STATUS',
+            'confidence': confidence,
+            'band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
+            'decision_source': _BORDERLINE_DECISION_SOURCE,
+        }
+    missing_fields = _missing_prediction_intake_fields(handoff=handoff)
+    if missing_fields:
+        return {
+            'eligible': False,
+            'reason_code': 'HANDOFF_BORDERLINE_BLOCKED_BY_COMPONENTS',
+            'missing_fields': missing_fields,
+            'confidence': confidence,
+            'band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
+            'decision_source': _BORDERLINE_DECISION_SOURCE,
+        }
+    market_probability = getattr(getattr(handoff, 'linked_market', None), 'current_market_probability', None)
+    if market_probability is None or getattr(handoff, 'linked_market_id', None) is None:
+        return {
+            'eligible': False,
+            'reason_code': 'HANDOFF_BORDERLINE_BLOCKED_BY_COMPONENTS',
+            'confidence': confidence,
+            'band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
+            'decision_source': _BORDERLINE_DECISION_SOURCE,
+        }
+    if list(getattr(handoff, 'handoff_reason_codes', []) or []):
+        blocked_codes = {'BLOCKED', 'RULE', 'POLICY', 'SAFETY'}
+        if any(any(token in str(code).upper() for token in blocked_codes) for code in handoff.handoff_reason_codes):
+            return {
+                'eligible': False,
+                'reason_code': 'HANDOFF_BORDERLINE_BLOCKED_BY_COMPONENTS',
+                'confidence': confidence,
+                'band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
+                'decision_source': _BORDERLINE_DECISION_SOURCE,
+            }
+    structural_status = str(getattr(getattr(handoff, 'linked_assessment', None), 'structural_status', '') or '')
+    if structural_status != 'prediction_ready':
+        return {
+            'eligible': False,
+            'reason_code': 'HANDOFF_BORDERLINE_BLOCKED_BY_STRUCTURAL_WEAKNESS',
+            'observed_structural_status': structural_status,
+            'confidence': confidence,
+            'band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
+            'decision_source': _BORDERLINE_DECISION_SOURCE,
+        }
+    score_components = dict(getattr(getattr(handoff, 'linked_pursuit_score', None), 'score_components', {}) or {})
+    narrative_priority = _as_decimal(score_components.get('narrative_priority'))
+    divergence_strength = _as_decimal(score_components.get('divergence_strength'))
+    if narrative_priority < _BORDERLINE_MIN_NARRATIVE_PRIORITY:
+        return {
+            'eligible': False,
+            'reason_code': 'HANDOFF_BORDERLINE_BLOCKED_BY_LOW_NARRATIVE_PRIORITY',
+            'observed_value': str(narrative_priority.quantize(Decimal('0.0001'))),
+            'threshold': str(_BORDERLINE_MIN_NARRATIVE_PRIORITY),
+            'confidence': confidence,
+            'band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
+            'decision_source': _BORDERLINE_DECISION_SOURCE,
+        }
+    if divergence_strength < _BORDERLINE_MIN_DIVERGENCE_STRENGTH:
+        return {
+            'eligible': False,
+            'reason_code': 'HANDOFF_BORDERLINE_BLOCKED_BY_LOW_DIVERGENCE',
+            'observed_value': str(divergence_strength.quantize(Decimal('0.0001'))),
+            'threshold': str(_BORDERLINE_MIN_DIVERGENCE_STRENGTH),
+            'confidence': confidence,
+            'band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
+            'decision_source': _BORDERLINE_DECISION_SOURCE,
+        }
+    return {
+        'eligible': True,
+        'reason_code': 'HANDOFF_BORDERLINE_ELIGIBLE',
+        'confidence': confidence,
+        'band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
+        'decision_source': _BORDERLINE_DECISION_SOURCE,
+    }
 
 
 def _handoff_status_reason(*, handoff: PredictionHandoffCandidate) -> tuple[str, str, Any, Any, dict[str, Any]]:
@@ -398,7 +508,7 @@ def _resolve_market_link_for_shortlist_signal(*, signal_row: dict[str, Any], act
     }
 
 
-def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
+def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) -> dict[str, Any]:
     prediction_intake_route_disabled = _is_prediction_intake_route_disabled()
     prediction_intake_handler_available = _is_prediction_intake_handler_available()
     shortlisted_qs = NarrativeSignal.objects.filter(
@@ -487,32 +597,9 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         ).values_list('id', flat=True)
     )
     eligible_handoff_ids = {int(handoff_id) for handoff_id in eligible_handoff_rows}
-    existing_intake_handoff_ids = {
-        int(handoff_id)
-        for handoff_id in PredictionIntakeCandidate.objects.filter(
-            linked_prediction_handoff_candidate_id__in=list(eligible_handoff_ids)
-        ).values_list('linked_prediction_handoff_candidate_id', flat=True)
-        if handoff_id is not None
-    }
+    borderline_diagnostics_by_handoff: dict[int, dict[str, Any]] = {}
     bridge_attempted = False
     bridge_created_handoff_ids: set[int] = set()
-    if handoff_count > 0 and prediction_count == 0 and route_available and eligible_handoff_ids and not existing_intake_handoff_ids:
-        bridge_attempted = True
-        run_prediction_intake_review(triggered_by='mission_control_prediction_bridge')
-        prediction_qs = PredictionConvictionReview.objects.filter(created_at__gte=window_start)
-        intake_run_qs = PredictionIntakeRun.objects.filter(created_at__gte=window_start)
-        intake_candidate_qs = PredictionIntakeCandidate.objects.filter(created_at__gte=window_start)
-        prediction_count = prediction_qs.count()
-        intake_run_count = intake_run_qs.count()
-        intake_candidate_count = intake_candidate_qs.count()
-        intake_after_ids = {
-            int(handoff_id)
-            for handoff_id in PredictionIntakeCandidate.objects.filter(
-                linked_prediction_handoff_candidate_id__in=list(eligible_handoff_ids)
-            ).values_list('linked_prediction_handoff_candidate_id', flat=True)
-            if handoff_id is not None
-        }
-        bridge_created_handoff_ids = intake_after_ids - existing_intake_handoff_ids
 
     for row in shortlisted_rows:
         signal_id = int(row.get('id') or 0)
@@ -768,6 +855,11 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
     handoff_status_reason_codes: list[str] = []
     deferred_reasons: list[str] = []
     handoff_scoring_examples: list[dict[str, Any]] = []
+    borderline_handoff_count = 0
+    borderline_promoted_count = 0
+    borderline_blocked_count = 0
+    borderline_reason_codes: list[str] = []
+    handoff_borderline_examples: list[dict[str, Any]] = []
     for handoff in handoff_rows:
         status_reason_code, source_stage, observed_value, threshold, scoring_context = _handoff_status_reason(handoff=handoff)
         handoff_status_reason_codes.append(status_reason_code)
@@ -780,6 +872,29 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         else:
             handoff_deferred_count += 1
             deferred_reasons.append(status_reason_code)
+        borderline = _evaluate_borderline_handoff(handoff=handoff, preset_name=preset_name)
+        borderline_diagnostics_by_handoff[int(handoff.id)] = borderline
+        if borderline.get('reason_code') != 'HANDOFF_BORDERLINE_NOT_IN_BAND':
+            borderline_handoff_count += 1
+        borderline_reason_codes.append(str(borderline.get('reason_code') or 'HANDOFF_BORDERLINE_NOT_IN_BAND'))
+        if borderline.get('eligible'):
+            borderline_promoted_count += 1
+            eligible_handoff_ids.add(int(handoff.id))
+            borderline_reason_codes.append('HANDOFF_BORDERLINE_PROMOTED_TO_PREDICTION')
+        elif borderline.get('reason_code') != 'HANDOFF_BORDERLINE_NOT_IN_BAND':
+            borderline_blocked_count += 1
+        if len(handoff_borderline_examples) < 3 and borderline.get('reason_code') != 'HANDOFF_BORDERLINE_NOT_IN_BAND':
+            handoff_borderline_examples.append(
+                {
+                    'handoff_id': int(handoff.id),
+                    'market_id': _safe_int(handoff.linked_market_id),
+                    'handoff_confidence': str(getattr(handoff, 'handoff_confidence', '') or ''),
+                    'ready_threshold': str(_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD),
+                    'borderline_band': str(borderline.get('band') or ''),
+                    'reason_code': str(borderline.get('reason_code') or ''),
+                    'decision_source': str(borderline.get('decision_source') or _BORDERLINE_DECISION_SOURCE),
+                }
+            )
         if len(handoff_scoring_examples) < _HANDOFF_SCORING_EXAMPLES_LIMIT:
             handoff_scoring_examples.append(
                 {
@@ -798,6 +913,21 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
             )
     handoff_status_reason_codes = list(dict.fromkeys(handoff_status_reason_codes))
     deferred_reasons = list(dict.fromkeys(deferred_reasons))
+    borderline_reason_codes = list(dict.fromkeys(borderline_reason_codes))
+    handoff_borderline_summary = {
+        'borderline_handoffs': int(borderline_handoff_count),
+        'borderline_promoted': int(borderline_promoted_count),
+        'borderline_blocked': int(borderline_blocked_count),
+        'borderline_reason_codes': borderline_reason_codes,
+        'ready_threshold': str(_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD),
+        'borderline_band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
+        'borderline_summary': (
+            f"borderline_handoffs={borderline_handoff_count} borderline_promoted={borderline_promoted_count} "
+            f"borderline_blocked={borderline_blocked_count} ready_threshold={_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD} "
+            f"borderline_band=[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX}) "
+            f"borderline_reason_codes={','.join(borderline_reason_codes) or 'none'}"
+        ),
+    }
     handoff_scoring_summary = {
         'handoff_ready': int(handoff_ready_count),
         'handoff_deferred': int(handoff_deferred_count),
@@ -812,6 +942,31 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
             f"deferred_reasons={','.join(deferred_reasons) or 'none'}"
         ),
     }
+    existing_intake_handoff_ids = {
+        int(handoff_id)
+        for handoff_id in PredictionIntakeCandidate.objects.filter(
+            linked_prediction_handoff_candidate_id__in=list(eligible_handoff_ids)
+        ).values_list('linked_prediction_handoff_candidate_id', flat=True)
+        if handoff_id is not None
+    }
+    if handoff_count > 0 and prediction_count == 0 and route_available and eligible_handoff_ids and not existing_intake_handoff_ids:
+        bridge_attempted = True
+        run_prediction_intake_review(triggered_by='mission_control_prediction_bridge')
+        prediction_qs = PredictionConvictionReview.objects.filter(created_at__gte=window_start)
+        intake_run_qs = PredictionIntakeRun.objects.filter(created_at__gte=window_start)
+        intake_candidate_qs = PredictionIntakeCandidate.objects.filter(created_at__gte=window_start)
+        prediction_count = prediction_qs.count()
+        intake_run_count = intake_run_qs.count()
+        intake_candidate_count = intake_candidate_qs.count()
+        intake_after_ids = {
+            int(handoff_id)
+            for handoff_id in PredictionIntakeCandidate.objects.filter(
+                linked_prediction_handoff_candidate_id__in=list(eligible_handoff_ids)
+            ).values_list('linked_prediction_handoff_candidate_id', flat=True)
+            if handoff_id is not None
+        }
+        bridge_created_handoff_ids = intake_after_ids - existing_intake_handoff_ids
+
     handoff_ids = [handoff.id for handoff in handoff_rows]
     intake_candidate_by_handoff = set(
         PredictionIntakeCandidate.objects.filter(linked_prediction_handoff_candidate_id__in=handoff_ids)
@@ -902,15 +1057,26 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
             prediction_intake_blocked += 1
             prediction_intake_missing_fields += 1
         elif handoff.handoff_status in {PredictionHandoffStatus.BLOCKED, PredictionHandoffStatus.DEFERRED}:
-            diagnosis.update(
-                reason_code='PREDICTION_INTAKE_GUARDRAIL_REJECTED',
-                reason_type='guardrail',
-                guardrail_name='handoff_status_guardrail',
-                observed_value=handoff.handoff_status,
-                threshold='READY',
-            )
-            prediction_intake_blocked += 1
-            prediction_intake_guardrail_blocked += 1
+            borderline = borderline_diagnostics_by_handoff.get(int(handoff.id), {})
+            if handoff.handoff_status == PredictionHandoffStatus.DEFERRED and borderline.get('eligible'):
+                diagnosis.update(
+                    reason_code='PREDICTION_INTAKE_ENABLED_BY_BORDERLINE_PROMOTION',
+                    reason_type='filter',
+                    filter_name='borderline_handoff_promotion',
+                    observed_value=str(getattr(handoff, 'handoff_confidence', None)),
+                    threshold=str(_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD),
+                    blocking_stage='mission_control_borderline',
+                )
+            else:
+                diagnosis.update(
+                    reason_code='PREDICTION_INTAKE_GUARDRAIL_REJECTED',
+                    reason_type='guardrail',
+                    guardrail_name='handoff_status_guardrail',
+                    observed_value=handoff.handoff_status,
+                    threshold='READY',
+                )
+                prediction_intake_blocked += 1
+                prediction_intake_guardrail_blocked += 1
         elif getattr(handoff, 'linked_market_id', None) is None or getattr(getattr(handoff, 'linked_market', None), 'current_market_probability', None) is None:
             diagnosis.update(
                 reason_code='PREDICTION_INTAKE_MARKET_PROBABILITY_MISSING',
@@ -1060,6 +1226,8 @@ def _build_handoff_diagnostics(*, window_start) -> dict[str, Any]:
         'consensus_alignment': consensus_alignment,
         'handoff_scoring_summary': handoff_scoring_summary,
         'handoff_scoring_examples': handoff_scoring_examples,
+        'handoff_borderline_summary': handoff_borderline_summary,
+        'handoff_borderline_examples': handoff_borderline_examples,
         'prediction_intake_summary': prediction_intake_summary,
         'prediction_intake_examples': prediction_intake_examples,
     }
@@ -1088,7 +1256,7 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
     top_stage = _infer_top_stage(counts=counts)
     stalled_stage = _infer_stalled_stage(counts=counts)
     risk_decision_count = counts.risk_approved_count + counts.risk_blocked_count
-    handoff_diagnostics = _build_handoff_diagnostics(window_start=window_start)
+    handoff_diagnostics = _build_handoff_diagnostics(window_start=window_start, preset_name=target_preset)
     stalled_reason_code = _infer_stalled_reason_code(stalled_stage=stalled_stage, handoff_diagnostics=handoff_diagnostics)
     if not stalled_reason_code and stalled_stage:
         stage_reason_map = {
@@ -1176,6 +1344,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'consensus_alignment': handoff_diagnostics.get('consensus_alignment', {}),
         'handoff_scoring_summary': handoff_diagnostics.get('handoff_scoring_summary', {}),
         'handoff_scoring_examples': handoff_diagnostics.get('handoff_scoring_examples', []),
+        'handoff_borderline_summary': handoff_diagnostics.get('handoff_borderline_summary', {}),
+        'handoff_borderline_examples': handoff_diagnostics.get('handoff_borderline_examples', []),
         'prediction_intake_summary': handoff_diagnostics.get('prediction_intake_summary', {}),
         'prediction_intake_examples': handoff_diagnostics.get('prediction_intake_examples', []),
         'shortlisted_signals': handoff_diagnostics.get('shortlisted_signals', 0),

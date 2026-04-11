@@ -3310,6 +3310,12 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - reason codes operacionales para distinguir `HANDOFF_STATUS_DEFERRED_LOW_CONFIDENCE`, `...NO_PROMOTION`, `...INSUFFICIENT_EVIDENCE`, `...READY_BY_CONSENSUS`, `...READY_BY_PURSUIT`.
   - coherencia semántica en export de prediction intake: guardrail/filtro se reportan en listas separadas, sin mezclar `FILTER_REJECTED` cuando `filter_reason_codes=none`.
   - se mantiene enfoque observability-first y límites **REAL_READ_ONLY + PAPER_ONLY** sin habilitar live trading.
+- **Prompt 237** agrega promoción conservadora para handoffs borderline en V1 paper local/test:
+  - no baja el `ready_threshold` global (`0.5500`) para el flujo normal `READY`.
+  - habilita una vía auditada solo para `DEFERRED` en banda `[0.4500,0.5500)` que cumplen criterios estrictos (market link válido, campos completos, `structural_status=prediction_ready`, narrativa/divergencia mínimas, sin bypass policy/risk/safety).
+  - el bridge habilita solo `prediction_intake` (no paper execution directa) y mantiene **REAL_READ_ONLY + PAPER_ONLY**.
+  - añade `handoff_borderline_summary` + `handoff_borderline_examples` (máx 3) para mostrar elegibles/promovidos/bloqueados y reason codes explícitos.
+  - el export reporta explícitamente cuándo prediction intake fue habilitado por la regla borderline conservadora.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.
