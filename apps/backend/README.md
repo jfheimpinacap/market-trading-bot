@@ -4419,6 +4419,17 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - añade `prediction_risk_summary` (`risk_route_expected`, `risk_route_available`, `risk_route_attempted`, `risk_route_reason_codes`) para diagnóstico mínimo del puente prediction->risk sin bypass.
   - reason codes de visibilidad/ruta incluyen `PREDICTION_VISIBLE_IN_FUNNEL`, `PREDICTION_REUSED_BUT_NOT_COUNTED`, `PREDICTION_HIDDEN_BY_STATUS_FILTER`, `PREDICTION_READY_FOR_RISK`, `PREDICTION_NOT_READY_FOR_RISK`, `PREDICTION_RISK_ROUTE_MISSING`.
   - mantiene límites de seguridad: observability-first, **REAL_READ_ONLY + PAPER_ONLY**, sin habilitar live trading real.
+- **Prompt 243 (diagnóstico + reparación conservadora del bridge prediction->risk):**
+  - amplía `prediction_risk_summary` con:
+    - `risk_route_expected`, `risk_route_available`, `risk_route_attempted`,
+    - `risk_route_created`, `risk_route_blocked`, `risk_route_missing_status_count`,
+    - `risk_route_reason_codes`, `risk_route_summary`.
+  - agrega `prediction_risk_examples` (máx 3) para trazabilidad compacta por candidate (`candidate_id`, `market_id`, `source_model`, `prediction_status`, `expected_route`, `reason_code`, `blocking_stage`, `observed_value`, `threshold`).
+  - diferencia explícitamente candidate **visible** vs candidate **enrutable a risk**:
+    - visible no implica enrutable si falta `PredictionConvictionReview` o si `review_status != READY_FOR_RISK`.
+    - `MONITOR_ONLY` permanece visible para observabilidad, pero puede quedar bloqueado por status filter conservador.
+  - Mission Control intenta `run_risk_runtime_review` sólo cuando hay candidate visible y elegible sin decisión previa; mantiene dedupe y no hace bypass de policy/risk/safety.
+  - sigue siendo observability-first y **paper-only** (**REAL_READ_ONLY + PAPER_ONLY**), sin live trading real.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`
