@@ -3312,10 +3312,15 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - se mantiene enfoque observability-first y límites **REAL_READ_ONLY + PAPER_ONLY** sin habilitar live trading.
 - **Prompt 237** agrega promoción conservadora para handoffs borderline en V1 paper local/test:
   - no baja el `ready_threshold` global (`0.5500`) para el flujo normal `READY`.
-  - habilita una vía auditada solo para `DEFERRED` en banda `[0.4500,0.5500)` que cumplen criterios estrictos (market link válido, campos completos, `structural_status=prediction_ready`, narrativa/divergencia mínimas, sin bypass policy/risk/safety).
+  - habilita una vía auditada solo para `DEFERRED` en banda `[0.4500,0.5500)` que cumplen criterios estrictos (market link válido, campos completos, narrativa/divergencia mínimas, sin bypass policy/risk/safety).
   - el bridge habilita solo `prediction_intake` (no paper execution directa) y mantiene **REAL_READ_ONLY + PAPER_ONLY**.
   - añade `handoff_borderline_summary` + `handoff_borderline_examples` (máx 3) para mostrar elegibles/promovidos/bloqueados y reason codes explícitos.
   - el export reporta explícitamente cuándo prediction intake fue habilitado por la regla borderline conservadora.
+- **Prompt 239** agrega diagnóstico explícito de `structural weakness` y override conservador (solo V1 paper local/test):
+  - nuevo `handoff_structural_summary` + `handoff_structural_examples` (máx 3) con `structural_pass/block`, componentes débiles/fuertes, valores observados, reglas/thresholds y reason codes (`HANDOFF_STRUCTURAL_WEAK_ACTIVITY`, `..._TIME_WINDOW`, `..._ACTIVITY_AND_TIME_WINDOW`, `..._OVERRIDE_BORDERLINE`, etc.).
+  - cuando el bloqueo borderline es estructural, el export deja trazabilidad accionable (qué componente bloqueó, valor observado, mínimo esperado y si fue regla individual vs agregada), evitando el genérico único.
+  - ajuste conservador: permite override estructural solo si la debilidad activity/time-window no es extrema y existe combinación fuerte de volumen+liquidez+narrativa+divergencia; mantiene guardrails posteriores intactos.
+  - sigue siendo observability-first, **REAL_READ_ONLY + PAPER_ONLY**, sin habilitar live trading real.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.

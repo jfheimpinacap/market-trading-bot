@@ -39,11 +39,129 @@ _BORDERLINE_CONFIDENCE_MIN = Decimal('0.4500')
 _BORDERLINE_CONFIDENCE_MAX = Decimal('0.5500')
 _BORDERLINE_MIN_NARRATIVE_PRIORITY = Decimal('0.7000')
 _BORDERLINE_MIN_DIVERGENCE_STRENGTH = Decimal('0.6000')
+_STRUCTURAL_ACTIVITY_MIN = Decimal('0.3000')
+_STRUCTURAL_TIME_WINDOW_MIN = Decimal('0.2500')
+_STRUCTURAL_ACTIVITY_EXTREME_MIN = Decimal('0.2000')
+_STRUCTURAL_TIME_WINDOW_EXTREME_MIN = Decimal('0.2000')
+_STRUCTURAL_OVERRIDE_MIN_VOLUME = Decimal('0.9000')
+_STRUCTURAL_OVERRIDE_MIN_LIQUIDITY = Decimal('0.9000')
+_STRUCTURAL_OVERRIDE_MIN_NARRATIVE = Decimal('0.8000')
+_STRUCTURAL_OVERRIDE_MIN_DIVERGENCE = Decimal('0.6500')
 _HANDOFF_SCORING_EXAMPLES_LIMIT = 3
 _TOKEN_STOPWORDS = {'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'will', 'over'}
 _DOWNSTREAM_ROUTE_NAME = 'research_pursuit_review'
 _PREDICTION_INTAKE_ROUTE_NAME = 'prediction_intake_review'
 _BORDERLINE_DECISION_SOURCE = 'mission_control_borderline_guardrail_v1'
+
+
+def _quantized(value: Decimal) -> str:
+    return str(value.quantize(Decimal('0.0001')))
+
+
+def _evaluate_structural_guardrail(*, handoff: PredictionHandoffCandidate, preset_name: str) -> dict[str, Any]:
+    score_components = dict(getattr(getattr(handoff, 'linked_pursuit_score', None), 'score_components', {}) or {})
+    structural_status = str(getattr(getattr(handoff, 'linked_assessment', None), 'structural_status', '') or '')
+    activity_quality = _as_decimal(score_components.get('activity_quality'))
+    time_window_quality = _as_decimal(score_components.get('time_window_quality'))
+    volume_quality = _as_decimal(score_components.get('volume_quality'))
+    liquidity_quality = _as_decimal(score_components.get('liquidity_quality'))
+    narrative_priority = _as_decimal(score_components.get('narrative_priority'))
+    divergence_strength = _as_decimal(score_components.get('divergence_strength'))
+
+    weak_components: list[str] = []
+    strong_components: list[str] = []
+    component_rules = {
+        'activity_quality': {'min': _quantized(_STRUCTURAL_ACTIVITY_MIN), 'extreme_min': _quantized(_STRUCTURAL_ACTIVITY_EXTREME_MIN)},
+        'time_window_quality': {'min': _quantized(_STRUCTURAL_TIME_WINDOW_MIN), 'extreme_min': _quantized(_STRUCTURAL_TIME_WINDOW_EXTREME_MIN)},
+        'override_strong_signals': {
+            'min_volume_quality': _quantized(_STRUCTURAL_OVERRIDE_MIN_VOLUME),
+            'min_liquidity_quality': _quantized(_STRUCTURAL_OVERRIDE_MIN_LIQUIDITY),
+            'min_narrative_priority': _quantized(_STRUCTURAL_OVERRIDE_MIN_NARRATIVE),
+            'min_divergence_strength': _quantized(_STRUCTURAL_OVERRIDE_MIN_DIVERGENCE),
+        },
+    }
+    observed_values = {
+        'activity_quality': _quantized(activity_quality),
+        'time_window_quality': _quantized(time_window_quality),
+        'volume_quality': _quantized(volume_quality),
+        'liquidity_quality': _quantized(liquidity_quality),
+        'narrative_priority': _quantized(narrative_priority),
+        'divergence_strength': _quantized(divergence_strength),
+    }
+    structural_rule_type = 'aggregate'
+    if activity_quality < _STRUCTURAL_ACTIVITY_MIN:
+        weak_components.append('activity_quality')
+    else:
+        strong_components.append('activity_quality')
+    if time_window_quality < _STRUCTURAL_TIME_WINDOW_MIN:
+        weak_components.append('time_window_quality')
+    else:
+        strong_components.append('time_window_quality')
+    if volume_quality >= _STRUCTURAL_OVERRIDE_MIN_VOLUME:
+        strong_components.append('volume_quality')
+    if liquidity_quality >= _STRUCTURAL_OVERRIDE_MIN_LIQUIDITY:
+        strong_components.append('liquidity_quality')
+    if narrative_priority >= _STRUCTURAL_OVERRIDE_MIN_NARRATIVE:
+        strong_components.append('narrative_priority')
+    if divergence_strength >= _STRUCTURAL_OVERRIDE_MIN_DIVERGENCE:
+        strong_components.append('divergence_strength')
+
+    has_extreme_weakness = activity_quality < _STRUCTURAL_ACTIVITY_EXTREME_MIN or time_window_quality < _STRUCTURAL_TIME_WINDOW_EXTREME_MIN
+    strong_override_signals = (
+        volume_quality >= _STRUCTURAL_OVERRIDE_MIN_VOLUME
+        and liquidity_quality >= _STRUCTURAL_OVERRIDE_MIN_LIQUIDITY
+        and narrative_priority >= _STRUCTURAL_OVERRIDE_MIN_NARRATIVE
+        and divergence_strength >= _STRUCTURAL_OVERRIDE_MIN_DIVERGENCE
+    )
+    override_enabled = preset_name == PRESET_NAME and structural_status == 'deferred'
+    override_applied = False
+
+    if structural_status == 'prediction_ready':
+        reason_code = 'HANDOFF_STRUCTURAL_PASS'
+        blocked = False
+        structural_rule_type = 'individual'
+    elif structural_status not in {'deferred', 'blocked', 'watchlist_only'}:
+        reason_code = 'HANDOFF_STRUCTURAL_WEAK_COMPOSITE'
+        blocked = True
+    elif 'activity_quality' in weak_components and 'time_window_quality' in weak_components:
+        reason_code = 'HANDOFF_STRUCTURAL_WEAK_ACTIVITY_AND_TIME_WINDOW'
+        blocked = True
+    elif 'activity_quality' in weak_components:
+        reason_code = 'HANDOFF_STRUCTURAL_WEAK_ACTIVITY'
+        blocked = True
+        structural_rule_type = 'individual'
+    elif 'time_window_quality' in weak_components:
+        reason_code = 'HANDOFF_STRUCTURAL_WEAK_TIME_WINDOW'
+        blocked = True
+        structural_rule_type = 'individual'
+    else:
+        reason_code = 'HANDOFF_STRUCTURAL_WEAK_COMPOSITE'
+        blocked = True
+
+    if blocked and override_enabled and not has_extreme_weakness and strong_override_signals:
+        blocked = False
+        override_applied = True
+        reason_code = 'HANDOFF_STRUCTURAL_OVERRIDE_BORDERLINE'
+        structural_rule_type = 'aggregate'
+
+    structural_reason_code = reason_code
+    if blocked:
+        reason_code = 'HANDOFF_STRUCTURAL_BLOCK_BORDERLINE'
+
+    return {
+        'blocked': blocked,
+        'reason_code': reason_code,
+        'structural_reason_code': structural_reason_code,
+        'structural_status': structural_status,
+        'weak_components': weak_components,
+        'strong_components': strong_components,
+        'observed_values': observed_values,
+        'thresholds': component_rules,
+        'override_enabled': override_enabled,
+        'override_applied': override_applied,
+        'structural_rule_type': structural_rule_type,
+        'decision_source': _BORDERLINE_DECISION_SOURCE,
+    }
 
 
 def _is_downstream_route_disabled() -> bool:
@@ -150,12 +268,18 @@ def _evaluate_borderline_handoff(*, handoff: PredictionHandoffCandidate, preset_
                 'band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
                 'decision_source': _BORDERLINE_DECISION_SOURCE,
             }
-    structural_status = str(getattr(getattr(handoff, 'linked_assessment', None), 'structural_status', '') or '')
-    if structural_status != 'prediction_ready':
+    structural_diagnostics = _evaluate_structural_guardrail(handoff=handoff, preset_name=preset_name)
+    if structural_diagnostics.get('blocked'):
         return {
             'eligible': False,
             'reason_code': 'HANDOFF_BORDERLINE_BLOCKED_BY_STRUCTURAL_WEAKNESS',
-            'observed_structural_status': structural_status,
+            'structural_reason_code': structural_diagnostics.get('structural_reason_code'),
+            'structural_status': structural_diagnostics.get('structural_status'),
+            'weak_components': structural_diagnostics.get('weak_components'),
+            'strong_components': structural_diagnostics.get('strong_components'),
+            'observed_values': structural_diagnostics.get('observed_values'),
+            'thresholds': structural_diagnostics.get('thresholds'),
+            'structural_rule_type': structural_diagnostics.get('structural_rule_type'),
             'confidence': confidence,
             'band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
             'decision_source': _BORDERLINE_DECISION_SOURCE,
@@ -186,6 +310,15 @@ def _evaluate_borderline_handoff(*, handoff: PredictionHandoffCandidate, preset_
     return {
         'eligible': True,
         'reason_code': 'HANDOFF_BORDERLINE_ELIGIBLE',
+        'structural_reason_code': structural_diagnostics.get('structural_reason_code'),
+        'structural_status': structural_diagnostics.get('structural_status'),
+        'weak_components': structural_diagnostics.get('weak_components'),
+        'strong_components': structural_diagnostics.get('strong_components'),
+        'observed_values': structural_diagnostics.get('observed_values'),
+        'thresholds': structural_diagnostics.get('thresholds'),
+        'structural_override_enabled': structural_diagnostics.get('override_enabled'),
+        'structural_override_applied': structural_diagnostics.get('override_applied'),
+        'structural_rule_type': structural_diagnostics.get('structural_rule_type'),
         'confidence': confidence,
         'band': f'[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX})',
         'decision_source': _BORDERLINE_DECISION_SOURCE,
@@ -860,6 +993,13 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
     borderline_blocked_count = 0
     borderline_reason_codes: list[str] = []
     handoff_borderline_examples: list[dict[str, Any]] = []
+    structural_pass_count = 0
+    structural_blocked_count = 0
+    structural_override_enabled_count = 0
+    structural_override_promoted_count = 0
+    structural_override_blocked_count = 0
+    structural_reason_codes: list[str] = []
+    handoff_structural_examples: list[dict[str, Any]] = []
     for handoff in handoff_rows:
         status_reason_code, source_stage, observed_value, threshold, scoring_context = _handoff_status_reason(handoff=handoff)
         handoff_status_reason_codes.append(status_reason_code)
@@ -874,6 +1014,34 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
             deferred_reasons.append(status_reason_code)
         borderline = _evaluate_borderline_handoff(handoff=handoff, preset_name=preset_name)
         borderline_diagnostics_by_handoff[int(handoff.id)] = borderline
+        structural_diagnostics = _evaluate_structural_guardrail(handoff=handoff, preset_name=preset_name)
+        structural_reason_codes.append(str(structural_diagnostics.get('structural_reason_code') or 'HANDOFF_STRUCTURAL_WEAK_COMPOSITE'))
+        if structural_diagnostics.get('override_enabled'):
+            structural_override_enabled_count += 1
+        if structural_diagnostics.get('override_applied'):
+            structural_override_promoted_count += 1
+        elif structural_diagnostics.get('blocked') and structural_diagnostics.get('override_enabled'):
+            structural_override_blocked_count += 1
+        if structural_diagnostics.get('blocked'):
+            structural_blocked_count += 1
+        else:
+            structural_pass_count += 1
+        if len(handoff_structural_examples) < 3:
+            handoff_structural_examples.append(
+                {
+                    'handoff_id': int(handoff.id),
+                    'market_id': _safe_int(handoff.linked_market_id),
+                    'handoff_confidence': str(getattr(handoff, 'handoff_confidence', '') or ''),
+                    'structural_status': structural_diagnostics.get('structural_status'),
+                    'structural_reason_code': structural_diagnostics.get('structural_reason_code'),
+                    'weak_components': structural_diagnostics.get('weak_components') or [],
+                    'strong_components': structural_diagnostics.get('strong_components') or [],
+                    'observed_values': structural_diagnostics.get('observed_values') or {},
+                    'thresholds': structural_diagnostics.get('thresholds') or {},
+                    'structural_rule_type': structural_diagnostics.get('structural_rule_type'),
+                    'decision_source': str(structural_diagnostics.get('decision_source') or _BORDERLINE_DECISION_SOURCE),
+                }
+            )
         if borderline.get('reason_code') != 'HANDOFF_BORDERLINE_NOT_IN_BAND':
             borderline_handoff_count += 1
         borderline_reason_codes.append(str(borderline.get('reason_code') or 'HANDOFF_BORDERLINE_NOT_IN_BAND'))
@@ -892,6 +1060,9 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
                     'ready_threshold': str(_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD),
                     'borderline_band': str(borderline.get('band') or ''),
                     'reason_code': str(borderline.get('reason_code') or ''),
+                    'structural_reason_code': str(borderline.get('structural_reason_code') or ''),
+                    'weak_components': list(borderline.get('weak_components') or []),
+                    'observed_values': dict(borderline.get('observed_values') or {}),
                     'decision_source': str(borderline.get('decision_source') or _BORDERLINE_DECISION_SOURCE),
                 }
             )
@@ -926,6 +1097,24 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
             f"borderline_blocked={borderline_blocked_count} ready_threshold={_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD} "
             f"borderline_band=[{_BORDERLINE_CONFIDENCE_MIN},{_BORDERLINE_CONFIDENCE_MAX}) "
             f"borderline_reason_codes={','.join(borderline_reason_codes) or 'none'}"
+        ),
+    }
+    structural_reason_codes = list(dict.fromkeys(structural_reason_codes))
+    handoff_structural_summary = {
+        'structural_pass': int(structural_pass_count),
+        'structural_blocked': int(structural_blocked_count),
+        'structural_weakness_count': int(structural_blocked_count),
+        'structural_pass_count': int(structural_pass_count),
+        'structural_reason_codes': structural_reason_codes,
+        'structural_block_reason_codes': [code for code in structural_reason_codes if code != 'HANDOFF_STRUCTURAL_PASS'],
+        'override_enabled': int(structural_override_enabled_count),
+        'override_promoted': int(structural_override_promoted_count),
+        'override_blocked': int(structural_override_blocked_count),
+        'structural_guardrail_summary': (
+            f"structural_pass={structural_pass_count} structural_blocked={structural_blocked_count} "
+            f"override_enabled={structural_override_enabled_count} override_promoted={structural_override_promoted_count} "
+            f"override_blocked={structural_override_blocked_count} "
+            f"structural_reason_codes={','.join(structural_reason_codes) or 'none'}"
         ),
     }
     handoff_scoring_summary = {
@@ -1228,6 +1417,8 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'handoff_scoring_examples': handoff_scoring_examples,
         'handoff_borderline_summary': handoff_borderline_summary,
         'handoff_borderline_examples': handoff_borderline_examples,
+        'handoff_structural_summary': handoff_structural_summary,
+        'handoff_structural_examples': handoff_structural_examples,
         'prediction_intake_summary': prediction_intake_summary,
         'prediction_intake_examples': prediction_intake_examples,
     }
