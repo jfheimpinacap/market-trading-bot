@@ -237,6 +237,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'prediction_visibility_examples': list(funnel.get('prediction_visibility_examples') or []),
             'prediction_risk_summary': dict(funnel.get('prediction_risk_summary') or {}),
             'prediction_risk_examples': list(funnel.get('prediction_risk_examples') or []),
+            'prediction_risk_caution_summary': dict(funnel.get('prediction_risk_caution_summary') or {}),
+            'prediction_risk_caution_examples': list(funnel.get('prediction_risk_caution_examples') or []),
             'prediction_status_summary': dict(funnel.get('prediction_status_summary') or {}),
             'prediction_status_examples': list(funnel.get('prediction_status_examples') or []),
             'attention_mode': str(attention.get('attention_mode') or 'UNKNOWN'),
@@ -273,6 +275,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     prediction_visibility_examples = payload.get('prediction_visibility_examples') or []
     prediction_risk = payload.get('prediction_risk_summary') or {}
     prediction_risk_examples = payload.get('prediction_risk_examples') or []
+    prediction_risk_caution = payload.get('prediction_risk_caution_summary') or {}
+    prediction_risk_caution_examples = payload.get('prediction_risk_caution_examples') or []
     prediction_status = payload.get('prediction_status_summary') or {}
     prediction_status_examples = payload.get('prediction_status_examples') or []
 
@@ -414,6 +418,18 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         f"  risk_route_reason_codes={','.join(prediction_risk.get('risk_route_reason_codes') or []) or 'none'}",
         f"  risk_route_summary={prediction_risk.get('risk_route_summary') or ''}",
         f"  prediction_risk_examples={prediction_risk_examples or []}",
+        'prediction_risk_caution_summary:',
+        (
+            f"  monitor_only_candidates={prediction_risk_caution.get('monitor_only_candidates', 0)} "
+            f"risk_with_caution_eligible_count={prediction_risk_caution.get('risk_with_caution_eligible_count', 0)} "
+            f"risk_with_caution_promoted_count={prediction_risk_caution.get('risk_with_caution_promoted_count', 0)} "
+            f"risk_with_caution_blocked_count={prediction_risk_caution.get('risk_with_caution_blocked_count', 0)}"
+        ),
+        f"  risk_with_caution_reason_codes={','.join(prediction_risk_caution.get('risk_with_caution_reason_codes') or []) or 'none'}",
+        f"  runtime_ready_threshold={prediction_risk_caution.get('runtime_ready_threshold') or ''}",
+        f"  caution_band={prediction_risk_caution.get('caution_band') or ''}",
+        f"  risk_with_caution_summary={prediction_risk_caution.get('risk_with_caution_summary') or ''}",
+        f"  prediction_risk_caution_examples={prediction_risk_caution_examples or []}",
         'prediction_status_summary:',
         (
             f"  monitor_only={prediction_status.get('prediction_status_monitor_only_count', 0)} "

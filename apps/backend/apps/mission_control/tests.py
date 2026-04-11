@@ -3944,7 +3944,13 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertTrue(
             any(
                 code in prediction_risk.get('risk_route_reason_codes', [])
-                for code in ['PREDICTION_RISK_ROUTE_MISSING', 'PREDICTION_RISK_STATUS_FILTER_REJECTED', 'PREDICTION_RISK_ROUTE_AVAILABLE']
+                for code in [
+                    'PREDICTION_RISK_ROUTE_MISSING',
+                    'PREDICTION_RISK_STATUS_FILTER_REJECTED',
+                    'PREDICTION_RISK_ROUTE_AVAILABLE',
+                    'PREDICTION_RISK_WITH_CAUTION_NOT_IN_BAND',
+                    'PREDICTION_RISK_WITH_CAUTION_BLOCKED_BY_LOW_EDGE',
+                ]
             )
         )
 
@@ -3987,14 +3993,100 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
 
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         prediction_risk = diagnostics.get('prediction_risk_summary') or {}
+        caution = diagnostics.get('prediction_risk_caution_summary') or {}
         prediction_status = diagnostics.get('prediction_status_summary') or {}
         self.assertEqual(prediction_risk.get('risk_route_expected'), 1)
         self.assertEqual(prediction_risk.get('risk_route_available'), 0)
         self.assertEqual(prediction_risk.get('risk_route_attempted'), 0)
         self.assertGreaterEqual(prediction_risk.get('risk_route_missing_status_count', 0), 1)
-        self.assertIn('PREDICTION_RISK_STATUS_FILTER_REJECTED', prediction_risk.get('risk_route_reason_codes', []))
+        self.assertIn('PREDICTION_RISK_WITH_CAUTION_NOT_IN_BAND', prediction_risk.get('risk_route_reason_codes', []))
+        self.assertEqual(caution.get('monitor_only_candidates'), 1)
+        self.assertEqual(caution.get('risk_with_caution_eligible_count'), 0)
         self.assertEqual(prediction_status.get('prediction_status_monitor_only_count'), 1)
         self.assertIn('PREDICTION_STATUS_MONITOR_ONLY_LOW_CONFIDENCE', prediction_status.get('prediction_status_reason_codes', []))
+
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.run_risk_runtime_review')
+    def test_monitor_only_with_strong_edge_and_lineage_enters_risk_with_caution(self, mock_risk_runtime_review):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.prediction_agent.models import (
+            PredictionConvictionBucket,
+            PredictionConvictionReview,
+            PredictionConvictionReviewStatus,
+            PredictionIntakeCandidate,
+            PredictionIntakeRun,
+            PredictionIntakeStatus,
+        )
+        from apps.research_agent.models import (
+            NarrativeConsensusRun,
+            NarrativeConsensusRecord,
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-risk-with-caution-promoted')
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run, linked_market=market, structural_status=ResearchStructuralStatus.PREDICTION_READY
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run, linked_assessment=assessment, linked_market=market, score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION
+        )
+        handoff = PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.DEFERRED,
+            handoff_confidence=Decimal('0.5100'),
+        )
+        intake_run = PredictionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        consensus_run = NarrativeConsensusRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        consensus = NarrativeConsensusRecord.objects.create(
+            consensus_run=consensus_run,
+            topic_label='macro',
+            confidence_score=Decimal('0.7600'),
+            summary='Aligned consensus',
+        )
+        candidate = PredictionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_prediction_handoff_candidate=handoff,
+            linked_consensus_record=consensus,
+            intake_status=PredictionIntakeStatus.MONITOR_ONLY,
+            handoff_confidence=Decimal('0.5100'),
+            structural_priority=Decimal('0.6900'),
+            narrative_priority=Decimal('0.6700'),
+            metadata={'handoff_status': 'deferred', 'pursuit_priority_bucket': 'medium'},
+        )
+        PredictionConvictionReview.objects.create(
+            linked_intake_candidate=candidate,
+            system_probability=Decimal('0.6000'),
+            market_probability=Decimal('0.5000'),
+            calibrated_probability=Decimal('0.6000'),
+            raw_edge=Decimal('0.1000'),
+            adjusted_edge=Decimal('0.1000'),
+            confidence=Decimal('0.5100'),
+            uncertainty=Decimal('0.3000'),
+            conviction_bucket=PredictionConvictionBucket.MEDIUM_CONVICTION,
+            review_status=PredictionConvictionReviewStatus.READY_FOR_RISK,
+            reason_codes=[],
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        prediction_risk = diagnostics.get('prediction_risk_summary') or {}
+        caution = diagnostics.get('prediction_risk_caution_summary') or {}
+        self.assertEqual(prediction_risk.get('risk_route_available'), 1)
+        self.assertGreaterEqual(prediction_risk.get('risk_route_attempted', 0), 1)
+        self.assertIn('PREDICTION_RISK_WITH_CAUTION_PROMOTED', prediction_risk.get('risk_route_reason_codes', []))
+        self.assertEqual(caution.get('risk_with_caution_eligible_count'), 1)
+        self.assertEqual(caution.get('risk_with_caution_promoted_count'), 1)
+        self.assertIn('PREDICTION_RISK_WITH_CAUTION_PROMOTED', caution.get('risk_with_caution_reason_codes', []))
+        mock_risk_runtime_review.assert_called_once()
 
     def test_prediction_status_summary_marks_reused_monitor_only_candidate(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
@@ -4790,6 +4882,9 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('risk_route_blocked=', text_payload)
         self.assertIn('risk_route_missing_status_count=', text_payload)
         self.assertIn('prediction_risk_examples=', text_payload)
+        self.assertIn('prediction_risk_caution_summary:', text_payload)
+        self.assertIn('risk_with_caution_reason_codes=', text_payload)
+        self.assertIn('prediction_risk_caution_examples=', text_payload)
         self.assertIn('prediction_status_summary:', text_payload)
         self.assertIn('prediction_status_reason_codes=', text_payload)
         self.assertIn('runtime_ready_threshold=', text_payload)
