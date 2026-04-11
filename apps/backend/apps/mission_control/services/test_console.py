@@ -233,6 +233,9 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'handoff_structural_examples': list(funnel.get('handoff_structural_examples') or []),
             'prediction_intake_summary': dict(funnel.get('prediction_intake_summary') or {}),
             'prediction_intake_examples': list(funnel.get('prediction_intake_examples') or []),
+            'prediction_visibility_summary': dict(funnel.get('prediction_visibility_summary') or {}),
+            'prediction_visibility_examples': list(funnel.get('prediction_visibility_examples') or []),
+            'prediction_risk_summary': dict(funnel.get('prediction_risk_summary') or {}),
             'attention_mode': str(attention.get('attention_mode') or 'UNKNOWN'),
             'portfolio_summary': _build_portfolio_summary(),
             'scan_summary': _build_scan_summary(scan_run=scan_run),
@@ -263,6 +266,9 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     handoff_structural_examples = payload.get('handoff_structural_examples') or []
     prediction_intake = payload.get('prediction_intake_summary') or {}
     prediction_intake_examples = payload.get('prediction_intake_examples') or []
+    prediction_visibility = payload.get('prediction_visibility_summary') or {}
+    prediction_visibility_examples = payload.get('prediction_visibility_examples') or []
+    prediction_risk = payload.get('prediction_risk_summary') or {}
 
     lines = [
         '=== Mission Control Test Console Export ===',
@@ -381,6 +387,22 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         f"  prediction_intake_filter_reason_codes={','.join(prediction_intake.get('prediction_intake_filter_reason_codes') or []) or 'none'}",
         f"  prediction_intake_guardrail_summary={prediction_intake.get('prediction_intake_guardrail_summary') or ''}",
         f"  prediction_intake_examples={prediction_intake_examples or []}",
+        'prediction_visibility_summary:',
+        (
+            f"  intake_created={prediction_visibility.get('prediction_intake_created_count', 0)} "
+            f"intake_reused={prediction_visibility.get('prediction_intake_reused_count', 0)} "
+            f"candidates_visible={prediction_visibility.get('prediction_candidates_visible_count', 0)} "
+            f"candidates_hidden={prediction_visibility.get('prediction_candidates_hidden_count', 0)}"
+        ),
+        f"  prediction_visibility_reason_codes={','.join(prediction_visibility.get('prediction_visibility_reason_codes') or []) or 'none'}",
+        f"  prediction_visibility_examples={prediction_visibility_examples or []}",
+        'prediction_risk_summary:',
+        (
+            f"  risk_route_expected={prediction_risk.get('risk_route_expected', 0)} "
+            f"risk_route_available={prediction_risk.get('risk_route_available', 0)} "
+            f"risk_route_attempted={prediction_risk.get('risk_route_attempted', 0)}"
+        ),
+        f"  risk_route_reason_codes={','.join(prediction_risk.get('risk_route_reason_codes') or []) or 'none'}",
         'scan_summary:',
         f"  summary_window={scan.get('summary_window') or 'latest_scan_run'}",
         f"  runs={scan.get('runs', 0)} rss_items={scan.get('rss_items', 0)} reddit_items={scan.get('reddit_items', 0)} x_items={scan.get('x_items', 0)}",

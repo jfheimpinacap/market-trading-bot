@@ -18,6 +18,7 @@ from apps.mission_control.services.session_heartbeat import build_heartbeat_summ
 from apps.paper_trading.models import PaperTrade, PaperTradeStatus
 from apps.paper_trading.services.portfolio import build_account_summary, get_active_account
 from apps.prediction_agent.models import PredictionConvictionReview, PredictionIntakeCandidate, PredictionIntakeRun
+from apps.prediction_agent.models import PredictionConvictionReviewStatus, PredictionIntakeStatus
 from apps.prediction_agent.services.run import run_prediction_intake_review
 from apps.research_agent.models import NarrativeConsensusRecord
 from apps.research_agent.models import MarketUniverseScanRun, NarrativeSignal, NarrativeSignalStatus, PredictionHandoffCandidate
@@ -698,6 +699,7 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
     stage_source_mismatch: dict[str, Any] = {}
     prediction_intake_reason_codes: list[str] = []
     prediction_intake_examples: list[dict[str, Any]] = []
+    prediction_visibility_examples: list[dict[str, Any]] = []
     shortlist_handoff_summary = {
         'shortlisted_signals': int(shortlisted_count),
         'shortlisted_signal_ids': [int(row.get('id') or 0) for row in shortlisted_rows[:3]],
@@ -929,6 +931,9 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
             f"downstream_route_reason_codes={','.join(normalized_downstream_route_codes) or 'none'}"
         ),
     }
+    operational_prediction_count = int(prediction_count)
+    prediction_visibility_summary: dict[str, Any] = {}
+    prediction_risk_summary: dict[str, Any] = {}
 
     if shortlisted_count > 0 and handoff_count == 0:
         handoff_reason_codes.append('SHORTLIST_PRESENT_NO_HANDOFF')
@@ -938,11 +943,11 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         handoff_reason_codes.append('HANDOFF_CREATED')
     if handoff_count > 0 and consensus_count == 0:
         handoff_reason_codes.append('CONSENSUS_NOT_RUN')
-    if consensus_count > 0 and handoff_count > 0 and prediction_count == 0:
+    if consensus_count > 0 and handoff_count > 0 and operational_prediction_count == 0:
         handoff_reason_codes.append('CONSENSUS_RAN_NO_PROMOTION')
-    if handoff_count > 0 and prediction_count == 0:
+    if handoff_count > 0 and operational_prediction_count == 0:
         handoff_reason_codes.append('PREDICTION_STAGE_EMPTY')
-    if prediction_count > 0 and risk_count == 0:
+    if operational_prediction_count > 0 and risk_count == 0:
         handoff_reason_codes.append('RISK_STAGE_EMPTY')
 
     if shortlist_market_ids and handoff_market_ids:
@@ -960,7 +965,7 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
     if stage_source_mismatch:
         handoff_reason_codes.append('FUNNEL_STAGE_SOURCE_MISMATCH')
 
-    if shortlisted_count > 0 and prediction_count == 0 and risk_count == 0 and paper_execution_count == 0:
+    if shortlisted_count > 0 and operational_prediction_count == 0 and risk_count == 0 and paper_execution_count == 0:
         handoff_reason_codes.append('DOWNSTREAM_EVIDENCE_INSUFFICIENT')
 
     aligned_consensus_count = 0
@@ -1389,10 +1394,112 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         ),
     }
 
+    intake_candidate_rows = list(
+        PredictionIntakeCandidate.objects.filter(linked_prediction_handoff_candidate_id__in=[handoff.id for handoff in handoff_rows]).order_by('-created_at', '-id')
+    )
+    conviction_by_candidate_id = {}
+    for review in (
+        PredictionConvictionReview.objects.filter(linked_intake_candidate_id__in=[candidate.id for candidate in intake_candidate_rows])
+        .order_by('linked_intake_candidate_id', '-created_at', '-id')
+    ):
+        if review.linked_intake_candidate_id not in conviction_by_candidate_id:
+            conviction_by_candidate_id[int(review.linked_intake_candidate_id)] = review
+
+    prediction_intake_created_count = 0
+    prediction_intake_reused_count = 0
+    prediction_candidates_visible_count = 0
+    prediction_candidates_hidden_count = 0
+    prediction_visibility_reason_codes = []
+    prediction_risk_reason_codes = []
+    prediction_visibility_examples = []
+    visible_candidate_ids = []
+    for candidate in intake_candidate_rows:
+        source = 'created' if candidate.created_at >= window_start else 'reused'
+        if source == 'created':
+            prediction_intake_created_count += 1
+        else:
+            prediction_intake_reused_count += 1
+        visible = candidate.intake_status in {PredictionIntakeStatus.READY_FOR_RUNTIME, PredictionIntakeStatus.MONITOR_ONLY}
+        if visible:
+            prediction_candidates_visible_count += 1
+            visible_candidate_ids.append(int(candidate.id))
+            visibility_reason = 'PREDICTION_REUSED_BUT_NOT_COUNTED' if source == 'reused' else 'PREDICTION_VISIBLE_IN_FUNNEL'
+        else:
+            prediction_candidates_hidden_count += 1
+            visibility_reason = 'PREDICTION_HIDDEN_BY_STATUS_FILTER'
+        prediction_visibility_reason_codes.append(visibility_reason)
+
+        linked_review = conviction_by_candidate_id.get(int(candidate.id))
+        if linked_review and linked_review.review_status == PredictionConvictionReviewStatus.READY_FOR_RISK:
+            prediction_risk_reason_codes.append('PREDICTION_READY_FOR_RISK')
+        elif linked_review:
+            prediction_risk_reason_codes.append('PREDICTION_NOT_READY_FOR_RISK')
+        else:
+            prediction_risk_reason_codes.append('PREDICTION_RISK_ROUTE_MISSING')
+        if len(prediction_visibility_examples) < 3:
+            prediction_visibility_examples.append(
+                {
+                    'candidate_id': int(candidate.id),
+                    'handoff_id': _safe_int(candidate.linked_prediction_handoff_candidate_id),
+                    'market_id': _safe_int(candidate.linked_market_id),
+                    'source': source,
+                    'source_model': 'PredictionIntakeCandidate',
+                    'source_stage': 'prediction_intake',
+                    'visible_in_funnel': bool(visible),
+                    'reason_code': visibility_reason,
+                    'visibility_window': 'current_window' if source == 'created' else 'outside_window_reused',
+                    'status': str(candidate.intake_status or ''),
+                }
+            )
+
+    risk_route_expected = int(prediction_candidates_visible_count)
+    risk_route_available = sum(
+        1
+        for candidate_id in visible_candidate_ids
+        if conviction_by_candidate_id.get(candidate_id)
+        and conviction_by_candidate_id[candidate_id].review_status == PredictionConvictionReviewStatus.READY_FOR_RISK
+    )
+    risk_route_attempted = RiskApprovalDecision.objects.filter(
+        linked_candidate__linked_prediction_intake_candidate_id__in=visible_candidate_ids,
+        created_at__gte=window_start,
+    ).count()
+    prediction_risk_summary = {
+        'risk_route_expected': int(risk_route_expected),
+        'risk_route_available': int(risk_route_available),
+        'risk_route_attempted': int(risk_route_attempted),
+        'risk_route_reason_codes': list(dict.fromkeys(prediction_risk_reason_codes)),
+    }
+    prediction_visibility_summary = {
+        'prediction_intake_created_count': int(prediction_intake_created_count),
+        'prediction_intake_reused_count': int(prediction_intake_reused_count),
+        'prediction_candidates_visible_count': int(prediction_candidates_visible_count),
+        'prediction_candidates_hidden_count': int(prediction_candidates_hidden_count),
+        'prediction_visibility_reason_codes': list(dict.fromkeys(prediction_visibility_reason_codes)),
+        'prediction_visibility_summary': (
+            f"intake_created={prediction_intake_created_count} intake_reused={prediction_intake_reused_count} "
+            f"candidates_visible={prediction_candidates_visible_count} candidates_hidden={prediction_candidates_hidden_count} "
+            f"prediction_visibility_reason_codes={','.join(list(dict.fromkeys(prediction_visibility_reason_codes))) or 'none'}"
+        ),
+    }
+    operational_prediction_count = int(prediction_candidates_visible_count)
+    handoff_reason_codes = [
+        code
+        for code in handoff_reason_codes
+        if code not in {'CONSENSUS_RAN_NO_PROMOTION', 'PREDICTION_STAGE_EMPTY', 'RISK_STAGE_EMPTY', 'DOWNSTREAM_EVIDENCE_INSUFFICIENT'}
+    ]
+    if consensus_count > 0 and handoff_count > 0 and operational_prediction_count == 0:
+        handoff_reason_codes.append('CONSENSUS_RAN_NO_PROMOTION')
+    if handoff_count > 0 and operational_prediction_count == 0:
+        handoff_reason_codes.append('PREDICTION_STAGE_EMPTY')
+    if operational_prediction_count > 0 and risk_count == 0:
+        handoff_reason_codes.append('RISK_STAGE_EMPTY')
+    if shortlisted_count > 0 and operational_prediction_count == 0 and risk_count == 0 and paper_execution_count == 0:
+        handoff_reason_codes.append('DOWNSTREAM_EVIDENCE_INSUFFICIENT')
+
     normalized_codes = list(dict.fromkeys(handoff_reason_codes))
     handoff_summary = (
         f"shortlisted_signals={shortlisted_count} handoff_candidates={handoff_count} "
-        f"consensus_reviews={consensus_count} prediction_candidates={prediction_count} "
+        f"consensus_reviews={consensus_count} prediction_candidates={operational_prediction_count} "
         f"risk_decisions={risk_count} paper_execution_candidates={paper_execution_count} "
         f"handoff_reason_codes={','.join(normalized_codes) or 'none'}"
     )
@@ -1401,7 +1508,7 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'shortlisted_signals': int(shortlisted_count),
         'handoff_candidates': int(handoff_count),
         'consensus_reviews': int(consensus_count),
-        'prediction_candidates': int(prediction_count),
+        'prediction_candidates': int(operational_prediction_count),
         'risk_decisions': int(risk_count),
         'paper_execution_candidates': int(paper_execution_count),
         'handoff_reason_codes': normalized_codes,
@@ -1421,6 +1528,9 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'handoff_structural_examples': handoff_structural_examples,
         'prediction_intake_summary': prediction_intake_summary,
         'prediction_intake_examples': prediction_intake_examples,
+        'prediction_visibility_summary': prediction_visibility_summary,
+        'prediction_visibility_examples': prediction_visibility_examples,
+        'prediction_risk_summary': prediction_risk_summary,
     }
 
 
@@ -1539,6 +1649,9 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'handoff_borderline_examples': handoff_diagnostics.get('handoff_borderline_examples', []),
         'prediction_intake_summary': handoff_diagnostics.get('prediction_intake_summary', {}),
         'prediction_intake_examples': handoff_diagnostics.get('prediction_intake_examples', []),
+        'prediction_visibility_summary': handoff_diagnostics.get('prediction_visibility_summary', {}),
+        'prediction_visibility_examples': handoff_diagnostics.get('prediction_visibility_examples', []),
+        'prediction_risk_summary': handoff_diagnostics.get('prediction_risk_summary', {}),
         'shortlisted_signals': handoff_diagnostics.get('shortlisted_signals', 0),
         'handoff_candidates': handoff_diagnostics.get('handoff_candidates', 0),
         'consensus_reviews': handoff_diagnostics.get('consensus_reviews', 0),
