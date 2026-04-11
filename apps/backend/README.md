@@ -4430,6 +4430,15 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
     - `MONITOR_ONLY` permanece visible para observabilidad, pero puede quedar bloqueado por status filter conservador.
   - Mission Control intenta `run_risk_runtime_review` sólo cuando hay candidate visible y elegible sin decisión previa; mantiene dedupe y no hace bypass de policy/risk/safety.
   - sigue siendo observability-first y **paper-only** (**REAL_READ_ONLY + PAPER_ONLY**), sin live trading real.
+- **Prompt 245 (diagnóstico de status MONITOR_ONLY y promoción conservadora previa a risk):**
+  - añade `prediction_status_summary` + `prediction_status_examples` (máx 3) en el funnel/export para dejar explícito:
+    - conteos (`prediction_status_monitor_only_count`, `prediction_status_ready_for_runtime_count`, `prediction_status_blocked_count`),
+    - `prediction_status_reason_codes`,
+    - `runtime_ready_threshold` y `status_rule_summary`.
+  - cada ejemplo incluye `candidate_id`, `market_id`, `prediction_status`, `status_reason_code`, `confidence`, `edge`, `uncertainty`, `observed_value`, `threshold`, `source_stage` y `lineage_summary`.
+  - ajuste conservador en `prediction intake`: además del umbral fuerte existente, permite `READY_FOR_RUNTIME` con `PREDICTION_STATUS_READY_WITH_CAUTION` sólo cuando la confianza es borderline y la lineage (narrative + pursuit) supera mínimos explícitos.
+  - candidatos reutilizados que conservan `MONITOR_ONLY` se reportan con `PREDICTION_STATUS_MONITOR_ONLY_REUSED_STATUS` para evitar diagnósticos ambiguos.
+  - no relaja controles downstream: continúa **REAL_READ_ONLY + PAPER_ONLY**, sin bypass de risk/policy/safety ni live trading real.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

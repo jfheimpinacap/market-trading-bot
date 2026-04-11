@@ -3987,11 +3987,63 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
 
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         prediction_risk = diagnostics.get('prediction_risk_summary') or {}
+        prediction_status = diagnostics.get('prediction_status_summary') or {}
         self.assertEqual(prediction_risk.get('risk_route_expected'), 1)
         self.assertEqual(prediction_risk.get('risk_route_available'), 0)
         self.assertEqual(prediction_risk.get('risk_route_attempted'), 0)
         self.assertGreaterEqual(prediction_risk.get('risk_route_missing_status_count', 0), 1)
         self.assertIn('PREDICTION_RISK_STATUS_FILTER_REJECTED', prediction_risk.get('risk_route_reason_codes', []))
+        self.assertEqual(prediction_status.get('prediction_status_monitor_only_count'), 1)
+        self.assertIn('PREDICTION_STATUS_MONITOR_ONLY_LOW_CONFIDENCE', prediction_status.get('prediction_status_reason_codes', []))
+
+    def test_prediction_status_summary_marks_reused_monitor_only_candidate(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.prediction_agent.models import PredictionIntakeCandidate, PredictionIntakeRun, PredictionIntakeStatus
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-status-reused-monitor')
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run, linked_market=market, structural_status=ResearchStructuralStatus.PREDICTION_READY
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run, linked_assessment=assessment, linked_market=market, score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION
+        )
+        handoff = PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.WATCH,
+            handoff_confidence=Decimal('0.5000'),
+        )
+        intake_run = PredictionIntakeRun.objects.create(
+            started_at=timezone.now() - timedelta(hours=2),
+            completed_at=timezone.now() - timedelta(hours=2),
+        )
+        candidate = PredictionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_prediction_handoff_candidate=handoff,
+            intake_status=PredictionIntakeStatus.MONITOR_ONLY,
+            handoff_confidence=Decimal('0.5100'),
+            reason_codes=['PREDICTION_STATUS_MONITOR_ONLY_LOW_CONFIDENCE'],
+        )
+        PredictionIntakeCandidate.objects.filter(id=candidate.id).update(created_at=timezone.now() - timedelta(hours=2))
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        prediction_status = diagnostics.get('prediction_status_summary') or {}
+        examples = diagnostics.get('prediction_status_examples') or []
+        self.assertIn('PREDICTION_STATUS_MONITOR_ONLY_REUSED_STATUS', prediction_status.get('prediction_status_reason_codes', []))
+        self.assertTrue(any(item.get('status_reason_code') == 'PREDICTION_STATUS_MONITOR_ONLY_REUSED_STATUS' for item in examples))
 
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.run_risk_runtime_review')
     def test_prediction_risk_summary_attempts_bridge_when_candidate_is_routable(self, mock_risk_runtime_review):
@@ -4036,6 +4088,7 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertGreaterEqual(prediction_risk.get('risk_route_available', 0), 1)
         self.assertGreaterEqual(prediction_risk.get('risk_route_attempted', 0), 1)
         self.assertIn('PREDICTION_RISK_ATTEMPTED', prediction_risk.get('risk_route_reason_codes', []))
+        self.assertNotIn('PREDICTION_RISK_STATUS_FILTER_REJECTED', prediction_risk.get('risk_route_reason_codes', []))
         mock_risk_runtime_review.assert_called_once()
 
     def test_prediction_risk_summary_reuses_existing_risk_decision(self):
@@ -4737,6 +4790,10 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('risk_route_blocked=', text_payload)
         self.assertIn('risk_route_missing_status_count=', text_payload)
         self.assertIn('prediction_risk_examples=', text_payload)
+        self.assertIn('prediction_status_summary:', text_payload)
+        self.assertIn('prediction_status_reason_codes=', text_payload)
+        self.assertIn('runtime_ready_threshold=', text_payload)
+        self.assertIn('prediction_status_examples=', text_payload)
         self.assertIn('handoff_structural_summary:', text_payload)
         self.assertIn('structural_reason_codes=', text_payload)
         self.assertIn('handoff_structural_examples=', text_payload)
