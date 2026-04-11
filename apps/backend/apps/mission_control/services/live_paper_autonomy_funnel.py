@@ -55,6 +55,7 @@ _DOWNSTREAM_ROUTE_NAME = 'research_pursuit_review'
 _PREDICTION_INTAKE_ROUTE_NAME = 'prediction_intake_review'
 _PREDICTION_RISK_ROUTE_NAME = 'risk_runtime_review'
 _BORDERLINE_DECISION_SOURCE = 'mission_control_borderline_guardrail_v1'
+_PREDICTION_STATUS_EXAMPLES_LIMIT = 3
 
 
 def _quantized(value: Decimal) -> str:
@@ -221,6 +222,51 @@ def _as_decimal(value: Any, default: str = '0') -> Decimal:
         return Decimal(str(value if value is not None else default))
     except Exception:
         return Decimal(default)
+
+
+def _derive_prediction_status_reason(*, candidate: PredictionIntakeCandidate, linked_review: PredictionConvictionReview | None, source: str) -> dict[str, Any]:
+    diagnostics = dict((candidate.metadata or {}).get('prediction_intake_status_diagnostics') or {})
+    runtime_ready_threshold = diagnostics.get('runtime_ready_confidence_threshold') or str(_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD)
+    monitor_reason = 'PREDICTION_STATUS_NOT_RUNTIME_READY'
+    observed_value: Any = str(candidate.intake_status or '')
+    threshold: Any = runtime_ready_threshold
+
+    if source == 'reused' and candidate.intake_status == PredictionIntakeStatus.MONITOR_ONLY:
+        monitor_reason = 'PREDICTION_STATUS_MONITOR_ONLY_REUSED_STATUS'
+        observed_value = str(candidate.intake_status or '')
+        threshold = 'current_handoff_not_re-evaluated_in_window'
+    elif candidate.intake_status == PredictionIntakeStatus.READY_FOR_RUNTIME:
+        reason_codes = set(candidate.reason_codes or [])
+        monitor_reason = 'PREDICTION_STATUS_READY_WITH_CAUTION' if 'PREDICTION_STATUS_READY_WITH_CAUTION' in reason_codes else 'PREDICTION_STATUS_READY_FOR_RUNTIME'
+        observed_value = str(candidate.handoff_confidence)
+    elif candidate.intake_status == PredictionIntakeStatus.BLOCKED:
+        monitor_reason = 'PREDICTION_STATUS_BLOCKED_BY_RULE'
+        observed_value = str(getattr(getattr(candidate, 'linked_market', None), 'current_market_probability', ''))
+        threshold = 'market_probability_required'
+    elif candidate.intake_status == PredictionIntakeStatus.MONITOR_ONLY:
+        confidence = _as_decimal(getattr(candidate, 'handoff_confidence', None))
+        narrative = _as_decimal(getattr(candidate, 'narrative_priority', None))
+        structural = _as_decimal(getattr(candidate, 'structural_priority', None))
+        if confidence < _PREDICTION_INTAKE_CONFIDENCE_THRESHOLD:
+            monitor_reason = 'PREDICTION_STATUS_MONITOR_ONLY_LOW_CONFIDENCE'
+            observed_value = str(confidence)
+            threshold = runtime_ready_threshold
+        elif narrative < Decimal('0.6500') or structural < Decimal('0.7000'):
+            monitor_reason = 'PREDICTION_STATUS_MONITOR_ONLY_LOW_EDGE'
+            observed_value = {'narrative_priority': str(narrative), 'structural_priority': str(structural)}
+            threshold = diagnostics.get('runtime_ready_with_caution_threshold') or 'lineage_strength'
+        elif linked_review and _as_decimal(getattr(linked_review, 'uncertainty', None)) > Decimal('0.6500'):
+            monitor_reason = 'PREDICTION_STATUS_MONITOR_ONLY_HIGH_UNCERTAINTY'
+            observed_value = str(linked_review.uncertainty)
+            threshold = 'uncertainty<=0.6500'
+
+    return {
+        'status_reason_code': monitor_reason,
+        'runtime_ready_threshold': runtime_ready_threshold,
+        'observed_value': observed_value,
+        'threshold': threshold,
+        'source_stage': diagnostics.get('handler') or 'prediction_intake',
+    }
 
 
 def _evaluate_borderline_handoff(*, handoff: PredictionHandoffCandidate, preset_name: str) -> dict[str, Any]:
@@ -1422,6 +1468,8 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
     prediction_visibility_reason_codes = []
     prediction_risk_reason_codes = []
     prediction_risk_examples: list[dict[str, Any]] = []
+    prediction_status_reason_codes: list[str] = []
+    prediction_status_examples: list[dict[str, Any]] = []
     prediction_visibility_examples = []
     visible_candidate_ids = []
     risk_route_eligible_candidate_ids: list[int] = []
@@ -1429,6 +1477,9 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
     risk_route_blocked = 0
     risk_route_created = 0
     risk_route_reused_existing_decision = 0
+    prediction_status_monitor_only_count = 0
+    prediction_status_ready_for_runtime_count = 0
+    prediction_status_blocked_count = 0
     prediction_risk_route_disabled = _is_prediction_risk_route_disabled()
     prediction_risk_handler_available = _is_prediction_risk_handler_available()
     for candidate in intake_candidate_rows:
@@ -1448,6 +1499,35 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         prediction_visibility_reason_codes.append(visibility_reason)
 
         linked_review = conviction_by_candidate_id.get(int(candidate.id))
+        status_reason_details = _derive_prediction_status_reason(candidate=candidate, linked_review=linked_review, source=source)
+        prediction_status_reason_codes.append(status_reason_details['status_reason_code'])
+        if candidate.intake_status == PredictionIntakeStatus.MONITOR_ONLY:
+            prediction_status_monitor_only_count += 1
+        elif candidate.intake_status == PredictionIntakeStatus.READY_FOR_RUNTIME:
+            prediction_status_ready_for_runtime_count += 1
+        else:
+            prediction_status_blocked_count += 1
+        if len(prediction_status_examples) < _PREDICTION_STATUS_EXAMPLES_LIMIT:
+            prediction_status_examples.append(
+                {
+                    'candidate_id': int(candidate.id),
+                    'market_id': _safe_int(candidate.linked_market_id),
+                    'prediction_status': str(candidate.intake_status or ''),
+                    'status_reason_code': status_reason_details['status_reason_code'],
+                    'confidence': str(candidate.handoff_confidence),
+                    'edge': str(candidate.structural_priority),
+                    'uncertainty': str(getattr(linked_review, 'uncertainty', '')) if linked_review else '',
+                    'source_stage': status_reason_details['source_stage'],
+                    'observed_value': status_reason_details['observed_value'],
+                    'threshold': status_reason_details['threshold'],
+                    'lineage_summary': (
+                        f"handoff={(candidate.metadata or {}).get('handoff_status', '')} "
+                        f"pursuit={(candidate.metadata or {}).get('pursuit_priority_bucket', '')} "
+                        f"consensus={'yes' if candidate.linked_consensus_record_id else 'no'} "
+                        f"reuse={source}"
+                    ),
+                }
+            )
         risk_reason_code = 'PREDICTION_RISK_ROUTE_MISSING'
         blocking_stage = 'prediction_to_risk_bridge'
         observed_value: Any = str(candidate.intake_status or '')
@@ -1580,6 +1660,24 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
             f"risk_route_reason_codes={','.join(list(dict.fromkeys(prediction_risk_reason_codes))) or 'none'}"
         ),
     }
+    runtime_ready_threshold = str(_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD)
+    prediction_status_summary = {
+        'prediction_status_monitor_only_count': int(prediction_status_monitor_only_count),
+        'prediction_status_ready_for_runtime_count': int(prediction_status_ready_for_runtime_count),
+        'prediction_status_blocked_count': int(prediction_status_blocked_count),
+        'prediction_status_reason_codes': list(dict.fromkeys(prediction_status_reason_codes)),
+        'runtime_ready_threshold': runtime_ready_threshold,
+        'status_rule_summary': (
+            f"READY_FOR_RUNTIME when handoff READY and confidence>={runtime_ready_threshold}; "
+            "conservative promotion allowed for strong lineage; MONITOR_ONLY remains visible for observability."
+        ),
+        'prediction_status_summary': (
+            f"monitor_only={prediction_status_monitor_only_count} "
+            f"ready_for_runtime={prediction_status_ready_for_runtime_count} "
+            f"blocked={prediction_status_blocked_count} "
+            f"prediction_status_reason_codes={','.join(list(dict.fromkeys(prediction_status_reason_codes))) or 'none'}"
+        ),
+    }
     prediction_visibility_summary = {
         'prediction_intake_created_count': int(prediction_intake_created_count),
         'prediction_intake_reused_count': int(prediction_intake_reused_count),
@@ -1643,6 +1741,8 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'prediction_visibility_examples': prediction_visibility_examples,
         'prediction_risk_summary': prediction_risk_summary,
         'prediction_risk_examples': prediction_risk_examples,
+        'prediction_status_summary': prediction_status_summary,
+        'prediction_status_examples': prediction_status_examples,
     }
 
 
@@ -1765,6 +1865,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'prediction_visibility_examples': handoff_diagnostics.get('prediction_visibility_examples', []),
         'prediction_risk_summary': handoff_diagnostics.get('prediction_risk_summary', {}),
         'prediction_risk_examples': handoff_diagnostics.get('prediction_risk_examples', []),
+        'prediction_status_summary': handoff_diagnostics.get('prediction_status_summary', {}),
+        'prediction_status_examples': handoff_diagnostics.get('prediction_status_examples', []),
         'shortlisted_signals': handoff_diagnostics.get('shortlisted_signals', 0),
         'handoff_candidates': handoff_diagnostics.get('handoff_candidates', 0),
         'consensus_reviews': handoff_diagnostics.get('consensus_reviews', 0),

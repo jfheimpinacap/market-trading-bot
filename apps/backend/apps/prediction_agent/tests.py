@@ -256,6 +256,24 @@ class PredictionIntakeRuntimeTests(TestCase):
         candidate = self.market.prediction_intake_candidates.order_by('-id').first()
         self.assertEqual(candidate.intake_status, PredictionIntakeStatus.INSUFFICIENT_CONTEXT)
 
+    def test_borderline_confidence_promotes_with_conservative_lineage(self):
+        self.score.pursuit_score = Decimal('0.8200')
+        self.score.save(update_fields=['pursuit_score', 'updated_at'])
+        self._create_handoff(confidence='0.5100')
+        self.client.post(reverse('prediction_agent:run-intake-review'), {'triggered_by': 'test'}, format='json')
+        candidate = self.market.prediction_intake_candidates.order_by('-id').first()
+        self.assertEqual(candidate.intake_status, PredictionIntakeStatus.READY_FOR_RUNTIME)
+        self.assertIn('PREDICTION_STATUS_READY_WITH_CAUTION', candidate.reason_codes)
+
+    def test_mid_confidence_without_lineage_strength_stays_monitor_only(self):
+        self.score.pursuit_score = Decimal('0.6200')
+        self.score.save(update_fields=['pursuit_score', 'updated_at'])
+        self._create_handoff(confidence='0.5100')
+        self.client.post(reverse('prediction_agent:run-intake-review'), {'triggered_by': 'test'}, format='json')
+        candidate = self.market.prediction_intake_candidates.order_by('-id').first()
+        self.assertEqual(candidate.intake_status, PredictionIntakeStatus.MONITOR_ONLY)
+        self.assertIn('PREDICTION_STATUS_MONITOR_ONLY_LOW_CONFIDENCE', candidate.reason_codes)
+
     def test_intake_summary_endpoint(self):
         self._create_handoff()
         self.client.post(reverse('prediction_agent:run-intake-review'), {'triggered_by': 'test'}, format='json')

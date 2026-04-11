@@ -14,6 +14,58 @@ class IntakeResult:
     candidates: list[PredictionIntakeCandidate]
 
 
+RUNTIME_READY_CONFIDENCE_THRESHOLD = Decimal('0.5500')
+RUNTIME_READY_WITH_CAUTION_CONFIDENCE_THRESHOLD = Decimal('0.5000')
+RUNTIME_READY_WITH_CAUTION_NARRATIVE_THRESHOLD = Decimal('0.6500')
+RUNTIME_READY_WITH_CAUTION_STRUCTURAL_THRESHOLD = Decimal('0.7000')
+RUNTIME_READY_WITH_CAUTION_STRUCTURAL_STRONG_THRESHOLD = Decimal('0.8000')
+LOW_CONFIDENCE_THRESHOLD = Decimal('0.3500')
+
+
+def derive_prediction_intake_status(
+    *,
+    handoff: PredictionHandoffCandidate,
+    narrative_priority: Decimal,
+    structural_priority: Decimal,
+    handoff_confidence: Decimal,
+) -> tuple[str, list[str], dict[str, str]]:
+    status_reason_codes: list[str] = []
+    diagnostics = {
+        'handler': 'prediction_intake',
+        'runtime_ready_confidence_threshold': str(RUNTIME_READY_CONFIDENCE_THRESHOLD),
+        'runtime_ready_with_caution_threshold': (
+            f"confidence>={RUNTIME_READY_WITH_CAUTION_CONFIDENCE_THRESHOLD},"
+            f"structural>={RUNTIME_READY_WITH_CAUTION_STRUCTURAL_THRESHOLD},"
+            f"(narrative>={RUNTIME_READY_WITH_CAUTION_NARRATIVE_THRESHOLD}"
+            f"or structural>={RUNTIME_READY_WITH_CAUTION_STRUCTURAL_STRONG_THRESHOLD})"
+        ),
+        'low_confidence_threshold': str(LOW_CONFIDENCE_THRESHOLD),
+    }
+
+    if handoff.linked_market.current_market_probability is None:
+        return PredictionIntakeStatus.BLOCKED, ['PREDICTION_STATUS_BLOCKED_BY_RULE'], diagnostics
+
+    if handoff.handoff_status == PredictionHandoffStatus.READY and handoff_confidence >= RUNTIME_READY_CONFIDENCE_THRESHOLD:
+        return PredictionIntakeStatus.READY_FOR_RUNTIME, ['PREDICTION_STATUS_READY_FOR_RUNTIME'], diagnostics
+
+    if (
+        handoff.handoff_status == PredictionHandoffStatus.READY
+        and handoff_confidence >= RUNTIME_READY_WITH_CAUTION_CONFIDENCE_THRESHOLD
+        and structural_priority >= RUNTIME_READY_WITH_CAUTION_STRUCTURAL_THRESHOLD
+        and (
+            narrative_priority >= RUNTIME_READY_WITH_CAUTION_NARRATIVE_THRESHOLD
+            or structural_priority >= RUNTIME_READY_WITH_CAUTION_STRUCTURAL_STRONG_THRESHOLD
+        )
+    ):
+        return PredictionIntakeStatus.READY_FOR_RUNTIME, ['PREDICTION_STATUS_READY_WITH_CAUTION'], diagnostics
+
+    if handoff_confidence < LOW_CONFIDENCE_THRESHOLD:
+        return PredictionIntakeStatus.INSUFFICIENT_CONTEXT, ['PREDICTION_STATUS_NOT_RUNTIME_READY'], diagnostics
+
+    status_reason_codes.append('PREDICTION_STATUS_MONITOR_ONLY_LOW_CONFIDENCE')
+    return PredictionIntakeStatus.MONITOR_ONLY, status_reason_codes, diagnostics
+
+
 def _d(value: Decimal | None, default: str = '0.0000') -> Decimal:
     return Decimal(str(value if value is not None else default))
 
@@ -38,19 +90,25 @@ def build_intake_candidates(*, intake_run: PredictionIntakeRun, limit: int = 40)
         structural_priority = _d(getattr(handoff.linked_pursuit_score, 'pursuit_score', None))
         handoff_confidence = _d(handoff.handoff_confidence)
 
+        intake_status, status_reason_codes, status_diagnostics = derive_prediction_intake_status(
+            handoff=handoff,
+            narrative_priority=narrative_priority,
+            structural_priority=structural_priority,
+            handoff_confidence=handoff_confidence,
+        )
         if market_probability is None:
-            intake_status = PredictionIntakeStatus.BLOCKED
             reason_codes.append('BLOCKED_MISSING_MARKET_PROBABILITY')
-        elif handoff.handoff_status == PredictionHandoffStatus.READY and handoff_confidence >= Decimal('0.5500'):
-            intake_status = PredictionIntakeStatus.READY_FOR_RUNTIME
+        elif 'PREDICTION_STATUS_READY_FOR_RUNTIME' in status_reason_codes:
             runtime_ready_count += 1
             reason_codes.append('RUNTIME_READY_FROM_STRONG_RESEARCH_HANDOFF')
-        elif handoff_confidence < Decimal('0.3500'):
-            intake_status = PredictionIntakeStatus.INSUFFICIENT_CONTEXT
+        elif 'PREDICTION_STATUS_READY_WITH_CAUTION' in status_reason_codes:
+            runtime_ready_count += 1
+            reason_codes.append('RUNTIME_READY_WITH_CAUTION_FROM_RESEARCH_HANDOFF')
+        elif 'PREDICTION_STATUS_NOT_RUNTIME_READY' in status_reason_codes:
             reason_codes.append('LOW_HANDOFF_CONFIDENCE')
         else:
-            intake_status = PredictionIntakeStatus.MONITOR_ONLY
             reason_codes.append('MONITOR_UNTIL_CONTEXT_IMPROVES')
+        reason_codes.extend(status_reason_codes)
 
         candidate = PredictionIntakeCandidate.objects.create(
             intake_run=intake_run,
@@ -69,6 +127,7 @@ def build_intake_candidates(*, intake_run: PredictionIntakeRun, limit: int = 40)
             metadata={
                 'handoff_status': handoff.handoff_status,
                 'pursuit_priority_bucket': getattr(handoff.linked_pursuit_score, 'priority_bucket', ''),
+                'prediction_intake_status_diagnostics': status_diagnostics,
             },
         )
         created.append(candidate)

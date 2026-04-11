@@ -3336,6 +3336,12 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
     - handler/route no disponible,
     - bridge intentado, decisión creada, o decisión reutilizada.
   - incorpora bridge mínimo a `run_risk_runtime_review` **solo** cuando hay candidate visible + elegible + sin decisión previa, manteniendo dedupe, policy/safety y modo **REAL_READ_ONLY + PAPER_ONLY** (sin live trading real).
+- **Prompt 245** agrega diagnóstico explícito de `prediction_status` y ajuste conservador `MONITOR_ONLY -> READY_FOR_RUNTIME`:
+  - nuevo `prediction_status_summary` + `prediction_status_examples` (máx 3) con conteos (`monitor_only`, `ready_for_runtime`, `blocked`), reason codes y umbral operativo para runtime-ready.
+  - cada ejemplo expone trazabilidad accionable (`status_reason_code`, `observed_value`, `threshold`, `source_stage`, confidence/edge/uncertainty y lineage resumido) para distinguir bloqueo correcto vs regla demasiado conservadora.
+  - ajuste conservador de intake para V1 local/test: habilita `READY_FOR_RUNTIME` con `PREDICTION_STATUS_READY_WITH_CAUTION` cuando la confianza es borderline pero la lineage (narrative + pursuit) es fuerte; no bypass de risk/policy/safety.
+  - si el candidate es `reused` y conserva `MONITOR_ONLY`, el diagnóstico lo marca explícitamente (`PREDICTION_STATUS_MONITOR_ONLY_REUSED_STATUS`) sin promoción masiva.
+  - mantiene observability-first y fronteras **REAL_READ_ONLY + PAPER_ONLY**, sin live trading real.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.
