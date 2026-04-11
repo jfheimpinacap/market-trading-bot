@@ -4390,6 +4390,12 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - separa causalidad: guardrail real (pre-check Mission Control), filter interno de elegibilidad y reuse/dedupe.
   - `prediction_intake_examples` agrega campos compactos para depuración accionable: `handoff_status`, `handoff_confidence`, `guardrail_name`/`filter_name`, `observed_value`, `threshold`, `blocking_stage`.
   - sigue en modo observability-first paper local/test; no bypass de policy/safety/risk y sin live trading real.
+- **Prompt 235 (handoff scoring/status diagnostics antes de prediction):**
+  - añade `handoff_scoring_summary` con `handoff_ready`, `handoff_deferred`, `handoff_blocked`, `handoff_status_reason_codes`, `ready_threshold`, `deferred_reasons`.
+  - añade `handoff_scoring_examples` (máx 3) con `status_reason_code`, `source_stage`, `observed_value`, `threshold`, `scoring_components`, `score_status`, `structural_status`.
+  - hace explícita la causa operacional del status (`READY_BY_PURSUIT`, `READY_BY_CONSENSUS`, `DEFERRED_LOW_CONFIDENCE`, `DEFERRED_NO_PROMOTION`, `DEFERRED_INSUFFICIENT_EVIDENCE`, `BLOCKED_BY_RULE`).
+  - corrige coherencia de export en prediction intake: no mezcla códigos guardrail/filter cuando se consolidan los reason codes.
+  - mantiene la calibración conservadora de V1 local/test y fronteras **REAL_READ_ONLY + PAPER_ONLY**.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

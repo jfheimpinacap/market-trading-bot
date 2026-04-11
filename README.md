@@ -3304,6 +3304,12 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - `prediction_intake_eligible_count`, `prediction_intake_ineligible_count`, `prediction_intake_reused_count` para distinguir creación útil vs reuse vs bloqueo.
   - `prediction_intake_examples` ahora incluye `handoff_status`, `handoff_confidence`, `guardrail_name`/`filter_name`, `observed_value`, `threshold`, `blocking_stage`.
   - mantiene postura **observability-first + REAL_READ_ONLY + PAPER_ONLY**; no relaja safety/risk de forma indiscriminada.
+- **Prompt 235** agrega diagnóstico explícito del handoff scoring/status antes de prediction:
+  - `handoff_scoring_summary` con `handoff_ready`, `handoff_deferred`, `handoff_blocked`, `handoff_status_reason_codes`, `ready_threshold`, `deferred_reasons`.
+  - `handoff_scoring_examples` (máx 3) con `status_reason_code`, `source_stage`, `observed_value`, `threshold` y `scoring_components`.
+  - reason codes operacionales para distinguir `HANDOFF_STATUS_DEFERRED_LOW_CONFIDENCE`, `...NO_PROMOTION`, `...INSUFFICIENT_EVIDENCE`, `...READY_BY_CONSENSUS`, `...READY_BY_PURSUIT`.
+  - coherencia semántica en export de prediction intake: guardrail/filtro se reportan en listas separadas, sin mezclar `FILTER_REJECTED` cuando `filter_reason_codes=none`.
+  - se mantiene enfoque observability-first y límites **REAL_READ_ONLY + PAPER_ONLY** sin habilitar live trading.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.

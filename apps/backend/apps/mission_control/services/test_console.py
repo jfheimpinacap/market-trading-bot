@@ -225,6 +225,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'market_link_summary': dict(funnel.get('market_link_summary') or {}),
             'market_link_examples': list(funnel.get('market_link_examples') or []),
             'consensus_alignment': dict(funnel.get('consensus_alignment') or {}),
+            'handoff_scoring_summary': dict(funnel.get('handoff_scoring_summary') or {}),
+            'handoff_scoring_examples': list(funnel.get('handoff_scoring_examples') or []),
             'prediction_intake_summary': dict(funnel.get('prediction_intake_summary') or {}),
             'prediction_intake_examples': list(funnel.get('prediction_intake_examples') or []),
             'attention_mode': str(attention.get('attention_mode') or 'UNKNOWN'),
@@ -249,6 +251,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     market_link = payload.get('market_link_summary') or {}
     market_link_examples = payload.get('market_link_examples') or []
     consensus_alignment = payload.get('consensus_alignment') or {}
+    handoff_scoring = payload.get('handoff_scoring_summary') or {}
+    handoff_scoring_examples = payload.get('handoff_scoring_examples') or []
     prediction_intake = payload.get('prediction_intake_summary') or {}
     prediction_intake_examples = payload.get('prediction_intake_examples') or []
 
@@ -318,6 +322,16 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"shortlist_aligned={consensus_alignment.get('shortlist_aligned_consensus_reviews', 0)} "
             f"aligned_with_shortlist={consensus_alignment.get('consensus_aligned_with_shortlist', True)}"
         ),
+        'handoff_scoring_summary:',
+        (
+            f"  handoff_ready={handoff_scoring.get('handoff_ready', 0)} "
+            f"handoff_deferred={handoff_scoring.get('handoff_deferred', 0)} "
+            f"handoff_blocked={handoff_scoring.get('handoff_blocked', 0)} "
+            f"ready_threshold={handoff_scoring.get('ready_threshold', '')}"
+        ),
+        f"  handoff_status_reason_codes={','.join(handoff_scoring.get('handoff_status_reason_codes') or []) or 'none'}",
+        f"  deferred_reasons={','.join(handoff_scoring.get('deferred_reasons') or []) or 'none'}",
+        f"  handoff_scoring_examples={handoff_scoring_examples or []}",
         'prediction_intake_summary:',
         (
             f"  handoff_candidates={prediction_intake.get('handoff_candidates', 0)} "
