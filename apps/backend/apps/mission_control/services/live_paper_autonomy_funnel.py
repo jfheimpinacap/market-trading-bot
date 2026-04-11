@@ -37,6 +37,9 @@ STAGE_EMPTY = 'EMPTY'
 _LOW_THRESHOLD = 3
 _MARKET_LINK_CONFIDENCE_THRESHOLD = Decimal('1.00')
 _PREDICTION_INTAKE_CONFIDENCE_THRESHOLD = Decimal('0.5500')
+_PREDICTION_RISK_CAUTION_BAND_MIN = Decimal('0.4500')
+_PREDICTION_RISK_CAUTION_BAND_MAX = Decimal('0.5500')
+_PREDICTION_RISK_CAUTION_MIN_EDGE = Decimal('0.6500')
 _BORDERLINE_CONFIDENCE_MIN = Decimal('0.4500')
 _BORDERLINE_CONFIDENCE_MAX = Decimal('0.5500')
 _BORDERLINE_MIN_NARRATIVE_PRIORITY = Decimal('0.7000')
@@ -56,6 +59,7 @@ _PREDICTION_INTAKE_ROUTE_NAME = 'prediction_intake_review'
 _PREDICTION_RISK_ROUTE_NAME = 'risk_runtime_review'
 _BORDERLINE_DECISION_SOURCE = 'mission_control_borderline_guardrail_v1'
 _PREDICTION_STATUS_EXAMPLES_LIMIT = 3
+_PREDICTION_RISK_CAUTION_EXAMPLES_LIMIT = 3
 
 
 def _quantized(value: Decimal) -> str:
@@ -266,6 +270,94 @@ def _derive_prediction_status_reason(*, candidate: PredictionIntakeCandidate, li
         'observed_value': observed_value,
         'threshold': threshold,
         'source_stage': diagnostics.get('handler') or 'prediction_intake',
+    }
+
+
+def _has_policy_risk_safety_signal(*, codes: list[Any]) -> bool:
+    tokens = {'POLICY', 'RISK', 'SAFETY', 'BLOCK', 'GUARDRAIL'}
+    for code in codes:
+        text = str(code or '').upper()
+        if any(token in text for token in tokens):
+            return True
+    return False
+
+
+def _evaluate_prediction_risk_with_caution(
+    *,
+    candidate: PredictionIntakeCandidate,
+    linked_review: PredictionConvictionReview | None,
+    preset_name: str,
+) -> dict[str, Any]:
+    confidence = _as_decimal(getattr(candidate, 'handoff_confidence', None))
+    edge = _as_decimal(getattr(candidate, 'structural_priority', None))
+    runtime_ready_threshold = str(_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD)
+    caution_band = f'[{_PREDICTION_RISK_CAUTION_BAND_MIN},{_PREDICTION_RISK_CAUTION_BAND_MAX})'
+    decision_source = 'mission_control_prediction_risk_with_caution_v1'
+    handoff_status = str((candidate.metadata or {}).get('handoff_status') or '').strip()
+    pursuit_bucket = str((candidate.metadata or {}).get('pursuit_priority_bucket') or '').strip()
+    has_consensus = bool(candidate.linked_consensus_record_id)
+    policy_signal = _has_policy_risk_safety_signal(codes=list(candidate.reason_codes or []))
+    if linked_review:
+        policy_signal = policy_signal or _has_policy_risk_safety_signal(codes=list(linked_review.reason_codes or []))
+
+    if preset_name != PRESET_NAME:
+        return {
+            'eligible': False,
+            'reason_code': 'PREDICTION_RISK_WITH_CAUTION_NOT_IN_BAND',
+            'confidence': confidence,
+            'edge': edge,
+            'runtime_ready_threshold': runtime_ready_threshold,
+            'caution_band': caution_band,
+            'decision_source': decision_source,
+        }
+    if not (_PREDICTION_RISK_CAUTION_BAND_MIN <= confidence < _PREDICTION_RISK_CAUTION_BAND_MAX):
+        return {
+            'eligible': False,
+            'reason_code': 'PREDICTION_RISK_WITH_CAUTION_NOT_IN_BAND',
+            'confidence': confidence,
+            'edge': edge,
+            'runtime_ready_threshold': runtime_ready_threshold,
+            'caution_band': caution_band,
+            'decision_source': decision_source,
+        }
+    if edge < _PREDICTION_RISK_CAUTION_MIN_EDGE:
+        return {
+            'eligible': False,
+            'reason_code': 'PREDICTION_RISK_WITH_CAUTION_BLOCKED_BY_LOW_EDGE',
+            'confidence': confidence,
+            'edge': edge,
+            'runtime_ready_threshold': runtime_ready_threshold,
+            'caution_band': caution_band,
+            'decision_source': decision_source,
+        }
+    if not handoff_status or not pursuit_bucket or not has_consensus:
+        return {
+            'eligible': False,
+            'reason_code': 'PREDICTION_RISK_WITH_CAUTION_BLOCKED_BY_WEAK_LINEAGE',
+            'confidence': confidence,
+            'edge': edge,
+            'runtime_ready_threshold': runtime_ready_threshold,
+            'caution_band': caution_band,
+            'decision_source': decision_source,
+        }
+    if candidate.linked_market_id is None or policy_signal:
+        return {
+            'eligible': False,
+            'reason_code': 'PREDICTION_RISK_WITH_CAUTION_BLOCKED_BY_POLICY_SIGNAL',
+            'confidence': confidence,
+            'edge': edge,
+            'runtime_ready_threshold': runtime_ready_threshold,
+            'caution_band': caution_band,
+            'decision_source': decision_source,
+        }
+    return {
+        'eligible': True,
+        'reason_code': 'PREDICTION_RISK_WITH_CAUTION_ELIGIBLE',
+        'confidence': confidence,
+        'edge': edge,
+        'runtime_ready_threshold': runtime_ready_threshold,
+        'caution_band': caution_band,
+        'decision_source': decision_source,
     }
 
 
@@ -1480,6 +1572,14 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
     prediction_status_monitor_only_count = 0
     prediction_status_ready_for_runtime_count = 0
     prediction_status_blocked_count = 0
+    monitor_only_candidates = 0
+    risk_with_caution_eligible_count = 0
+    risk_with_caution_promoted_count = 0
+    risk_with_caution_blocked_count = 0
+    risk_with_caution_reason_codes: list[str] = []
+    prediction_risk_caution_examples: list[dict[str, Any]] = []
+    caution_eligible_candidate_ids: list[int] = []
+    caution_promoted_candidate_ids: list[int] = []
     prediction_risk_route_disabled = _is_prediction_risk_route_disabled()
     prediction_risk_handler_available = _is_prediction_risk_handler_available()
     for candidate in intake_candidate_rows:
@@ -1532,6 +1632,33 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         blocking_stage = 'prediction_to_risk_bridge'
         observed_value: Any = str(candidate.intake_status or '')
         threshold: Any = PredictionConvictionReviewStatus.READY_FOR_RISK
+        caution_diagnostics: dict[str, Any] | None = None
+        if candidate.intake_status == PredictionIntakeStatus.MONITOR_ONLY:
+            monitor_only_candidates += 1
+            caution_diagnostics = _evaluate_prediction_risk_with_caution(
+                candidate=candidate,
+                linked_review=linked_review,
+                preset_name=preset_name,
+            )
+            risk_with_caution_reason_codes.append(str(caution_diagnostics.get('reason_code') or ''))
+            if caution_diagnostics.get('eligible'):
+                risk_with_caution_eligible_count += 1
+                caution_eligible_candidate_ids.append(int(candidate.id))
+            else:
+                risk_with_caution_blocked_count += 1
+            if len(prediction_risk_caution_examples) < _PREDICTION_RISK_CAUTION_EXAMPLES_LIMIT:
+                prediction_risk_caution_examples.append(
+                    {
+                        'candidate_id': int(candidate.id),
+                        'market_id': _safe_int(candidate.linked_market_id),
+                        'confidence': str(caution_diagnostics.get('confidence', '')),
+                        'edge': str(caution_diagnostics.get('edge', '')),
+                        'runtime_ready_threshold': caution_diagnostics.get('runtime_ready_threshold'),
+                        'caution_band': caution_diagnostics.get('caution_band'),
+                        'reason_code': caution_diagnostics.get('reason_code'),
+                        'decision_source': caution_diagnostics.get('decision_source'),
+                    }
+                )
         if not visible:
             risk_reason_code = 'PREDICTION_RISK_STATUS_FILTER_REJECTED'
             blocking_stage = 'prediction_visibility'
@@ -1550,12 +1677,36 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
             threshold = True
             risk_route_blocked += 1
         elif candidate.intake_status == PredictionIntakeStatus.MONITOR_ONLY:
-            risk_reason_code = 'PREDICTION_RISK_STATUS_FILTER_REJECTED'
-            blocking_stage = 'prediction_intake_status'
-            observed_value = str(candidate.intake_status or '')
-            threshold = PredictionIntakeStatus.READY_FOR_RUNTIME
-            risk_route_missing_status_count += 1
-            risk_route_blocked += 1
+            if caution_diagnostics and caution_diagnostics.get('eligible'):
+                if not linked_review:
+                    risk_reason_code = 'PREDICTION_RISK_ROUTE_MISSING'
+                    blocking_stage = 'prediction_artifact_mismatch'
+                    observed_value = 'PredictionIntakeCandidate'
+                    threshold = 'PredictionConvictionReview'
+                    risk_route_blocked += 1
+                elif linked_review.review_status != PredictionConvictionReviewStatus.READY_FOR_RISK:
+                    risk_reason_code = 'PREDICTION_RISK_STATUS_FILTER_REJECTED'
+                    blocking_stage = 'prediction_conviction_review'
+                    observed_value = str(linked_review.review_status or '')
+                    threshold = PredictionConvictionReviewStatus.READY_FOR_RISK
+                    risk_route_missing_status_count += 1
+                    risk_route_blocked += 1
+                else:
+                    risk_reason_code = 'PREDICTION_RISK_WITH_CAUTION_PROMOTED'
+                    blocking_stage = 'prediction_risk_with_caution_precheck'
+                    observed_value = str(linked_review.review_status or '')
+                    threshold = PredictionConvictionReviewStatus.READY_FOR_RISK
+                    risk_route_eligible_candidate_ids.append(int(candidate.id))
+                    risk_with_caution_promoted_count += 1
+                    caution_promoted_candidate_ids.append(int(candidate.id))
+                    risk_with_caution_reason_codes.append('PREDICTION_RISK_WITH_CAUTION_PROMOTED')
+            else:
+                risk_reason_code = str((caution_diagnostics or {}).get('reason_code') or 'PREDICTION_RISK_STATUS_FILTER_REJECTED')
+                blocking_stage = 'prediction_risk_with_caution_precheck'
+                observed_value = str(candidate.handoff_confidence)
+                threshold = (caution_diagnostics or {}).get('caution_band') or PredictionIntakeStatus.READY_FOR_RUNTIME
+                risk_route_missing_status_count += 1
+                risk_route_blocked += 1
         elif not linked_review:
             risk_reason_code = 'PREDICTION_RISK_ROUTE_MISSING'
             blocking_stage = 'prediction_artifact_mismatch'
@@ -1636,6 +1787,8 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         prediction_risk_reason_codes.append('PREDICTION_RISK_CREATED')
     if risk_route_reused_existing_decision > 0:
         prediction_risk_reason_codes.append('PREDICTION_RISK_REUSED_EXISTING_DECISION')
+    if any(candidate_id in preexisting_risk_decision_candidate_ids for candidate_id in caution_promoted_candidate_ids):
+        risk_with_caution_reason_codes.append('PREDICTION_RISK_WITH_CAUTION_REUSED')
 
     risk_route_expected = int(prediction_candidates_visible_count)
     risk_route_available = int(len(risk_route_eligible_candidate_ids))
@@ -1658,6 +1811,22 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
             f"risk_route_attempted={risk_route_attempted} risk_route_created={risk_route_created} "
             f"risk_route_blocked={risk_route_blocked} risk_route_missing_status_count={risk_route_missing_status_count} "
             f"risk_route_reason_codes={','.join(list(dict.fromkeys(prediction_risk_reason_codes))) or 'none'}"
+        ),
+    }
+    prediction_risk_caution_summary = {
+        'monitor_only_candidates': int(monitor_only_candidates),
+        'risk_with_caution_eligible_count': int(risk_with_caution_eligible_count),
+        'risk_with_caution_promoted_count': int(risk_with_caution_promoted_count),
+        'risk_with_caution_blocked_count': int(risk_with_caution_blocked_count),
+        'risk_with_caution_reason_codes': list(dict.fromkeys([code for code in risk_with_caution_reason_codes if code])),
+        'runtime_ready_threshold': str(_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD),
+        'caution_band': f'[{_PREDICTION_RISK_CAUTION_BAND_MIN},{_PREDICTION_RISK_CAUTION_BAND_MAX})',
+        'risk_with_caution_summary': (
+            f"monitor_only_candidates={monitor_only_candidates} "
+            f"risk_with_caution_eligible={risk_with_caution_eligible_count} "
+            f"risk_with_caution_promoted={risk_with_caution_promoted_count} "
+            f"risk_with_caution_blocked={risk_with_caution_blocked_count} "
+            f"risk_with_caution_reason_codes={','.join(list(dict.fromkeys([code for code in risk_with_caution_reason_codes if code]))) or 'none'}"
         ),
     }
     runtime_ready_threshold = str(_PREDICTION_INTAKE_CONFIDENCE_THRESHOLD)
@@ -1741,6 +1910,8 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'prediction_visibility_examples': prediction_visibility_examples,
         'prediction_risk_summary': prediction_risk_summary,
         'prediction_risk_examples': prediction_risk_examples,
+        'prediction_risk_caution_summary': prediction_risk_caution_summary,
+        'prediction_risk_caution_examples': prediction_risk_caution_examples,
         'prediction_status_summary': prediction_status_summary,
         'prediction_status_examples': prediction_status_examples,
     }
@@ -1865,6 +2036,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'prediction_visibility_examples': handoff_diagnostics.get('prediction_visibility_examples', []),
         'prediction_risk_summary': handoff_diagnostics.get('prediction_risk_summary', {}),
         'prediction_risk_examples': handoff_diagnostics.get('prediction_risk_examples', []),
+        'prediction_risk_caution_summary': handoff_diagnostics.get('prediction_risk_caution_summary', {}),
+        'prediction_risk_caution_examples': handoff_diagnostics.get('prediction_risk_caution_examples', []),
         'prediction_status_summary': handoff_diagnostics.get('prediction_status_summary', {}),
         'prediction_status_examples': handoff_diagnostics.get('prediction_status_examples', []),
         'shortlisted_signals': handoff_diagnostics.get('shortlisted_signals', 0),

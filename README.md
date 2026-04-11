@@ -3342,6 +3342,12 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - ajuste conservador de intake para V1 local/test: habilita `READY_FOR_RUNTIME` con `PREDICTION_STATUS_READY_WITH_CAUTION` cuando la confianza es borderline pero la lineage (narrative + pursuit) es fuerte; no bypass de risk/policy/safety.
   - si el candidate es `reused` y conserva `MONITOR_ONLY`, el diagnóstico lo marca explícitamente (`PREDICTION_STATUS_MONITOR_ONLY_REUSED_STATUS`) sin promoción masiva.
   - mantiene observability-first y fronteras **REAL_READ_ONLY + PAPER_ONLY**, sin live trading real.
+- **Prompt 247** agrega una vía auditada `MONITOR_ONLY -> risk runtime review with caution` (sin bajar el threshold global):
+  - mantiene `runtime_ready_threshold=0.5500` como regla base de `READY_FOR_RUNTIME`; no promueve masivamente `MONITOR_ONLY`.
+  - introduce `prediction_risk_caution_summary` + `prediction_risk_caution_examples` (máx 3) para mostrar candidatos monitor-only evaluados en banda conservadora (`[0.4500,0.5500)`) con edge/lineage/policy checks explícitos.
+  - agrega reason codes accionables (`PREDICTION_RISK_WITH_CAUTION_ELIGIBLE`, `..._PROMOTED`, `..._BLOCKED_BY_LOW_EDGE`, `..._BLOCKED_BY_WEAK_LINEAGE`, `..._BLOCKED_BY_POLICY_SIGNAL`, `..._NOT_IN_BAND`, `..._REUSED`).
+  - Mission Control permite llegar únicamente a `risk_runtime_review` cuando el candidate `MONITOR_ONLY` cumple la regla de cautela y ya está `READY_FOR_RISK` en conviction review; no habilita paper execution directa ni relaja risk/policy/safety.
+  - mantiene límites estrictos **REAL_READ_ONLY + PAPER_ONLY** y sin live trading real.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.

@@ -4439,6 +4439,14 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - ajuste conservador en `prediction intake`: además del umbral fuerte existente, permite `READY_FOR_RUNTIME` con `PREDICTION_STATUS_READY_WITH_CAUTION` sólo cuando la confianza es borderline y la lineage (narrative + pursuit) supera mínimos explícitos.
   - candidatos reutilizados que conservan `MONITOR_ONLY` se reportan con `PREDICTION_STATUS_MONITOR_ONLY_REUSED_STATUS` para evitar diagnósticos ambiguos.
   - no relaja controles downstream: continúa **REAL_READ_ONLY + PAPER_ONLY**, sin bypass de risk/policy/safety ni live trading real.
+- **Prompt 247 (vía conservadora MONITOR_ONLY -> risk runtime review con caution):**
+  - mantiene intacta la regla base `READY_FOR_RUNTIME` (`runtime_ready_threshold=0.5500`) y evita relajar el threshold global.
+  - añade evaluación explícita de candidatos `MONITOR_ONLY` con banda de cautela `[0.4500,0.5500)` + edge mínimo + lineage mínima + market link válido + ausencia de señales policy/risk/safety.
+  - incorpora `prediction_risk_caution_summary` y `prediction_risk_caution_examples` (máx 3) en funnel/export con:
+    - `monitor_only_candidates`, `risk_with_caution_eligible_count`, `risk_with_caution_promoted_count`, `risk_with_caution_blocked_count`,
+    - `risk_with_caution_reason_codes`, `runtime_ready_threshold`, `caution_band`, `risk_with_caution_summary`.
+  - reason codes compactos de decisión: `PREDICTION_RISK_WITH_CAUTION_ELIGIBLE`, `..._PROMOTED`, `..._BLOCKED_BY_LOW_EDGE`, `..._BLOCKED_BY_WEAK_LINEAGE`, `..._BLOCKED_BY_POLICY_SIGNAL`, `..._NOT_IN_BAND`, `..._REUSED`.
+  - el bridge Mission Control sólo habilita llegada a `risk_runtime_review` (no paper execution directa), mantiene dedupe, conserva guardrails de risk/policy/safety y sigue en **REAL_READ_ONLY + PAPER_ONLY** sin live trading real.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`
