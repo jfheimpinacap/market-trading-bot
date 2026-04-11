@@ -3299,6 +3299,137 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(example.get('observed_value'), '0.4500')
         self.assertEqual(example.get('threshold'), '0.5500')
 
+    def test_prediction_intake_borderline_confidence_too_low_stays_blocked(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-borderline-too-low')
+        market.current_market_probability = Decimal('0.4400')
+        market.save(update_fields=['current_market_probability'])
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            pursuit_score=Decimal('0.4200'),
+            score_status=ResearchPursuitScoreStatus.DEFER,
+            score_components={'narrative_priority': '0.9000', 'divergence_strength': '0.9000'},
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.DEFERRED,
+            handoff_confidence=Decimal('0.3200'),
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        intake_summary = diagnostics.get('prediction_intake_summary') or {}
+        borderline = diagnostics.get('handoff_borderline_summary') or {}
+        self.assertIn('PREDICTION_INTAKE_GUARDRAIL_REJECTED', intake_summary.get('prediction_intake_guardrail_reason_codes', []))
+        self.assertEqual(borderline.get('borderline_handoffs'), 0)
+
+    def test_prediction_intake_borderline_eligible_can_be_promoted(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.prediction_agent.models import PredictionIntakeCandidate
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-borderline-promoted')
+        market.current_market_probability = Decimal('0.5100')
+        market.save(update_fields=['current_market_probability'])
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            pursuit_score=Decimal('0.5200'),
+            score_status=ResearchPursuitScoreStatus.DEFER,
+            score_components={'narrative_priority': '0.8200', 'divergence_strength': '0.6663'},
+        )
+        handoff = PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.DEFERRED,
+            handoff_confidence=Decimal('0.4500'),
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        intake_summary = diagnostics.get('prediction_intake_summary') or {}
+        borderline = diagnostics.get('handoff_borderline_summary') or {}
+        self.assertGreaterEqual(intake_summary.get('prediction_intake_attempted', 0), 1)
+        self.assertIn('HANDOFF_BORDERLINE_PROMOTED_TO_PREDICTION', borderline.get('borderline_reason_codes', []))
+        self.assertTrue(PredictionIntakeCandidate.objects.filter(linked_prediction_handoff_candidate=handoff).exists())
+
+    def test_prediction_intake_borderline_low_narrative_stays_blocked(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+
+        market = self._provider_and_market('prediction-borderline-low-narrative')
+        market.current_market_probability = Decimal('0.5300')
+        market.save(update_fields=['current_market_probability'])
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            pursuit_score=Decimal('0.5000'),
+            score_status=ResearchPursuitScoreStatus.DEFER,
+            score_components={'narrative_priority': '0.6200', 'divergence_strength': '0.7000'},
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.DEFERRED,
+            handoff_confidence=Decimal('0.4900'),
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        intake_summary = diagnostics.get('prediction_intake_summary') or {}
+        borderline = diagnostics.get('handoff_borderline_summary') or {}
+        self.assertIn('HANDOFF_BORDERLINE_BLOCKED_BY_LOW_NARRATIVE_PRIORITY', borderline.get('borderline_reason_codes', []))
+        self.assertIn('PREDICTION_INTAKE_GUARDRAIL_REJECTED', intake_summary.get('prediction_intake_guardrail_reason_codes', []))
+
     def test_handoff_scoring_summary_explains_no_promotion(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.research_agent.models import (
@@ -3980,6 +4111,25 @@ class TestConsoleApiTests(TestCase):
                     'source_stage': 'pursuit',
                 }
             ],
+            'handoff_borderline_summary': {
+                'borderline_handoffs': 1,
+                'borderline_promoted': 1,
+                'borderline_blocked': 0,
+                'borderline_reason_codes': ['HANDOFF_BORDERLINE_ELIGIBLE', 'HANDOFF_BORDERLINE_PROMOTED_TO_PREDICTION'],
+                'ready_threshold': '0.5500',
+                'borderline_band': '[0.4500,0.5500)',
+            },
+            'handoff_borderline_examples': [
+                {
+                    'handoff_id': 5,
+                    'market_id': 20,
+                    'handoff_confidence': '0.4800',
+                    'ready_threshold': '0.5500',
+                    'borderline_band': '[0.4500,0.5500)',
+                    'reason_code': 'HANDOFF_BORDERLINE_ELIGIBLE',
+                    'decision_source': 'mission_control_borderline_guardrail_v1',
+                }
+            ],
             'attention_mode': 'HEALTHY',
             'portfolio_summary': {
                 'cash': 10000.0,
@@ -4059,6 +4209,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('market_link_reason_codes=', text_payload)
         self.assertIn('handoff_scoring_summary:', text_payload)
         self.assertIn('handoff_status_reason_codes=', text_payload)
+        self.assertIn('handoff_borderline_summary:', text_payload)
+        self.assertIn('borderline_reason_codes=', text_payload)
         self.assertIn('prediction_intake_summary:', text_payload)
         self.assertIn('prediction_intake_reason_codes=', text_payload)
         self.assertIn('prediction_intake_guardrail_reason_codes=', text_payload)

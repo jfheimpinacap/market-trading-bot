@@ -227,6 +227,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'consensus_alignment': dict(funnel.get('consensus_alignment') or {}),
             'handoff_scoring_summary': dict(funnel.get('handoff_scoring_summary') or {}),
             'handoff_scoring_examples': list(funnel.get('handoff_scoring_examples') or []),
+            'handoff_borderline_summary': dict(funnel.get('handoff_borderline_summary') or {}),
+            'handoff_borderline_examples': list(funnel.get('handoff_borderline_examples') or []),
             'prediction_intake_summary': dict(funnel.get('prediction_intake_summary') or {}),
             'prediction_intake_examples': list(funnel.get('prediction_intake_examples') or []),
             'attention_mode': str(attention.get('attention_mode') or 'UNKNOWN'),
@@ -253,6 +255,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     consensus_alignment = payload.get('consensus_alignment') or {}
     handoff_scoring = payload.get('handoff_scoring_summary') or {}
     handoff_scoring_examples = payload.get('handoff_scoring_examples') or []
+    handoff_borderline = payload.get('handoff_borderline_summary') or {}
+    handoff_borderline_examples = payload.get('handoff_borderline_examples') or []
     prediction_intake = payload.get('prediction_intake_summary') or {}
     prediction_intake_examples = payload.get('prediction_intake_examples') or []
 
@@ -332,6 +336,16 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         f"  handoff_status_reason_codes={','.join(handoff_scoring.get('handoff_status_reason_codes') or []) or 'none'}",
         f"  deferred_reasons={','.join(handoff_scoring.get('deferred_reasons') or []) or 'none'}",
         f"  handoff_scoring_examples={handoff_scoring_examples or []}",
+        'handoff_borderline_summary:',
+        (
+            f"  borderline_handoffs={handoff_borderline.get('borderline_handoffs', 0)} "
+            f"borderline_promoted={handoff_borderline.get('borderline_promoted', 0)} "
+            f"borderline_blocked={handoff_borderline.get('borderline_blocked', 0)} "
+            f"ready_threshold={handoff_borderline.get('ready_threshold', '')} "
+            f"borderline_band={handoff_borderline.get('borderline_band', '')}"
+        ),
+        f"  borderline_reason_codes={','.join(handoff_borderline.get('borderline_reason_codes') or []) or 'none'}",
+        f"  handoff_borderline_examples={handoff_borderline_examples or []}",
         'prediction_intake_summary:',
         (
             f"  handoff_candidates={prediction_intake.get('handoff_candidates', 0)} "
