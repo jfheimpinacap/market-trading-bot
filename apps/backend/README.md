@@ -4409,6 +4409,16 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - cada ejemplo deja verdad operacional: componentes débiles/fuertes, `observed_values`, `thresholds` y `structural_rule_type` (`individual` vs `aggregate`).
   - ajuste conservador solo para V1 paper local/test: permite override estructural en borderline únicamente si activity/time-window están bajos pero no extremos y el resto de señales fuertes (volumen, liquidez, narrativa, divergencia) cumple mínimos; mantiene risk/policy/safety downstream sin cambios.
   - `handoff_borderline_examples` ahora incluye contexto estructural para explicar por qué se bloquea o se promueve.
+- **Prompt 241 (alineación prediction intake -> funnel visibility -> risk handoff):**
+  - añade `prediction_visibility_summary` + `prediction_visibility_examples` compactos (máx 3) para explicar por qué intake crea/reusa candidatos que podían quedar invisibles en `prediction_candidates`.
+  - diferencia operacional explícita:
+    - `prediction_intake_created_count`: candidates creados en la ventana actual.
+    - `prediction_intake_reused_count`: candidates históricos reutilizados por handoffs de la ventana.
+    - `prediction_candidates_visible_count` / `prediction_candidates_hidden_count`: visibilidad downstream real para funnel.
+  - `handoff_summary.prediction_candidates` pasa a reflejar candidates visibles en funnel (incluye reuse válido), evitando falsos `0` cuando hay candidates reutilizados.
+  - añade `prediction_risk_summary` (`risk_route_expected`, `risk_route_available`, `risk_route_attempted`, `risk_route_reason_codes`) para diagnóstico mínimo del puente prediction->risk sin bypass.
+  - reason codes de visibilidad/ruta incluyen `PREDICTION_VISIBLE_IN_FUNNEL`, `PREDICTION_REUSED_BUT_NOT_COUNTED`, `PREDICTION_HIDDEN_BY_STATUS_FILTER`, `PREDICTION_READY_FOR_RISK`, `PREDICTION_NOT_READY_FOR_RISK`, `PREDICTION_RISK_ROUTE_MISSING`.
+  - mantiene límites de seguridad: observability-first, **REAL_READ_ONLY + PAPER_ONLY**, sin habilitar live trading real.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

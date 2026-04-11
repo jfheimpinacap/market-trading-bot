@@ -3321,6 +3321,12 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - cuando el bloqueo borderline es estructural, el export deja trazabilidad accionable (qué componente bloqueó, valor observado, mínimo esperado y si fue regla individual vs agregada), evitando el genérico único.
   - ajuste conservador: permite override estructural solo si la debilidad activity/time-window no es extrema y existe combinación fuerte de volumen+liquidez+narrativa+divergencia; mantiene guardrails posteriores intactos.
   - sigue siendo observability-first, **REAL_READ_ONLY + PAPER_ONLY**, sin habilitar live trading real.
+- **Prompt 241** alinea `prediction intake -> funnel visibility -> risk route` para eliminar falsos `prediction_candidates=0`:
+  - añade `prediction_visibility_summary` + `prediction_visibility_examples` (máx 3) con separación explícita `created` vs `reused` vs `visible_in_funnel`.
+  - `prediction_candidates` en `handoff_summary` ahora refleja candidatos de intake visibles downstream (no solo conviction reviews en ventana).
+  - reason codes explícitos de visibilidad/ruta (`PREDICTION_VISIBLE_IN_FUNNEL`, `PREDICTION_REUSED_BUT_NOT_COUNTED`, `PREDICTION_HIDDEN_BY_STATUS_FILTER`, `PREDICTION_READY_FOR_RISK`, `PREDICTION_NOT_READY_FOR_RISK`, `PREDICTION_RISK_ROUTE_MISSING`).
+  - añade `prediction_risk_summary` compacto (`risk_route_expected`, `risk_route_available`, `risk_route_attempted`, `risk_route_reason_codes`) para exponer el siguiente cuello real sin bypass de risk.
+  - mantiene enfoque observability-first y fronteras **REAL_READ_ONLY + PAPER_ONLY**; sin live trading real.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.
