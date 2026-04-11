@@ -4398,10 +4398,17 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - mantiene la calibración conservadora de V1 local/test y fronteras **REAL_READ_ONLY + PAPER_ONLY**.
 - **Prompt 237 (borderline handoff promotion conservadora, solo V1 paper local/test):**
   - mantiene `ready_threshold=0.5500` para `READY` normal; no relaja el threshold global.
-  - añade franja auditada para `DEFERRED` borderline (`confidence` en banda `[0.4500,0.5500)`) con gating conservador: market link válido, sin missing fields, `structural_status=prediction_ready`, mínimos de narrativa/divergencia y sin bypass de policy/risk/safety.
+  - añade franja auditada para `DEFERRED` borderline (`confidence` en banda `[0.4500,0.5500)`) con gating conservador: market link válido, sin missing fields, mínimos de narrativa/divergencia y sin bypass de policy/risk/safety.
   - el puente solo habilita **prediction intake** (`mission_control_prediction_bridge`), nunca paper execution directa.
   - añade `handoff_borderline_summary` + `handoff_borderline_examples` (máx 3) en funnel/export con reason codes explícitos (`HANDOFF_BORDERLINE_ELIGIBLE`, `HANDOFF_BORDERLINE_PROMOTED_TO_PREDICTION`, bloqueos por narrativa/divergencia/estructura/componentes).
   - el export marca explícitamente cuando prediction intake avanzó por promoción borderline conservadora; se mantiene **REAL_READ_ONLY + PAPER_ONLY** y sin live trading real.
+- **Prompt 239 (diagnóstico structural weakness + override conservador):**
+  - añade `handoff_structural_summary` y `handoff_structural_examples` (máx 3) con:
+    - `structural_weakness_count`, `structural_pass_count`, `structural_block_reason_codes`, `structural_guardrail_summary`
+    - reason codes explícitos por componente (`HANDOFF_STRUCTURAL_WEAK_ACTIVITY`, `HANDOFF_STRUCTURAL_WEAK_TIME_WINDOW`, `HANDOFF_STRUCTURAL_WEAK_ACTIVITY_AND_TIME_WINDOW`, `HANDOFF_STRUCTURAL_WEAK_COMPOSITE`, `HANDOFF_STRUCTURAL_OVERRIDE_BORDERLINE`).
+  - cada ejemplo deja verdad operacional: componentes débiles/fuertes, `observed_values`, `thresholds` y `structural_rule_type` (`individual` vs `aggregate`).
+  - ajuste conservador solo para V1 paper local/test: permite override estructural en borderline únicamente si activity/time-window están bajos pero no extremos y el resto de señales fuertes (volumen, liquidez, narrativa, divergencia) cumple mínimos; mantiene risk/policy/safety downstream sin cambios.
+  - `handoff_borderline_examples` ahora incluye contexto estructural para explicar por qué se bloquea o se promueve.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

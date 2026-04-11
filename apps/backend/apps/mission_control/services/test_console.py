@@ -229,6 +229,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'handoff_scoring_examples': list(funnel.get('handoff_scoring_examples') or []),
             'handoff_borderline_summary': dict(funnel.get('handoff_borderline_summary') or {}),
             'handoff_borderline_examples': list(funnel.get('handoff_borderline_examples') or []),
+            'handoff_structural_summary': dict(funnel.get('handoff_structural_summary') or {}),
+            'handoff_structural_examples': list(funnel.get('handoff_structural_examples') or []),
             'prediction_intake_summary': dict(funnel.get('prediction_intake_summary') or {}),
             'prediction_intake_examples': list(funnel.get('prediction_intake_examples') or []),
             'attention_mode': str(attention.get('attention_mode') or 'UNKNOWN'),
@@ -257,6 +259,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     handoff_scoring_examples = payload.get('handoff_scoring_examples') or []
     handoff_borderline = payload.get('handoff_borderline_summary') or {}
     handoff_borderline_examples = payload.get('handoff_borderline_examples') or []
+    handoff_structural = payload.get('handoff_structural_summary') or {}
+    handoff_structural_examples = payload.get('handoff_structural_examples') or []
     prediction_intake = payload.get('prediction_intake_summary') or {}
     prediction_intake_examples = payload.get('prediction_intake_examples') or []
 
@@ -346,6 +350,20 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         ),
         f"  borderline_reason_codes={','.join(handoff_borderline.get('borderline_reason_codes') or []) or 'none'}",
         f"  handoff_borderline_examples={handoff_borderline_examples or []}",
+        'handoff_structural_summary:',
+        (
+            f"  structural_pass={handoff_structural.get('structural_pass', 0)} "
+            f"structural_blocked={handoff_structural.get('structural_blocked', 0)} "
+            f"structural_weakness_count={handoff_structural.get('structural_weakness_count', 0)} "
+            f"structural_pass_count={handoff_structural.get('structural_pass_count', 0)} "
+            f"override_enabled={handoff_structural.get('override_enabled', 0)} "
+            f"override_promoted={handoff_structural.get('override_promoted', 0)} "
+            f"override_blocked={handoff_structural.get('override_blocked', 0)}"
+        ),
+        f"  structural_reason_codes={','.join(handoff_structural.get('structural_reason_codes') or []) or 'none'}",
+        f"  structural_block_reason_codes={','.join(handoff_structural.get('structural_block_reason_codes') or []) or 'none'}",
+        f"  structural_guardrail_summary={handoff_structural.get('structural_guardrail_summary') or ''}",
+        f"  handoff_structural_examples={handoff_structural_examples or []}",
         'prediction_intake_summary:',
         (
             f"  handoff_candidates={prediction_intake.get('handoff_candidates', 0)} "
