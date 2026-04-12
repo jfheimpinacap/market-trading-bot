@@ -17,8 +17,10 @@ from apps.mission_control.services.live_paper_validation import build_live_paper
 from apps.mission_control.services.session_heartbeat import build_heartbeat_summary
 from apps.paper_trading.models import PaperTrade, PaperTradeStatus
 from apps.paper_trading.services.portfolio import build_account_summary, get_active_account
-from apps.prediction_agent.models import PredictionConvictionReview, PredictionIntakeCandidate, PredictionIntakeRun
+from apps.prediction_agent.models import PredictionConvictionReview, PredictionIntakeCandidate, PredictionIntakeRun, RiskReadyPredictionHandoff
 from apps.prediction_agent.models import PredictionConvictionReviewStatus, PredictionIntakeStatus
+from apps.prediction_agent.services.conviction import review_candidate
+from apps.prediction_agent.services.risk_handoff import build_risk_ready_handoff
 from apps.prediction_agent.services.run import run_prediction_intake_review
 from apps.research_agent.models import NarrativeConsensusRecord
 from apps.research_agent.models import MarketUniverseScanRun, NarrativeSignal, NarrativeSignalStatus, PredictionHandoffCandidate
@@ -359,6 +361,101 @@ def _evaluate_prediction_risk_with_caution(
         'caution_band': caution_band,
         'decision_source': decision_source,
     }
+
+
+def _materialize_prediction_artifacts_for_risk(
+    *,
+    candidates: list[PredictionIntakeCandidate],
+    conviction_by_candidate_id: dict[int, PredictionConvictionReview],
+) -> tuple[dict[str, Any], dict[int, PredictionConvictionReview], dict[int, RiskReadyPredictionHandoff], set[int]]:
+    review_ids = [review.id for review in conviction_by_candidate_id.values()]
+    handoff_by_review_id: dict[int, RiskReadyPredictionHandoff] = {}
+    if review_ids:
+        for handoff in (
+            RiskReadyPredictionHandoff.objects.filter(linked_conviction_review_id__in=review_ids).order_by('linked_conviction_review_id', '-created_at', '-id')
+        ):
+            review_id = int(handoff.linked_conviction_review_id)
+            if review_id not in handoff_by_review_id:
+                handoff_by_review_id[review_id] = handoff
+
+    summary: dict[str, Any] = {
+        'prediction_artifact_expected_count': 0,
+        'conviction_review_available_count': 0,
+        'conviction_review_created_count': 0,
+        'conviction_review_reused_count': 0,
+        'risk_ready_handoff_available_count': 0,
+        'risk_ready_handoff_created_count': 0,
+        'risk_ready_handoff_reused_count': 0,
+        'prediction_artifact_blocked_count': 0,
+        'prediction_artifact_reason_codes': [],
+        'prediction_artifact_examples': [],
+    }
+    route_resolved_candidate_ids: set[int] = set()
+    handoff_by_candidate_id: dict[int, RiskReadyPredictionHandoff] = {}
+    reason_codes: list[str] = []
+
+    for candidate in candidates:
+        summary['prediction_artifact_expected_count'] += 1
+        candidate_id = int(candidate.id)
+        review = conviction_by_candidate_id.get(candidate_id)
+        if review is None:
+            reason_codes.append('PREDICTION_CONVICTION_REVIEW_MISSING')
+            review = review_candidate(intake_candidate=candidate)
+            conviction_by_candidate_id[candidate_id] = review
+            summary['conviction_review_created_count'] += 1
+            reason_codes.append('PREDICTION_CONVICTION_REVIEW_CREATED')
+            created_artifact = 'PredictionConvictionReview'
+            reused_artifact = None
+        else:
+            summary['conviction_review_reused_count'] += 1
+            reason_codes.append('PREDICTION_CONVICTION_REVIEW_REUSED')
+            created_artifact = None
+            reused_artifact = 'PredictionConvictionReview'
+        summary['conviction_review_available_count'] += 1
+
+        handoff = handoff_by_review_id.get(int(review.id))
+        if handoff is None:
+            reason_codes.append('PREDICTION_RISK_READY_HANDOFF_MISSING')
+            handoff = build_risk_ready_handoff(review=review)
+            handoff_by_review_id[int(review.id)] = handoff
+            summary['risk_ready_handoff_created_count'] += 1
+            reason_codes.append('PREDICTION_RISK_READY_HANDOFF_CREATED')
+            created_artifact = 'RiskReadyPredictionHandoff'
+        else:
+            summary['risk_ready_handoff_reused_count'] += 1
+            reason_codes.append('PREDICTION_RISK_READY_HANDOFF_REUSED')
+            reused_artifact = 'RiskReadyPredictionHandoff'
+        summary['risk_ready_handoff_available_count'] += 1
+        handoff_by_candidate_id[candidate_id] = handoff
+        route_resolved_candidate_ids.add(candidate_id)
+        reason_codes.append('PREDICTION_ARTIFACT_MISMATCH_RESOLVED')
+        if len(summary['prediction_artifact_examples']) < 3:
+            summary['prediction_artifact_examples'].append(
+                {
+                    'candidate_id': candidate_id,
+                    'market_id': _safe_int(candidate.linked_market_id),
+                    'source_model': 'PredictionIntakeCandidate',
+                    'expected_artifact': 'RiskReadyPredictionHandoff',
+                    'created_artifact': created_artifact,
+                    'reused_artifact': reused_artifact,
+                    'reason_code': 'PREDICTION_ARTIFACT_MISMATCH_RESOLVED',
+                    'blocking_stage': '',
+                }
+            )
+
+    summary['prediction_artifact_reason_codes'] = list(dict.fromkeys(reason_codes))
+    summary['prediction_artifact_summary'] = (
+        f"artifact_expected={summary['prediction_artifact_expected_count']} "
+        f"conviction_review_available={summary['conviction_review_available_count']} "
+        f"conviction_review_created={summary['conviction_review_created_count']} "
+        f"conviction_review_reused={summary['conviction_review_reused_count']} "
+        f"risk_ready_handoff_available={summary['risk_ready_handoff_available_count']} "
+        f"risk_ready_handoff_created={summary['risk_ready_handoff_created_count']} "
+        f"risk_ready_handoff_reused={summary['risk_ready_handoff_reused_count']} "
+        f"artifact_blocked={summary['prediction_artifact_blocked_count']} "
+        f"prediction_artifact_reason_codes={','.join(summary['prediction_artifact_reason_codes']) or 'none'}"
+    )
+    return summary, conviction_by_candidate_id, handoff_by_candidate_id, route_resolved_candidate_ids
 
 
 def _evaluate_borderline_handoff(*, handoff: PredictionHandoffCandidate, preset_name: str) -> dict[str, Any]:
@@ -1552,6 +1649,20 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
     ):
         if review.linked_intake_candidate_id not in conviction_by_candidate_id:
             conviction_by_candidate_id[int(review.linked_intake_candidate_id)] = review
+    visible_candidates_for_artifacts = [
+        candidate
+        for candidate in intake_candidate_rows
+        if candidate.intake_status in {PredictionIntakeStatus.READY_FOR_RUNTIME, PredictionIntakeStatus.MONITOR_ONLY}
+    ]
+    (
+        prediction_artifact_summary,
+        conviction_by_candidate_id,
+        handoff_by_candidate_id,
+        artifact_route_resolved_candidate_ids,
+    ) = _materialize_prediction_artifacts_for_risk(
+        candidates=visible_candidates_for_artifacts,
+        conviction_by_candidate_id=conviction_by_candidate_id,
+    )
 
     prediction_intake_created_count = 0
     prediction_intake_reused_count = 0
@@ -1598,7 +1709,9 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
             visibility_reason = 'PREDICTION_HIDDEN_BY_STATUS_FILTER'
         prediction_visibility_reason_codes.append(visibility_reason)
 
-        linked_review = conviction_by_candidate_id.get(int(candidate.id))
+        candidate_id = int(candidate.id)
+        linked_review = conviction_by_candidate_id.get(candidate_id)
+        linked_handoff = handoff_by_candidate_id.get(candidate_id)
         status_reason_details = _derive_prediction_status_reason(candidate=candidate, linked_review=linked_review, source=source)
         prediction_status_reason_codes.append(status_reason_details['status_reason_code'])
         if candidate.intake_status == PredictionIntakeStatus.MONITOR_ONLY:
@@ -1684,6 +1797,19 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
                     observed_value = 'PredictionIntakeCandidate'
                     threshold = 'PredictionConvictionReview'
                     risk_route_blocked += 1
+                    if len(prediction_artifact_summary.get('prediction_artifact_examples') or []) < 3:
+                        prediction_artifact_summary['prediction_artifact_examples'].append(
+                            {
+                                'candidate_id': candidate_id,
+                                'market_id': _safe_int(candidate.linked_market_id),
+                                'source_model': 'PredictionIntakeCandidate',
+                                'expected_artifact': 'PredictionConvictionReview',
+                                'created_artifact': None,
+                                'reused_artifact': None,
+                                'reason_code': 'PREDICTION_ARTIFACT_MISMATCH_BLOCKED',
+                                'blocking_stage': 'prediction_artifact_mismatch',
+                            }
+                        )
                 elif linked_review.review_status != PredictionConvictionReviewStatus.READY_FOR_RISK:
                     risk_reason_code = 'PREDICTION_RISK_STATUS_FILTER_REJECTED'
                     blocking_stage = 'prediction_conviction_review'
@@ -1713,6 +1839,19 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
             observed_value = 'PredictionIntakeCandidate'
             threshold = 'PredictionConvictionReview'
             risk_route_blocked += 1
+            if len(prediction_artifact_summary.get('prediction_artifact_examples') or []) < 3:
+                prediction_artifact_summary['prediction_artifact_examples'].append(
+                    {
+                        'candidate_id': candidate_id,
+                        'market_id': _safe_int(candidate.linked_market_id),
+                        'source_model': 'PredictionIntakeCandidate',
+                        'expected_artifact': 'PredictionConvictionReview',
+                        'created_artifact': None,
+                        'reused_artifact': None,
+                        'reason_code': 'PREDICTION_ARTIFACT_MISMATCH_BLOCKED',
+                        'blocking_stage': 'prediction_artifact_mismatch',
+                    }
+                )
         elif linked_review.review_status != PredictionConvictionReviewStatus.READY_FOR_RISK:
             risk_reason_code = 'PREDICTION_RISK_STATUS_FILTER_REJECTED'
             blocking_stage = 'prediction_conviction_review'
@@ -1720,6 +1859,25 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
             threshold = PredictionConvictionReviewStatus.READY_FOR_RISK
             risk_route_missing_status_count += 1
             risk_route_blocked += 1
+        elif linked_handoff is None:
+            risk_reason_code = 'PREDICTION_RISK_ROUTE_MISSING'
+            blocking_stage = 'prediction_artifact_mismatch'
+            observed_value = 'PredictionConvictionReview'
+            threshold = 'RiskReadyPredictionHandoff'
+            risk_route_blocked += 1
+            if len(prediction_artifact_summary.get('prediction_artifact_examples') or []) < 3:
+                prediction_artifact_summary['prediction_artifact_examples'].append(
+                    {
+                        'candidate_id': candidate_id,
+                        'market_id': _safe_int(candidate.linked_market_id),
+                        'source_model': 'PredictionConvictionReview',
+                        'expected_artifact': 'RiskReadyPredictionHandoff',
+                        'created_artifact': None,
+                        'reused_artifact': None,
+                        'reason_code': 'PREDICTION_ARTIFACT_MISMATCH_BLOCKED',
+                        'blocking_stage': 'prediction_artifact_mismatch',
+                    }
+                )
         else:
             risk_reason_code = 'PREDICTION_RISK_ROUTE_AVAILABLE'
             blocking_stage = 'risk_runtime_precheck'
@@ -1797,6 +1955,28 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         created_at__gte=window_start,
     ).count()
     risk_route_blocked = max(0, risk_route_expected - (risk_route_created + risk_route_reused_existing_decision))
+    prediction_artifact_summary['prediction_artifact_blocked_count'] = max(
+        0,
+        int(prediction_artifact_summary.get('prediction_artifact_expected_count', 0)) - int(len(artifact_route_resolved_candidate_ids)),
+    )
+    if prediction_artifact_summary['prediction_artifact_blocked_count'] > 0:
+        prediction_artifact_summary['prediction_artifact_reason_codes'] = list(
+            dict.fromkeys(
+                list(prediction_artifact_summary.get('prediction_artifact_reason_codes') or [])
+                + ['PREDICTION_ARTIFACT_MISMATCH_BLOCKED']
+            )
+        )
+    prediction_artifact_summary['prediction_artifact_summary'] = (
+        f"artifact_expected={prediction_artifact_summary.get('prediction_artifact_expected_count', 0)} "
+        f"conviction_review_available={prediction_artifact_summary.get('conviction_review_available_count', 0)} "
+        f"conviction_review_created={prediction_artifact_summary.get('conviction_review_created_count', 0)} "
+        f"conviction_review_reused={prediction_artifact_summary.get('conviction_review_reused_count', 0)} "
+        f"risk_ready_handoff_available={prediction_artifact_summary.get('risk_ready_handoff_available_count', 0)} "
+        f"risk_ready_handoff_created={prediction_artifact_summary.get('risk_ready_handoff_created_count', 0)} "
+        f"risk_ready_handoff_reused={prediction_artifact_summary.get('risk_ready_handoff_reused_count', 0)} "
+        f"artifact_blocked={prediction_artifact_summary.get('prediction_artifact_blocked_count', 0)} "
+        f"prediction_artifact_reason_codes={','.join(prediction_artifact_summary.get('prediction_artifact_reason_codes') or []) or 'none'}"
+    )
     prediction_risk_summary = {
         'risk_route_expected': int(risk_route_expected),
         'risk_route_available': int(risk_route_available),
@@ -1813,6 +1993,10 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
             f"risk_route_reason_codes={','.join(list(dict.fromkeys(prediction_risk_reason_codes))) or 'none'}"
         ),
     }
+    if prediction_artifact_summary.get('risk_ready_handoff_created_count', 0) > 0:
+        prediction_risk_summary['risk_route_reason_codes'] = list(
+            dict.fromkeys(list(prediction_risk_summary.get('risk_route_reason_codes') or []) + ['PREDICTION_ARTIFACT_MISMATCH_RESOLVED'])
+        )
     prediction_risk_caution_summary = {
         'monitor_only_candidates': int(monitor_only_candidates),
         'risk_with_caution_eligible_count': int(risk_with_caution_eligible_count),
@@ -1908,6 +2092,8 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'prediction_intake_examples': prediction_intake_examples,
         'prediction_visibility_summary': prediction_visibility_summary,
         'prediction_visibility_examples': prediction_visibility_examples,
+        'prediction_artifact_summary': prediction_artifact_summary,
+        'prediction_artifact_examples': prediction_artifact_summary.get('prediction_artifact_examples', []),
         'prediction_risk_summary': prediction_risk_summary,
         'prediction_risk_examples': prediction_risk_examples,
         'prediction_risk_caution_summary': prediction_risk_caution_summary,
@@ -2034,6 +2220,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'prediction_intake_examples': handoff_diagnostics.get('prediction_intake_examples', []),
         'prediction_visibility_summary': handoff_diagnostics.get('prediction_visibility_summary', {}),
         'prediction_visibility_examples': handoff_diagnostics.get('prediction_visibility_examples', []),
+        'prediction_artifact_summary': handoff_diagnostics.get('prediction_artifact_summary', {}),
+        'prediction_artifact_examples': handoff_diagnostics.get('prediction_artifact_examples', []),
         'prediction_risk_summary': handoff_diagnostics.get('prediction_risk_summary', {}),
         'prediction_risk_examples': handoff_diagnostics.get('prediction_risk_examples', []),
         'prediction_risk_caution_summary': handoff_diagnostics.get('prediction_risk_caution_summary', {}),

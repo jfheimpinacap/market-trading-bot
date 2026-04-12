@@ -3348,6 +3348,12 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - agrega reason codes accionables (`PREDICTION_RISK_WITH_CAUTION_ELIGIBLE`, `..._PROMOTED`, `..._BLOCKED_BY_LOW_EDGE`, `..._BLOCKED_BY_WEAK_LINEAGE`, `..._BLOCKED_BY_POLICY_SIGNAL`, `..._NOT_IN_BAND`, `..._REUSED`).
   - Mission Control permite llegar únicamente a `risk_runtime_review` cuando el candidate `MONITOR_ONLY` cumple la regla de cautela y ya está `READY_FOR_RISK` en conviction review; no habilita paper execution directa ni relaja risk/policy/safety.
   - mantiene límites estrictos **REAL_READ_ONLY + PAPER_ONLY** y sin live trading real.
+- **Prompt 249** corrige mismatch de artefactos `PredictionIntakeCandidate -> PredictionConvictionReview -> RiskReadyPredictionHandoff` en el bridge prediction->risk:
+  - agrega `prediction_artifact_summary` + `prediction_artifact_examples` (máx 3) para diagnóstico explícito de expected/available/created/reused/bloqueado por artefacto.
+  - Mission Control materializa/reutiliza de forma conservadora `PredictionConvictionReview` y `RiskReadyPredictionHandoff` para candidatos visibles (sin bypass de risk/policy/safety y con dedupe natural).
+  - reason codes trazables: `PREDICTION_CONVICTION_REVIEW_{MISSING|CREATED|REUSED}`, `PREDICTION_RISK_READY_HANDOFF_{MISSING|CREATED|REUSED}`, `PREDICTION_ARTIFACT_MISMATCH_{RESOLVED|BLOCKED}`.
+  - export log ahora deja explícito si faltaba conviction review, si se creó/reusó conviction review/handoff y si `prediction_risk_summary` avanzó por resolver el mismatch.
+  - mantiene alcance observability-first, **REAL_READ_ONLY + PAPER_ONLY**, sin frontend, sin `/runtime`, sin paper execution directa ni live trading real.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.

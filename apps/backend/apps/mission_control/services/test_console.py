@@ -235,6 +235,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'prediction_intake_examples': list(funnel.get('prediction_intake_examples') or []),
             'prediction_visibility_summary': dict(funnel.get('prediction_visibility_summary') or {}),
             'prediction_visibility_examples': list(funnel.get('prediction_visibility_examples') or []),
+            'prediction_artifact_summary': dict(funnel.get('prediction_artifact_summary') or {}),
+            'prediction_artifact_examples': list(funnel.get('prediction_artifact_examples') or []),
             'prediction_risk_summary': dict(funnel.get('prediction_risk_summary') or {}),
             'prediction_risk_examples': list(funnel.get('prediction_risk_examples') or []),
             'prediction_risk_caution_summary': dict(funnel.get('prediction_risk_caution_summary') or {}),
@@ -273,6 +275,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     prediction_intake_examples = payload.get('prediction_intake_examples') or []
     prediction_visibility = payload.get('prediction_visibility_summary') or {}
     prediction_visibility_examples = payload.get('prediction_visibility_examples') or []
+    prediction_artifact = payload.get('prediction_artifact_summary') or {}
+    prediction_artifact_examples = payload.get('prediction_artifact_examples') or []
     prediction_risk = payload.get('prediction_risk_summary') or {}
     prediction_risk_examples = payload.get('prediction_risk_examples') or []
     prediction_risk_caution = payload.get('prediction_risk_caution_summary') or {}
@@ -406,6 +410,20 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         ),
         f"  prediction_visibility_reason_codes={','.join(prediction_visibility.get('prediction_visibility_reason_codes') or []) or 'none'}",
         f"  prediction_visibility_examples={prediction_visibility_examples or []}",
+        'prediction_artifact_summary:',
+        (
+            f"  artifact_expected={prediction_artifact.get('prediction_artifact_expected_count', 0)} "
+            f"conviction_review_available={prediction_artifact.get('conviction_review_available_count', 0)} "
+            f"conviction_review_created={prediction_artifact.get('conviction_review_created_count', 0)} "
+            f"conviction_review_reused={prediction_artifact.get('conviction_review_reused_count', 0)} "
+            f"risk_ready_handoff_available={prediction_artifact.get('risk_ready_handoff_available_count', 0)} "
+            f"risk_ready_handoff_created={prediction_artifact.get('risk_ready_handoff_created_count', 0)} "
+            f"risk_ready_handoff_reused={prediction_artifact.get('risk_ready_handoff_reused_count', 0)} "
+            f"artifact_blocked={prediction_artifact.get('prediction_artifact_blocked_count', 0)}"
+        ),
+        f"  prediction_artifact_reason_codes={','.join(prediction_artifact.get('prediction_artifact_reason_codes') or []) or 'none'}",
+        f"  prediction_artifact_summary={prediction_artifact.get('prediction_artifact_summary') or ''}",
+        f"  prediction_artifact_examples={prediction_artifact_examples or []}",
         'prediction_risk_summary:',
         (
             f"  risk_route_expected={prediction_risk.get('risk_route_expected', 0)} "

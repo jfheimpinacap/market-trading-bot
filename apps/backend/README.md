@@ -4447,6 +4447,12 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
     - `risk_with_caution_reason_codes`, `runtime_ready_threshold`, `caution_band`, `risk_with_caution_summary`.
   - reason codes compactos de decisión: `PREDICTION_RISK_WITH_CAUTION_ELIGIBLE`, `..._PROMOTED`, `..._BLOCKED_BY_LOW_EDGE`, `..._BLOCKED_BY_WEAK_LINEAGE`, `..._BLOCKED_BY_POLICY_SIGNAL`, `..._NOT_IN_BAND`, `..._REUSED`.
   - el bridge Mission Control sólo habilita llegada a `risk_runtime_review` (no paper execution directa), mantiene dedupe, conserva guardrails de risk/policy/safety y sigue en **REAL_READ_ONLY + PAPER_ONLY** sin live trading real.
+- **Prompt 249 (repair artifact mismatch prediction->risk):**
+  - agrega diagnóstico compacto `prediction_artifact_summary` + `prediction_artifact_examples` para el tramo `PredictionIntakeCandidate -> PredictionConvictionReview -> RiskReadyPredictionHandoff`.
+  - métricas explícitas: expected/available/created/reused de conviction review y risk-ready handoff, más `prediction_artifact_blocked_count` y reason codes de mismatch.
+  - Mission Control ejecuta un adapter conservador que materializa/reutiliza artefactos faltantes para candidatos visibles antes del precheck de risk route, sin bypass de safety/policy/risk ni promoción masiva.
+  - `prediction_risk_summary` ahora puede reflejar avance por resolución de mismatch (`PREDICTION_ARTIFACT_MISMATCH_RESOLVED`) y el export log expone la verdad operacional de created vs reused por artefacto.
+  - límites intactos: observability-first, `REAL_READ_ONLY + PAPER_ONLY`, sin frontend, sin `/runtime`, sin live trading real ni ejecución paper directa.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`
