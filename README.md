@@ -3371,6 +3371,10 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - nuevo `paper_execution_visibility_summary` + `paper_execution_visibility_examples` (máx 3) con conteos `created/reused/visible/hidden`, reason codes y trazabilidad por `risk_decision_id`/`execution_candidate_id`.
   - reason codes compactos para distinguir: visible real, hidden por ventana/status, created/reused no contados y mismatch de source model (`AutonomousExecutionReadiness` vs `AutonomousExecutionIntakeCandidate`).
   - el export log del Test Console agrega bloque explícito de visibilidad para explicar el caso “route OK pero `paper_execution_candidates=0`”.
+- **Prompt 257** cierra el tramo final `AutonomousExecutionReadiness -> candidate visible` sin abrir ejecución monetaria:
+  - agrega `execution_artifact_summary` + `execution_artifact_examples` (máx 3) para distinguir readiness creado/reusado, candidate visible creado/reusado, hidden y bloqueos reales de artifact mismatch.
+  - cuando existe readiness elegible pero falta `AutonomousExecutionIntakeCandidate`, Mission Control materializa de forma conservadora un candidate paper-only (`dispatch_enabled=false`) para resolver el mismatch de modelo sin forzar fills/trades.
+  - `handoff_summary.paper_execution_candidates` queda alineado con `execution_candidate_visible_count` downstream, manteniendo observability-first, `REAL_READ_ONLY` y `PAPER_ONLY`.
   - sigue observability-first, backend-only y **REAL_READ_ONLY + PAPER_ONLY**; no abre candidate->fill ni live trading real.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.

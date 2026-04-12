@@ -3338,7 +3338,74 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         self.assertEqual(diagnostics.get('paper_execution_visible_count'), 0)
         self.assertEqual(diagnostics.get('paper_execution_hidden_count'), 1)
-        self.assertIn('PAPER_EXECUTION_HIDDEN_BY_STATUS_FILTER', diagnostics.get('paper_execution_visibility_reason_codes', []))
+        self.assertIn('PAPER_EXECUTION_CANDIDATE_HIDDEN_BY_STATUS', diagnostics.get('paper_execution_visibility_reason_codes', []))
+
+    def test_paper_execution_bridge_materializes_candidate_from_readiness(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import AutonomousExecutionIntakeCandidate
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-execution-bridge-materialize')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.8100'),
+            readiness_summary='bridge-materialize',
+            readiness_reason_codes=['READY_FOR_BRIDGE'],
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertTrue(AutonomousExecutionIntakeCandidate.objects.filter(linked_execution_readiness=readiness).exists())
+        self.assertEqual(diagnostics.get('paper_execution_candidates'), 1)
+        self.assertEqual(diagnostics.get('execution_candidate_visible_count'), 1)
+        self.assertEqual(diagnostics.get('execution_candidate_created_count'), 1)
+        self.assertIn('PAPER_EXECUTION_CANDIDATE_CREATED', diagnostics.get('execution_artifact_reason_codes', []))
+        self.assertIn('PAPER_EXECUTION_ARTIFACT_MISMATCH_RESOLVED', diagnostics.get('execution_artifact_reason_codes', []))
+
+    def test_paper_execution_artifact_summary_marks_model_mismatch_when_still_missing(self):
+        from unittest.mock import patch
+
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-execution-bridge-mismatch')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.7000'),
+            readiness_summary='bridge-mismatch',
+            readiness_reason_codes=['READY_FOR_BRIDGE'],
+        )
+
+        with patch('apps.mission_control.services.live_paper_autonomy_funnel._ensure_execution_candidates_for_readiness', return_value={}):
+            diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertEqual(diagnostics.get('execution_candidate_visible_count'), 0)
+        self.assertGreaterEqual(diagnostics.get('execution_artifact_blocked_count', 0), 1)
+        self.assertIn('PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH', diagnostics.get('execution_artifact_reason_codes', []))
+
+    def test_handoff_paper_execution_candidates_align_with_execution_candidate_visible(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-execution-handoff-alignment')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.7800'),
+            readiness_summary='handoff-alignment',
+            readiness_reason_codes=['READY_FOR_BRIDGE'],
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertEqual(
+            diagnostics.get('paper_execution_candidates'),
+            diagnostics.get('execution_candidate_visible_count'),
+        )
 
     def test_prediction_intake_missing_required_fields_is_explicit(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
@@ -5334,6 +5401,9 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('paper_execution_visibility_summary:', text_payload)
         self.assertIn('paper_execution_visibility_reason_codes=', text_payload)
         self.assertIn('paper_execution_visibility_examples=', text_payload)
+        self.assertIn('execution_artifact_summary:', text_payload)
+        self.assertIn('execution_artifact_reason_codes=', text_payload)
+        self.assertIn('execution_artifact_examples=', text_payload)
         self.assertIn('handoff_structural_summary:', text_payload)
         self.assertIn('structural_reason_codes=', text_payload)
         self.assertIn('handoff_structural_examples=', text_payload)

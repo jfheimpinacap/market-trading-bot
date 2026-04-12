@@ -4476,6 +4476,12 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - reason codes operacionales: `PAPER_EXECUTION_VISIBLE_IN_FUNNEL`, `...HIDDEN_BY_WINDOW`, `...HIDDEN_BY_STATUS_FILTER`, `...CREATED_BUT_NOT_COUNTED`, `...REUSED_BUT_NOT_COUNTED`, `...SOURCE_MODEL_MISMATCH`.
   - Test Console export (`text/json`) incluye sección compacta `paper_execution_visibility_summary` para explicar explícitamente “route OK pero candidates=0”.
   - sin cambios en frontend/runtime, sin forzar ejecución final, y manteniendo límites `REAL_READ_ONLY + PAPER_ONLY`.
+- **Prompt 257 (repair final artifact mismatch readiness -> candidate visible):**
+  - añade `execution_artifact_summary` + `execution_artifact_examples` (máx 3) para distinguir claramente readiness (`created/reused`) de execution candidate (`created/reused/visible/hidden`) y bloqueos reales.
+  - Mission Control agrega bridge conservador: cuando hay `AutonomousExecutionReadiness` elegible sin `AutonomousExecutionIntakeCandidate`, materializa candidate paper-only (`dispatch_enabled=false`) sin abrir fill/trade settlement.
+  - `handoff_summary.paper_execution_candidates` queda alineado con `execution_candidate_visible_count` downstream.
+  - reason codes explícitos del tramo final: `PAPER_EXECUTION_CANDIDATE_CREATED|REUSED`, `PAPER_EXECUTION_ARTIFACT_MISMATCH_RESOLVED|BLOCKED`, `PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH`, `...HIDDEN_BY_STATUS`, `...HIDDEN_BY_WINDOW`.
+  - mantiene observability-first, `REAL_READ_ONLY + PAPER_ONLY`, sin tocar frontend ni `/runtime`.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

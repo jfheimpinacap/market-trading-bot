@@ -243,6 +243,19 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
                 'paper_execution_visibility_summary': str(funnel.get('paper_execution_visibility_summary') or ''),
             },
             'paper_execution_visibility_examples': list(funnel.get('paper_execution_visibility_examples') or []),
+            'execution_artifact_summary': {
+                'execution_readiness_available_count': int(funnel.get('execution_readiness_available_count') or 0),
+                'readiness_created': int(funnel.get('execution_readiness_created_count') or 0),
+                'readiness_reused': int(funnel.get('execution_readiness_reused_count') or 0),
+                'candidate_created': int(funnel.get('execution_candidate_created_count') or 0),
+                'candidate_reused': int(funnel.get('execution_candidate_reused_count') or 0),
+                'candidate_visible': int(funnel.get('execution_candidate_visible_count') or 0),
+                'candidate_hidden': int(funnel.get('execution_candidate_hidden_count') or 0),
+                'execution_artifact_blocked_count': int(funnel.get('execution_artifact_blocked_count') or 0),
+                'execution_artifact_reason_codes': list(funnel.get('execution_artifact_reason_codes') or []),
+                'execution_artifact_summary': str(funnel.get('execution_artifact_summary') or ''),
+            },
+            'execution_artifact_examples': list(funnel.get('execution_artifact_examples') or []),
             'shortlist_handoff_summary': dict(funnel.get('shortlist_handoff_summary') or {}),
             'downstream_route_summary': dict(funnel.get('downstream_route_summary') or {}),
             'downstream_route_examples': list(funnel.get('downstream_route_examples') or []),
@@ -287,6 +300,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     paper_execution_examples = payload.get('paper_execution_examples') or []
     paper_execution_visibility = payload.get('paper_execution_visibility_summary') or {}
     paper_execution_visibility_examples = payload.get('paper_execution_visibility_examples') or []
+    execution_artifact = payload.get('execution_artifact_summary') or {}
+    execution_artifact_examples = payload.get('execution_artifact_examples') or []
     shortlist_handoff = payload.get('shortlist_handoff_summary') or {}
     downstream_route = payload.get('downstream_route_summary') or {}
     downstream_route_examples = payload.get('downstream_route_examples') or []
@@ -367,6 +382,22 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"{','.join(paper_execution_visibility.get('paper_execution_visibility_reason_codes') or []) or 'none'}"
         ),
         f"  paper_execution_visibility_examples={paper_execution_visibility_examples or []}",
+        'execution_artifact_summary:',
+        (
+            f"  execution_readiness_available_count={execution_artifact.get('execution_readiness_available_count', 0)} "
+            f"readiness_created={execution_artifact.get('readiness_created', 0)} "
+            f"readiness_reused={execution_artifact.get('readiness_reused', 0)} "
+            f"candidate_created={execution_artifact.get('candidate_created', 0)} "
+            f"candidate_reused={execution_artifact.get('candidate_reused', 0)} "
+            f"candidate_visible={execution_artifact.get('candidate_visible', 0)} "
+            f"candidate_hidden={execution_artifact.get('candidate_hidden', 0)} "
+            f"execution_artifact_blocked_count={execution_artifact.get('execution_artifact_blocked_count', 0)}"
+        ),
+        (
+            f"  execution_artifact_reason_codes="
+            f"{','.join(execution_artifact.get('execution_artifact_reason_codes') or []) or 'none'}"
+        ),
+        f"  execution_artifact_examples={execution_artifact_examples or []}",
         'shortlist_handoff_summary:',
         (
             f"  shortlisted_signals={shortlist_handoff.get('shortlisted_signals', 0)} "
