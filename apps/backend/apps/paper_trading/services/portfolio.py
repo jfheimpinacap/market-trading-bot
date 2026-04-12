@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 
@@ -8,6 +8,12 @@ from apps.paper_trading.services.valuation import quantize_money, revalue_accoun
 DEFAULT_ACCOUNT_SLUG = 'demo-paper-account'
 DEFAULT_ACCOUNT_NAME = 'Demo Paper Account'
 DEFAULT_INITIAL_BALANCE = Decimal('10000.00')
+SUMMARY_STATUS_OK = 'PAPER_ACCOUNT_SUMMARY_OK'
+SUMMARY_STATUS_DEGRADED = 'PAPER_ACCOUNT_SUMMARY_DEGRADED'
+SUMMARY_STATUS_UNAVAILABLE = 'PAPER_ACCOUNT_SUMMARY_UNAVAILABLE'
+
+REASON_FIELD_FALLBACK_USED = 'PAPER_ACCOUNT_FIELD_FALLBACK_USED'
+REASON_FIELD_MISSING = 'PAPER_ACCOUNT_FIELD_MISSING'
 
 
 @transaction.atomic
@@ -36,6 +42,65 @@ def get_active_account() -> PaperAccount:
         return account
     account, _ = ensure_demo_account()
     return account
+
+
+def _to_decimal(value: object) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return quantize_money(Decimal(str(value)))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+
+def _resolve_field(account: PaperAccount, primary: str, alternates: tuple[str, ...]) -> tuple[Decimal | None, str | None]:
+    value = _to_decimal(getattr(account, primary, None))
+    if value is not None:
+        return value, None
+    for name in alternates:
+        fallback = _to_decimal(getattr(account, name, None))
+        if fallback is not None:
+            return fallback, REASON_FIELD_FALLBACK_USED
+    return None, REASON_FIELD_MISSING
+
+
+def build_account_financial_summary(*, account: PaperAccount) -> dict:
+    """
+    Resolve account balances defensively across minor schema/property differences.
+    """
+    reasons: list[str] = []
+    status = SUMMARY_STATUS_OK
+
+    cash, cash_reason = _resolve_field(account, 'cash_balance', ('cash',))
+    realized, realized_reason = _resolve_field(account, 'realized_pnl', ('realized',))
+    unrealized, unrealized_reason = _resolve_field(account, 'unrealized_pnl', ('unrealized',))
+    equity, equity_reason = _resolve_field(account, 'equity', ('equity_value', 'portfolio_value'))
+
+    for reason in (cash_reason, realized_reason, unrealized_reason, equity_reason):
+        if reason:
+            reasons.append(reason)
+
+    if equity is None and cash is not None:
+        total_market_value = Decimal('0.00')
+        for position in account.positions.all():
+            total_market_value += _to_decimal(getattr(position, 'market_value', None)) or Decimal('0.00')
+        equity = quantize_money(cash + total_market_value)
+        reasons.append(REASON_FIELD_FALLBACK_USED)
+
+    unique_reasons = list(dict.fromkeys(reasons))
+    if unique_reasons:
+        status = SUMMARY_STATUS_DEGRADED
+    if cash is None and equity is None and realized is None and unrealized is None:
+        status = SUMMARY_STATUS_UNAVAILABLE
+
+    return {
+        'cash': cash,
+        'equity': equity,
+        'realized_pnl': realized,
+        'unrealized_pnl': unrealized,
+        'summary_status': status,
+        'reason_codes': unique_reasons,
+    }
 
 
 @transaction.atomic

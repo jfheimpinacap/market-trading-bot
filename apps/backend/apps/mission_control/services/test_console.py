@@ -26,7 +26,7 @@ from apps.mission_control.services.live_paper_trial_trend import build_live_pape
 from apps.mission_control.services.live_paper_validation import build_live_paper_validation_digest
 from apps.mission_control.services.session_heartbeat import get_runner_state, pause_runner
 from apps.mission_control.services.session_runtime import pause_session
-from apps.paper_trading.services.portfolio import build_account_summary, get_active_account
+from apps.paper_trading.services.portfolio import build_account_financial_summary, build_account_summary, get_active_account
 from apps.research_agent.models import NarrativeSignal, NarrativeSignalStatus, SourceScanRun
 from apps.research_agent.services.intelligence_handoff.run import run_consensus_review
 from apps.research_agent.services.pursuit_scoring.run import run_pursuit_review
@@ -134,14 +134,17 @@ def _find_active_preset_session(*, preset_name: str) -> AutonomousRuntimeSession
 def _build_portfolio_summary() -> dict[str, Any]:
     account = get_active_account()
     summary = build_account_summary(account=account)
+    financial = build_account_financial_summary(account=account)
     recent_trades = summary.get('recent_trades') or []
     return {
-        'cash': _to_float(account.cash_balance),
-        'equity': _to_float(account.equity),
-        'realized_pnl': _to_float(account.realized_pnl),
-        'unrealized_pnl': _to_float(account.unrealized_pnl),
+        'cash': _to_float(financial.get('cash')),
+        'equity': _to_float(financial.get('equity')),
+        'realized_pnl': _to_float(financial.get('realized_pnl')),
+        'unrealized_pnl': _to_float(financial.get('unrealized_pnl')),
         'open_positions': int(summary.get('open_positions_count') or 0),
         'recent_trades_count': len(recent_trades),
+        'account_summary_status': str(financial.get('summary_status') or 'PAPER_ACCOUNT_SUMMARY_UNAVAILABLE'),
+        'account_summary_reason_codes': list(financial.get('reason_codes') or []),
     }
 
 
@@ -465,6 +468,10 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         'portfolio_summary:',
         f"  cash={portfolio.get('cash')} equity={portfolio.get('equity')} realized_pnl={portfolio.get('realized_pnl')} unrealized_pnl={portfolio.get('unrealized_pnl')}",
         f"  open_positions={portfolio.get('open_positions')} recent_trades_count={portfolio.get('recent_trades_count')}",
+        (
+            f"  account_summary_status={portfolio.get('account_summary_status')} "
+            f"account_summary_reason_codes={','.join(portfolio.get('account_summary_reason_codes') or []) or 'none'}"
+        ),
         f"reason_codes: {', '.join(payload.get('reason_codes') or []) or 'none'}",
         f"blockers: {', '.join(blockers) or 'none'}",
         f"warnings: {len(warnings)}",

@@ -1,5 +1,6 @@
 from decimal import Decimal
 from io import StringIO
+from types import SimpleNamespace
 
 from django.core.management import call_command
 from django.test import TestCase
@@ -17,6 +18,7 @@ from apps.paper_trading.models import (
 )
 from apps.paper_trading.services.execution import execute_paper_trade
 from apps.paper_trading.services.portfolio import ensure_demo_account, get_active_account
+from apps.paper_trading.services.portfolio import build_account_financial_summary
 from apps.paper_trading.services.valuation import PaperTradingRejectionError, revalue_account
 
 
@@ -122,6 +124,30 @@ class PaperTradingServiceTests(TestCase):
         self.assertEqual(position.unrealized_pnl, Decimal('100.00'))
         self.assertEqual(self.account.unrealized_pnl, Decimal('100.00'))
         self.assertEqual(self.account.equity, Decimal('10100.00'))
+
+    def test_account_financial_summary_uses_fallback_when_primary_field_missing(self):
+        self.account.equity = None
+        self.account.portfolio_value = Decimal('10321.12')
+
+        summary = build_account_financial_summary(account=self.account)
+
+        self.assertEqual(summary['equity'], Decimal('10321.12'))
+        self.assertEqual(summary['summary_status'], 'PAPER_ACCOUNT_SUMMARY_DEGRADED')
+        self.assertIn('PAPER_ACCOUNT_FIELD_FALLBACK_USED', summary['reason_codes'])
+
+    def test_account_financial_summary_marks_unavailable_when_all_key_fields_missing(self):
+        empty_account = SimpleNamespace(
+            cash_balance=None,
+            equity=None,
+            realized_pnl=None,
+            unrealized_pnl=None,
+            positions=SimpleNamespace(all=lambda: []),
+        )
+
+        summary = build_account_financial_summary(account=empty_account)
+
+        self.assertEqual(summary['summary_status'], 'PAPER_ACCOUNT_SUMMARY_UNAVAILABLE')
+        self.assertIn('PAPER_ACCOUNT_FIELD_MISSING', summary['reason_codes'])
 
 
     def test_buy_trade_allowed_on_real_read_only_market_with_pricing(self):

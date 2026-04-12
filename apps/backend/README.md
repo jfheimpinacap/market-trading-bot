@@ -1036,6 +1036,12 @@ Current paper trading workflows:
 - immediate demo trade execution via `POST /api/paper/trades/`
 - mark-to-market refresh via `refresh_paper_portfolio` or `POST /api/paper/revalue/`
 - account summary and exposure inspection via read endpoints and Django admin
+- schema-compatible account financial summary resolution for `PaperAccount` fields (with explicit degraded/unavailable diagnostics instead of opaque crashes)
+
+Paper account summary diagnostics (used by mission-control test console and risk intake context):
+- `PAPER_ACCOUNT_SUMMARY_OK`
+- `PAPER_ACCOUNT_SUMMARY_DEGRADED` (fallback field path used and/or partial data)
+- `PAPER_ACCOUNT_SUMMARY_UNAVAILABLE` (required financial fields unavailable)
 
 Current paper trading endpoints:
 - `/api/paper/account/`
