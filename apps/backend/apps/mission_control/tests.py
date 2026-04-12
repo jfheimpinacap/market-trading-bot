@@ -2901,6 +2901,124 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
             is_active=True,
         )
 
+    def _risk_decision(self, *, market, approval_status: str, created_at=None):
+        from apps.prediction_agent.models import (
+            PredictionConvictionBucket,
+            PredictionConvictionReview,
+            PredictionConvictionReviewStatus,
+            PredictionIntakeCandidate,
+            PredictionIntakeRun,
+            PredictionIntakeStatus,
+            RiskReadyPredictionHandoffStatus,
+            RiskReadyPredictionHandoff,
+        )
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+        from apps.risk_agent.models import RiskApprovalDecision, RiskRuntimeCandidate, RiskRuntimeRun
+
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            structural_status=ResearchStructuralStatus.PREDICTION_READY,
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run,
+            linked_assessment=assessment,
+            linked_market=market,
+            score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION,
+        )
+        handoff = PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.READY,
+            handoff_confidence=Decimal('0.7800'),
+        )
+        intake_run = PredictionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        intake_candidate = PredictionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_prediction_handoff_candidate=handoff,
+            intake_status=PredictionIntakeStatus.READY_FOR_RUNTIME,
+            handoff_confidence=Decimal('0.7800'),
+            narrative_priority=Decimal('0.7200'),
+            structural_priority=Decimal('0.7100'),
+        )
+        review = PredictionConvictionReview.objects.create(
+            linked_intake_candidate=intake_candidate,
+            system_probability=Decimal('0.6200'),
+            market_probability=Decimal('0.5000'),
+            calibrated_probability=Decimal('0.6200'),
+            raw_edge=Decimal('0.1200'),
+            adjusted_edge=Decimal('0.1200'),
+            confidence=Decimal('0.7900'),
+            uncertainty=Decimal('0.2100'),
+            conviction_bucket=PredictionConvictionBucket.MEDIUM_CONVICTION,
+            review_status=PredictionConvictionReviewStatus.READY_FOR_RISK,
+            reason_codes=['SEEDED_FOR_PAPER_EXECUTION_DIAGNOSTICS'],
+        )
+        risk_handoff = RiskReadyPredictionHandoff.objects.create(
+            linked_market=market,
+            linked_conviction_review=review,
+            handoff_status=RiskReadyPredictionHandoffStatus.READY,
+            handoff_confidence=Decimal('0.7900'),
+            handoff_summary='seeded for diagnostics',
+            handoff_reason_codes=['SEEDED_FOR_PAPER_EXECUTION_DIAGNOSTICS'],
+        )
+        runtime_run = RiskRuntimeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        runtime_candidate = RiskRuntimeCandidate.objects.create(
+            runtime_run=runtime_run,
+            linked_risk_ready_prediction_handoff=risk_handoff,
+            linked_prediction_conviction_review=review,
+            linked_prediction_intake_candidate=intake_candidate,
+            linked_market=market,
+            market_provider=market.provider.slug,
+            category=market.category or '',
+            calibrated_probability=Decimal('0.6200'),
+            market_probability=Decimal('0.5000'),
+            adjusted_edge=Decimal('0.1200'),
+            intake_status='READY_FOR_RISK_RUNTIME',
+            confidence_score=Decimal('0.7900'),
+            uncertainty_score=Decimal('0.2100'),
+            conviction_bucket='MEDIUM',
+            portfolio_pressure_state='LOW',
+            context_summary='seeded-for-paper-execution-diagnostics',
+            reason_codes=['SEEDED_FOR_PAPER_EXECUTION_DIAGNOSTICS'],
+            evidence_quality_score=Decimal('0.7100'),
+            precedent_caution_score=Decimal('0.2000'),
+            linked_portfolio_context={},
+            linked_feedback_context={},
+            market_liquidity_context={},
+            predicted_status='READY',
+            metadata={'paper_demo_only': True},
+        )
+        decision = RiskApprovalDecision.objects.create(
+            linked_candidate=runtime_candidate,
+            approval_status=approval_status,
+            approval_confidence=Decimal('0.7300'),
+            approval_summary='seeded-for-paper-execution-diagnostics',
+            approval_rationale='seeded-for-paper-execution-diagnostics',
+            reason_codes=['SEEDED_FOR_PAPER_EXECUTION_DIAGNOSTICS'],
+            blockers=[],
+            risk_score=Decimal('0.2500'),
+            max_allowed_exposure=Decimal('100.00'),
+            watch_required=False,
+            metadata={'paper_demo_only': True},
+        )
+        if created_at is not None:
+            RiskApprovalDecision.objects.filter(id=decision.id).update(created_at=created_at)
+            decision.refresh_from_db()
+        return decision
+
     def test_shortlist_present_without_pursuit_attempt_reports_no_downstream_route(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
 
@@ -3087,6 +3205,60 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         summary = diagnostics.get('prediction_intake_summary') or {}
         self.assertEqual(summary.get('prediction_intake_attempted'), 0)
         self.assertIn('PREDICTION_INTAKE_ROUTE_MISSING', summary.get('prediction_intake_reason_codes', []))
+
+    def test_paper_execution_summary_marks_non_routable_risk_decision(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.risk_agent.models import RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-execution-non-routable')
+        self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.BLOCKED)
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        summary = diagnostics.get('paper_execution_summary') or ''
+        codes = diagnostics.get('paper_execution_route_reason_codes') or []
+        self.assertIn('route_missing_status_count=1', summary)
+        self.assertIn('PAPER_EXECUTION_STATUS_FILTER_REJECTED', codes)
+        self.assertEqual(diagnostics.get('paper_execution_route_expected'), 0)
+
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel._is_paper_execution_handler_available', return_value=False)
+    def test_paper_execution_summary_marks_route_missing_when_handler_unavailable(self, _mock_handler):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.risk_agent.models import RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-execution-route-missing')
+        self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        codes = diagnostics.get('paper_execution_route_reason_codes') or []
+        self.assertEqual(diagnostics.get('paper_execution_route_expected'), 1)
+        self.assertEqual(diagnostics.get('paper_execution_route_available'), 0)
+        self.assertIn('PAPER_EXECUTION_NO_ELIGIBLE_HANDLER', codes)
+
+    def test_paper_execution_summary_marks_reused_existing_candidate(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-execution-reuse')
+        decision = self._risk_decision(
+            market=market,
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+            created_at=timezone.now() - timedelta(minutes=30),
+        )
+        AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.7400'),
+            readiness_summary='seeded-for-reuse',
+            readiness_reason_codes=['SEEDED_FOR_REUSE'],
+        )
+        AutonomousExecutionReadiness.objects.filter(linked_approval_review=decision).update(created_at=timezone.now() - timedelta(hours=2))
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        codes = diagnostics.get('paper_execution_route_reason_codes') or []
+        self.assertEqual(diagnostics.get('paper_execution_route_reused'), 1)
+        self.assertEqual(diagnostics.get('paper_execution_route_created'), 0)
+        self.assertIn('PAPER_EXECUTION_REUSED_EXISTING_CANDIDATE', codes)
 
     def test_prediction_intake_missing_required_fields_is_explicit(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
@@ -5076,6 +5248,9 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('prediction_status_reason_codes=', text_payload)
         self.assertIn('runtime_ready_threshold=', text_payload)
         self.assertIn('prediction_status_examples=', text_payload)
+        self.assertIn('paper_execution_summary:', text_payload)
+        self.assertIn('paper_execution_route_reason_codes=', text_payload)
+        self.assertIn('paper_execution_examples=', text_payload)
         self.assertIn('handoff_structural_summary:', text_payload)
         self.assertIn('structural_reason_codes=', text_payload)
         self.assertIn('handoff_structural_examples=', text_payload)

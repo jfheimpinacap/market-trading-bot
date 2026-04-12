@@ -3355,6 +3355,17 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - reason codes trazables: `PREDICTION_CONVICTION_REVIEW_{MISSING|CREATED|REUSED}`, `PREDICTION_RISK_READY_HANDOFF_{MISSING|CREATED|REUSED}`, `PREDICTION_ARTIFACT_MISMATCH_{RESOLVED|BLOCKED}`.
   - export log ahora deja explícito si faltaba conviction review, si se creó/reusó conviction review/handoff y si `prediction_risk_summary` avanzó por resolver el mismatch.
   - mantiene alcance observability-first, **REAL_READ_ONLY + PAPER_ONLY**, sin frontend, sin `/runtime`, sin paper execution directa ni live trading real.
+- **Prompt 253** agrega diagnóstico explícito del tramo `risk -> paper_execution` (sin reparar todavía el bridge):
+  - añade `paper_execution_summary` con métricas compactas: `route_expected`, `route_available`, `route_attempted`, `route_created`, `route_reused`, `route_blocked`, `route_missing_status_count`, `paper_execution_route_reason_codes`.
+  - añade `paper_execution_examples` (máx 3) con `risk_decision_id`, `market_id`, `decision_status`, `expected_route`, `reason_code`, `blocking_stage`, `observed_value`, `threshold`.
+  - separa explícitamente la verdad operacional entre:
+    - risk decision no enrutable por status (`PAPER_EXECUTION_STATUS_FILTER_REJECTED`),
+    - route/handler faltante (`PAPER_EXECUTION_ROUTE_MISSING`, `PAPER_EXECUTION_NO_ELIGIBLE_HANDLER`),
+    - bloqueo por policy/safety/runtime,
+    - reuse/creación de candidate de execution (`PAPER_EXECUTION_REUSED_EXISTING_CANDIDATE`, `PAPER_EXECUTION_CREATED`),
+    - mismatch de artefacto (`PAPER_EXECUTION_ARTIFACT_MISMATCH`).
+  - integra el diagnóstico en el funnel snapshot y en el export del Test Console (`text/json`) sin logging paralelo.
+  - mantiene scope observability-first + **REAL_READ_ONLY + PAPER_ONLY**, sin frontend, sin `/runtime`, sin live trading real.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.
