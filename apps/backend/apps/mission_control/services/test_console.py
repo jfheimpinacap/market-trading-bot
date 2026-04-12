@@ -234,6 +234,15 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
                 'paper_execution_summary': str(funnel.get('paper_execution_summary') or ''),
             },
             'paper_execution_examples': list(funnel.get('paper_execution_examples') or []),
+            'paper_execution_visibility_summary': {
+                'created': int(funnel.get('paper_execution_created_count') or 0),
+                'reused': int(funnel.get('paper_execution_reused_count') or 0),
+                'visible': int(funnel.get('paper_execution_visible_count') or 0),
+                'hidden': int(funnel.get('paper_execution_hidden_count') or 0),
+                'paper_execution_visibility_reason_codes': list(funnel.get('paper_execution_visibility_reason_codes') or []),
+                'paper_execution_visibility_summary': str(funnel.get('paper_execution_visibility_summary') or ''),
+            },
+            'paper_execution_visibility_examples': list(funnel.get('paper_execution_visibility_examples') or []),
             'shortlist_handoff_summary': dict(funnel.get('shortlist_handoff_summary') or {}),
             'downstream_route_summary': dict(funnel.get('downstream_route_summary') or {}),
             'downstream_route_examples': list(funnel.get('downstream_route_examples') or []),
@@ -276,6 +285,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     handoff_summary = payload.get('handoff_summary') or {}
     paper_execution = payload.get('paper_execution_summary') or {}
     paper_execution_examples = payload.get('paper_execution_examples') or []
+    paper_execution_visibility = payload.get('paper_execution_visibility_summary') or {}
+    paper_execution_visibility_examples = payload.get('paper_execution_visibility_examples') or []
     shortlist_handoff = payload.get('shortlist_handoff_summary') or {}
     downstream_route = payload.get('downstream_route_summary') or {}
     downstream_route_examples = payload.get('downstream_route_examples') or []
@@ -344,6 +355,18 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"{','.join(paper_execution.get('paper_execution_route_reason_codes') or []) or 'none'}"
         ),
         f"  paper_execution_examples={paper_execution_examples or []}",
+        'paper_execution_visibility_summary:',
+        (
+            f"  created={paper_execution_visibility.get('created', 0)} "
+            f"reused={paper_execution_visibility.get('reused', 0)} "
+            f"visible={paper_execution_visibility.get('visible', 0)} "
+            f"hidden={paper_execution_visibility.get('hidden', 0)}"
+        ),
+        (
+            f"  paper_execution_visibility_reason_codes="
+            f"{','.join(paper_execution_visibility.get('paper_execution_visibility_reason_codes') or []) or 'none'}"
+        ),
+        f"  paper_execution_visibility_examples={paper_execution_visibility_examples or []}",
         'shortlist_handoff_summary:',
         (
             f"  shortlisted_signals={shortlist_handoff.get('shortlisted_signals', 0)} "

@@ -3236,6 +3236,7 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
 
     def test_paper_execution_summary_marks_reused_existing_candidate(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
         from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
 
         market = self._provider_and_market('paper-execution-reuse')
@@ -3252,13 +3253,92 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
             readiness_summary='seeded-for-reuse',
             readiness_reason_codes=['SEEDED_FOR_REUSE'],
         )
-        AutonomousExecutionReadiness.objects.filter(linked_approval_review=decision).update(created_at=timezone.now() - timedelta(hours=2))
+        readiness = AutonomousExecutionReadiness.objects.get(linked_approval_review=decision)
+        AutonomousExecutionReadiness.objects.filter(id=readiness.id).update(created_at=timezone.now() - timedelta(hours=2))
+        readiness.refresh_from_db()
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now() - timedelta(hours=2), completed_at=timezone.now())
+        intake = AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=readiness,
+            linked_approval_review=decision,
+            intake_status=AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+            readiness_confidence=Decimal('0.7200'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+        )
+        AutonomousExecutionIntakeCandidate.objects.filter(id=intake.id).update(created_at=timezone.now() - timedelta(minutes=10))
 
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         codes = diagnostics.get('paper_execution_route_reason_codes') or []
         self.assertEqual(diagnostics.get('paper_execution_route_reused'), 1)
         self.assertEqual(diagnostics.get('paper_execution_route_created'), 0)
         self.assertIn('PAPER_EXECUTION_REUSED_EXISTING_CANDIDATE', codes)
+        self.assertEqual(diagnostics.get('paper_execution_visible_count'), 1)
+        self.assertEqual(diagnostics.get('paper_execution_candidates'), 1)
+        self.assertIn('PAPER_EXECUTION_VISIBLE_IN_FUNNEL', diagnostics.get('paper_execution_visibility_reason_codes', []))
+
+    def test_paper_execution_visibility_created_candidate_is_counted_in_funnel(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-execution-created-visible')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.7600'),
+            readiness_summary='seeded-for-created-visible',
+            readiness_reason_codes=['SEEDED_FOR_CREATED_VISIBLE'],
+        )
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=readiness,
+            linked_approval_review=decision,
+            intake_status=AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+            readiness_confidence=Decimal('0.7600'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertEqual(diagnostics.get('paper_execution_created_count'), 1)
+        self.assertEqual(diagnostics.get('paper_execution_visible_count'), 1)
+        self.assertEqual(diagnostics.get('paper_execution_candidates'), 1)
+        self.assertEqual(diagnostics.get('paper_execution_route_created'), 1)
+
+    def test_paper_execution_visibility_surfaces_hidden_reasons(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-execution-hidden-status')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.6500'),
+            readiness_summary='seeded-for-hidden-status',
+            readiness_reason_codes=['SEEDED_FOR_HIDDEN_STATUS'],
+        )
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=readiness,
+            linked_approval_review=decision,
+            intake_status=AutonomousExecutionIntakeStatus.BLOCKED,
+            readiness_confidence=Decimal('0.6500'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertEqual(diagnostics.get('paper_execution_visible_count'), 0)
+        self.assertEqual(diagnostics.get('paper_execution_hidden_count'), 1)
+        self.assertIn('PAPER_EXECUTION_HIDDEN_BY_STATUS_FILTER', diagnostics.get('paper_execution_visibility_reason_codes', []))
 
     def test_prediction_intake_missing_required_fields_is_explicit(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
@@ -5251,6 +5331,9 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('paper_execution_summary:', text_payload)
         self.assertIn('paper_execution_route_reason_codes=', text_payload)
         self.assertIn('paper_execution_examples=', text_payload)
+        self.assertIn('paper_execution_visibility_summary:', text_payload)
+        self.assertIn('paper_execution_visibility_reason_codes=', text_payload)
+        self.assertIn('paper_execution_visibility_examples=', text_payload)
         self.assertIn('handoff_structural_summary:', text_payload)
         self.assertIn('structural_reason_codes=', text_payload)
         self.assertIn('handoff_structural_examples=', text_payload)

@@ -10,7 +10,7 @@ from django.db.models import Sum
 from django.conf import settings
 from django.utils import timezone
 
-from apps.autonomous_trader.models import AutonomousTradeCycleRun
+from apps.autonomous_trader.models import AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeStatus, AutonomousTradeCycleRun
 from apps.autonomous_trader.services.execution_intake.run import run_execution_intake
 from apps.markets.models import Market
 from apps.mission_control.services.live_paper_bootstrap import PRESET_NAME
@@ -64,6 +64,7 @@ _RISK_PAPER_EXECUTION_ROUTE_NAME = 'execution_intake'
 _BORDERLINE_DECISION_SOURCE = 'mission_control_borderline_guardrail_v1'
 _PREDICTION_STATUS_EXAMPLES_LIMIT = 3
 _PREDICTION_RISK_CAUTION_EXAMPLES_LIMIT = 3
+_PAPER_EXECUTION_VISIBILITY_EXAMPLES_LIMIT = 3
 
 
 def _quantized(value: Decimal) -> str:
@@ -240,9 +241,53 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     route_reused = 0
     route_blocked = 0
     route_missing_status_count = 0
+    visibility_created_count = 0
+    visibility_reused_count = 0
+    visibility_visible_count = 0
+    visibility_hidden_count = 0
+    visibility_reason_codes: list[str] = []
+    visibility_examples: list[dict[str, Any]] = []
+    latest_readiness_by_decision_id: dict[int, AutonomousExecutionReadiness] = {}
+    latest_intake_by_readiness_id: dict[int, AutonomousExecutionIntakeCandidate] = {}
+    latest_intake_by_decision_id: dict[int, AutonomousExecutionIntakeCandidate] = {}
+
+    decision_ids = [int(decision.id) for decision in risk_rows]
+    if decision_ids:
+        readiness_rows = list(
+            AutonomousExecutionReadiness.objects.filter(linked_approval_review_id__in=decision_ids)
+            .select_related('linked_market', 'linked_approval_review')
+            .order_by('linked_approval_review_id', '-created_at', '-id')
+        )
+        for readiness in readiness_rows:
+            decision_id = int(getattr(readiness, 'linked_approval_review_id', 0) or 0)
+            if decision_id and decision_id not in latest_readiness_by_decision_id:
+                latest_readiness_by_decision_id[decision_id] = readiness
+
+        readiness_ids = [int(readiness.id) for readiness in latest_readiness_by_decision_id.values()]
+        if readiness_ids:
+            intake_rows = list(
+                AutonomousExecutionIntakeCandidate.objects.filter(linked_execution_readiness_id__in=readiness_ids)
+                .select_related('linked_execution_readiness', 'linked_approval_review', 'linked_market')
+                .order_by('linked_execution_readiness_id', '-created_at', '-id')
+            )
+            for intake in intake_rows:
+                readiness_id = int(getattr(intake, 'linked_execution_readiness_id', 0) or 0)
+                if readiness_id and readiness_id not in latest_intake_by_readiness_id:
+                    latest_intake_by_readiness_id[readiness_id] = intake
+
+        intake_by_decision_rows = list(
+            AutonomousExecutionIntakeCandidate.objects.filter(linked_approval_review_id__in=decision_ids)
+            .select_related('linked_execution_readiness', 'linked_approval_review', 'linked_market')
+            .order_by('linked_approval_review_id', '-created_at', '-id')
+        )
+        for intake in intake_by_decision_rows:
+            linked_decision_id = int(getattr(intake, 'linked_approval_review_id', 0) or 0)
+            if linked_decision_id and linked_decision_id not in latest_intake_by_decision_id:
+                latest_intake_by_decision_id[linked_decision_id] = intake
 
     for decision in risk_rows:
         decision_id = int(decision.id)
+        readiness: AutonomousExecutionReadiness | None = None
         market_id = _safe_int(getattr(decision.linked_candidate, 'linked_market_id', None))
         approval_status = str(decision.approval_status or '')
         decision_reason_codes = [str(code or '') for code in list(decision.reason_codes or []) if str(code or '').strip()]
@@ -280,8 +325,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             route_expected += 1
             route_available += 1
             reason_codes.append('PAPER_EXECUTION_ROUTE_AVAILABLE')
-            readiness_qs = AutonomousExecutionReadiness.objects.filter(linked_approval_review_id=decision.id).order_by('-created_at', '-id')
-            readiness = readiness_qs.first()
+            readiness = latest_readiness_by_decision_id.get(decision_id)
             if readiness is not None:
                 route_attempted += 1
                 if readiness.created_at >= window_start:
@@ -315,8 +359,88 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                     'threshold': threshold,
                 }
             )
+        if readiness is None:
+            continue
+
+        visibility_source = 'created' if readiness.created_at >= window_start else 'reused'
+        if visibility_source == 'created':
+            visibility_created_count += 1
+        else:
+            visibility_reused_count += 1
+        intake_candidate = latest_intake_by_readiness_id.get(int(readiness.id))
+        source_model = 'AutonomousExecutionIntakeCandidate'
+        source_stage = 'execution_intake'
+        status_value = ''
+        visibility_window = 'current_window' if visibility_source == 'created' else 'outside_window_reused'
+        visible_in_funnel = False
+        visibility_reason_code = ''
+
+        if intake_candidate is None:
+            intake_candidate = latest_intake_by_decision_id.get(decision_id)
+            if intake_candidate is None:
+                source_model = 'AutonomousExecutionReadiness'
+                source_stage = 'risk_execution_readiness'
+                visibility_reason_code = 'PAPER_EXECUTION_SOURCE_MODEL_MISMATCH'
+            else:
+                source_model = 'AutonomousExecutionIntakeCandidate'
+                source_stage = 'execution_intake'
+                status_value = str(intake_candidate.intake_status or '')
+                if intake_candidate.created_at < window_start:
+                    visibility_reason_code = 'PAPER_EXECUTION_HIDDEN_BY_WINDOW'
+                elif status_value in {
+                    AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+                    AutonomousExecutionIntakeStatus.READY_REDUCED,
+                    AutonomousExecutionIntakeStatus.WATCH_ONLY,
+                }:
+                    visible_in_funnel = True
+                    visibility_reason_code = 'PAPER_EXECUTION_VISIBLE_IN_FUNNEL'
+                else:
+                    visibility_reason_code = 'PAPER_EXECUTION_HIDDEN_BY_STATUS_FILTER'
+        else:
+            status_value = str(intake_candidate.intake_status or '')
+            if intake_candidate.created_at < window_start:
+                visibility_reason_code = 'PAPER_EXECUTION_HIDDEN_BY_WINDOW'
+            elif status_value in {
+                AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+                AutonomousExecutionIntakeStatus.READY_REDUCED,
+                AutonomousExecutionIntakeStatus.WATCH_ONLY,
+            }:
+                visible_in_funnel = True
+                visibility_reason_code = 'PAPER_EXECUTION_VISIBLE_IN_FUNNEL'
+            else:
+                visibility_reason_code = 'PAPER_EXECUTION_HIDDEN_BY_STATUS_FILTER'
+
+        if not visible_in_funnel and visibility_reason_code == 'PAPER_EXECUTION_SOURCE_MODEL_MISMATCH':
+            visibility_reason_codes.append(visibility_reason_code)
+            visibility_reason_codes.append(
+                'PAPER_EXECUTION_CREATED_BUT_NOT_COUNTED' if visibility_source == 'created' else 'PAPER_EXECUTION_REUSED_BUT_NOT_COUNTED'
+            )
+        else:
+            visibility_reason_codes.append(visibility_reason_code)
+
+        if visible_in_funnel:
+            visibility_visible_count += 1
+        else:
+            visibility_hidden_count += 1
+
+        if len(visibility_examples) < _PAPER_EXECUTION_VISIBILITY_EXAMPLES_LIMIT:
+            visibility_examples.append(
+                {
+                    'execution_candidate_id': _safe_int(getattr(intake_candidate, 'id', None)),
+                    'risk_decision_id': decision_id,
+                    'market_id': market_id,
+                    'source': visibility_source,
+                    'source_model': source_model,
+                    'source_stage': source_stage,
+                    'visible_in_funnel': bool(visible_in_funnel),
+                    'reason_code': visibility_reason_code,
+                    'visibility_window': visibility_window,
+                    'status': status_value or str(readiness.readiness_status or ''),
+                }
+            )
 
     normalized_codes = list(dict.fromkeys(reason_codes))
+    normalized_visibility_codes = list(dict.fromkeys([code for code in visibility_reason_codes if code]))
     return {
         'paper_execution_route_expected': int(route_expected),
         'paper_execution_route_available': int(route_available),
@@ -333,6 +457,19 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"paper_execution_route_reason_codes={','.join(normalized_codes) or 'none'}"
         ),
         'paper_execution_examples': examples,
+        'paper_execution_created_count': int(visibility_created_count),
+        'paper_execution_reused_count': int(visibility_reused_count),
+        'paper_execution_visible_count': int(visibility_visible_count),
+        'paper_execution_hidden_count': int(visibility_hidden_count),
+        'paper_execution_visibility_reason_codes': normalized_visibility_codes,
+        'paper_execution_visibility_summary': (
+            f"created={visibility_created_count} reused={visibility_reused_count} "
+            f"visible={visibility_visible_count} hidden={visibility_hidden_count} "
+            f"paper_execution_visibility_reason_codes={','.join(normalized_visibility_codes) or 'none'} "
+            "route_created means AutonomousExecutionReadiness persisted; "
+            "funnel visibility uses AutonomousExecutionIntakeCandidate in current window."
+        ),
+        'paper_execution_visibility_examples': visibility_examples,
     }
 
 
@@ -1033,7 +1170,6 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
     intake_run_qs = PredictionIntakeRun.objects.filter(created_at__gte=window_start)
     intake_candidate_qs = PredictionIntakeCandidate.objects.filter(created_at__gte=window_start)
     risk_qs = RiskApprovalDecision.objects.filter(created_at__gte=window_start)
-    paper_qs = AutonomousTradeCycleRun.objects.filter(started_at__gte=window_start)
 
     shortlisted_rows = list(
         shortlisted_qs.values('id', 'linked_market_id', 'target_market_id', 'topic', 'canonical_label', 'metadata')[:50]
@@ -1045,12 +1181,12 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
     intake_run_count = intake_run_qs.count()
     intake_candidate_count = intake_candidate_qs.count()
     risk_count = risk_qs.count()
-    paper_execution_count = paper_qs.count()
     risk_rows = list(
         risk_qs.select_related('linked_candidate')
         .order_by('-created_at', '-id')[:40]
     )
     paper_execution_summary = _build_paper_execution_diagnostics(risk_rows=risk_rows, window_start=window_start)
+    paper_execution_count = int(paper_execution_summary.get('paper_execution_visible_count') or 0)
 
     shortlist_market_ids = {
         market_id
@@ -2248,6 +2384,13 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'paper_execution_route_missing_status_count': paper_execution_summary.get('paper_execution_route_missing_status_count', 0),
         'paper_execution_route_reason_codes': paper_execution_summary.get('paper_execution_route_reason_codes', []),
         'paper_execution_examples': paper_execution_summary.get('paper_execution_examples', []),
+        'paper_execution_created_count': paper_execution_summary.get('paper_execution_created_count', 0),
+        'paper_execution_reused_count': paper_execution_summary.get('paper_execution_reused_count', 0),
+        'paper_execution_visible_count': paper_execution_summary.get('paper_execution_visible_count', 0),
+        'paper_execution_hidden_count': paper_execution_summary.get('paper_execution_hidden_count', 0),
+        'paper_execution_visibility_reason_codes': paper_execution_summary.get('paper_execution_visibility_reason_codes', []),
+        'paper_execution_visibility_summary': paper_execution_summary.get('paper_execution_visibility_summary', ''),
+        'paper_execution_visibility_examples': paper_execution_summary.get('paper_execution_visibility_examples', []),
     }
 
 
@@ -2386,6 +2529,13 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'paper_execution_route_missing_status_count': handoff_diagnostics.get('paper_execution_route_missing_status_count', 0),
         'paper_execution_route_reason_codes': handoff_diagnostics.get('paper_execution_route_reason_codes', []),
         'paper_execution_examples': handoff_diagnostics.get('paper_execution_examples', []),
+        'paper_execution_created_count': handoff_diagnostics.get('paper_execution_created_count', 0),
+        'paper_execution_reused_count': handoff_diagnostics.get('paper_execution_reused_count', 0),
+        'paper_execution_visible_count': handoff_diagnostics.get('paper_execution_visible_count', 0),
+        'paper_execution_hidden_count': handoff_diagnostics.get('paper_execution_hidden_count', 0),
+        'paper_execution_visibility_reason_codes': handoff_diagnostics.get('paper_execution_visibility_reason_codes', []),
+        'paper_execution_visibility_summary': handoff_diagnostics.get('paper_execution_visibility_summary', ''),
+        'paper_execution_visibility_examples': handoff_diagnostics.get('paper_execution_visibility_examples', []),
         'shortlisted_signals': handoff_diagnostics.get('shortlisted_signals', 0),
         'handoff_candidates': handoff_diagnostics.get('handoff_candidates', 0),
         'consensus_reviews': handoff_diagnostics.get('consensus_reviews', 0),
