@@ -11,6 +11,37 @@ class IntakeBuildResult:
     candidates: list[AutonomousExecutionIntakeCandidate]
 
 
+def resolve_intake_status_from_readiness(*, readiness: AutonomousExecutionReadiness) -> tuple[str, list[str], str]:
+    approval = readiness.linked_approval_review
+    approval_status = approval.approval_status if approval else ''
+    status = AutonomousExecutionIntakeStatus.INSUFFICIENT_CONTEXT
+    reason_codes = list(readiness.readiness_reason_codes or [])
+
+    if readiness.readiness_status == 'READY':
+        status = AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION
+    elif readiness.readiness_status == 'READY_REDUCED':
+        status = AutonomousExecutionIntakeStatus.READY_REDUCED
+    elif readiness.readiness_status == 'WATCH_ONLY':
+        status = AutonomousExecutionIntakeStatus.WATCH_ONLY
+    elif readiness.readiness_status == 'DEFERRED':
+        status = AutonomousExecutionIntakeStatus.DEFERRED
+    elif readiness.readiness_status == 'BLOCKED':
+        status = AutonomousExecutionIntakeStatus.BLOCKED
+
+    if approval_status == 'BLOCKED':
+        status = AutonomousExecutionIntakeStatus.BLOCKED
+        reason_codes.append('APPROVAL_BLOCKED')
+
+    if approval_status == 'NEEDS_REVIEW' and status in {
+        AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+        AutonomousExecutionIntakeStatus.READY_REDUCED,
+    }:
+        status = AutonomousExecutionIntakeStatus.INSUFFICIENT_CONTEXT
+        reason_codes.append('APPROVAL_NEEDS_REVIEW')
+
+    return status, reason_codes, approval_status
+
+
 def build_intake_candidates(*, run, limit: int = 25) -> IntakeBuildResult:
     readiness_rows = AutonomousExecutionReadiness.objects.select_related(
         'linked_market',
@@ -23,31 +54,7 @@ def build_intake_candidates(*, run, limit: int = 25) -> IntakeBuildResult:
     created: list[AutonomousExecutionIntakeCandidate] = []
     for readiness in readiness_rows:
         approval = readiness.linked_approval_review
-        approval_status = approval.approval_status if approval else ''
-        status = AutonomousExecutionIntakeStatus.INSUFFICIENT_CONTEXT
-        reason_codes = list(readiness.readiness_reason_codes or [])
-
-        if readiness.readiness_status == 'READY':
-            status = AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION
-        elif readiness.readiness_status == 'READY_REDUCED':
-            status = AutonomousExecutionIntakeStatus.READY_REDUCED
-        elif readiness.readiness_status == 'WATCH_ONLY':
-            status = AutonomousExecutionIntakeStatus.WATCH_ONLY
-        elif readiness.readiness_status == 'DEFERRED':
-            status = AutonomousExecutionIntakeStatus.DEFERRED
-        elif readiness.readiness_status == 'BLOCKED':
-            status = AutonomousExecutionIntakeStatus.BLOCKED
-
-        if approval_status == 'BLOCKED':
-            status = AutonomousExecutionIntakeStatus.BLOCKED
-            reason_codes.append('APPROVAL_BLOCKED')
-
-        if approval_status == 'NEEDS_REVIEW' and status in {
-            AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
-            AutonomousExecutionIntakeStatus.READY_REDUCED,
-        }:
-            status = AutonomousExecutionIntakeStatus.INSUFFICIENT_CONTEXT
-            reason_codes.append('APPROVAL_NEEDS_REVIEW')
+        status, reason_codes, approval_status = resolve_intake_status_from_readiness(readiness=readiness)
 
         created.append(
             AutonomousExecutionIntakeCandidate.objects.create(
