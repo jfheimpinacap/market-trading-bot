@@ -222,6 +222,18 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
                 'paper_execution_candidates': int(funnel.get('paper_execution_candidates') or 0),
                 'handoff_reason_codes': list(funnel.get('handoff_reason_codes') or []),
             },
+            'paper_execution_summary': {
+                'route_expected': int(funnel.get('paper_execution_route_expected') or 0),
+                'route_available': int(funnel.get('paper_execution_route_available') or 0),
+                'route_attempted': int(funnel.get('paper_execution_route_attempted') or 0),
+                'route_created': int(funnel.get('paper_execution_route_created') or 0),
+                'route_reused': int(funnel.get('paper_execution_route_reused') or 0),
+                'route_blocked': int(funnel.get('paper_execution_route_blocked') or 0),
+                'route_missing_status_count': int(funnel.get('paper_execution_route_missing_status_count') or 0),
+                'paper_execution_route_reason_codes': list(funnel.get('paper_execution_route_reason_codes') or []),
+                'paper_execution_summary': str(funnel.get('paper_execution_summary') or ''),
+            },
+            'paper_execution_examples': list(funnel.get('paper_execution_examples') or []),
             'shortlist_handoff_summary': dict(funnel.get('shortlist_handoff_summary') or {}),
             'downstream_route_summary': dict(funnel.get('downstream_route_summary') or {}),
             'downstream_route_examples': list(funnel.get('downstream_route_examples') or []),
@@ -262,6 +274,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     errors = payload.get('errors') or []
     blockers = payload.get('blocker_summary') or []
     handoff_summary = payload.get('handoff_summary') or {}
+    paper_execution = payload.get('paper_execution_summary') or {}
+    paper_execution_examples = payload.get('paper_execution_examples') or []
     shortlist_handoff = payload.get('shortlist_handoff_summary') or {}
     downstream_route = payload.get('downstream_route_summary') or {}
     downstream_route_examples = payload.get('downstream_route_examples') or []
@@ -315,6 +329,21 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"paper_execution_candidates={handoff_summary.get('paper_execution_candidates', 0)}"
         ),
         f"  handoff_reason_codes={','.join(handoff_summary.get('handoff_reason_codes') or []) or 'none'}",
+        'paper_execution_summary:',
+        (
+            f"  route_expected={paper_execution.get('route_expected', 0)} "
+            f"route_available={paper_execution.get('route_available', 0)} "
+            f"route_attempted={paper_execution.get('route_attempted', 0)} "
+            f"route_created={paper_execution.get('route_created', 0)} "
+            f"route_reused={paper_execution.get('route_reused', 0)} "
+            f"route_blocked={paper_execution.get('route_blocked', 0)} "
+            f"route_missing_status_count={paper_execution.get('route_missing_status_count', 0)}"
+        ),
+        (
+            f"  paper_execution_route_reason_codes="
+            f"{','.join(paper_execution.get('paper_execution_route_reason_codes') or []) or 'none'}"
+        ),
+        f"  paper_execution_examples={paper_execution_examples or []}",
         'shortlist_handoff_summary:',
         (
             f"  shortlisted_signals={shortlist_handoff.get('shortlisted_signals', 0)} "

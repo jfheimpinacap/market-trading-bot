@@ -11,6 +11,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.autonomous_trader.models import AutonomousTradeCycleRun
+from apps.autonomous_trader.services.execution_intake.run import run_execution_intake
 from apps.markets.models import Market
 from apps.mission_control.services.live_paper_bootstrap import PRESET_NAME
 from apps.mission_control.services.live_paper_validation import build_live_paper_validation_digest
@@ -25,7 +26,7 @@ from apps.prediction_agent.services.run import run_prediction_intake_review
 from apps.research_agent.models import NarrativeConsensusRecord
 from apps.research_agent.models import MarketUniverseScanRun, NarrativeSignal, NarrativeSignalStatus, PredictionHandoffCandidate
 from apps.research_agent.models import PredictionHandoffStatus, ResearchHandoffPriority, ResearchHandoffStatus, ResearchPursuitRun, ResearchStructuralAssessment
-from apps.risk_agent.models import RiskApprovalDecision
+from apps.risk_agent.models import AutonomousExecutionReadiness, RiskApprovalDecision, RiskRuntimeApprovalStatus
 from apps.risk_agent.services.run import run_risk_runtime_review
 
 FUNNEL_ACTIVE = 'ACTIVE'
@@ -59,6 +60,7 @@ _TOKEN_STOPWORDS = {'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into',
 _DOWNSTREAM_ROUTE_NAME = 'research_pursuit_review'
 _PREDICTION_INTAKE_ROUTE_NAME = 'prediction_intake_review'
 _PREDICTION_RISK_ROUTE_NAME = 'risk_runtime_review'
+_RISK_PAPER_EXECUTION_ROUTE_NAME = 'execution_intake'
 _BORDERLINE_DECISION_SOURCE = 'mission_control_borderline_guardrail_v1'
 _PREDICTION_STATUS_EXAMPLES_LIMIT = 3
 _PREDICTION_RISK_CAUTION_EXAMPLES_LIMIT = 3
@@ -201,6 +203,137 @@ def _is_prediction_risk_route_disabled() -> bool:
 
 def _is_prediction_risk_handler_available() -> bool:
     return callable(run_risk_runtime_review)
+
+
+def _is_paper_execution_route_disabled() -> bool:
+    return bool(getattr(settings, 'MISSION_CONTROL_DISABLE_RISK_PAPER_EXECUTION_ROUTE', False))
+
+
+def _is_paper_execution_handler_available() -> bool:
+    return callable(run_execution_intake)
+
+
+def _paper_execution_reason_from_risk_decision(*, approval_status: str, reason_codes: list[str], blocked_tags: set[str]) -> tuple[str, str]:
+    if approval_status not in {RiskRuntimeApprovalStatus.APPROVED, RiskRuntimeApprovalStatus.APPROVED_REDUCED}:
+        return 'PAPER_EXECUTION_STATUS_FILTER_REJECTED', 'risk_decision_status_filter'
+    if 'POLICY' in blocked_tags:
+        return 'PAPER_EXECUTION_BLOCKED_BY_POLICY', 'policy_gate'
+    if 'SAFETY' in blocked_tags:
+        return 'PAPER_EXECUTION_BLOCKED_BY_SAFETY', 'safety_gate'
+    if 'RUNTIME' in blocked_tags:
+        return 'PAPER_EXECUTION_BLOCKED_BY_RUNTIME', 'runtime_gate'
+    if any(code == 'PREDICTION_RISK_ROUTE_MISSING' for code in reason_codes):
+        return 'PAPER_EXECUTION_ARTIFACT_MISMATCH', 'risk_execution_artifact_adapter'
+    return 'PAPER_EXECUTION_ROUTE_AVAILABLE', 'paper_execution_precheck'
+
+
+def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision], window_start) -> dict[str, Any]:
+    route_disabled = _is_paper_execution_route_disabled()
+    route_handler_available = _is_paper_execution_handler_available()
+    route_infra_available = not route_disabled and route_handler_available
+    reason_codes: list[str] = []
+    examples: list[dict[str, Any]] = []
+    route_expected = 0
+    route_available = 0
+    route_attempted = 0
+    route_created = 0
+    route_reused = 0
+    route_blocked = 0
+    route_missing_status_count = 0
+
+    for decision in risk_rows:
+        decision_id = int(decision.id)
+        market_id = _safe_int(getattr(decision.linked_candidate, 'linked_market_id', None))
+        approval_status = str(decision.approval_status or '')
+        decision_reason_codes = [str(code or '') for code in list(decision.reason_codes or []) if str(code or '').strip()]
+        metadata_reason_codes = [str(code or '') for code in list((decision.metadata or {}).get('reason_codes') or []) if str(code or '').strip()]
+        merged_reason_codes = list(dict.fromkeys(decision_reason_codes + metadata_reason_codes))
+        blocked_tags = {tag for tag in {'POLICY', 'SAFETY', 'RUNTIME'} if any(tag in code.upper() for code in merged_reason_codes)}
+        expected_route = _RISK_PAPER_EXECUTION_ROUTE_NAME if approval_status in {RiskRuntimeApprovalStatus.APPROVED, RiskRuntimeApprovalStatus.APPROVED_REDUCED} else None
+
+        reason_code, blocking_stage = _paper_execution_reason_from_risk_decision(
+            approval_status=approval_status,
+            reason_codes=merged_reason_codes,
+            blocked_tags=blocked_tags,
+        )
+        observed_value: Any = approval_status
+        threshold: Any = f'{RiskRuntimeApprovalStatus.APPROVED}|{RiskRuntimeApprovalStatus.APPROVED_REDUCED}'
+
+        if expected_route is None:
+            route_missing_status_count += 1
+            route_blocked += 1
+            reason_codes.append(reason_code)
+        elif not route_infra_available:
+            route_expected += 1
+            route_blocked += 1
+            if route_disabled:
+                reason_code = 'PAPER_EXECUTION_ROUTE_MISSING'
+                blocking_stage = 'paper_execution_route'
+                observed_value = 'route_disabled'
+            else:
+                reason_code = 'PAPER_EXECUTION_NO_ELIGIBLE_HANDLER'
+                blocking_stage = 'paper_execution_handler'
+                observed_value = 'handler_unavailable'
+            threshold = _RISK_PAPER_EXECUTION_ROUTE_NAME
+            reason_codes.append(reason_code)
+        else:
+            route_expected += 1
+            route_available += 1
+            reason_codes.append('PAPER_EXECUTION_ROUTE_AVAILABLE')
+            readiness_qs = AutonomousExecutionReadiness.objects.filter(linked_approval_review_id=decision.id).order_by('-created_at', '-id')
+            readiness = readiness_qs.first()
+            if readiness is not None:
+                route_attempted += 1
+                if readiness.created_at >= window_start:
+                    route_created += 1
+                    reason_code = 'PAPER_EXECUTION_CREATED'
+                else:
+                    route_reused += 1
+                    reason_code = 'PAPER_EXECUTION_REUSED_EXISTING_CANDIDATE'
+                blocking_stage = 'paper_execution_readiness'
+                observed_value = str(readiness.readiness_status or '')
+                threshold = 'READY|READY_REDUCED'
+                reason_codes.append(reason_code)
+            else:
+                route_blocked += 1
+                reason_code = 'PAPER_EXECUTION_ROUTE_MISSING'
+                blocking_stage = 'paper_execution_readiness'
+                observed_value = 'missing_readiness_artifact'
+                threshold = 'AutonomousExecutionReadiness'
+                reason_codes.append(reason_code)
+
+        if len(examples) < 3:
+            examples.append(
+                {
+                    'risk_decision_id': decision_id,
+                    'market_id': market_id,
+                    'decision_status': approval_status,
+                    'expected_route': expected_route,
+                    'reason_code': reason_code,
+                    'blocking_stage': blocking_stage,
+                    'observed_value': observed_value,
+                    'threshold': threshold,
+                }
+            )
+
+    normalized_codes = list(dict.fromkeys(reason_codes))
+    return {
+        'paper_execution_route_expected': int(route_expected),
+        'paper_execution_route_available': int(route_available),
+        'paper_execution_route_attempted': int(route_attempted),
+        'paper_execution_route_created': int(route_created),
+        'paper_execution_route_reused': int(route_reused),
+        'paper_execution_route_blocked': int(route_blocked),
+        'paper_execution_route_missing_status_count': int(route_missing_status_count),
+        'paper_execution_route_reason_codes': normalized_codes,
+        'paper_execution_summary': (
+            f"route_expected={route_expected} route_available={route_available} route_attempted={route_attempted} "
+            f"route_created={route_created} route_reused={route_reused} route_blocked={route_blocked} "
+            f"route_missing_status_count={route_missing_status_count} "
+            f"paper_execution_route_reason_codes={','.join(normalized_codes) or 'none'}"
+        ),
+        'paper_execution_examples': examples,
+    }
 
 
 def _safe_int(value: Any) -> int | None:
@@ -913,6 +1046,11 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
     intake_candidate_count = intake_candidate_qs.count()
     risk_count = risk_qs.count()
     paper_execution_count = paper_qs.count()
+    risk_rows = list(
+        risk_qs.select_related('linked_candidate')
+        .order_by('-created_at', '-id')[:40]
+    )
+    paper_execution_summary = _build_paper_execution_diagnostics(risk_rows=risk_rows, window_start=window_start)
 
     shortlist_market_ids = {
         market_id
@@ -2100,6 +2238,16 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'prediction_risk_caution_examples': prediction_risk_caution_examples,
         'prediction_status_summary': prediction_status_summary,
         'prediction_status_examples': prediction_status_examples,
+        'paper_execution_summary': paper_execution_summary.get('paper_execution_summary', ''),
+        'paper_execution_route_expected': paper_execution_summary.get('paper_execution_route_expected', 0),
+        'paper_execution_route_available': paper_execution_summary.get('paper_execution_route_available', 0),
+        'paper_execution_route_attempted': paper_execution_summary.get('paper_execution_route_attempted', 0),
+        'paper_execution_route_created': paper_execution_summary.get('paper_execution_route_created', 0),
+        'paper_execution_route_reused': paper_execution_summary.get('paper_execution_route_reused', 0),
+        'paper_execution_route_blocked': paper_execution_summary.get('paper_execution_route_blocked', 0),
+        'paper_execution_route_missing_status_count': paper_execution_summary.get('paper_execution_route_missing_status_count', 0),
+        'paper_execution_route_reason_codes': paper_execution_summary.get('paper_execution_route_reason_codes', []),
+        'paper_execution_examples': paper_execution_summary.get('paper_execution_examples', []),
     }
 
 
@@ -2228,6 +2376,16 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'prediction_risk_caution_examples': handoff_diagnostics.get('prediction_risk_caution_examples', []),
         'prediction_status_summary': handoff_diagnostics.get('prediction_status_summary', {}),
         'prediction_status_examples': handoff_diagnostics.get('prediction_status_examples', []),
+        'paper_execution_summary': handoff_diagnostics.get('paper_execution_summary', ''),
+        'paper_execution_route_expected': handoff_diagnostics.get('paper_execution_route_expected', 0),
+        'paper_execution_route_available': handoff_diagnostics.get('paper_execution_route_available', 0),
+        'paper_execution_route_attempted': handoff_diagnostics.get('paper_execution_route_attempted', 0),
+        'paper_execution_route_created': handoff_diagnostics.get('paper_execution_route_created', 0),
+        'paper_execution_route_reused': handoff_diagnostics.get('paper_execution_route_reused', 0),
+        'paper_execution_route_blocked': handoff_diagnostics.get('paper_execution_route_blocked', 0),
+        'paper_execution_route_missing_status_count': handoff_diagnostics.get('paper_execution_route_missing_status_count', 0),
+        'paper_execution_route_reason_codes': handoff_diagnostics.get('paper_execution_route_reason_codes', []),
+        'paper_execution_examples': handoff_diagnostics.get('paper_execution_examples', []),
         'shortlisted_signals': handoff_diagnostics.get('shortlisted_signals', 0),
         'handoff_candidates': handoff_diagnostics.get('handoff_candidates', 0),
         'consensus_reviews': handoff_diagnostics.get('consensus_reviews', 0),

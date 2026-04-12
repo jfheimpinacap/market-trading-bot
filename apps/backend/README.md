@@ -4459,6 +4459,13 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - Mission Control ejecuta un adapter conservador que materializa/reutiliza artefactos faltantes para candidatos visibles antes del precheck de risk route, sin bypass de safety/policy/risk ni promoción masiva.
   - `prediction_risk_summary` ahora puede reflejar avance por resolución de mismatch (`PREDICTION_ARTIFACT_MISMATCH_RESOLVED`) y el export log expone la verdad operacional de created vs reused por artefacto.
   - límites intactos: observability-first, `REAL_READ_ONLY + PAPER_ONLY`, sin frontend, sin `/runtime`, sin live trading real ni ejecución paper directa.
+- **Prompt 253 (diagnóstico explícito risk -> paper_execution, sin fix de bridge):**
+  - añade `paper_execution_summary` para separar risk decision visible vs risk decision enrutable:
+    - `route_expected`, `route_available`, `route_attempted`, `route_created`, `route_reused`, `route_blocked`, `route_missing_status_count`, `paper_execution_route_reason_codes`.
+  - añade `paper_execution_examples` (máx 3) por decisión con `risk_decision_id`, `market_id`, `decision_status`, `expected_route`, `reason_code`, `blocking_stage`, `observed_value`, `threshold`.
+  - reason codes operacionales explícitos: `PAPER_EXECUTION_ROUTE_AVAILABLE`, `..._ROUTE_MISSING`, `..._NO_ELIGIBLE_HANDLER`, `..._STATUS_FILTER_REJECTED`, `..._BLOCKED_BY_POLICY`, `..._BLOCKED_BY_SAFETY`, `..._BLOCKED_BY_RUNTIME`, `..._REUSED_EXISTING_CANDIDATE`, `..._CREATED`, `..._ARTIFACT_MISMATCH`.
+  - integración directa en `build_live_paper_autonomy_funnel_snapshot` y en el export log del Test Console (`paper_execution_summary` + `paper_execution_examples`) sin logging paralelo.
+  - alcance intacto: observability-first, `REAL_READ_ONLY + PAPER_ONLY`, sin frontend, sin `/runtime`, sin live trading real.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`
