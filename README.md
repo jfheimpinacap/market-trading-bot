@@ -3382,6 +3382,12 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - separa visibilidad de candidate vs ejecutabilidad real (`READY_FOR_AUTONOMOUS_EXECUTION|READY_REDUCED`) y deja explícitos bloqueos por status, runtime, policy/safety, dedupe/reuse y artifact mismatch.
   - añade `execution_lineage_summary` para distinguir reuse histórico/fan-out legítimo vs fan-out excesivo (`fanout_reason_codes`).
   - el export del Test Console incluye ambos bloques (`paper_trade_summary`, `execution_lineage_summary`) en texto y JSON, manteniendo enfoque observability-first y **REAL_READ_ONLY + PAPER_ONLY**.
+- **Prompt 261** repara el bridge final `AutonomousExecutionIntakeCandidate -> AutonomousExecutionDecision` en paper-only con contención conservadora de fan-out:
+  - Mission Control crea o reutiliza `AutonomousExecutionDecision` para candidates ejecutables visibles, sin abrir live trading ni broker routing.
+  - añade dedupe final por lineage/market (market + ancestry de readiness/approval/sizing/watch/prediction context) para evitar decisiones equivalentes duplicadas.
+  - nuevo bloque `paper_trade_decision_summary` + `paper_trade_decision_examples` en Test Console export (`text/json`) con `decision_created|reused|blocked|dedupe_applied` y reason codes explícitos.
+  - `execution_lineage_summary` ahora expone `candidates_considered`, `candidates_deduplicated`, `decisions_created` y `decisions_reused` para distinguir fan-out legítimo vs dedupe aplicada.
+  - mantiene enfoque observability-first, backend-only y límites **REAL_READ_ONLY + PAPER_ONLY**; no mezcla todavía fill/settlement ni rediseña `/runtime`.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.
