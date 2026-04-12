@@ -228,6 +228,7 @@ Scope remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` changes,
   - `test_status`, `current_phase`, `started_at`, `ended_at`
   - validation/trial/trend/readiness/gate/extended-run/attention/funnel
   - compact `scan_summary`, `portfolio_summary`, `next_action_hint`, optional `blocker_summary`
+  - `portfolio_summary` includes compact account diagnostics: `account_summary_status` (`PAPER_ACCOUNT_SUMMARY_OK` / `PAPER_ACCOUNT_SUMMARY_DEGRADED` / `PAPER_ACCOUNT_SUMMARY_UNAVAILABLE`) plus `account_summary_reason_codes`
 - compact log pane:
   - log text is rendered directly in the card for easy copy/paste into chat
   - fallback: `No log exported yet`

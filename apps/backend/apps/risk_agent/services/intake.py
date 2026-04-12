@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django.utils import timezone
 
-from apps.paper_trading.services.portfolio import get_active_account
+from apps.paper_trading.services.portfolio import build_account_financial_summary, get_active_account
 from apps.prediction_agent.models import RiskReadyPredictionHandoff, RiskReadyPredictionHandoffStatus
 from apps.risk_agent.models import RiskIntakeStatus, RiskRuntimeCandidate, RiskRuntimeRun
 
@@ -28,14 +28,24 @@ def _liquidity_bucket(liquidity_value: float) -> str:
 
 def _portfolio_pressure_state() -> tuple[str, dict[str, object]]:
     account = get_active_account()
-    exposure = Decimal(str(account.cash_balance + account.equity_value))
-    used = Decimal(str(account.equity_value))
+    portfolio = build_account_financial_summary(account=account)
+    cash_value = Decimal(str(portfolio.get('cash') or '0'))
+    equity_value = Decimal(str(portfolio.get('equity') or '0'))
+    exposure = cash_value + equity_value
+    used = equity_value
     utilization = (used / exposure) if exposure > Decimal('0') else Decimal('0')
+    context = {
+        'equity_value': str(equity_value),
+        'cash_balance': str(cash_value),
+        'utilization': str(utilization),
+        'account_summary_status': str(portfolio.get('summary_status') or ''),
+        'account_summary_reason_codes': list(portfolio.get('reason_codes') or []),
+    }
     if utilization >= Decimal('0.70'):
-        return 'HIGH', {'equity_value': str(account.equity_value), 'cash_balance': str(account.cash_balance), 'utilization': str(utilization)}
+        return 'HIGH', context
     if utilization >= Decimal('0.45'):
-        return 'MEDIUM', {'equity_value': str(account.equity_value), 'cash_balance': str(account.cash_balance), 'utilization': str(utilization)}
-    return 'LOW', {'equity_value': str(account.equity_value), 'cash_balance': str(account.cash_balance), 'utilization': str(utilization)}
+        return 'MEDIUM', context
+    return 'LOW', context
 
 
 def build_runtime_candidates(*, runtime_run: RiskRuntimeRun) -> IntakeBuildResult:

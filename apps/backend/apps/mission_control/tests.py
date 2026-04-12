@@ -4979,6 +4979,8 @@ class TestConsoleApiTests(TestCase):
                 'unrealized_pnl': 0.0,
                 'open_positions': 0,
                 'recent_trades_count': 0,
+                'account_summary_status': 'PAPER_ACCOUNT_SUMMARY_OK',
+                'account_summary_reason_codes': [],
             },
             'scan_summary': {
                 'summary_window': 'latest_scan_run',
@@ -5077,6 +5079,7 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('handoff_structural_summary:', text_payload)
         self.assertIn('structural_reason_codes=', text_payload)
         self.assertIn('handoff_structural_examples=', text_payload)
+        self.assertIn('account_summary_status=', text_payload)
 
     @patch('apps.mission_control.views.export_test_console_log')
     def test_export_log_json_works(self, mock_export):
