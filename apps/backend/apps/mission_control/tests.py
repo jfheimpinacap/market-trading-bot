@@ -3403,6 +3403,124 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(diagnostics.get('paper_trade_route_available'), 0)
         self.assertIn('PAPER_TRADE_NO_ELIGIBLE_HANDLER', diagnostics.get('paper_trade_route_reason_codes', []))
 
+    def test_paper_trade_decision_bridge_creates_missing_execution_decision(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import (
+            AutonomousExecutionDecision,
+            AutonomousExecutionIntakeCandidate,
+            AutonomousExecutionIntakeRun,
+            AutonomousExecutionIntakeStatus,
+        )
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-trade-decision-created')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.8400'),
+            readiness_summary='decision-created',
+            readiness_reason_codes=['READY'],
+        )
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        candidate = AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=readiness,
+            linked_approval_review=decision,
+            intake_status=AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+            readiness_confidence=Decimal('0.8400'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertTrue(AutonomousExecutionDecision.objects.filter(linked_intake_candidate=candidate).exists())
+        self.assertEqual(diagnostics.get('paper_trade_decision_created'), 1)
+        self.assertIn('PAPER_TRADE_DECISION_CREATED', diagnostics.get('paper_trade_decision_reason_codes', []))
+
+    def test_paper_trade_decision_bridge_reuses_existing_execution_decision(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import (
+            AutonomousExecutionDecision,
+            AutonomousExecutionIntakeCandidate,
+            AutonomousExecutionIntakeRun,
+            AutonomousExecutionIntakeStatus,
+        )
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-trade-decision-reused')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.8200'),
+            readiness_summary='decision-reused',
+            readiness_reason_codes=['READY'],
+        )
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        candidate = AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=readiness,
+            linked_approval_review=decision,
+            intake_status=AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+            readiness_confidence=Decimal('0.8200'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+        )
+        existing = AutonomousExecutionDecision.objects.create(linked_intake_candidate=candidate, decision_type='EXECUTE_NOW')
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertEqual(AutonomousExecutionDecision.objects.filter(linked_intake_candidate=candidate).count(), 1)
+        self.assertEqual(diagnostics.get('paper_trade_decision_reused'), 1)
+        self.assertIn('PAPER_TRADE_DECISION_REUSED', diagnostics.get('paper_trade_decision_reason_codes', []))
+        self.assertEqual(
+            (diagnostics.get('paper_trade_decision_examples') or [{}])[0].get('observed_value'),
+            f'existing_execution_decision:{existing.id}',
+        )
+
+    def test_paper_trade_decision_dedupe_applies_for_same_lineage_market(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import (
+            AutonomousExecutionDecision,
+            AutonomousExecutionIntakeCandidate,
+            AutonomousExecutionIntakeRun,
+            AutonomousExecutionIntakeStatus,
+        )
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-trade-decision-dedupe')
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        for idx in range(2):
+            risk_decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+            readiness = AutonomousExecutionReadiness.objects.create(
+                linked_market=market,
+                linked_approval_review=risk_decision,
+                readiness_status=AutonomousExecutionReadinessStatus.READY,
+                readiness_confidence=Decimal('0.8000'),
+                readiness_summary=f'dedupe-{idx}',
+                readiness_reason_codes=['READY'],
+            )
+            AutonomousExecutionIntakeCandidate.objects.create(
+                intake_run=intake_run,
+                linked_market=market,
+                linked_execution_readiness=readiness,
+                linked_approval_review=risk_decision,
+                intake_status=AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+                readiness_confidence=Decimal('0.8000'),
+                approval_status=RiskRuntimeApprovalStatus.APPROVED,
+                linked_prediction_context={'prediction_candidate_id': 901, 'handoff_id': 701},
+            )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertEqual(AutonomousExecutionDecision.objects.count(), 1)
+        self.assertEqual(diagnostics.get('paper_trade_decision_dedupe_applied'), 1)
+        self.assertIn('LINEAGE_DEDUPE_APPLIED', diagnostics.get('paper_trade_decision_reason_codes', []))
+        self.assertIn('LINEAGE_DEDUPE_BLOCKED_DUPLICATE', diagnostics.get('paper_trade_route_reason_codes', []))
+        lineage = diagnostics.get('execution_lineage_summary') or {}
+        self.assertEqual(lineage.get('candidates_deduplicated'), 1)
+
     def test_execution_lineage_summary_surfaces_fanout_reason_codes(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
@@ -3423,6 +3541,8 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         lineage = diagnostics.get('execution_lineage_summary') or {}
         self.assertEqual(lineage.get('visible_execution_candidates'), diagnostics.get('paper_execution_candidates'))
         self.assertIn('LINEAGE_FANOUT_EXCESSIVE', lineage.get('fanout_reason_codes', []))
+        self.assertIn('candidates_considered', lineage)
+        self.assertIn('decisions_created', lineage)
 
     def test_paper_execution_bridge_materializes_candidate_from_readiness(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
@@ -5488,8 +5608,12 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('paper_trade_summary:', text_payload)
         self.assertIn('paper_trade_route_reason_codes=', text_payload)
         self.assertIn('paper_trade_examples=', text_payload)
+        self.assertIn('paper_trade_decision_summary:', text_payload)
+        self.assertIn('paper_trade_decision_reason_codes=', text_payload)
+        self.assertIn('paper_trade_decision_examples=', text_payload)
         self.assertIn('execution_lineage_summary:', text_payload)
         self.assertIn('fanout_reason_codes=', text_payload)
+        self.assertIn('candidates_deduplicated=', text_payload)
         self.assertIn('execution_artifact_summary:', text_payload)
         self.assertIn('execution_artifact_reason_codes=', text_payload)
         self.assertIn('execution_artifact_examples=', text_payload)

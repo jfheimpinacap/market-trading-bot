@@ -4489,6 +4489,12 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - agrega `execution_lineage_summary` para detectar fan-out/reuse (`visible_execution_candidates`, `executable_candidates`, `materialized_paper_trades`, `reused_trade_cycles`, `fanout_reason_codes`).
   - export log del Test Console (`text/json`) ahora incluye `paper_trade_summary` y `execution_lineage_summary` sin logging paralelo.
   - mantiene fronteras **observability-first + REAL_READ_ONLY + PAPER_ONLY**, sin live trading real y sin tocar frontend ni `/runtime`.
+- **Prompt 261 (bridge final execution candidate -> execution decision + dedupe conservadora):**
+  - Mission Control materializa o reutiliza `AutonomousExecutionDecision` para candidates ejecutables visibles cuando falta el artefacto final, sin habilitar live trading real.
+  - añade contención final de fan-out por lineage/market (market + ancestry de readiness/approval/sizing/watch/prediction context) y bloquea duplicados prácticos con reason codes de dedupe.
+  - incorpora `paper_trade_decision_summary` + `paper_trade_decision_examples` en export log (`text/json`) para diagnosticar `decision_created|decision_reused|decision_blocked|decision_dedupe_applied`.
+  - amplía `execution_lineage_summary` con `candidates_considered`, `candidates_deduplicated`, `decisions_created`, `decisions_reused` para hacer explícito cuándo hubo fan-out y cuándo se contuvo.
+  - mantiene límites **REAL_READ_ONLY + PAPER_ONLY**, backend-only, observability-first y sin mezclar todavía fill/settlement final.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

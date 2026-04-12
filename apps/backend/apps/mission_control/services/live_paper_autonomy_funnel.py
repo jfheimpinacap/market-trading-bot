@@ -20,6 +20,7 @@ from apps.autonomous_trader.models import (
     AutonomousExecutionIntakeStatus,
     AutonomousTradeCycleRun,
 )
+from apps.autonomous_trader.services.execution_intake.decision import decide_intake_candidate
 from apps.autonomous_trader.services.execution_intake.intake import resolve_intake_status_from_readiness
 from apps.autonomous_trader.services.execution_intake.run import run_execution_intake
 from apps.markets.models import Market
@@ -253,6 +254,156 @@ def _is_visible_execution_intake_status(status_value: str) -> bool:
 
 def _is_executable_execution_intake_status(status_value: str) -> bool:
     return status_value in _EXECUTABLE_INTAKE_STATUSES
+
+
+def _candidate_lineage_key(*, candidate: AutonomousExecutionIntakeCandidate) -> tuple[Any, ...]:
+    prediction_context = dict(getattr(candidate, 'linked_prediction_context', {}) or {})
+    prediction_candidate_id = _safe_int(prediction_context.get('prediction_candidate_id') or prediction_context.get('linked_prediction_candidate_id'))
+    handoff_id = _safe_int(prediction_context.get('handoff_id') or prediction_context.get('linked_handoff_id'))
+    if prediction_candidate_id is not None or handoff_id is not None:
+        ancestry_anchor = f'prediction:{prediction_candidate_id}|handoff:{handoff_id}'
+    else:
+        ancestry_anchor = f"approval:{_safe_int(getattr(candidate, 'linked_approval_review_id', None))}"
+    return (
+        _safe_int(getattr(candidate, 'linked_market_id', None)),
+        ancestry_anchor,
+        _safe_int(getattr(candidate, 'linked_sizing_plan_id', None)),
+        _safe_int(getattr(candidate, 'linked_watch_plan_id', None)),
+    )
+
+
+@transaction.atomic
+def _ensure_execution_decisions_for_candidates(
+    *,
+    candidates: list[AutonomousExecutionIntakeCandidate],
+    window_start,
+) -> dict[str, Any]:
+    if not candidates:
+        return {
+            'decision_by_candidate_id': {},
+            'duplicate_candidate_ids': set(),
+            'decision_created': 0,
+            'decision_reused': 0,
+            'decision_blocked': 0,
+            'decision_dedupe_applied': 0,
+            'reason_codes': [],
+            'examples': [],
+            'considered_candidates': 0,
+            'deduplicated_candidates': 0,
+        }
+    candidate_ids = [int(candidate.id) for candidate in candidates]
+    decision_rows = list(
+        AutonomousExecutionDecision.objects.filter(linked_intake_candidate_id__in=candidate_ids)
+        .select_related('linked_intake_candidate')
+        .order_by('linked_intake_candidate_id', '-created_at', '-id')
+    )
+    latest_decision_by_candidate: dict[int, AutonomousExecutionDecision] = {}
+    for decision in decision_rows:
+        candidate_id = _safe_int(getattr(decision, 'linked_intake_candidate_id', None))
+        if candidate_id is not None and candidate_id not in latest_decision_by_candidate:
+            latest_decision_by_candidate[candidate_id] = decision
+
+    decision_by_candidate_id: dict[int, AutonomousExecutionDecision] = {}
+    lineage_decision_by_key: dict[tuple[Any, ...], AutonomousExecutionDecision] = {}
+    duplicate_candidate_ids: set[int] = set()
+    reason_codes: list[str] = []
+    examples: list[dict[str, Any]] = []
+    decision_created = 0
+    decision_reused = 0
+    decision_blocked = 0
+    decision_dedupe_applied = 0
+
+    for candidate in candidates:
+        candidate_id = int(candidate.id)
+        lineage_key = _candidate_lineage_key(candidate=candidate)
+        market_id = _safe_int(getattr(candidate, 'linked_market_id', None))
+        latest_decision = latest_decision_by_candidate.get(candidate_id)
+        if latest_decision is not None:
+            decision_by_candidate_id[candidate_id] = latest_decision
+            lineage_decision_by_key.setdefault(lineage_key, latest_decision)
+            decision_reused += 1
+            reason_codes.append('PAPER_TRADE_DECISION_REUSED')
+            if len(examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                examples.append(
+                    {
+                        'execution_candidate_id': candidate_id,
+                        'market_id': market_id,
+                        'reason_code': 'PAPER_TRADE_DECISION_REUSED',
+                        'blocking_stage': 'execution_decision',
+                        'observed_value': f'existing_execution_decision:{latest_decision.id}',
+                        'threshold': 'AutonomousExecutionDecision',
+                    }
+                )
+            continue
+
+        dedupe_decision = lineage_decision_by_key.get(lineage_key)
+        if dedupe_decision is not None:
+            duplicate_candidate_ids.add(candidate_id)
+            decision_by_candidate_id[candidate_id] = dedupe_decision
+            decision_reused += 1
+            decision_dedupe_applied += 1
+            reason_codes.extend(['PAPER_TRADE_DECISION_DEDUPE_REUSED', 'LINEAGE_DEDUPE_REUSED_EXISTING_DECISION'])
+            if len(examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                examples.append(
+                    {
+                        'execution_candidate_id': candidate_id,
+                        'market_id': market_id,
+                        'reason_code': 'PAPER_TRADE_DECISION_DEDUPE_REUSED',
+                        'blocking_stage': 'execution_decision',
+                        'observed_value': f'reused_execution_decision:{dedupe_decision.id}',
+                        'threshold': 'lineage/market dedupe key',
+                    }
+                )
+            continue
+
+        try:
+            created_decision = decide_intake_candidate(candidate=candidate)
+        except Exception:
+            decision_blocked += 1
+            reason_codes.append('PAPER_TRADE_DECISION_BLOCKED_BY_RUNTIME')
+            if len(examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                examples.append(
+                    {
+                        'execution_candidate_id': candidate_id,
+                        'market_id': market_id,
+                        'reason_code': 'PAPER_TRADE_DECISION_BLOCKED_BY_RUNTIME',
+                        'blocking_stage': 'execution_decision',
+                        'observed_value': 'decision_bridge_exception',
+                        'threshold': 'AutonomousExecutionDecision',
+                    }
+                )
+            continue
+
+        decision_by_candidate_id[candidate_id] = created_decision
+        lineage_decision_by_key[lineage_key] = created_decision
+        decision_created += 1
+        reason_codes.extend(['PAPER_TRADE_DECISION_CREATED', 'PAPER_TRADE_DECISION_ROUTE_AVAILABLE'])
+        if len(examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+            examples.append(
+                {
+                    'execution_candidate_id': candidate_id,
+                    'market_id': market_id,
+                    'reason_code': 'PAPER_TRADE_DECISION_CREATED',
+                    'blocking_stage': 'execution_decision',
+                    'observed_value': str(created_decision.decision_type or ''),
+                    'threshold': 'AutonomousExecutionDecision',
+                }
+            )
+
+    if duplicate_candidate_ids:
+        reason_codes.extend(['LINEAGE_DEDUPE_APPLIED', 'LINEAGE_DEDUPE_BLOCKED_DUPLICATE'])
+    return {
+        'decision_by_candidate_id': decision_by_candidate_id,
+        'duplicate_candidate_ids': duplicate_candidate_ids,
+        'decision_created': int(decision_created),
+        'decision_reused': int(decision_reused),
+        'decision_blocked': int(decision_blocked),
+        'decision_dedupe_applied': int(decision_dedupe_applied),
+        'reason_codes': list(dict.fromkeys(reason_codes)),
+        'examples': examples,
+        'considered_candidates': int(len(candidate_ids)),
+        'deduplicated_candidates': int(len(duplicate_candidate_ids)),
+    }
 
 
 @transaction.atomic
@@ -592,6 +743,14 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     paper_trade_route_created = 0
     paper_trade_route_reused = 0
     paper_trade_route_blocked = 0
+    paper_trade_decision_created = 0
+    paper_trade_decision_reused = 0
+    paper_trade_decision_blocked = 0
+    paper_trade_decision_dedupe_applied = 0
+    paper_trade_decision_reason_codes: list[str] = []
+    paper_trade_decision_examples: list[dict[str, Any]] = []
+    execution_lineage_considered = 0
+    execution_lineage_deduplicated = 0
 
     if not route_infra_available and paper_trade_route_expected > 0:
         reason = 'PAPER_TRADE_ROUTE_MISSING' if route_disabled else 'PAPER_TRADE_NO_ELIGIBLE_HANDLER'
@@ -641,16 +800,18 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                     )
 
         if executable_candidate_ids:
-            decision_rows = list(
-                AutonomousExecutionDecision.objects.filter(linked_intake_candidate_id__in=executable_candidate_ids)
-                .select_related('linked_intake_candidate')
-                .order_by('linked_intake_candidate_id', '-created_at', '-id')
-            )
-            latest_decision_by_candidate: dict[int, AutonomousExecutionDecision] = {}
-            for row in decision_rows:
-                candidate_id = int(getattr(row, 'linked_intake_candidate_id', 0) or 0)
-                if candidate_id and candidate_id not in latest_decision_by_candidate:
-                    latest_decision_by_candidate[candidate_id] = row
+            executable_candidates = [candidate_by_id[candidate_id] for candidate_id in executable_candidate_ids if candidate_id in candidate_by_id]
+            decision_bridge = _ensure_execution_decisions_for_candidates(candidates=executable_candidates, window_start=window_start)
+            latest_decision_by_candidate = dict(decision_bridge.get('decision_by_candidate_id') or {})
+            duplicate_candidate_ids = set(decision_bridge.get('duplicate_candidate_ids') or set())
+            paper_trade_decision_created = int(decision_bridge.get('decision_created') or 0)
+            paper_trade_decision_reused = int(decision_bridge.get('decision_reused') or 0)
+            paper_trade_decision_blocked = int(decision_bridge.get('decision_blocked') or 0)
+            paper_trade_decision_dedupe_applied = int(decision_bridge.get('decision_dedupe_applied') or 0)
+            paper_trade_decision_reason_codes.extend(list(decision_bridge.get('reason_codes') or []))
+            paper_trade_decision_examples.extend(list(decision_bridge.get('examples') or []))
+            execution_lineage_considered = int(decision_bridge.get('considered_candidates') or 0)
+            execution_lineage_deduplicated = int(decision_bridge.get('deduplicated_candidates') or 0)
             decision_ids = [int(row.id) for row in latest_decision_by_candidate.values()]
             dispatch_rows = list(
                 AutonomousDispatchRecord.objects.filter(linked_execution_decision_id__in=decision_ids)
@@ -668,10 +829,28 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                 if candidate is None:
                     continue
                 market_id = _safe_int(getattr(candidate, 'linked_market_id', None))
+                if candidate_id in duplicate_candidate_ids:
+                    paper_trade_route_blocked += 1
+                    paper_trade_route_reason_codes.append('LINEAGE_DEDUPE_BLOCKED_DUPLICATE')
+                    if len(paper_trade_examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                        paper_trade_examples.append(
+                            {
+                                'execution_candidate_id': int(candidate.id),
+                                'market_id': market_id,
+                                'candidate_status': str(candidate.intake_status or ''),
+                                'expected_route': _RISK_PAPER_EXECUTION_ROUTE_NAME,
+                                'reason_code': 'LINEAGE_DEDUPE_BLOCKED_DUPLICATE',
+                                'blocking_stage': 'execution_decision_dedupe',
+                                'observed_value': 'duplicate_lineage_market_candidate',
+                                'threshold': 'single active decision per lineage/market',
+                            }
+                        )
+                    continue
                 decision = latest_decision_by_candidate.get(candidate_id)
                 if decision is None:
                     paper_trade_route_blocked += 1
                     paper_trade_route_reason_codes.append('PAPER_TRADE_BLOCKED_BY_RUNTIME')
+                    paper_trade_decision_reason_codes.append('PAPER_TRADE_DECISION_BLOCKED_BY_RUNTIME')
                     if len(paper_trade_examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
                         paper_trade_examples.append(
                             {
@@ -704,6 +883,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                                 'threshold': 'AutonomousDispatchRecord',
                             }
                         )
+                    paper_trade_decision_reason_codes.append('PAPER_TRADE_DECISION_ROUTE_AVAILABLE')
                     continue
                 dispatch_status = str(dispatch.dispatch_status or '')
                 if dispatch.linked_paper_trade_id:
@@ -767,6 +947,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             fanout_reason_codes.append('LINEAGE_MULTI_RISK_DECISIONS_PER_PREDICTION')
     if paper_trade_route_reused > 0:
         fanout_reason_codes.append('LINEAGE_REUSE_VISIBLE')
+    if execution_lineage_deduplicated > 0:
+        fanout_reason_codes.append('LINEAGE_DEDUPE_APPLIED')
     if paper_trade_route_expected > 0 and unique_visible_market_count > 0:
         fanout_ratio = Decimal(str(paper_trade_route_expected)) / Decimal(str(unique_visible_market_count))
         if fanout_ratio > Decimal('3.0'):
@@ -778,10 +960,15 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     else:
         fanout_reason_codes.append('LINEAGE_FANOUT_INSUFFICIENT_DATA')
     normalized_paper_trade_route_codes = list(dict.fromkeys(paper_trade_route_reason_codes))
+    normalized_paper_trade_decision_codes = list(dict.fromkeys(paper_trade_decision_reason_codes))
     normalized_fanout_codes = list(dict.fromkeys(fanout_reason_codes))
     execution_lineage_summary = {
         'visible_execution_candidates': int(paper_trade_route_expected),
         'executable_candidates': int(len(executable_candidate_ids)),
+        'candidates_considered': int(execution_lineage_considered or len(executable_candidate_ids)),
+        'candidates_deduplicated': int(execution_lineage_deduplicated),
+        'decisions_created': int(paper_trade_decision_created),
+        'decisions_reused': int(paper_trade_decision_reused),
         'materialized_paper_trades': int(paper_trade_route_created),
         'reused_trade_cycles': int(paper_trade_route_reused),
         'fanout_reason_codes': normalized_fanout_codes,
@@ -841,6 +1028,18 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'paper_trade_route_reused': int(paper_trade_route_reused),
         'paper_trade_route_blocked': int(paper_trade_route_blocked),
         'paper_trade_route_reason_codes': normalized_paper_trade_route_codes,
+        'paper_trade_decision_created': int(paper_trade_decision_created),
+        'paper_trade_decision_reused': int(paper_trade_decision_reused),
+        'paper_trade_decision_blocked': int(paper_trade_decision_blocked),
+        'paper_trade_decision_dedupe_applied': int(paper_trade_decision_dedupe_applied),
+        'paper_trade_decision_reason_codes': normalized_paper_trade_decision_codes,
+        'paper_trade_decision_summary': (
+            f"route_expected={paper_trade_route_expected} decision_created={paper_trade_decision_created} "
+            f"decision_reused={paper_trade_decision_reused} decision_blocked={paper_trade_decision_blocked} "
+            f"decision_dedupe_applied={paper_trade_decision_dedupe_applied} "
+            f"paper_trade_decision_reason_codes={','.join(normalized_paper_trade_decision_codes) or 'none'}"
+        ),
+        'paper_trade_decision_examples': paper_trade_decision_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
         'paper_trade_summary': (
             f"route_expected={paper_trade_route_expected} route_available={paper_trade_route_available} "
             f"route_attempted={paper_trade_route_attempted} route_created={paper_trade_route_created} "
@@ -2778,6 +2977,13 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'paper_trade_route_reused': paper_execution_summary.get('paper_trade_route_reused', 0),
         'paper_trade_route_blocked': paper_execution_summary.get('paper_trade_route_blocked', 0),
         'paper_trade_route_reason_codes': paper_execution_summary.get('paper_trade_route_reason_codes', []),
+        'paper_trade_decision_created': paper_execution_summary.get('paper_trade_decision_created', 0),
+        'paper_trade_decision_reused': paper_execution_summary.get('paper_trade_decision_reused', 0),
+        'paper_trade_decision_blocked': paper_execution_summary.get('paper_trade_decision_blocked', 0),
+        'paper_trade_decision_dedupe_applied': paper_execution_summary.get('paper_trade_decision_dedupe_applied', 0),
+        'paper_trade_decision_reason_codes': paper_execution_summary.get('paper_trade_decision_reason_codes', []),
+        'paper_trade_decision_summary': paper_execution_summary.get('paper_trade_decision_summary', ''),
+        'paper_trade_decision_examples': paper_execution_summary.get('paper_trade_decision_examples', []),
         'paper_trade_examples': paper_execution_summary.get('paper_trade_examples', []),
         'execution_lineage_summary': paper_execution_summary.get('execution_lineage_summary', {}),
         'execution_readiness_available_count': paper_execution_summary.get('execution_readiness_available_count', 0),
