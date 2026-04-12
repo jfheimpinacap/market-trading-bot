@@ -4466,6 +4466,16 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - reason codes operacionales explícitos: `PAPER_EXECUTION_ROUTE_AVAILABLE`, `..._ROUTE_MISSING`, `..._NO_ELIGIBLE_HANDLER`, `..._STATUS_FILTER_REJECTED`, `..._BLOCKED_BY_POLICY`, `..._BLOCKED_BY_SAFETY`, `..._BLOCKED_BY_RUNTIME`, `..._REUSED_EXISTING_CANDIDATE`, `..._CREATED`, `..._ARTIFACT_MISMATCH`.
   - integración directa en `build_live_paper_autonomy_funnel_snapshot` y en el export log del Test Console (`paper_execution_summary` + `paper_execution_examples`) sin logging paralelo.
   - alcance intacto: observability-first, `REAL_READ_ONLY + PAPER_ONLY`, sin frontend, sin `/runtime`, sin live trading real.
+- **Prompt 255 (alineación de visibilidad/counting en paper execution):**
+  - corrige la inconsistencia entre `paper_execution_summary` (route created/reused) y `handoff_summary.paper_execution_candidates` cuando todavía no hay fills/trades.
+  - `paper_execution_candidates` pasa a representar candidates visibles downstream en `execution_intake` (source de funnel), no `AutonomousTradeCycleRun`.
+  - agrega `paper_execution_visibility_summary` + `paper_execution_visibility_examples` (máx 3) con:
+    - `paper_execution_created_count`, `paper_execution_reused_count`,
+    - `paper_execution_visible_count`, `paper_execution_hidden_count`,
+    - `paper_execution_visibility_reason_codes`.
+  - reason codes operacionales: `PAPER_EXECUTION_VISIBLE_IN_FUNNEL`, `...HIDDEN_BY_WINDOW`, `...HIDDEN_BY_STATUS_FILTER`, `...CREATED_BUT_NOT_COUNTED`, `...REUSED_BUT_NOT_COUNTED`, `...SOURCE_MODEL_MISMATCH`.
+  - Test Console export (`text/json`) incluye sección compacta `paper_execution_visibility_summary` para explicar explícitamente “route OK pero candidates=0”.
+  - sin cambios en frontend/runtime, sin forzar ejecución final, y manteniendo límites `REAL_READ_ONLY + PAPER_ONLY`.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

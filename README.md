@@ -3366,6 +3366,12 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
     - mismatch de artefacto (`PAPER_EXECUTION_ARTIFACT_MISMATCH`).
   - integra el diagnóstico en el funnel snapshot y en el export del Test Console (`text/json`) sin logging paralelo.
   - mantiene scope observability-first + **REAL_READ_ONLY + PAPER_ONLY**, sin frontend, sin `/runtime`, sin live trading real.
+- **Prompt 255** alinea visibilidad/counting de `paper_execution_candidates` entre funnel y Test Console:
+  - `handoff_summary.paper_execution_candidates` ahora refleja visibilidad operacional de candidates de `execution_intake` (no ejecuciones/fills finales), evitando falsos `0` cuando `paper_execution_summary` ya reportaba `route_created/route_reused`.
+  - nuevo `paper_execution_visibility_summary` + `paper_execution_visibility_examples` (máx 3) con conteos `created/reused/visible/hidden`, reason codes y trazabilidad por `risk_decision_id`/`execution_candidate_id`.
+  - reason codes compactos para distinguir: visible real, hidden por ventana/status, created/reused no contados y mismatch de source model (`AutonomousExecutionReadiness` vs `AutonomousExecutionIntakeCandidate`).
+  - el export log del Test Console agrega bloque explícito de visibilidad para explicar el caso “route OK pero `paper_execution_candidates=0`”.
+  - sigue observability-first, backend-only y **REAL_READ_ONLY + PAPER_ONLY**; no abre candidate->fill ni live trading real.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.
