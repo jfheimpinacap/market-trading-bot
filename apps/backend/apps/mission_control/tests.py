@@ -3340,6 +3340,90 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(diagnostics.get('paper_execution_hidden_count'), 1)
         self.assertIn('PAPER_EXECUTION_CANDIDATE_HIDDEN_BY_STATUS', diagnostics.get('paper_execution_visibility_reason_codes', []))
 
+    def test_paper_trade_summary_marks_visible_candidate_not_executable(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-trade-visible-not-executable')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.6800'),
+            readiness_summary='watch-only-visible',
+            readiness_reason_codes=['WATCH_ONLY'],
+        )
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=readiness,
+            linked_approval_review=decision,
+            intake_status=AutonomousExecutionIntakeStatus.WATCH_ONLY,
+            readiness_confidence=Decimal('0.6800'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertEqual(diagnostics.get('paper_trade_route_expected'), 1)
+        self.assertEqual(diagnostics.get('paper_trade_route_blocked'), 1)
+        self.assertIn('PAPER_TRADE_STATUS_FILTER_REJECTED', diagnostics.get('paper_trade_route_reason_codes', []))
+
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel._is_paper_execution_handler_available', return_value=False)
+    def test_paper_trade_summary_marks_route_missing_for_executable_candidate(self, _mock_handler):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-trade-route-missing')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.8300'),
+            readiness_summary='ready-for-route-missing',
+            readiness_reason_codes=['READY'],
+        )
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=readiness,
+            linked_approval_review=decision,
+            intake_status=AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+            readiness_confidence=Decimal('0.8300'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertEqual(diagnostics.get('paper_trade_route_expected'), 1)
+        self.assertEqual(diagnostics.get('paper_trade_route_available'), 0)
+        self.assertIn('PAPER_TRADE_NO_ELIGIBLE_HANDLER', diagnostics.get('paper_trade_route_reason_codes', []))
+
+    def test_execution_lineage_summary_surfaces_fanout_reason_codes(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-trade-fanout')
+        for idx in range(4):
+            decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+            AutonomousExecutionReadiness.objects.create(
+                linked_market=market,
+                linked_approval_review=decision,
+                readiness_status=AutonomousExecutionReadinessStatus.READY,
+                readiness_confidence=Decimal('0.7800'),
+                readiness_summary=f'fanout-{idx}',
+                readiness_reason_codes=['READY'],
+            )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        lineage = diagnostics.get('execution_lineage_summary') or {}
+        self.assertEqual(lineage.get('visible_execution_candidates'), diagnostics.get('paper_execution_candidates'))
+        self.assertIn('LINEAGE_FANOUT_EXCESSIVE', lineage.get('fanout_reason_codes', []))
+
     def test_paper_execution_bridge_materializes_candidate_from_readiness(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.autonomous_trader.models import AutonomousExecutionIntakeCandidate
@@ -5401,6 +5485,11 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('paper_execution_visibility_summary:', text_payload)
         self.assertIn('paper_execution_visibility_reason_codes=', text_payload)
         self.assertIn('paper_execution_visibility_examples=', text_payload)
+        self.assertIn('paper_trade_summary:', text_payload)
+        self.assertIn('paper_trade_route_reason_codes=', text_payload)
+        self.assertIn('paper_trade_examples=', text_payload)
+        self.assertIn('execution_lineage_summary:', text_payload)
+        self.assertIn('fanout_reason_codes=', text_payload)
         self.assertIn('execution_artifact_summary:', text_payload)
         self.assertIn('execution_artifact_reason_codes=', text_payload)
         self.assertIn('execution_artifact_examples=', text_payload)

@@ -4482,6 +4482,13 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - `handoff_summary.paper_execution_candidates` queda alineado con `execution_candidate_visible_count` downstream.
   - reason codes explícitos del tramo final: `PAPER_EXECUTION_CANDIDATE_CREATED|REUSED`, `PAPER_EXECUTION_ARTIFACT_MISMATCH_RESOLVED|BLOCKED`, `PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH`, `...HIDDEN_BY_STATUS`, `...HIDDEN_BY_WINDOW`.
   - mantiene observability-first, `REAL_READ_ONLY + PAPER_ONLY`, sin tocar frontend ni `/runtime`.
+- **Prompt 259 (diagnóstico explícito candidate visible -> paper trade / trade cycle):**
+  - agrega `paper_trade_summary` + `paper_trade_examples` (máx 3) para explicar por qué un `AutonomousExecutionIntakeCandidate` visible no termina en paper trade materializado.
+  - nueva telemetría de ruta final: `paper_trade_route_expected|available|attempted|created|reused|blocked` + `paper_trade_route_reason_codes`.
+  - distingue explícitamente candidate visible vs candidate ejecutable (`READY_FOR_AUTONOMOUS_EXECUTION|READY_REDUCED`) y bloqueos finales por status/policy/safety/runtime/mismatch.
+  - agrega `execution_lineage_summary` para detectar fan-out/reuse (`visible_execution_candidates`, `executable_candidates`, `materialized_paper_trades`, `reused_trade_cycles`, `fanout_reason_codes`).
+  - export log del Test Console (`text/json`) ahora incluye `paper_trade_summary` y `execution_lineage_summary` sin logging paralelo.
+  - mantiene fronteras **observability-first + REAL_READ_ONLY + PAPER_ONLY**, sin live trading real y sin tocar frontend ni `/runtime`.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

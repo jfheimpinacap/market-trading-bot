@@ -12,7 +12,10 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.autonomous_trader.models import (
+    AutonomousDispatchRecord,
     AutonomousExecutionIntakeCandidate,
+    AutonomousExecutionDecision,
+    AutonomousExecutionDecisionType,
     AutonomousExecutionIntakeRun,
     AutonomousExecutionIntakeStatus,
     AutonomousTradeCycleRun,
@@ -72,6 +75,11 @@ _BORDERLINE_DECISION_SOURCE = 'mission_control_borderline_guardrail_v1'
 _PREDICTION_STATUS_EXAMPLES_LIMIT = 3
 _PREDICTION_RISK_CAUTION_EXAMPLES_LIMIT = 3
 _PAPER_EXECUTION_VISIBILITY_EXAMPLES_LIMIT = 3
+_PAPER_TRADE_EXAMPLES_LIMIT = 3
+_EXECUTABLE_INTAKE_STATUSES = {
+    AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+    AutonomousExecutionIntakeStatus.READY_REDUCED,
+}
 
 
 def _quantized(value: Decimal) -> str:
@@ -241,6 +249,10 @@ def _is_visible_execution_intake_status(status_value: str) -> bool:
         AutonomousExecutionIntakeStatus.READY_REDUCED,
         AutonomousExecutionIntakeStatus.WATCH_ONLY,
     }
+
+
+def _is_executable_execution_intake_status(status_value: str) -> bool:
+    return status_value in _EXECUTABLE_INTAKE_STATUSES
 
 
 @transaction.atomic
@@ -559,6 +571,221 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     execution_candidate_reused = max(0, len(latest_intake_by_readiness_id) - execution_candidate_created)
     execution_artifact_blocked_count = max(0, len(latest_readiness_by_decision_id) - visibility_visible_count)
     execution_examples = visibility_examples[:3]
+    visible_candidate_ids: list[int] = []
+    for intake_candidate in latest_intake_by_decision_id.values():
+        status_value = str(getattr(intake_candidate, 'intake_status', '') or '')
+        if intake_candidate.created_at >= window_start and _is_visible_execution_intake_status(status_value):
+            visible_candidate_ids.append(int(intake_candidate.id))
+    visible_candidate_ids = list(dict.fromkeys(visible_candidate_ids))
+    visible_candidates = list(
+        AutonomousExecutionIntakeCandidate.objects.filter(id__in=visible_candidate_ids)
+        .select_related('linked_market')
+        .order_by('-created_at', '-id')
+    )
+    candidate_by_id = {int(candidate.id): candidate for candidate in visible_candidates}
+    executable_candidate_ids: list[int] = []
+    paper_trade_route_reason_codes: list[str] = []
+    paper_trade_examples: list[dict[str, Any]] = []
+    paper_trade_route_expected = int(len(visible_candidate_ids))
+    paper_trade_route_available = int(len(visible_candidate_ids)) if route_infra_available else 0
+    paper_trade_route_attempted = 0
+    paper_trade_route_created = 0
+    paper_trade_route_reused = 0
+    paper_trade_route_blocked = 0
+
+    if not route_infra_available and paper_trade_route_expected > 0:
+        reason = 'PAPER_TRADE_ROUTE_MISSING' if route_disabled else 'PAPER_TRADE_NO_ELIGIBLE_HANDLER'
+        paper_trade_route_reason_codes.append(reason)
+        paper_trade_route_blocked = int(paper_trade_route_expected)
+        for candidate_id in visible_candidate_ids[:_PAPER_TRADE_EXAMPLES_LIMIT]:
+            candidate = candidate_by_id.get(candidate_id)
+            if candidate is None:
+                continue
+            paper_trade_examples.append(
+                {
+                    'execution_candidate_id': int(candidate.id),
+                    'market_id': _safe_int(getattr(candidate, 'linked_market_id', None)),
+                    'candidate_status': str(candidate.intake_status or ''),
+                    'expected_route': _RISK_PAPER_EXECUTION_ROUTE_NAME,
+                    'reason_code': reason,
+                    'blocking_stage': 'paper_trade_route',
+                    'observed_value': 'route_disabled' if route_disabled else 'handler_unavailable',
+                    'threshold': _RISK_PAPER_EXECUTION_ROUTE_NAME,
+                }
+            )
+
+    if route_infra_available and visible_candidate_ids:
+        for candidate_id in visible_candidate_ids:
+            candidate = candidate_by_id.get(candidate_id)
+            if candidate is None:
+                continue
+            market_id = _safe_int(getattr(candidate, 'linked_market_id', None))
+            candidate_status = str(candidate.intake_status or '')
+            if _is_executable_execution_intake_status(candidate_status):
+                executable_candidate_ids.append(int(candidate.id))
+            else:
+                paper_trade_route_blocked += 1
+                paper_trade_route_reason_codes.append('PAPER_TRADE_STATUS_FILTER_REJECTED')
+                if len(paper_trade_examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                    paper_trade_examples.append(
+                        {
+                            'execution_candidate_id': int(candidate.id),
+                            'market_id': market_id,
+                            'candidate_status': candidate_status,
+                            'expected_route': _RISK_PAPER_EXECUTION_ROUTE_NAME,
+                            'reason_code': 'PAPER_TRADE_STATUS_FILTER_REJECTED',
+                            'blocking_stage': 'candidate_status',
+                            'observed_value': candidate_status,
+                            'threshold': '|'.join(sorted(_EXECUTABLE_INTAKE_STATUSES)),
+                        }
+                    )
+
+        if executable_candidate_ids:
+            decision_rows = list(
+                AutonomousExecutionDecision.objects.filter(linked_intake_candidate_id__in=executable_candidate_ids)
+                .select_related('linked_intake_candidate')
+                .order_by('linked_intake_candidate_id', '-created_at', '-id')
+            )
+            latest_decision_by_candidate: dict[int, AutonomousExecutionDecision] = {}
+            for row in decision_rows:
+                candidate_id = int(getattr(row, 'linked_intake_candidate_id', 0) or 0)
+                if candidate_id and candidate_id not in latest_decision_by_candidate:
+                    latest_decision_by_candidate[candidate_id] = row
+            decision_ids = [int(row.id) for row in latest_decision_by_candidate.values()]
+            dispatch_rows = list(
+                AutonomousDispatchRecord.objects.filter(linked_execution_decision_id__in=decision_ids)
+                .select_related('linked_execution_decision')
+                .order_by('linked_execution_decision_id', '-created_at', '-id')
+            )
+            latest_dispatch_by_decision: dict[int, AutonomousDispatchRecord] = {}
+            for row in dispatch_rows:
+                decision_id = int(getattr(row, 'linked_execution_decision_id', 0) or 0)
+                if decision_id and decision_id not in latest_dispatch_by_decision:
+                    latest_dispatch_by_decision[decision_id] = row
+
+            for candidate_id in executable_candidate_ids:
+                candidate = candidate_by_id.get(candidate_id)
+                if candidate is None:
+                    continue
+                market_id = _safe_int(getattr(candidate, 'linked_market_id', None))
+                decision = latest_decision_by_candidate.get(candidate_id)
+                if decision is None:
+                    paper_trade_route_blocked += 1
+                    paper_trade_route_reason_codes.append('PAPER_TRADE_BLOCKED_BY_RUNTIME')
+                    if len(paper_trade_examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                        paper_trade_examples.append(
+                            {
+                                'execution_candidate_id': int(candidate.id),
+                                'market_id': market_id,
+                                'candidate_status': str(candidate.intake_status or ''),
+                                'expected_route': _RISK_PAPER_EXECUTION_ROUTE_NAME,
+                                'reason_code': 'PAPER_TRADE_BLOCKED_BY_RUNTIME',
+                                'blocking_stage': 'execution_decision',
+                                'observed_value': 'missing_execution_decision',
+                                'threshold': 'AutonomousExecutionDecision',
+                            }
+                        )
+                    continue
+                paper_trade_route_attempted += 1
+                dispatch = latest_dispatch_by_decision.get(int(decision.id))
+                if dispatch is None:
+                    paper_trade_route_blocked += 1
+                    paper_trade_route_reason_codes.append('PAPER_TRADE_BLOCKED_BY_RUNTIME')
+                    if len(paper_trade_examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                        paper_trade_examples.append(
+                            {
+                                'execution_candidate_id': int(candidate.id),
+                                'market_id': market_id,
+                                'candidate_status': str(candidate.intake_status or ''),
+                                'expected_route': _RISK_PAPER_EXECUTION_ROUTE_NAME,
+                                'reason_code': 'PAPER_TRADE_BLOCKED_BY_RUNTIME',
+                                'blocking_stage': 'dispatch_record',
+                                'observed_value': 'missing_dispatch_record',
+                                'threshold': 'AutonomousDispatchRecord',
+                            }
+                        )
+                    continue
+                dispatch_status = str(dispatch.dispatch_status or '')
+                if dispatch.linked_paper_trade_id:
+                    if dispatch.created_at >= window_start:
+                        paper_trade_route_created += 1
+                        reason_code = 'PAPER_TRADE_CREATED'
+                    else:
+                        paper_trade_route_reused += 1
+                        reason_code = 'PAPER_TRADE_DEDUPE_REUSED'
+                    paper_trade_route_reason_codes.append(reason_code)
+                    if len(paper_trade_examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                        paper_trade_examples.append(
+                            {
+                                'execution_candidate_id': int(candidate.id),
+                                'market_id': market_id,
+                                'candidate_status': str(candidate.intake_status or ''),
+                                'expected_route': _RISK_PAPER_EXECUTION_ROUTE_NAME,
+                                'reason_code': reason_code,
+                                'blocking_stage': 'paper_trade_dispatch',
+                                'observed_value': dispatch_status,
+                                'threshold': 'FILLED|PARTIAL|DISPATCHED',
+                            }
+                        )
+                    continue
+                paper_trade_route_blocked += 1
+                if dispatch_status == 'BLOCKED':
+                    if decision.decision_type == AutonomousExecutionDecisionType.BLOCK:
+                        reason_code = 'PAPER_TRADE_BLOCKED_BY_POLICY'
+                    elif decision.decision_type == AutonomousExecutionDecisionType.REQUIRE_MANUAL_REVIEW:
+                        reason_code = 'PAPER_TRADE_BLOCKED_BY_SAFETY'
+                    else:
+                        reason_code = 'PAPER_TRADE_BLOCKED_BY_RUNTIME'
+                elif dispatch_status == 'SKIPPED':
+                    reason_code = 'PAPER_TRADE_STATUS_FILTER_REJECTED'
+                else:
+                    reason_code = 'PAPER_TRADE_ARTIFACT_MISMATCH'
+                paper_trade_route_reason_codes.append(reason_code)
+                if len(paper_trade_examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                    paper_trade_examples.append(
+                        {
+                            'execution_candidate_id': int(candidate.id),
+                            'market_id': market_id,
+                            'candidate_status': str(candidate.intake_status or ''),
+                            'expected_route': _RISK_PAPER_EXECUTION_ROUTE_NAME,
+                            'reason_code': reason_code,
+                            'blocking_stage': 'paper_trade_dispatch',
+                            'observed_value': dispatch_status,
+                            'threshold': 'linked_paper_trade_id',
+                        }
+                    )
+
+    visible_market_ids = [
+        _safe_int(getattr(candidate, 'linked_market_id', None))
+        for candidate in visible_candidates
+        if _safe_int(getattr(candidate, 'linked_market_id', None)) is not None
+    ]
+    unique_visible_market_count = len(set(visible_market_ids))
+    fanout_reason_codes: list[str] = []
+    if risk_count := len(risk_rows):
+        if risk_count > max(1, len(set(int(getattr(row.linked_candidate, 'id', 0) or 0) for row in risk_rows))):
+            fanout_reason_codes.append('LINEAGE_MULTI_RISK_DECISIONS_PER_PREDICTION')
+    if paper_trade_route_reused > 0:
+        fanout_reason_codes.append('LINEAGE_REUSE_VISIBLE')
+    if paper_trade_route_expected > 0 and unique_visible_market_count > 0:
+        fanout_ratio = Decimal(str(paper_trade_route_expected)) / Decimal(str(unique_visible_market_count))
+        if fanout_ratio > Decimal('3.0'):
+            fanout_reason_codes.append('LINEAGE_FANOUT_EXCESSIVE')
+        elif fanout_ratio > Decimal('1.0'):
+            fanout_reason_codes.append('LINEAGE_FANOUT_MULTI_ARTIFACT_EXPECTED')
+        else:
+            fanout_reason_codes.append('LINEAGE_FANOUT_ONE_TO_ONE')
+    else:
+        fanout_reason_codes.append('LINEAGE_FANOUT_INSUFFICIENT_DATA')
+    normalized_paper_trade_route_codes = list(dict.fromkeys(paper_trade_route_reason_codes))
+    normalized_fanout_codes = list(dict.fromkeys(fanout_reason_codes))
+    execution_lineage_summary = {
+        'visible_execution_candidates': int(paper_trade_route_expected),
+        'executable_candidates': int(len(executable_candidate_ids)),
+        'materialized_paper_trades': int(paper_trade_route_created),
+        'reused_trade_cycles': int(paper_trade_route_reused),
+        'fanout_reason_codes': normalized_fanout_codes,
+    }
     return {
         'paper_execution_route_expected': int(route_expected),
         'paper_execution_route_available': int(route_available),
@@ -607,6 +834,21 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         ),
         'execution_artifact_examples': execution_examples,
         'paper_execution_route_bridge_materialized': int(bridge_materialized_count),
+        'paper_trade_route_expected': int(paper_trade_route_expected),
+        'paper_trade_route_available': int(paper_trade_route_available),
+        'paper_trade_route_attempted': int(paper_trade_route_attempted),
+        'paper_trade_route_created': int(paper_trade_route_created),
+        'paper_trade_route_reused': int(paper_trade_route_reused),
+        'paper_trade_route_blocked': int(paper_trade_route_blocked),
+        'paper_trade_route_reason_codes': normalized_paper_trade_route_codes,
+        'paper_trade_summary': (
+            f"route_expected={paper_trade_route_expected} route_available={paper_trade_route_available} "
+            f"route_attempted={paper_trade_route_attempted} route_created={paper_trade_route_created} "
+            f"route_reused={paper_trade_route_reused} route_blocked={paper_trade_route_blocked} "
+            f"paper_trade_route_reason_codes={','.join(normalized_paper_trade_route_codes) or 'none'}"
+        ),
+        'paper_trade_examples': paper_trade_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
+        'execution_lineage_summary': execution_lineage_summary,
     }
 
 
@@ -2528,6 +2770,16 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'paper_execution_visibility_reason_codes': paper_execution_summary.get('paper_execution_visibility_reason_codes', []),
         'paper_execution_visibility_summary': paper_execution_summary.get('paper_execution_visibility_summary', ''),
         'paper_execution_visibility_examples': paper_execution_summary.get('paper_execution_visibility_examples', []),
+        'paper_trade_summary': paper_execution_summary.get('paper_trade_summary', ''),
+        'paper_trade_route_expected': paper_execution_summary.get('paper_trade_route_expected', 0),
+        'paper_trade_route_available': paper_execution_summary.get('paper_trade_route_available', 0),
+        'paper_trade_route_attempted': paper_execution_summary.get('paper_trade_route_attempted', 0),
+        'paper_trade_route_created': paper_execution_summary.get('paper_trade_route_created', 0),
+        'paper_trade_route_reused': paper_execution_summary.get('paper_trade_route_reused', 0),
+        'paper_trade_route_blocked': paper_execution_summary.get('paper_trade_route_blocked', 0),
+        'paper_trade_route_reason_codes': paper_execution_summary.get('paper_trade_route_reason_codes', []),
+        'paper_trade_examples': paper_execution_summary.get('paper_trade_examples', []),
+        'execution_lineage_summary': paper_execution_summary.get('execution_lineage_summary', {}),
         'execution_readiness_available_count': paper_execution_summary.get('execution_readiness_available_count', 0),
         'execution_readiness_created_count': paper_execution_summary.get('execution_readiness_created_count', 0),
         'execution_readiness_reused_count': paper_execution_summary.get('execution_readiness_reused_count', 0),
@@ -2684,6 +2936,16 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'paper_execution_visibility_reason_codes': handoff_diagnostics.get('paper_execution_visibility_reason_codes', []),
         'paper_execution_visibility_summary': handoff_diagnostics.get('paper_execution_visibility_summary', ''),
         'paper_execution_visibility_examples': handoff_diagnostics.get('paper_execution_visibility_examples', []),
+        'paper_trade_summary': handoff_diagnostics.get('paper_trade_summary', ''),
+        'paper_trade_route_expected': handoff_diagnostics.get('paper_trade_route_expected', 0),
+        'paper_trade_route_available': handoff_diagnostics.get('paper_trade_route_available', 0),
+        'paper_trade_route_attempted': handoff_diagnostics.get('paper_trade_route_attempted', 0),
+        'paper_trade_route_created': handoff_diagnostics.get('paper_trade_route_created', 0),
+        'paper_trade_route_reused': handoff_diagnostics.get('paper_trade_route_reused', 0),
+        'paper_trade_route_blocked': handoff_diagnostics.get('paper_trade_route_blocked', 0),
+        'paper_trade_route_reason_codes': handoff_diagnostics.get('paper_trade_route_reason_codes', []),
+        'paper_trade_examples': handoff_diagnostics.get('paper_trade_examples', []),
+        'execution_lineage_summary': handoff_diagnostics.get('execution_lineage_summary', {}),
         'execution_readiness_available_count': handoff_diagnostics.get('execution_readiness_available_count', 0),
         'execution_readiness_created_count': handoff_diagnostics.get('execution_readiness_created_count', 0),
         'execution_readiness_reused_count': handoff_diagnostics.get('execution_readiness_reused_count', 0),

@@ -3376,6 +3376,12 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - cuando existe readiness elegible pero falta `AutonomousExecutionIntakeCandidate`, Mission Control materializa de forma conservadora un candidate paper-only (`dispatch_enabled=false`) para resolver el mismatch de modelo sin forzar fills/trades.
   - `handoff_summary.paper_execution_candidates` queda alineado con `execution_candidate_visible_count` downstream, manteniendo observability-first, `REAL_READ_ONLY` y `PAPER_ONLY`.
   - sigue observability-first, backend-only y **REAL_READ_ONLY + PAPER_ONLY**; no abre candidate->fill ni live trading real.
+- **Prompt 259** agrega diagnóstico explícito del último tramo `execution candidate visible -> paper trade/trade cycle`:
+  - nuevo `paper_trade_summary` con `paper_trade_route_expected|available|attempted|created|reused|blocked` y `paper_trade_route_reason_codes`.
+  - `paper_trade_examples` (máx 3) muestra `execution_candidate_id`, `market_id`, `candidate_status`, `expected_route`, `reason_code`, `blocking_stage`, `observed_value`, `threshold`.
+  - separa visibilidad de candidate vs ejecutabilidad real (`READY_FOR_AUTONOMOUS_EXECUTION|READY_REDUCED`) y deja explícitos bloqueos por status, runtime, policy/safety, dedupe/reuse y artifact mismatch.
+  - añade `execution_lineage_summary` para distinguir reuse histórico/fan-out legítimo vs fan-out excesivo (`fanout_reason_codes`).
+  - el export del Test Console incluye ambos bloques (`paper_trade_summary`, `execution_lineage_summary`) en texto y JSON, manteniendo enfoque observability-first y **REAL_READ_ONLY + PAPER_ONLY**.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.

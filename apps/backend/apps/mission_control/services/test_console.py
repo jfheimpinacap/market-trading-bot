@@ -243,6 +243,18 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
                 'paper_execution_visibility_summary': str(funnel.get('paper_execution_visibility_summary') or ''),
             },
             'paper_execution_visibility_examples': list(funnel.get('paper_execution_visibility_examples') or []),
+            'paper_trade_summary': {
+                'route_expected': int(funnel.get('paper_trade_route_expected') or 0),
+                'route_available': int(funnel.get('paper_trade_route_available') or 0),
+                'route_attempted': int(funnel.get('paper_trade_route_attempted') or 0),
+                'route_created': int(funnel.get('paper_trade_route_created') or 0),
+                'route_reused': int(funnel.get('paper_trade_route_reused') or 0),
+                'route_blocked': int(funnel.get('paper_trade_route_blocked') or 0),
+                'paper_trade_route_reason_codes': list(funnel.get('paper_trade_route_reason_codes') or []),
+                'paper_trade_summary': str(funnel.get('paper_trade_summary') or ''),
+            },
+            'paper_trade_examples': list(funnel.get('paper_trade_examples') or []),
+            'execution_lineage_summary': dict(funnel.get('execution_lineage_summary') or {}),
             'execution_artifact_summary': {
                 'execution_readiness_available_count': int(funnel.get('execution_readiness_available_count') or 0),
                 'readiness_created': int(funnel.get('execution_readiness_created_count') or 0),
@@ -300,6 +312,9 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     paper_execution_examples = payload.get('paper_execution_examples') or []
     paper_execution_visibility = payload.get('paper_execution_visibility_summary') or {}
     paper_execution_visibility_examples = payload.get('paper_execution_visibility_examples') or []
+    paper_trade = payload.get('paper_trade_summary') or {}
+    paper_trade_examples = payload.get('paper_trade_examples') or []
+    execution_lineage = payload.get('execution_lineage_summary') or {}
     execution_artifact = payload.get('execution_artifact_summary') or {}
     execution_artifact_examples = payload.get('execution_artifact_examples') or []
     shortlist_handoff = payload.get('shortlist_handoff_summary') or {}
@@ -382,6 +397,25 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"{','.join(paper_execution_visibility.get('paper_execution_visibility_reason_codes') or []) or 'none'}"
         ),
         f"  paper_execution_visibility_examples={paper_execution_visibility_examples or []}",
+        'paper_trade_summary:',
+        (
+            f"  route_expected={paper_trade.get('route_expected', 0)} "
+            f"route_available={paper_trade.get('route_available', 0)} "
+            f"route_attempted={paper_trade.get('route_attempted', 0)} "
+            f"route_created={paper_trade.get('route_created', 0)} "
+            f"route_reused={paper_trade.get('route_reused', 0)} "
+            f"route_blocked={paper_trade.get('route_blocked', 0)}"
+        ),
+        f"  paper_trade_route_reason_codes={','.join(paper_trade.get('paper_trade_route_reason_codes') or []) or 'none'}",
+        f"  paper_trade_examples={paper_trade_examples or []}",
+        'execution_lineage_summary:',
+        (
+            f"  visible_execution_candidates={execution_lineage.get('visible_execution_candidates', 0)} "
+            f"executable_candidates={execution_lineage.get('executable_candidates', 0)} "
+            f"materialized_paper_trades={execution_lineage.get('materialized_paper_trades', 0)} "
+            f"reused_trade_cycles={execution_lineage.get('reused_trade_cycles', 0)}"
+        ),
+        f"  fanout_reason_codes={','.join(execution_lineage.get('fanout_reason_codes') or []) or 'none'}",
         'execution_artifact_summary:',
         (
             f"  execution_readiness_available_count={execution_artifact.get('execution_readiness_available_count', 0)} "
