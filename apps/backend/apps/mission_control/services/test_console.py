@@ -26,6 +26,7 @@ from apps.mission_control.services.live_paper_trial_trend import build_live_pape
 from apps.mission_control.services.live_paper_validation import build_live_paper_validation_digest
 from apps.mission_control.services.session_heartbeat import get_runner_state, pause_runner
 from apps.mission_control.services.session_runtime import pause_session
+from apps.mission_control.services.state_consistency import build_state_consistency_snapshot
 from apps.paper_trading.services.portfolio import build_account_financial_summary, build_account_summary, get_active_account
 from apps.research_agent.models import NarrativeSignal, NarrativeSignalStatus, SourceScanRun
 from apps.research_agent.services.intelligence_handoff.run import run_consensus_review
@@ -86,6 +87,8 @@ _state = _ConsoleState(
         'attention_mode': 'UNKNOWN',
         'portfolio_summary': {},
         'scan_summary': {},
+        'state_mismatch_summary': {},
+        'state_mismatch_examples': [],
         'blocker_summary': [],
         'next_action_hint': 'Start test console run',
         'warnings': [],
@@ -330,6 +333,20 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'reason_codes': list(dict.fromkeys(gate.get('reason_codes') or [])),
         }
     )
+    active_session = _find_active_preset_session(preset_name=preset_name)
+    portfolio = payload.get('portfolio_summary') or {}
+    account = get_active_account()
+    consistency = build_state_consistency_snapshot(
+        funnel=funnel,
+        portfolio_summary=portfolio,
+        funnel_session_detected=(f"runtime_session:{active_session.id}" if active_session else None),
+        portfolio_session_detected=f"paper_account:{account.slug}",
+        funnel_scope=None,
+        portfolio_scope=None,
+        stale_view_gate_blocked=bool(payload.get('gate_status') == 'BLOCK' and int(portfolio.get('open_positions') or 0) > 0 and str(funnel.get('funnel_status') or '').upper() == 'STALLED'),
+    )
+    payload['state_mismatch_summary'] = consistency.summary
+    payload['state_mismatch_examples'] = consistency.examples
 
 
 def _log_line_items(payload: dict[str, Any]) -> str:
@@ -378,6 +395,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     prediction_risk_caution_examples = payload.get('prediction_risk_caution_examples') or []
     prediction_status = payload.get('prediction_status_summary') or {}
     prediction_status_examples = payload.get('prediction_status_examples') or []
+    state_mismatch_summary = payload.get('state_mismatch_summary') or {}
+    state_mismatch_examples = payload.get('state_mismatch_examples') or []
 
     lines = [
         '=== Mission Control Test Console Export ===',
@@ -396,6 +415,17 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         f"current_session_status: {payload.get('current_session_status')}",
         f"attention_mode: {payload.get('attention_mode')}",
         f"funnel_status: {payload.get('funnel_status')}",
+        'state_mismatch_summary:',
+        f"  consistency_status={state_mismatch_summary.get('consistency_status') or 'UNKNOWN'}",
+        f"  funnel_session_detected={state_mismatch_summary.get('funnel_session_detected') or 'UNKNOWN'}",
+        f"  portfolio_session_detected={state_mismatch_summary.get('portfolio_session_detected') or 'UNKNOWN'}",
+        f"  state_window_alignment={state_mismatch_summary.get('state_window_alignment') or 'UNKNOWN'}",
+        f"  state_scope_alignment={state_mismatch_summary.get('state_scope_alignment') or 'UNKNOWN'}",
+        (
+            f"  state_consistency_reason_codes="
+            f"{','.join(state_mismatch_summary.get('state_consistency_reason_codes') or []) or 'none'}"
+        ),
+        f"  state_mismatch_examples={state_mismatch_examples}",
         'handoff_summary:',
         f"  summary_window={handoff_summary.get('summary_window') or 'rolling_60m'}",
         (

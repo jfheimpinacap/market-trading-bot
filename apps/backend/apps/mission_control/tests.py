@@ -2,6 +2,7 @@ from unittest.mock import patch
 import json
 from datetime import timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 from django.test import TestCase
 from django.urls import reverse
@@ -5250,6 +5251,15 @@ class ExtendedPaperRunGateApiTests(TestCase):
         ), patch(
             'apps.mission_control.services.extended_paper_run_gate.get_live_paper_bootstrap_status',
             return_value=bootstrap,
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_active_account',
+            return_value=SimpleNamespace(slug='demo-paper-account'),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_account_summary',
+            return_value={'open_positions_count': 0, 'recent_trades': []},
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_account_financial_summary',
+            return_value={'summary_status': 'PAPER_ACCOUNT_SUMMARY_OK'},
         ):
             return self.client.get(reverse('mission_control:extended-paper-run-gate'))
 
@@ -5349,6 +5359,41 @@ class ExtendedPaperRunGateApiTests(TestCase):
         self.assertIn('INSUFFICIENT_TRIAL_DATA', payload['reason_codes'])
         self.assertIn('VALIDATION_BLOCKED', payload['reason_codes'])
         self.assertIn('ATTENTION_BLOCKING', payload['reason_codes'])
+
+    def test_gate_uses_state_mismatch_diagnostics_when_portfolio_active_but_funnel_window_empty(self):
+        with patch('apps.mission_control.services.extended_paper_run_gate.build_live_paper_validation_digest', return_value=self._base_validation('READY')), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_live_paper_trial_trend_digest',
+            return_value=self._base_trend(),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.list_live_paper_trial_history',
+            return_value=self._base_history(),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_live_paper_attention_alert_status',
+            return_value=self._base_attention('HEALTHY'),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_live_paper_autonomy_funnel_snapshot',
+            return_value={'funnel_status': 'STALLED'},
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_live_paper_bootstrap_status',
+            return_value=self._base_bootstrap(),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_active_account',
+            return_value=SimpleNamespace(slug='demo-paper-account'),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_account_summary',
+            return_value={'open_positions_count': 1, 'recent_trades': [{'id': 10}]},
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_account_financial_summary',
+            return_value={'summary_status': 'PAPER_ACCOUNT_SUMMARY_OK'},
+        ):
+            response = self.client.get(reverse('mission_control:extended-paper-run-gate'))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['gate_status'], 'ALLOW')
+        self.assertIn('STATE_GATE_BLOCKED_ON_STALE_VIEW', payload['reason_codes'])
+        self.assertEqual(payload['state_mismatch_summary']['consistency_status'], 'MISMATCH')
+        self.assertIn('state_mismatch_examples', payload)
 
     def test_gate_reuses_existing_signal_services(self):
         with patch('apps.mission_control.services.extended_paper_run_gate.build_live_paper_validation_digest', return_value=self._base_validation('READY')) as mock_validation, patch(
@@ -5551,6 +5596,23 @@ class ExtendedPaperRunLauncherApiTests(TestCase):
         self.assertNotIn('INVALID_EXECUTION_MODE', response.json()['reason_codes'])
 
 
+class StateConsistencyDiagnosticsTests(TestCase):
+    def test_portfolio_active_and_funnel_empty_returns_explicit_mismatch(self):
+        from apps.mission_control.services.state_consistency import build_state_consistency_snapshot
+
+        snapshot = build_state_consistency_snapshot(
+            funnel={'funnel_status': 'STALLED'},
+            portfolio_summary={'open_positions': 1, 'recent_trades_count': 2},
+            funnel_session_detected='runtime_session:10',
+            portfolio_session_detected='paper_account:demo-paper-account',
+            funnel_scope='live_read_only_paper_conservative',
+            portfolio_scope='demo-paper-account',
+        )
+        self.assertEqual(snapshot.summary['consistency_status'], 'MISMATCH')
+        self.assertIn('STATE_PORTFOLIO_ACTIVE_BUT_FUNNEL_EMPTY', snapshot.reason_codes)
+        self.assertTrue(snapshot.examples)
+
+
 class TestConsoleApiTests(TestCase):
     def _status_payload(self):
         return {
@@ -5697,6 +5759,15 @@ class TestConsoleApiTests(TestCase):
                 'clusters': 2,
                 'shortlisted_signals': 1,
             },
+            'state_mismatch_summary': {
+                'consistency_status': 'ALIGNED',
+                'funnel_session_detected': 'runtime_session:1',
+                'portfolio_session_detected': 'paper_account:demo-paper-account',
+                'state_window_alignment': 'ALIGNED',
+                'state_scope_alignment': 'ALIGNED',
+                'state_consistency_reason_codes': ['STATE_ALIGNMENT_OK'],
+            },
+            'state_mismatch_examples': [],
             'blocker_summary': [],
             'next_action_hint': 'Proceed to extended paper run',
             'warnings': [],
@@ -5748,6 +5819,8 @@ class TestConsoleApiTests(TestCase):
         mock_state_snapshot.return_value = (payload, payload, [])
         text_payload = export_test_console_log(fmt='text')
         self.assertIn('handoff_summary:', text_payload)
+        self.assertIn('state_mismatch_summary:', text_payload)
+        self.assertIn('state_consistency_reason_codes=', text_payload)
         self.assertIn('shortlisted_signals=', text_payload)
         self.assertIn('shortlist_handoff_summary:', text_payload)
         self.assertIn('handoff_attempted=', text_payload)
