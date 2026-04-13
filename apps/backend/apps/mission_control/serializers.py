@@ -550,6 +550,8 @@ class TestConsoleStatusSerializer(serializers.Serializer):
     execution_lineage_summary = serializers.DictField(required=False)
     final_fanout_summary = serializers.DictField(required=False)
     final_fanout_examples = serializers.ListField(child=serializers.DictField(), required=False)
+    cash_pressure_summary = serializers.DictField(required=False)
+    cash_pressure_examples = serializers.ListField(child=serializers.DictField(), required=False)
     prediction_intake_summary = serializers.DictField(required=False)
     prediction_intake_examples = serializers.ListField(child=serializers.DictField(), required=False)
     attention_mode = serializers.CharField()

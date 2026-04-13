@@ -23,6 +23,33 @@ Mission Control backend observability paths now treat expected paper-runtime tra
 
 Safety boundary is unchanged: `REAL_READ_ONLY` + `PAPER_ONLY` only; no live-trading enablement and no runtime/broker escalation.
 
+## Mission Control cash-pressure and final fan-out diagnostics (Prompt 268)
+
+`live_paper_autonomy_funnel` now adds a compact cash-pressure layer for the final materialization segment (observability-only, no throttle logic changes).
+
+- New export blocks:
+  - `cash_pressure_summary`
+  - `cash_pressure_examples` (max 3)
+- `cash_pressure_summary` fields:
+  - `cash_available`
+  - `executable_candidates`
+  - `estimated_cash_required`
+  - `candidates_blocked_by_cash`
+  - `candidates_reused`
+  - `cash_pressure_status`
+  - `cash_pressure_reason_codes`
+- Diagnostic reason codes include:
+  - `CASH_PRESSURE_OK`
+  - `CASH_PRESSURE_HIGH`
+  - `CASH_PRESSURE_INSUFFICIENT_FOR_ALL`
+  - `CASH_PRESSURE_BLOCKING_FINAL_TRADES`
+  - `CASH_PRESSURE_REUSE_EXPECTED`
+  - `CASH_PRESSURE_FANOUT_EXCESSIVE`
+
+`final_fanout_summary` remains logic-neutral (no selection/runtime rewrite) and is reported together with `cash_pressure_summary` so operators can quickly separate “insufficient cash” from “excessive final fan-out” and “expected reuse”.
+
+Safety boundary remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY` only.
+
 ## Scan diagnostics + demo narrative fallback (new)
 
 `apps.research_agent.services.run.run_scan_agent` now writes explicit scan diagnostics under `SourceScanRun.metadata.scan_diagnostics`.

@@ -376,6 +376,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'execution_lineage_summary': dict(funnel.get('execution_lineage_summary') or {}),
             'final_fanout_summary': dict(funnel.get('final_fanout_summary') or {}),
             'final_fanout_examples': list(funnel.get('final_fanout_examples') or []),
+            'cash_pressure_summary': dict(funnel.get('cash_pressure_summary') or {}),
+            'cash_pressure_examples': list(funnel.get('cash_pressure_examples') or []),
             'execution_artifact_summary': {
                 'execution_readiness_available_count': int(funnel.get('execution_readiness_available_count') or 0),
                 'readiness_created': int(funnel.get('execution_readiness_created_count') or 0),
@@ -463,6 +465,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     execution_lineage = payload.get('execution_lineage_summary') or {}
     final_fanout = payload.get('final_fanout_summary') or {}
     final_fanout_examples = payload.get('final_fanout_examples') or []
+    cash_pressure = payload.get('cash_pressure_summary') or {}
+    cash_pressure_examples = payload.get('cash_pressure_examples') or []
     portfolio_trade_reconciliation = payload.get('portfolio_trade_reconciliation_summary') or {}
     execution_artifact = payload.get('execution_artifact_summary') or {}
     execution_artifact_examples = payload.get('execution_artifact_examples') or []
@@ -637,6 +641,17 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         ),
         f"  final_fanout_reason_codes={','.join(final_fanout.get('final_fanout_reason_codes') or []) or 'none'}",
         f"  final_fanout_examples={final_fanout_examples or []}",
+        'cash_pressure_summary:',
+        (
+            f"  cash_available={cash_pressure.get('cash_available', 0)} "
+            f"executable_candidates={cash_pressure.get('executable_candidates', 0)} "
+            f"estimated_cash_required={cash_pressure.get('estimated_cash_required', 0)} "
+            f"candidates_blocked_by_cash={cash_pressure.get('candidates_blocked_by_cash', 0)} "
+            f"candidates_reused={cash_pressure.get('candidates_reused', 0)} "
+            f"cash_pressure_status={cash_pressure.get('cash_pressure_status') or 'UNKNOWN'}"
+        ),
+        f"  cash_pressure_reason_codes={','.join(cash_pressure.get('cash_pressure_reason_codes') or []) or 'none'}",
+        f"  cash_pressure_examples={cash_pressure_examples or []}",
         'execution_artifact_summary:',
         (
             f"  execution_readiness_available_count={execution_artifact.get('execution_readiness_available_count', 0)} "

@@ -34,6 +34,27 @@ Test Console export reconciliation is now `None`-safe for numeric portfolio metr
 
 Scope remains unchanged: observability-first, `REAL_READ_ONLY` market data, and `PAPER_ONLY` execution (no live broker/real-money enablement).
 
+### Mission Control cash-pressure + final fan-out diagnostics (Prompt 268)
+
+Mission Control backend now emits compact operational truth for the final paper-trade materialization stage without changing selection/execution logic.
+
+- New `cash_pressure_summary` + `cash_pressure_examples` are included in funnel snapshot and Test Console export log.
+- `cash_pressure_summary` reports:
+  - `cash_available`
+  - `executable_candidates`
+  - `estimated_cash_required`
+  - `candidates_blocked_by_cash`
+  - `candidates_reused`
+  - `cash_pressure_status`
+  - `cash_pressure_reason_codes`
+- Cash pressure reason codes include explicit differentiation between normal/reuse and pressure/fanout contexts (for example `CASH_PRESSURE_INSUFFICIENT_FOR_ALL`, `CASH_PRESSURE_BLOCKING_FINAL_TRADES`, `CASH_PRESSURE_FANOUT_EXCESSIVE`).
+- Existing `final_fanout_summary` stays logic-neutral and is now consumed alongside cash pressure to distinguish:
+  - real cash insufficiency,
+  - excessive lineage/market fan-out,
+  - expected healthy reuse.
+
+Scope remains observability-first and paper-only (`REAL_READ_ONLY` + `PAPER_ONLY`), with no runtime rewrite and no live-trading enablement.
+
 ### Scan diagnostics + demo narrative fallback (backend, local V1 paper)
 
 `research_agent` scan runs now persist explicit diagnostics in `SourceScanRun.metadata.scan_diagnostics` so local V1 paper tests can explain zero-signal stalls instead of failing silently.

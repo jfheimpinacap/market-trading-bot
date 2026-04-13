@@ -893,6 +893,93 @@ def _build_final_fanout_diagnostics(
     }
 
 
+def _build_cash_pressure_diagnostics(
+    *,
+    executable_candidates: list[AutonomousExecutionIntakeCandidate],
+    dispatch_by_candidate_id: dict[int, AutonomousDispatchRecord],
+    final_trade_reason_codes: list[str],
+    final_fanout_summary: dict[str, Any],
+    final_trade_created: int,
+    final_trade_reused: int,
+) -> dict[str, Any]:
+    account = get_active_account()
+    portfolio_summary = build_account_summary(account=account)
+    cash_available = _as_decimal(portfolio_summary.get('cash_balance', portfolio_summary.get('cash', '0')))
+    estimated_cash_required = Decimal('0')
+    candidates_blocked_by_cash = 0
+    examples: list[dict[str, Any]] = []
+
+    for candidate in executable_candidates:
+        candidate_id = int(candidate.id)
+        market_id = _safe_int(getattr(candidate, 'linked_market_id', None))
+        dispatch = dispatch_by_candidate_id.get(candidate_id)
+        estimated_cost = Decimal('50.00')
+        if dispatch is not None and getattr(dispatch, 'dispatched_notional', None):
+            estimated_cost = _as_decimal(dispatch.dispatched_notional, default='50.00')
+        elif candidate.linked_sizing_plan and candidate.linked_sizing_plan.paper_notional_size:
+            estimated_cost = _as_decimal(candidate.linked_sizing_plan.paper_notional_size, default='50.00')
+
+        estimated_cash_required += estimated_cost
+        candidate_reason = 'CASH_PRESSURE_OK'
+        candidate_status = str(candidate.intake_status or '')
+        if estimated_cost > cash_available:
+            candidates_blocked_by_cash += 1
+            candidate_reason = 'CASH_PRESSURE_INSUFFICIENT_FOR_ALL'
+            candidate_status = 'BLOCKED_BY_CASH_PRESSURE'
+        if len(examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+            examples.append(
+                {
+                    'execution_candidate_id': candidate_id,
+                    'market_id': market_id,
+                    'candidate_status': candidate_status,
+                    'estimated_cost': float(estimated_cost.quantize(Decimal('0.01'))),
+                    'observed_cash': float(cash_available.quantize(Decimal('0.01'))),
+                    'reason_code': candidate_reason,
+                }
+            )
+
+    reason_codes: list[str] = []
+    estimated_executable = len(executable_candidates)
+    blocking_final_trades = 'PAPER_TRADE_FINAL_BLOCKED_BY_CASH' in final_trade_reason_codes
+    fanout_excessive = str(final_fanout_summary.get('final_fanout_status') or 'UNKNOWN') == 'EXCESSIVE'
+    if candidates_blocked_by_cash == 0 and estimated_cash_required <= cash_available:
+        status = 'OK'
+        reason_codes.append('CASH_PRESSURE_OK')
+    else:
+        status = 'HIGH'
+        reason_codes.append('CASH_PRESSURE_HIGH')
+    if estimated_cash_required > cash_available:
+        reason_codes.append('CASH_PRESSURE_INSUFFICIENT_FOR_ALL')
+    if blocking_final_trades:
+        reason_codes.append('CASH_PRESSURE_BLOCKING_FINAL_TRADES')
+    if final_trade_reused > 0:
+        reason_codes.append('CASH_PRESSURE_REUSE_EXPECTED')
+    if fanout_excessive:
+        reason_codes.append('CASH_PRESSURE_FANOUT_EXCESSIVE')
+
+    normalized_codes = list(dict.fromkeys(reason_codes))
+    return {
+        'cash_available': float(cash_available.quantize(Decimal('0.01'))),
+        'executable_candidates': int(estimated_executable),
+        'estimated_cash_required': float(estimated_cash_required.quantize(Decimal('0.01'))),
+        'candidates_blocked_by_cash': int(candidates_blocked_by_cash),
+        'candidates_reused': int(final_trade_reused),
+        'cash_pressure_status': status,
+        'cash_pressure_reason_codes': normalized_codes,
+        'cash_pressure_summary': (
+            f"cash_available={cash_available.quantize(Decimal('0.01'))} "
+            f"executable_candidates={estimated_executable} "
+            f"estimated_cash_required={estimated_cash_required.quantize(Decimal('0.01'))} "
+            f"candidates_blocked_by_cash={candidates_blocked_by_cash} "
+            f"candidates_reused={final_trade_reused} "
+            f"created={final_trade_created} "
+            f"cash_pressure_status={status} "
+            f"cash_pressure_reason_codes={','.join(normalized_codes) or 'none'}"
+        ),
+        'cash_pressure_examples': examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
+    }
+
+
 @transaction.atomic
 def _ensure_execution_decisions_for_candidates(
     *,
@@ -1647,6 +1734,14 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         trades_materialized=int(final_trade_created),
         trades_reused=int(final_trade_reused),
     )
+    cash_pressure_summary = _build_cash_pressure_diagnostics(
+        executable_candidates=executable_candidates,
+        dispatch_by_candidate_id=latest_dispatch_by_candidate,
+        final_trade_reason_codes=normalized_final_trade_codes,
+        final_fanout_summary=final_fanout_summary,
+        final_trade_created=int(final_trade_created),
+        final_trade_reused=int(final_trade_reused),
+    )
     execution_lineage_summary = {
         'visible_execution_candidates': int(paper_trade_route_expected),
         'executable_candidates': int(len(executable_candidate_ids)),
@@ -1767,6 +1862,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'paper_trade_final_examples': final_trade_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
         'final_fanout_summary': final_fanout_summary,
         'final_fanout_examples': list(final_fanout_summary.get('final_fanout_examples') or []),
+        'cash_pressure_summary': cash_pressure_summary,
+        'cash_pressure_examples': list(cash_pressure_summary.get('cash_pressure_examples') or []),
         'paper_trade_decision_summary': (
             f"route_expected={paper_trade_route_expected} decision_created={paper_trade_decision_created} "
             f"decision_reused={paper_trade_decision_reused} decision_blocked={paper_trade_decision_blocked} "
@@ -3742,6 +3839,8 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'execution_lineage_summary': paper_execution_summary.get('execution_lineage_summary', {}),
         'final_fanout_summary': paper_execution_summary.get('final_fanout_summary', {}),
         'final_fanout_examples': paper_execution_summary.get('final_fanout_examples', []),
+        'cash_pressure_summary': paper_execution_summary.get('cash_pressure_summary', {}),
+        'cash_pressure_examples': paper_execution_summary.get('cash_pressure_examples', []),
         'execution_readiness_available_count': paper_execution_summary.get('execution_readiness_available_count', 0),
         'execution_readiness_created_count': paper_execution_summary.get('execution_readiness_created_count', 0),
         'execution_readiness_reused_count': paper_execution_summary.get('execution_readiness_reused_count', 0),
@@ -3935,6 +4034,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'execution_lineage_summary': handoff_diagnostics.get('execution_lineage_summary', {}),
         'final_fanout_summary': handoff_diagnostics.get('final_fanout_summary', {}),
         'final_fanout_examples': handoff_diagnostics.get('final_fanout_examples', []),
+        'cash_pressure_summary': handoff_diagnostics.get('cash_pressure_summary', {}),
+        'cash_pressure_examples': handoff_diagnostics.get('cash_pressure_examples', []),
         'execution_readiness_available_count': handoff_diagnostics.get('execution_readiness_available_count', 0),
         'execution_readiness_created_count': handoff_diagnostics.get('execution_readiness_created_count', 0),
         'execution_readiness_reused_count': handoff_diagnostics.get('execution_readiness_reused_count', 0),
