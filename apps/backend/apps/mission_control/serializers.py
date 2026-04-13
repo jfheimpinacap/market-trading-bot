@@ -566,6 +566,17 @@ class TestConsoleStatusSerializer(serializers.Serializer):
     errors = serializers.ListField(child=serializers.CharField(), required=False)
     reason_codes = serializers.ListField(child=serializers.CharField(), required=False)
     summary = serializers.CharField(required=False)
+    current_step = serializers.IntegerField(required=False, allow_null=True)
+    current_step_label = serializers.CharField(required=False, allow_blank=True)
+    completed_steps = serializers.IntegerField(required=False)
+    total_steps = serializers.IntegerField(required=False)
+    progress_state = serializers.CharField(required=False)
+    updated_at = serializers.DateTimeField(required=False, allow_null=True)
+    elapsed_seconds = serializers.IntegerField(required=False, allow_null=True)
+    last_event = serializers.CharField(required=False, allow_blank=True)
+    last_reason_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    export_available = serializers.BooleanField(required=False)
+    is_stale = serializers.BooleanField(required=False)
 
 
 class TestConsoleExportLogQuerySerializer(serializers.Serializer):

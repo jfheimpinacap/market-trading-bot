@@ -54,6 +54,19 @@ _PHASES = [
     'finalize',
 ]
 
+_PHASE_LABELS = {
+    'bootstrap': 'Inicializando',
+    'scan': 'Scan',
+    'consensus_review': 'Handoff',
+    'pursuit_review': 'Prediction',
+    'trial': 'Execution',
+    'validation': 'Risk',
+    'trend': 'Risk',
+    'gate': 'Risk',
+    'extended_run': 'Execution',
+    'finalize': 'Finalizando',
+}
+
 _HISTORY_SIZE = 10
 
 
@@ -94,6 +107,15 @@ _state = _ConsoleState(
         'warnings': [],
         'errors': [],
         'reason_codes': [],
+        'updated_at': timezone.now(),
+        'current_step': None,
+        'current_step_label': 'Sin etapa',
+        'completed_steps': 0,
+        'total_steps': len(_PHASES),
+        'progress_state': 'idle',
+        'elapsed_seconds': None,
+        'export_available': False,
+        'is_stale': False,
     },
     last_log=None,
     history=deque(maxlen=_HISTORY_SIZE),
@@ -116,6 +138,55 @@ def _set_state(*, status: dict[str, Any] | None = None, log: dict[str, Any] | No
             _state.last_log = deepcopy(log)
             if append_history:
                 _state.history.appendleft(deepcopy(log))
+
+
+def _phase_index(phase: str | None) -> int:
+    if phase in _PHASES:
+        return _PHASES.index(phase) + 1
+    return 0
+
+
+def _progress_state_for_status(test_status: str) -> str:
+    normalized = str(test_status or TEST_STATUS_IDLE).upper()
+    if normalized in {TEST_STATUS_RUNNING, 'IN_PROGRESS', 'ACTIVE'}:
+        return 'running'
+    if normalized in {TEST_STATUS_COMPLETED, TEST_STATUS_COMPLETED_WITH_WARNINGS}:
+        return 'completed'
+    if normalized == TEST_STATUS_BLOCKED:
+        return 'blocked'
+    if normalized == TEST_STATUS_FAILED:
+        return 'failed'
+    if normalized == TEST_STATUS_STOPPED:
+        return 'stopped'
+    return 'idle'
+
+
+def _augment_progress(status_payload: dict[str, Any]) -> dict[str, Any]:
+    payload = status_payload
+    now = timezone.now()
+    current_phase = payload.get('current_phase')
+    started_at = payload.get('started_at')
+    updated_at = payload.get('updated_at') or payload.get('timestamp') or now
+    current_step = _phase_index(current_phase)
+    completed_steps = int(sum(1 for item in payload.get('step_results') or [] if item.get('status') in {'ok', 'warning', 'skipped'}))
+    total_steps = len(_PHASES)
+    if current_step and completed_steps > current_step:
+        completed_steps = current_step
+    elapsed_seconds = None
+    if started_at:
+        elapsed_seconds = int(max(0, (now - started_at).total_seconds()))
+    stale_seconds = int(max(0, (now - updated_at).total_seconds())) if updated_at else 0
+    export_available = bool(payload.get('ended_at') or payload.get('text_export'))
+    payload['updated_at'] = updated_at
+    payload['current_step'] = current_step if current_step > 0 else None
+    payload['current_step_label'] = _PHASE_LABELS.get(current_phase or '', str(current_phase or 'Sin etapa'))
+    payload['completed_steps'] = completed_steps
+    payload['total_steps'] = total_steps
+    payload['progress_state'] = _progress_state_for_status(str(payload.get('test_status') or TEST_STATUS_IDLE))
+    payload['elapsed_seconds'] = elapsed_seconds
+    payload['export_available'] = export_available
+    payload['is_stale'] = stale_seconds > 30 and payload['progress_state'] != 'running'
+    return payload
 
 
 def _get_state_snapshot() -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, Any]]]:
@@ -883,18 +954,26 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         'reason_codes': [],
         'step_results': [],
         'next_action_hint': 'Running test console pipeline',
+        'last_event': 'Test console run started',
     }
-    _set_state(status=payload)
+    _set_state(status=_augment_progress(payload))
 
     scan_run: SourceScanRun | None = None
 
     try:
         bootstrap_result = bootstrap_live_read_only_paper_session(preset_name=target_preset, auto_start_heartbeat=True, start_now=True)
         payload['step_results'].append({'phase': 'bootstrap', 'status': 'ok', 'result': bootstrap_result})
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Bootstrap completed'
+        payload['last_reason_code'] = str(bootstrap_result.get('bootstrap_action') or '')
+        _set_state(status=_augment_progress(payload))
         if str(bootstrap_result.get('bootstrap_action')) in {'BLOCKED', 'FAILED'}:
             payload['warnings'].append(f"bootstrap action={bootstrap_result.get('bootstrap_action')}")
 
         payload['current_phase'] = 'scan'
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Scan phase started'
+        _set_state(status=_augment_progress(payload))
         try:
             scan_run = run_scan_agent(triggered_by='mission_control_test_console')
             payload['step_results'].append(
@@ -909,14 +988,24 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
                     },
                 }
             )
+            payload['updated_at'] = timezone.now()
+            payload['last_event'] = 'Scan completed'
             if int(scan_run.signal_count or 0) <= 0:
                 payload['warnings'].append('scan produced zero signals')
                 payload['blocker_summary'].append('SCAN_ZERO_SIGNALS')
+                payload['last_reason_code'] = 'SCAN_ZERO_SIGNALS'
         except Exception as exc:  # pragma: no cover
             payload['warnings'].append(f'scan skipped/failed: {exc}')
             payload['step_results'].append({'phase': 'scan', 'status': 'warning', 'result': {'error': str(exc)}})
+            payload['updated_at'] = timezone.now()
+            payload['last_event'] = 'Scan warning'
+            payload['last_reason_code'] = 'SCAN_WARNING'
+        _set_state(status=_augment_progress(payload))
 
         payload['current_phase'] = 'consensus_review'
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Handoff phase started'
+        _set_state(status=_augment_progress(payload))
         shortlisted_count = 0
         if scan_run:
             shortlisted_count = scan_run.signals.filter(status=NarrativeSignalStatus.SHORTLISTED).count()
@@ -935,9 +1024,15 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
                         },
                     }
                 )
+                payload['updated_at'] = timezone.now()
+                payload['last_event'] = 'Consensus review completed'
             except Exception as exc:  # pragma: no cover
                 payload['warnings'].append(f'consensus review failed: {exc}')
                 payload['step_results'].append({'phase': 'consensus_review', 'status': 'warning', 'result': {'error': str(exc)}})
+                payload['updated_at'] = timezone.now()
+                payload['last_event'] = 'Consensus review warning'
+                payload['last_reason_code'] = 'CONSENSUS_WARNING'
+            _set_state(status=_augment_progress(payload))
             try:
                 pursuit = run_pursuit_review(
                     triggered_by='mission_control_test_console',
@@ -954,47 +1049,93 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
                         },
                     }
                 )
+                payload['updated_at'] = timezone.now()
+                payload['last_event'] = 'Pursuit review completed'
             except Exception as exc:  # pragma: no cover
                 payload['warnings'].append(f'pursuit review failed: {exc}')
                 payload['step_results'].append({'phase': 'pursuit_review', 'status': 'warning', 'result': {'error': str(exc)}})
+                payload['updated_at'] = timezone.now()
+                payload['last_event'] = 'Pursuit review warning'
+                payload['last_reason_code'] = 'PURSUIT_WARNING'
+            _set_state(status=_augment_progress(payload))
         else:
             payload['step_results'].append({'phase': 'consensus_review', 'status': 'skipped', 'result': {'reason': 'no_shortlisted_signals'}})
             payload['step_results'].append({'phase': 'pursuit_review', 'status': 'skipped', 'result': {'reason': 'no_shortlisted_signals'}})
+            payload['updated_at'] = timezone.now()
+            payload['last_event'] = 'Handoff skipped'
+            payload['last_reason_code'] = 'NO_SHORTLISTED_SIGNALS'
+            _set_state(status=_augment_progress(payload))
 
         payload['current_phase'] = 'trial'
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Execution trial started'
+        _set_state(status=_augment_progress(payload))
         trial = run_live_paper_trial_run(preset_name=target_preset, heartbeat_passes=1)
         payload['trial_status'] = str(trial.get('trial_status') or 'UNKNOWN')
         payload['step_results'].append({'phase': 'trial', 'status': 'ok', 'result': trial})
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Execution trial completed'
+        _set_state(status=_augment_progress(payload))
 
         payload['current_phase'] = 'validation'
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Risk validation started'
+        _set_state(status=_augment_progress(payload))
         validation = build_live_paper_validation_digest(preset_name=target_preset)
         payload['validation_status'] = str(validation.get('validation_status') or 'UNKNOWN')
         payload['step_results'].append({'phase': 'validation', 'status': 'ok', 'result': validation})
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Risk validation completed'
+        _set_state(status=_augment_progress(payload))
 
         payload['current_phase'] = 'trend'
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Trend review started'
+        _set_state(status=_augment_progress(payload))
         trend = build_live_paper_trial_trend_digest(limit=5, preset=target_preset)
         payload['trend_status'] = str(trend.get('trend_status') or 'UNKNOWN')
         payload['readiness_status'] = str(trend.get('readiness_status') or 'UNKNOWN')
         payload['step_results'].append({'phase': 'trend', 'status': 'ok', 'result': trend})
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Trend review completed'
+        _set_state(status=_augment_progress(payload))
 
         payload['current_phase'] = 'gate'
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Gate evaluation started'
+        _set_state(status=_augment_progress(payload))
         gate = build_extended_paper_run_gate(preset_name=target_preset)
         payload['gate_status'] = str(gate.get('gate_status') or 'UNKNOWN')
         payload['reason_codes'] = list(dict.fromkeys(gate.get('reason_codes') or []))
         payload['step_results'].append({'phase': 'gate', 'status': 'ok', 'result': gate})
         if payload['gate_status'] == 'BLOCK':
             payload['blocker_summary'].append('GATE_BLOCKED')
+            payload['last_reason_code'] = 'GATE_BLOCKED'
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Gate evaluation completed'
+        _set_state(status=_augment_progress(payload))
 
         payload['current_phase'] = 'extended_run'
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Extended run phase started'
+        _set_state(status=_augment_progress(payload))
         if payload['gate_status'] in {GATE_ALLOW, GATE_ALLOW_WITH_CAUTION}:
             launch = launch_extended_paper_run(preset_name=target_preset)
             payload['extended_run_status'] = str(launch.get('launch_status') or 'UNKNOWN')
             payload['step_results'].append({'phase': 'extended_run', 'status': 'ok', 'result': launch})
+            payload['last_event'] = 'Extended run launch completed'
         else:
             payload['extended_run_status'] = 'SKIPPED_GATE_BLOCKED'
             payload['step_results'].append({'phase': 'extended_run', 'status': 'skipped', 'result': {'reason': 'gate_blocked'}})
+            payload['last_reason_code'] = 'GATE_BLOCKED'
+            payload['last_event'] = 'Extended run skipped (gate blocked)'
+        payload['updated_at'] = timezone.now()
+        _set_state(status=_augment_progress(payload))
 
         payload['current_phase'] = 'finalize'
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Finalizing test console run'
+        _set_state(status=_augment_progress(payload))
         _sync_operational_snapshot(payload=payload, preset_name=target_preset, scan_run=scan_run)
 
         has_errors = bool(payload['errors'])
@@ -1010,13 +1151,17 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
     except Exception as exc:
         payload['errors'].append(str(exc))
         payload['test_status'] = TEST_STATUS_FAILED
+        payload['updated_at'] = timezone.now()
+        payload['last_event'] = 'Run failed'
     finally:
         payload['ended_at'] = timezone.now()
+        payload['updated_at'] = timezone.now()
         payload['summary'] = (
             f"{payload['test_status']}: phase={payload.get('current_phase')} trial={payload.get('trial_status')} "
             f"validation={payload.get('validation_status')} gate={payload.get('gate_status')}"
         )
         payload['text_export'] = _log_line_items(payload)
+        payload = _augment_progress(payload)
         _set_state(status=payload, log=payload, append_history=True)
 
     return payload
@@ -1066,15 +1211,19 @@ def stop_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
             'Stop applied conservatively.' if actions else 'No explicit stop primitive was applied; reported current state only.'
         ),
         'next_action_hint': 'Run start again when ready for next V1 paper diagnostic cycle',
+        'updated_at': timezone.now(),
+        'last_event': 'Stop requested by operator',
+        'last_reason_code': warnings[0] if warnings else (actions[0] if actions else None),
     }
     payload['text_export'] = _log_line_items(payload)
+    payload = _augment_progress(payload)
     _set_state(status=payload, log=payload, append_history=True)
     return payload
 
 
 def get_test_console_status() -> dict[str, Any]:
     status_snapshot, _last_log, _history = _get_state_snapshot()
-    return status_snapshot
+    return _augment_progress(status_snapshot)
 
 
 def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:

@@ -92,6 +92,19 @@ import type {
 import type { PaperAccount, PaperPortfolioSnapshot, PaperPortfolioSummary } from '../types/paperTrading';
 
 const formatDate = (value: string | null | undefined) => (value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'n/a');
+const formatDurationSeconds = (value: number | null | undefined) => {
+  if (value === null || value === undefined) return 'n/a';
+  if (value < 60) return `${value}s`;
+  const minutes = Math.floor(value / 60);
+  const seconds = value % 60;
+  return `${minutes}m ${seconds}s`;
+};
+const formatRelativeSeconds = (value: string | null | undefined) => {
+  if (!value) return 'n/a';
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  return `${seconds}s`;
+};
+const TEST_CONSOLE_PHASES = ['bootstrap', 'scan', 'consensus_review', 'pursuit_review', 'trial', 'validation', 'trend', 'gate', 'extended_run', 'finalize'];
 const parseNumber = (value: string | null | undefined) => {
   if (!value) return null;
   const parsed = Number(value);
@@ -380,6 +393,13 @@ export function CockpitPage() {
     testConsoleStatus?.test_status
       && ['RUNNING', 'IN_PROGRESS', 'ACTIVE'].includes(testConsoleStatus.test_status.toUpperCase()),
   );
+  const testConsoleCurrentStep = testConsoleStatus?.current_step ?? (testConsoleStatus?.current_phase ? TEST_CONSOLE_PHASES.indexOf(testConsoleStatus.current_phase) + 1 : null);
+  const testConsoleTotalSteps = testConsoleStatus?.total_steps ?? TEST_CONSOLE_PHASES.length;
+  const testConsoleProgressPercent = testConsoleCurrentStep && testConsoleTotalSteps
+    ? Math.min(100, Math.max(0, Math.round((testConsoleCurrentStep / testConsoleTotalSteps) * 100)))
+    : 0;
+  const testConsoleCurrentStepLabel = testConsoleStatus?.current_step_label ?? testConsoleStatus?.current_phase ?? 'Sin etapa';
+  const testConsoleUpdatedAgo = formatRelativeSeconds(testConsoleStatus?.updated_at);
   const testConsoleHasExportableLog = Boolean(
     testConsoleLog
       && testConsoleLog !== 'No log exported yet'
@@ -871,6 +891,14 @@ export function CockpitPage() {
   }, [loadTestConsoleStatus]);
 
   useEffect(() => {
+    if (!testConsoleRunActive && !testConsoleStartLoading) return undefined;
+    const timer = window.setInterval(() => {
+      void loadTestConsoleStatus();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [loadTestConsoleStatus, testConsoleRunActive, testConsoleStartLoading]);
+
+  useEffect(() => {
     void loadLivePaperOperationalSnapshot();
   }, [loadLivePaperOperationalSnapshot]);
 
@@ -1168,17 +1196,29 @@ export function CockpitPage() {
                 >
                   <div className="button-row">
                     <StatusBadge tone={toneFromStatus(testConsoleStatus?.test_status)}>{testConsoleStatus?.test_status ?? 'UNKNOWN'}</StatusBadge>
+                    <StatusBadge tone={toneFromStatus(testConsoleStatus?.progress_state)}>{testConsoleStatus?.progress_state ?? 'idle'}</StatusBadge>
                     <StatusBadge tone={toneFromStatus(testConsoleStatus?.validation_status)}>{testConsoleStatus?.validation_status ?? 'n/a'}</StatusBadge>
                     <StatusBadge tone={toneFromStatus(testConsoleStatus?.trial_status)}>{testConsoleStatus?.trial_status ?? 'n/a'}</StatusBadge>
                     <StatusBadge tone={toneFromStatus(testConsoleStatus?.gate_status)}>{testConsoleStatus?.gate_status ?? 'n/a'}</StatusBadge>
+                    {testConsoleStatus?.is_stale ? <StatusBadge tone="pending">STALE</StatusBadge> : null}
+                    {testConsoleStatus?.export_available ? <StatusBadge tone="ready">EXPORT AVAILABLE</StatusBadge> : null}
                   </div>
                   {testConsoleStatusLoading ? <p>Loading Test Console status…</p> : null}
                   {!testConsoleStatusLoading && testConsoleStatusError ? <p className="warning-text">{testConsoleStatusError}</p> : null}
                   {testConsoleStatus ? (
-                    <ul className="key-value-list">
+                    <>
+                      <div className="test-console-progress">
+                        <div className="test-console-progress__bar" role="progressbar" aria-valuenow={testConsoleProgressPercent} aria-valuemin={0} aria-valuemax={100}>
+                          <div className="test-console-progress__fill" style={{ width: `${testConsoleProgressPercent}%` }} />
+                        </div>
+                        <p className="muted-text">Etapa actual: {testConsoleCurrentStepLabel} · Paso {testConsoleCurrentStep ?? 0} de {testConsoleTotalSteps} · Última actualización hace {testConsoleUpdatedAgo}</p>
+                      </div>
+                      <ul className="key-value-list">
                       <li><span>Current phase</span><strong>{testConsoleStatus.current_phase ?? 'n/a'}</strong></li>
                       <li><span>Started at</span><strong>{formatDate(testConsoleStatus.started_at)}</strong></li>
+                      <li><span>Updated at</span><strong>{formatDate(testConsoleStatus.updated_at)}</strong></li>
                       <li><span>Ended at</span><strong>{formatDate(testConsoleStatus.ended_at)}</strong></li>
+                      <li><span>Elapsed time</span><strong>{formatDurationSeconds(testConsoleStatus.elapsed_seconds)}</strong></li>
                       <li><span>Validation status</span><strong>{testConsoleStatus.validation_status ?? 'n/a'}</strong></li>
                       <li><span>Trial status</span><strong>{testConsoleStatus.trial_status ?? 'n/a'}</strong></li>
                       <li><span>Trend status</span><strong>{testConsoleStatus.trend_status ?? 'n/a'}</strong></li>
@@ -1189,11 +1229,14 @@ export function CockpitPage() {
                       <li><span>Funnel status</span><strong>{testConsoleStatus.funnel_status ?? 'n/a'}</strong></li>
                       <li><span>Scan summary</span><strong>{testConsoleScanSummary}</strong></li>
                       <li><span>Portfolio summary</span><strong>{testConsolePortfolioSummary}</strong></li>
+                      <li><span>Last event</span><strong>{testConsoleStatus.last_event ?? 'n/a'}</strong></li>
+                      <li><span>Last reason code</span><strong>{testConsoleStatus.last_reason_code ?? 'n/a'}</strong></li>
                       <li><span>Next action hint</span><strong>{testConsoleStatus.next_action_hint ?? 'n/a'}</strong></li>
                       {testConsoleStatus.blocker_summary ? (
                         <li><span>Blocker summary</span><strong>{testConsoleStatus.blocker_summary}</strong></li>
                       ) : null}
-                    </ul>
+                      </ul>
+                    </>
                   ) : null}
                   <div className="button-row test-console-actions">
                     <button className="secondary-button" type="button" disabled={testConsoleStartLoading || testConsoleStopLoading} onClick={() => void startTestConsoleFromCockpit()}>
