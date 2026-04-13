@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import json
 from datetime import timedelta
 from decimal import Decimal
@@ -3766,6 +3766,35 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(final_fanout.get('final_fanout_status'), 'EXCESSIVE')
         self.assertIn('FINAL_LINEAGE_FANOUT_EXCESSIVE', final_fanout.get('final_fanout_reason_codes', []))
 
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary')
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
+    def test_cash_pressure_summary_reports_insufficient_cash_and_fanout_excessive(self, mock_get_active_account, mock_build_account_summary):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        mock_get_active_account.return_value = Mock()
+        mock_build_account_summary.return_value = {'cash_balance': Decimal('10.00'), 'recent_trades': []}
+
+        market = self._provider_and_market('paper-trade-cash-pressure')
+        for idx in range(4):
+            decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+            AutonomousExecutionReadiness.objects.create(
+                linked_market=market,
+                linked_approval_review=decision,
+                readiness_status=AutonomousExecutionReadinessStatus.READY,
+                readiness_confidence=Decimal('0.8200'),
+                readiness_summary=f'cash-pressure-{idx}',
+                readiness_reason_codes=['READY'],
+            )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        cash_pressure = diagnostics.get('cash_pressure_summary') or {}
+        self.assertEqual(cash_pressure.get('cash_pressure_status'), 'HIGH')
+        self.assertGreaterEqual(cash_pressure.get('candidates_blocked_by_cash', 0), 1)
+        self.assertIn('CASH_PRESSURE_INSUFFICIENT_FOR_ALL', cash_pressure.get('cash_pressure_reason_codes', []))
+        self.assertIn('CASH_PRESSURE_FANOUT_EXCESSIVE', cash_pressure.get('cash_pressure_reason_codes', []))
+        self.assertEqual(len(diagnostics.get('cash_pressure_examples') or []), 3)
+
     def test_final_fanout_summary_reports_ok_when_one_to_one(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
@@ -5982,6 +6011,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('fanout_reason_codes=', text_payload)
         self.assertIn('final_fanout_summary:', text_payload)
         self.assertIn('final_fanout_reason_codes=', text_payload)
+        self.assertIn('cash_pressure_summary:', text_payload)
+        self.assertIn('cash_pressure_reason_codes=', text_payload)
         self.assertIn('candidates_deduplicated=', text_payload)
         self.assertIn('dispatches_considered=', text_payload)
         self.assertIn('trades_materialized=', text_payload)
@@ -6011,6 +6042,7 @@ class TestConsoleApiTests(TestCase):
             'account_summary_reason_codes': ['PAPER_ACCOUNT_SCOPE_LIVE_READ_ONLY'],
         }
         payload['execution_lineage_summary'] = {'trades_materialized': 1, 'trades_reused': 8}
+        payload['cash_pressure_summary'] = {'cash_pressure_status': 'HIGH', 'cash_pressure_reason_codes': ['CASH_PRESSURE_HIGH']}
         payload['text_export'] = ''
         mock_state_snapshot.return_value = (payload, payload, [])
 
@@ -6018,6 +6050,7 @@ class TestConsoleApiTests(TestCase):
         reconciliation = json_payload.get('portfolio_trade_reconciliation_summary') or {}
         self.assertIn('PORTFOLIO_POSITION_REUSE_ACCUMULATION', reconciliation.get('portfolio_trade_reconciliation_reason_codes', []))
         self.assertIn('PORTFOLIO_UNREALIZED_PNL_OUTLIER', reconciliation.get('portfolio_trade_reconciliation_reason_codes', []))
+        self.assertIn('cash_pressure_summary', json_payload)
 
     def test_reconciliation_summary_handles_none_metrics_as_degraded(self):
         from apps.mission_control.services.test_console import _build_portfolio_trade_reconciliation_summary
