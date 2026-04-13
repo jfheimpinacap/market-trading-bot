@@ -80,6 +80,31 @@ Mission Control backend now adds a conservative **cash-aware precheck** right be
 
 Clarification: this precheck is **before** `execute_paper_trade`; runtime cash rejection is still captured separately if it happens (for example due concurrent cash changes). Scope remains observability-first and strictly `REAL_READ_ONLY` + `PAPER_ONLY` (no live trading).
 
+### Mission Control active-position conservative gate (Prompt 272)
+
+Mission Control backend now adds a conservative **active position / active trade gate** before final paper-trade materialization to contain redundant buy-side fan-out.
+
+- Rule (stable, minimal):
+  - if the same market/lineage already has active exposure, skip additive new-entry materialization;
+  - allow reduce/exit-shaped candidates to bypass this gate;
+  - keep reuse preference for existing trade/dispatch/position artifacts.
+- New diagnostics are emitted in existing funnel/export summaries (no parallel logging), including:
+  - `PAPER_TRADE_BLOCKED_BY_ACTIVE_POSITION`
+  - `PAPER_TRADE_BLOCKED_BY_EXISTING_OPEN_TRADE`
+  - `PAPER_TRADE_SKIPPED_BY_POSITION_EXPOSURE`
+  - `PAPER_TRADE_POSITION_GATE_APPLIED`
+  - `PAPER_TRADE_ALLOWED_REDUCE_POSITION`
+  - `PAPER_TRADE_ALLOWED_EXIT_POSITION`
+  - `PAPER_TRADE_POSITION_GATE_BYPASSED_FOR_EXIT`
+- New compact block:
+  - `position_exposure_summary` (`open_positions_detected`, blocked/allowed counters, reason codes).
+
+Cash vs exposure clarification:
+- **Active-position gate** blocks redundant additive exposure before cash pressure is hit.
+- **Cash precheck** still handles remaining selected candidates against available paper cash.
+
+Scope remains unchanged: observability-first, backend-only, `REAL_READ_ONLY` + `PAPER_ONLY`.
+
 ### Scan diagnostics + demo narrative fallback (backend, local V1 paper)
 
 `research_agent` scan runs now persist explicit diagnostics in `SourceScanRun.metadata.scan_diagnostics` so local V1 paper tests can explain zero-signal stalls instead of failing silently.

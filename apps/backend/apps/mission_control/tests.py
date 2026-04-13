@@ -2953,6 +2953,113 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         self.assertEqual(bridge.get('cash_available'), 90.0)
         self.assertEqual(bridge.get('cash_budget_remaining'), 10.0)
 
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.execute_paper_trade')
+    def test_final_trade_blocks_redundant_entry_when_active_position_exists(self, mock_execute, mock_account, _mock_summary):
+        from apps.autonomous_trader.models import AutonomousDispatchStatus, AutonomousExecutionDecisionType
+        from apps.mission_control.services.live_paper_autonomy_funnel import _ensure_final_paper_trade_for_dispatches
+
+        positions_filter = Mock()
+        positions_filter.values_list.return_value = [55]
+        account = Mock()
+        account.positions.filter.return_value = positions_filter
+        mock_account.return_value = account
+
+        candidate = SimpleNamespace(
+            id=101,
+            linked_market_id=55,
+            linked_market=object(),
+            linked_execution_readiness=None,
+            linked_sizing_plan=SimpleNamespace(paper_notional_size=Decimal('50.00')),
+            linked_prediction_context={},
+            linked_portfolio_context={},
+            reason_codes=[],
+            execution_context_summary='',
+            intake_run=SimpleNamespace(linked_cycle_run=None),
+        )
+        decision = SimpleNamespace(
+            id=201,
+            decision_type=AutonomousExecutionDecisionType.EXECUTE_NOW,
+            decision_confidence=Decimal('0.7000'),
+            reason_codes=[],
+            metadata={},
+        )
+        dispatch = SimpleNamespace(
+            id=301,
+            dispatch_status=AutonomousDispatchStatus.QUEUED,
+            linked_paper_trade_id=None,
+            linked_paper_trade=None,
+            metadata={},
+        )
+
+        bridge = _ensure_final_paper_trade_for_dispatches(
+            candidates=[candidate],
+            decision_by_candidate_id={101: decision},
+            dispatch_by_candidate_id={101: dispatch},
+            window_start=timezone.now() - timedelta(minutes=60),
+        )
+        mock_execute.assert_not_called()
+        self.assertEqual(bridge.get('blocked_by_active_position'), 1)
+        self.assertEqual(bridge.get('allowed_without_exposure'), 0)
+        self.assertEqual(bridge.get('allowed_for_exit'), 0)
+        self.assertEqual(bridge.get('blocked_by_cash_precheck'), 0)
+        self.assertIn('PAPER_TRADE_BLOCKED_BY_ACTIVE_POSITION', bridge.get('reason_codes', []))
+        self.assertIn('PAPER_TRADE_POSITION_GATE_APPLIED', bridge.get('reason_codes', []))
+
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.execute_paper_trade')
+    def test_final_trade_allows_reduce_or_exit_candidates_despite_active_position(self, mock_execute, mock_account, _mock_summary):
+        from apps.autonomous_trader.models import AutonomousDispatchStatus, AutonomousExecutionDecisionType
+        from apps.mission_control.services.live_paper_autonomy_funnel import _ensure_final_paper_trade_for_dispatches
+        from apps.paper_trading.services.execution import PaperTradingValidationError
+
+        positions_filter = Mock()
+        positions_filter.values_list.return_value = [55]
+        account = Mock()
+        account.positions.filter.return_value = positions_filter
+        mock_account.return_value = account
+        mock_execute.side_effect = PaperTradingValidationError('forced-test-runtime-validation')
+
+        candidate = SimpleNamespace(
+            id=101,
+            linked_market_id=55,
+            linked_market=object(),
+            linked_execution_readiness=None,
+            linked_sizing_plan=SimpleNamespace(paper_notional_size=Decimal('50.00')),
+            linked_prediction_context={},
+            linked_portfolio_context={'position_action': 'reduce'},
+            reason_codes=['REDUCE_POSITION'],
+            execution_context_summary='reduce position',
+            intake_run=SimpleNamespace(linked_cycle_run=None),
+        )
+        decision = SimpleNamespace(
+            id=201,
+            decision_type=AutonomousExecutionDecisionType.EXECUTE_REDUCED,
+            decision_confidence=Decimal('0.7000'),
+            reason_codes=['REDUCE_POSITION'],
+            metadata={},
+        )
+        dispatch = SimpleNamespace(
+            id=301,
+            dispatch_status=AutonomousDispatchStatus.QUEUED,
+            linked_paper_trade_id=None,
+            linked_paper_trade=None,
+            metadata={},
+        )
+
+        bridge = _ensure_final_paper_trade_for_dispatches(
+            candidates=[candidate],
+            decision_by_candidate_id={101: decision},
+            dispatch_by_candidate_id={101: dispatch},
+            window_start=timezone.now() - timedelta(minutes=60),
+        )
+        mock_execute.assert_called_once()
+        self.assertEqual(bridge.get('blocked_by_active_position'), 0)
+        self.assertEqual(bridge.get('allowed_for_exit'), 1)
+        self.assertIn('PAPER_TRADE_ALLOWED_REDUCE_POSITION', bridge.get('reason_codes', []))
+
 
 class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
     def _provider_and_market(self, suffix: str = 'base'):
@@ -6082,6 +6189,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('final_fanout_reason_codes=', text_payload)
         self.assertIn('cash_pressure_summary:', text_payload)
         self.assertIn('cash_pressure_reason_codes=', text_payload)
+        self.assertIn('position_exposure_summary:', text_payload)
+        self.assertIn('position_exposure_reason_codes=', text_payload)
         self.assertIn('candidates_deduplicated=', text_payload)
         self.assertIn('dispatches_considered=', text_payload)
         self.assertIn('trades_materialized=', text_payload)
