@@ -4495,6 +4495,12 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - incorpora `paper_trade_decision_summary` + `paper_trade_decision_examples` en export log (`text/json`) para diagnosticar `decision_created|decision_reused|decision_blocked|decision_dedupe_applied`.
   - amplía `execution_lineage_summary` con `candidates_considered`, `candidates_deduplicated`, `decisions_created`, `decisions_reused` para hacer explícito cuándo hubo fan-out y cuándo se contuvo.
   - mantiene límites **REAL_READ_ONLY + PAPER_ONLY**, backend-only, observability-first y sin mezclar todavía fill/settlement final.
+- **Prompt 263 (bridge final execution decision -> dispatch record + alineación de summaries):**
+  - Mission Control crea o reutiliza `AutonomousDispatchRecord` desde `AutonomousExecutionDecision` cuando faltaba dispatch en paper-only, evitando el bloqueo `missing_dispatch_record` del tramo final.
+  - agrega dedupe final conservadora por lineage/market para reusar dispatch ya existente cuando corresponda y contener fan-out práctico sin rediseño arquitectónico.
+  - incorpora `paper_trade_dispatch_summary` + `paper_trade_dispatch_examples` en export (`text/json`) con `dispatch_created|dispatch_reused|dispatch_blocked|dispatch_dedupe_applied`.
+  - alinea `paper_trade_decision_summary` con `execution_lineage_summary` usando los mismos contadores operacionales de decisiones creadas/reusadas.
+  - mantiene límites **REAL_READ_ONLY + PAPER_ONLY**, sin broker routing/live trading real, sin frontend y sin tocar `/runtime`.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`
