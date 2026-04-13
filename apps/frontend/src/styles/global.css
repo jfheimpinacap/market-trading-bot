@@ -2498,6 +2498,38 @@ button {
   cursor: not-allowed;
 }
 
+.test-console-actions button:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.test-console-actions .ghost-button:disabled,
+.test-console-actions .secondary-button:disabled {
+  border-style: dashed;
+  border-color: var(--border-soft);
+  background: var(--bg-panel);
+  color: var(--text-soft);
+}
+
+.test-console-output-block {
+  min-width: 0;
+}
+
+.test-console-output {
+  margin: 0;
+  max-height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--bg-panel-alt);
+  padding: 12px;
+  line-height: 1.45;
+  color: var(--text-main);
+}
+
 .stack-md {
   display: grid;
   gap: 14px;
@@ -2659,4 +2691,3 @@ button {
 }
 
 .is-selected-row { outline: 2px solid rgba(94, 157, 255, 0.45); }
-
