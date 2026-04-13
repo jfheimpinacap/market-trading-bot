@@ -37,6 +37,7 @@ from apps.mission_control.services.session_heartbeat import build_heartbeat_summ
 from apps.paper_trading.models import PaperTrade, PaperTradeStatus, PaperTradeType
 from apps.paper_trading.services.execution import PaperTradingValidationError, execute_paper_trade
 from apps.paper_trading.services.portfolio import build_account_summary, get_active_account
+from apps.paper_trading.services.valuation import PaperTradingRejectionError
 from apps.prediction_agent.models import PredictionConvictionReview, PredictionIntakeCandidate, PredictionIntakeRun, RiskReadyPredictionHandoff
 from apps.prediction_agent.models import PredictionConvictionReviewStatus, PredictionIntakeStatus
 from apps.prediction_agent.services.conviction import review_candidate
@@ -260,6 +261,14 @@ def _is_visible_execution_intake_status(status_value: str) -> bool:
     }
 
 
+def _paper_trade_runtime_rejection_reason(error: Exception) -> tuple[str, str]:
+    message = str(error or '').strip()
+    lowered = message.lower()
+    if 'insufficient' in lowered and 'cash' in lowered:
+        return 'PAPER_TRADE_FINAL_BLOCKED_BY_CASH', message or 'insufficient_paper_cash'
+    return 'PAPER_TRADE_FINAL_BLOCKED_BY_REJECTION', message or 'paper_runtime_rejection'
+
+
 def _is_executable_execution_intake_status(status_value: str) -> bool:
     return status_value in _EXECUTABLE_INTAKE_STATUSES
 
@@ -457,6 +466,8 @@ def _ensure_final_paper_trade_for_dispatches(
     final_trade_deduped = 0
     dispatches_considered = 0
     dispatches_deduplicated = 0
+    runtime_rejection_count = 0
+    runtime_rejection_reason_codes: list[str] = []
     dedupe_trade_by_lineage_key: dict[tuple[Any, ...], PaperTrade] = {}
     dedupe_dispatch_by_lineage_key: dict[tuple[Any, ...], int] = {}
 
@@ -469,6 +480,9 @@ def _ensure_final_paper_trade_for_dispatches(
             'final_trade_deduped': 0,
             'dispatches_considered': 0,
             'dispatches_deduplicated': 0,
+            'runtime_rejection_count': 0,
+            'runtime_rejection_reason_codes': [],
+            'runtime_rejection_summary': 'runtime_rejection_count=0 runtime_rejection_reason_codes=none',
             'reason_codes': [],
             'examples': [],
         }
@@ -652,6 +666,38 @@ def _ensure_final_paper_trade_for_dispatches(
                     }
                 )
             continue
+        except PaperTradingRejectionError as error:
+            final_trade_blocked += 1
+            runtime_rejection_count += 1
+            rejection_reason_code, observed_value = _paper_trade_runtime_rejection_reason(error)
+            reason_codes.extend(
+                [
+                    rejection_reason_code,
+                    'PAPER_TRADE_FINAL_RUNTIME_REJECTION_CAPTURED',
+                    'PAPER_TRADE_FINAL_BLOCKED_BY_RUNTIME',
+                ]
+            )
+            runtime_rejection_reason_codes.extend(
+                [
+                    rejection_reason_code,
+                    'PAPER_TRADE_FINAL_RUNTIME_REJECTION_CAPTURED',
+                ]
+            )
+            if len(examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                examples.append(
+                    {
+                        'dispatch_id': int(dispatch.id),
+                        'execution_candidate_id': candidate_id,
+                        'market_id': market_id,
+                        'dispatch_status': dispatch_status,
+                        'linked_paper_trade_id': _safe_int(dispatch.linked_paper_trade_id),
+                        'reason_code': rejection_reason_code,
+                        'blocking_stage': 'final_trade_bridge_runtime_rejection',
+                        'observed_value': observed_value,
+                        'threshold': 'paper runtime rejection captured',
+                    }
+                )
+            continue
 
         cycle_run = candidate.intake_run.linked_cycle_run
         if cycle_run is None:
@@ -728,6 +774,12 @@ def _ensure_final_paper_trade_for_dispatches(
         'final_trade_deduped': int(final_trade_deduped),
         'dispatches_considered': int(dispatches_considered),
         'dispatches_deduplicated': int(dispatches_deduplicated),
+        'runtime_rejection_count': int(runtime_rejection_count),
+        'runtime_rejection_reason_codes': list(dict.fromkeys(runtime_rejection_reason_codes)),
+        'runtime_rejection_summary': (
+            f"runtime_rejection_count={runtime_rejection_count} "
+            f"runtime_rejection_reason_codes={','.join(list(dict.fromkeys(runtime_rejection_reason_codes))) or 'none'}"
+        ),
         'reason_codes': list(dict.fromkeys(reason_codes)),
         'examples': examples,
     }
@@ -1332,6 +1384,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     final_trade_blocked = 0
     final_trade_reason_codes: list[str] = []
     final_trade_examples: list[dict[str, Any]] = []
+    runtime_rejection_count = 0
+    runtime_rejection_reason_codes: list[str] = []
     dispatches_considered = 0
     dispatches_deduplicated = 0
     execution_lineage_considered = 0
@@ -1428,6 +1482,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             final_trade_examples.extend(list(final_trade_bridge.get('examples') or []))
             dispatches_considered = int(final_trade_bridge.get('dispatches_considered') or 0)
             dispatches_deduplicated = int(final_trade_bridge.get('dispatches_deduplicated') or 0)
+            runtime_rejection_count = int(final_trade_bridge.get('runtime_rejection_count') or 0)
+            runtime_rejection_reason_codes.extend(list(final_trade_bridge.get('runtime_rejection_reason_codes') or []))
             final_trade_expected = int(len(executable_candidate_ids))
             final_trade_available = int(sum(1 for dispatch in latest_dispatch_by_candidate.values() if dispatch is not None))
             final_trade_attempted = int(dispatches_considered)
@@ -1580,6 +1636,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     normalized_paper_trade_decision_codes = list(dict.fromkeys(paper_trade_decision_reason_codes))
     normalized_paper_trade_dispatch_codes = list(dict.fromkeys(paper_trade_dispatch_reason_codes))
     normalized_final_trade_codes = list(dict.fromkeys(final_trade_reason_codes))
+    normalized_runtime_rejection_codes = list(dict.fromkeys(runtime_rejection_reason_codes))
     normalized_fanout_codes = list(dict.fromkeys(fanout_reason_codes))
     aligned_decision_created = int(paper_trade_decision_created)
     aligned_decision_reused = int(paper_trade_decision_reused)
@@ -1612,6 +1669,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'final_fanout_status': str(final_fanout_summary.get('final_fanout_status') or 'UNKNOWN'),
         'final_fanout_reason_codes': list(final_fanout_summary.get('final_fanout_reason_codes') or []),
         'fanout_reason_codes': normalized_fanout_codes,
+        'runtime_rejection_count': int(runtime_rejection_count),
+        'runtime_rejection_reason_codes': normalized_runtime_rejection_codes,
     }
     return {
         'paper_execution_route_expected': int(route_expected),
@@ -1692,10 +1751,17 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'final_trade_reused': int(final_trade_reused),
         'final_trade_blocked': int(final_trade_blocked),
         'final_trade_reason_codes': normalized_final_trade_codes,
+        'runtime_rejection_summary': (
+            f"runtime_rejection_count={runtime_rejection_count} "
+            f"runtime_rejection_reason_codes={','.join(normalized_runtime_rejection_codes) or 'none'}"
+        ),
+        'runtime_rejection_reason_codes': normalized_runtime_rejection_codes,
         'paper_trade_final_summary': (
             f"expected={final_trade_expected} available={final_trade_available} "
             f"attempted={final_trade_attempted} created={final_trade_created} "
             f"reused={final_trade_reused} blocked={final_trade_blocked} "
+            f"runtime_rejection_count={runtime_rejection_count} "
+            f"runtime_rejection_reason_codes={','.join(normalized_runtime_rejection_codes) or 'none'} "
             f"final_trade_reason_codes={','.join(normalized_final_trade_codes) or 'none'}"
         ),
         'paper_trade_final_examples': final_trade_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
@@ -1712,6 +1778,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"route_expected={paper_trade_route_expected} route_available={paper_trade_route_available} "
             f"route_attempted={paper_trade_route_attempted} route_created={paper_trade_route_created} "
             f"route_reused={paper_trade_route_reused} route_blocked={paper_trade_route_blocked} "
+            f"runtime_rejection_count={runtime_rejection_count} "
+            f"runtime_rejection_reason_codes={','.join(normalized_runtime_rejection_codes) or 'none'} "
             f"paper_trade_route_reason_codes={','.join(normalized_paper_trade_route_codes) or 'none'}"
         ),
         'paper_trade_examples': paper_trade_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
@@ -3666,6 +3734,8 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'final_trade_reused': paper_execution_summary.get('final_trade_reused', 0),
         'final_trade_blocked': paper_execution_summary.get('final_trade_blocked', 0),
         'final_trade_reason_codes': paper_execution_summary.get('final_trade_reason_codes', []),
+        'runtime_rejection_summary': paper_execution_summary.get('runtime_rejection_summary', ''),
+        'runtime_rejection_reason_codes': paper_execution_summary.get('runtime_rejection_reason_codes', []),
         'paper_trade_final_summary': paper_execution_summary.get('paper_trade_final_summary', ''),
         'paper_trade_final_examples': paper_execution_summary.get('paper_trade_final_examples', []),
         'paper_trade_examples': paper_execution_summary.get('paper_trade_examples', []),
@@ -3857,6 +3927,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'final_trade_reused': handoff_diagnostics.get('final_trade_reused', 0),
         'final_trade_blocked': handoff_diagnostics.get('final_trade_blocked', 0),
         'final_trade_reason_codes': handoff_diagnostics.get('final_trade_reason_codes', []),
+        'runtime_rejection_summary': handoff_diagnostics.get('runtime_rejection_summary', ''),
+        'runtime_rejection_reason_codes': handoff_diagnostics.get('runtime_rejection_reason_codes', []),
         'paper_trade_final_summary': handoff_diagnostics.get('paper_trade_final_summary', ''),
         'paper_trade_final_examples': handoff_diagnostics.get('paper_trade_final_examples', []),
         'paper_trade_examples': handoff_diagnostics.get('paper_trade_examples', []),

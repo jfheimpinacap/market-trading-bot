@@ -11,6 +11,18 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 - Make the demo dataset feel alive locally without real provider integrations, trading, or websockets.
 - Provide precedent-aware agent support via `memory_retrieval` with conservative and auditable influence on research/prediction/risk/signals/postmortem.
 
+## Mission Control funnel/export hardening (Prompt 267)
+
+Mission Control backend observability paths now treat expected paper-runtime trade rejections as degradable diagnostics instead of unhandled server errors.
+
+- `live_paper_autonomy_funnel` captures expected paper-only `PaperTradingRejectionError` during final-trade bridge attempts.
+- Captured rejections are emitted as compact reason codes in existing summaries (`paper_trade_summary`, `paper_trade_final_summary`, `execution_lineage_summary`) and compact runtime rejection fields.
+- This keeps `live-paper-autonomy-funnel`, `extended-paper-run-gate`, `extended-paper-run-status`, and test-console export flows resilient and observable under insufficient paper cash conditions.
+
+`test_console` reconciliation/export logic is now None-safe for numeric fields and reports explicit degraded reconciliation status with fallback reason codes, rather than raising `TypeError` when values are missing.
+
+Safety boundary is unchanged: `REAL_READ_ONLY` + `PAPER_ONLY` only; no live-trading enablement and no runtime/broker escalation.
+
 ## Scan diagnostics + demo narrative fallback (new)
 
 `apps.research_agent.services.run.run_scan_agent` now writes explicit scan diagnostics under `SourceScanRun.metadata.scan_diagnostics`.

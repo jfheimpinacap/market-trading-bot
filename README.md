@@ -12,6 +12,28 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
 - **Precedent-aware decision support (new):** research, prediction, risk, signal-fusion, and postmortem now consume semantic precedents automatically in internal flows with conservative influence and explicit audit trails (`AgentPrecedentUse`).
 
+### Mission Control observability hardening (Prompt 267)
+
+Backend Mission Control observability now degrades safely (HTTP 200) when paper-only runtime rejects a final trade (for example insufficient paper cash), instead of bubbling an unhandled exception from funnel/gate/status/export GET flows.
+
+- Final paper-trade bridge now captures expected `PaperTradingRejectionError` as explicit diagnostics.
+- Compact reason codes now include runtime-rejection intent, such as:
+  - `PAPER_TRADE_FINAL_BLOCKED_BY_CASH`
+  - `PAPER_TRADE_FINAL_BLOCKED_BY_REJECTION`
+  - `PAPER_TRADE_FINAL_RUNTIME_REJECTION_CAPTURED`
+  - `PAPER_TRADE_FINAL_BLOCKED_BY_RUNTIME`
+- Diagnostics are surfaced in existing summaries (`paper_trade_summary`, `paper_trade_final_summary`, `execution_lineage_summary`) plus compact runtime rejection fields.
+
+Test Console export reconciliation is now `None`-safe for numeric portfolio metrics (`equity`, `unrealized_pnl`, `realized_pnl`, `recent_trades_count`, `open_positions`), with explicit degraded reporting instead of `TypeError`.
+
+- Reconciliation reason codes now include:
+  - `PORTFOLIO_TRADE_RECONCILIATION_OK`
+  - `PORTFOLIO_TRADE_RECONCILIATION_DEGRADED`
+  - `PORTFOLIO_TRADE_RECONCILIATION_MISSING_NUMERIC_FIELD`
+  - `PORTFOLIO_TRADE_RECONCILIATION_FALLBACK_USED`
+
+Scope remains unchanged: observability-first, `REAL_READ_ONLY` market data, and `PAPER_ONLY` execution (no live broker/real-money enablement).
+
 ### Scan diagnostics + demo narrative fallback (backend, local V1 paper)
 
 `research_agent` scan runs now persist explicit diagnostics in `SourceScanRun.metadata.scan_diagnostics` so local V1 paper tests can explain zero-signal stalls instead of failing silently.

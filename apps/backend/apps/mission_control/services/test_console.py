@@ -199,12 +199,36 @@ def _build_portfolio_trade_reconciliation_summary(*, payload: dict[str, Any]) ->
     paper_trade_final = payload.get('paper_trade_final_summary') or {}
     lineage = payload.get('execution_lineage_summary') or {}
     portfolio = payload.get('portfolio_summary') or {}
-    materialized = int(lineage.get('trades_materialized') or paper_trade_final.get('created') or 0)
-    reused = int(lineage.get('trades_reused') or paper_trade_final.get('reused') or 0)
-    recent_trades_count = int(portfolio.get('recent_trades_count') or 0)
-    open_positions = int(portfolio.get('open_positions') or 0)
-    equity = _to_float(portfolio.get('equity'))
-    unrealized_pnl = _to_float(portfolio.get('unrealized_pnl'))
+    missing_numeric_fields: list[str] = []
+    fallback_fields: list[str] = []
+
+    def _coerce_int(value: Any, *, field: str) -> int:
+        if value is None:
+            missing_numeric_fields.append(field)
+            fallback_fields.append(field)
+            return 0
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            missing_numeric_fields.append(field)
+            fallback_fields.append(field)
+            return 0
+
+    def _coerce_float(value: Any, *, field: str) -> float:
+        converted = _to_float(value)
+        if converted is None:
+            missing_numeric_fields.append(field)
+            fallback_fields.append(field)
+            return 0.0
+        return float(converted)
+
+    materialized = _coerce_int(lineage.get('trades_materialized') or paper_trade_final.get('created'), field='trades_materialized')
+    reused = _coerce_int(lineage.get('trades_reused') or paper_trade_final.get('reused'), field='trades_reused')
+    recent_trades_count = _coerce_int(portfolio.get('recent_trades_count'), field='recent_trades_count')
+    open_positions = _coerce_int(portfolio.get('open_positions'), field='open_positions')
+    equity = _coerce_float(portfolio.get('equity'), field='equity')
+    unrealized_pnl = _coerce_float(portfolio.get('unrealized_pnl'), field='unrealized_pnl')
+    realized_pnl = _coerce_float(portfolio.get('realized_pnl'), field='realized_pnl')
     reason_codes: list[str] = []
     if recent_trades_count >= min(1, materialized + reused):
         reason_codes.append('PORTFOLIO_SCOPE_ALIGNMENT_OK')
@@ -216,11 +240,17 @@ def _build_portfolio_trade_reconciliation_summary(*, payload: dict[str, Any]) ->
         reason_codes.append('PORTFOLIO_POSITION_REUSE_ACCUMULATION')
     if equity > 0 and abs(unrealized_pnl) > (equity * 0.9):
         reason_codes.append('PORTFOLIO_UNREALIZED_PNL_OUTLIER')
-    if not reason_codes:
-        reason_codes.append('PORTFOLIO_TRADE_RECONCILIATION_OK')
     status = 'OK'
     if any(code in reason_codes for code in ['PORTFOLIO_TRADE_COUNT_MISMATCH', 'PORTFOLIO_SCOPE_ALIGNMENT_MISMATCH']):
         status = 'CHECK'
+    if missing_numeric_fields:
+        status = 'DEGRADED'
+        reason_codes.append('PORTFOLIO_TRADE_RECONCILIATION_DEGRADED')
+        reason_codes.append('PORTFOLIO_TRADE_RECONCILIATION_MISSING_NUMERIC_FIELD')
+    if fallback_fields:
+        reason_codes.append('PORTFOLIO_TRADE_RECONCILIATION_FALLBACK_USED')
+    if not reason_codes:
+        reason_codes.append('PORTFOLIO_TRADE_RECONCILIATION_OK')
     normalized_codes = list(dict.fromkeys(reason_codes))
     if status == 'OK' and normalized_codes == ['PORTFOLIO_SCOPE_ALIGNMENT_OK']:
         normalized_codes.insert(0, 'PORTFOLIO_TRADE_RECONCILIATION_OK')
@@ -233,12 +263,15 @@ def _build_portfolio_trade_reconciliation_summary(*, payload: dict[str, Any]) ->
         'open_positions': open_positions,
         'equity': equity,
         'unrealized_pnl': unrealized_pnl,
+        'realized_pnl': realized_pnl,
+        'missing_numeric_fields': list(dict.fromkeys(missing_numeric_fields)),
+        'fallback_fields': list(dict.fromkeys(fallback_fields)),
         'trades_considered': int(materialized + reused),
         'positions_considered': int(open_positions),
-        'pnl_considered': {'equity': equity, 'unrealized_pnl': unrealized_pnl},
+        'pnl_considered': {'equity': equity, 'unrealized_pnl': unrealized_pnl, 'realized_pnl': realized_pnl},
         'reconciliation_summary': (
             f"materialized_paper_trades={materialized} reused_trade_cycles={reused} recent_trades_count={recent_trades_count} "
-            f"open_positions={open_positions} equity={equity:.2f} unrealized_pnl={unrealized_pnl:.2f} "
+            f"open_positions={open_positions} equity={equity:.2f} unrealized_pnl={unrealized_pnl:.2f} realized_pnl={realized_pnl:.2f} "
             f"portfolio_trade_reconciliation_status={status} "
             f"portfolio_trade_reconciliation_reason_codes={','.join(normalized_codes) or 'none'}"
         ),
@@ -335,6 +368,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
                 'reused': int(funnel.get('final_trade_reused') or 0),
                 'blocked': int(funnel.get('final_trade_blocked') or 0),
                 'final_trade_reason_codes': list(funnel.get('final_trade_reason_codes') or []),
+                'runtime_rejection_summary': str(funnel.get('runtime_rejection_summary') or ''),
+                'runtime_rejection_reason_codes': list(funnel.get('runtime_rejection_reason_codes') or []),
                 'paper_trade_final_summary': str(funnel.get('paper_trade_final_summary') or ''),
             },
             'paper_trade_final_examples': list(funnel.get('paper_trade_final_examples') or []),
@@ -383,9 +418,13 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'scan_summary': _build_scan_summary(scan_run=scan_run),
             'next_action_hint': str(gate.get('next_action_hint') or validation.get('next_action_hint') or 'Review test console log'),
             'reason_codes': list(dict.fromkeys(gate.get('reason_codes') or [])),
+            'runtime_rejection_summary': str(funnel.get('runtime_rejection_summary') or ''),
+            'runtime_rejection_reason_codes': list(funnel.get('runtime_rejection_reason_codes') or []),
         }
     )
     payload['portfolio_trade_reconciliation_summary'] = _build_portfolio_trade_reconciliation_summary(payload=payload)
+    payload['reconciliation_status'] = str(payload['portfolio_trade_reconciliation_summary'].get('portfolio_trade_reconciliation_status') or 'UNKNOWN')
+    payload['reconciliation_reason_codes'] = list(payload['portfolio_trade_reconciliation_summary'].get('portfolio_trade_reconciliation_reason_codes') or [])
     active_session = _find_active_preset_session(preset_name=preset_name)
     portfolio = payload.get('portfolio_summary') or {}
     account = get_active_account()
@@ -1033,6 +1072,10 @@ def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
     }
     if not payload.get('portfolio_trade_reconciliation_summary'):
         payload['portfolio_trade_reconciliation_summary'] = _build_portfolio_trade_reconciliation_summary(payload=payload)
+    payload['reconciliation_status'] = str(payload['portfolio_trade_reconciliation_summary'].get('portfolio_trade_reconciliation_status') or 'UNKNOWN')
+    payload['reconciliation_reason_codes'] = list(payload['portfolio_trade_reconciliation_summary'].get('portfolio_trade_reconciliation_reason_codes') or [])
+    payload.setdefault('runtime_rejection_summary', str((payload.get('paper_trade_final_summary') or {}).get('runtime_rejection_summary') or ''))
+    payload.setdefault('runtime_rejection_reason_codes', list((payload.get('paper_trade_final_summary') or {}).get('runtime_rejection_reason_codes') or []))
     if fmt == 'json':
         return payload
     return str(payload.get('text_export') or _log_line_items(payload))

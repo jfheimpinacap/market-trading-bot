@@ -2859,6 +2859,42 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         self.assertTrue(mock_validation.called)
         self.assertTrue(mock_heartbeat.called)
 
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.execute_paper_trade')
+    def test_final_trade_runtime_rejection_is_captured_without_raising(self, mock_execute):
+        from apps.autonomous_trader.models import AutonomousDispatchStatus, AutonomousExecutionDecisionType
+        from apps.mission_control.services.live_paper_autonomy_funnel import _ensure_final_paper_trade_for_dispatches
+        from apps.paper_trading.services.valuation import PaperTradingRejectionError
+
+        mock_execute.side_effect = PaperTradingRejectionError('Insufficient paper cash balance to execute buy trade.')
+        candidate = SimpleNamespace(
+            id=101,
+            linked_market_id=55,
+            linked_market=object(),
+            linked_execution_readiness=None,
+            linked_sizing_plan=None,
+            intake_run=SimpleNamespace(linked_cycle_run=None),
+        )
+        decision = SimpleNamespace(id=201, decision_type=AutonomousExecutionDecisionType.EXECUTE_NOW, decision_confidence=Decimal('0.7000'))
+        dispatch = SimpleNamespace(
+            id=301,
+            dispatch_status=AutonomousDispatchStatus.QUEUED,
+            linked_paper_trade_id=None,
+            linked_paper_trade=None,
+            metadata={},
+        )
+
+        bridge = _ensure_final_paper_trade_for_dispatches(
+            candidates=[candidate],
+            decision_by_candidate_id={101: decision},
+            dispatch_by_candidate_id={101: dispatch},
+            window_start=timezone.now() - timedelta(minutes=60),
+        )
+        self.assertEqual(bridge.get('final_trade_created'), 0)
+        self.assertEqual(bridge.get('final_trade_blocked'), 1)
+        self.assertEqual(bridge.get('runtime_rejection_count'), 1)
+        self.assertIn('PAPER_TRADE_FINAL_BLOCKED_BY_CASH', bridge.get('reason_codes', []))
+        self.assertIn('PAPER_TRADE_FINAL_RUNTIME_REJECTION_CAPTURED', bridge.get('runtime_rejection_reason_codes', []))
+
 
 class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
     def _provider_and_market(self, suffix: str = 'base'):
@@ -5619,6 +5655,52 @@ class ExtendedPaperRunLauncherApiTests(TestCase):
         self.assertNotIn('INVALID_MARKET_DATA_MODE', response.json()['reason_codes'])
         self.assertNotIn('INVALID_EXECUTION_MODE', response.json()['reason_codes'])
 
+    def test_gate_and_status_endpoints_stay_200_with_runtime_rejection_context(self):
+        degraded_funnel = {
+            'funnel_status': 'THIN_FLOW',
+            'runtime_rejection_summary': (
+                'runtime_rejection_count=1 '
+                'runtime_rejection_reason_codes=PAPER_TRADE_FINAL_BLOCKED_BY_CASH,PAPER_TRADE_FINAL_RUNTIME_REJECTION_CAPTURED'
+            ),
+            'runtime_rejection_reason_codes': ['PAPER_TRADE_FINAL_BLOCKED_BY_CASH', 'PAPER_TRADE_FINAL_RUNTIME_REJECTION_CAPTURED'],
+            'paper_trade_final_summary': 'expected=1 available=1 attempted=1 created=0 reused=0 blocked=1',
+        }
+        with patch('apps.mission_control.services.extended_paper_run_gate.build_live_paper_validation_digest', return_value={'validation_status': 'READY'}), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_live_paper_trial_trend_digest',
+            return_value={'sample_size': 1, 'latest_trial_status': 'PASS', 'trend_status': 'STABLE', 'readiness_status': 'READY_FOR_EXTENDED_RUN', 'counts': {'warn_count': 0, 'fail_count': 0}},
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.list_live_paper_trial_history',
+            return_value={'count': 1, 'latest_trial_status': 'PASS', 'items': []},
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_live_paper_attention_alert_status',
+            return_value={'attention_mode': 'HEALTHY'},
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_live_paper_autonomy_funnel_snapshot',
+            return_value=degraded_funnel,
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_live_paper_bootstrap_status',
+            return_value={'session_active': True, 'heartbeat_active': True},
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_active_account',
+            return_value=SimpleNamespace(slug='demo-paper-account'),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_account_summary',
+            return_value={'open_positions_count': 0, 'recent_trades': []},
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_account_financial_summary',
+            return_value={'summary_status': 'PAPER_ACCOUNT_SUMMARY_OK'},
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_launcher.build_extended_paper_run_gate',
+            return_value={'gate_status': 'ALLOW', 'reason_codes': ['VALIDATION_READY'], 'next_action_hint': 'Proceed to extended paper run'},
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_launcher.get_live_paper_bootstrap_status',
+            return_value={'session_active': True, 'heartbeat_active': True, 'current_session_status': 'RUNNING'},
+        ):
+            gate = self.client.get(reverse('mission_control:extended-paper-run-gate'))
+            status = self.client.get(reverse('mission_control:extended-paper-run-status'))
+        self.assertEqual(gate.status_code, 200)
+        self.assertEqual(status.status_code, 200)
+
 
 class StateConsistencyDiagnosticsTests(TestCase):
     def test_portfolio_active_and_funnel_empty_returns_explicit_mismatch(self):
@@ -5936,6 +6018,65 @@ class TestConsoleApiTests(TestCase):
         reconciliation = json_payload.get('portfolio_trade_reconciliation_summary') or {}
         self.assertIn('PORTFOLIO_POSITION_REUSE_ACCUMULATION', reconciliation.get('portfolio_trade_reconciliation_reason_codes', []))
         self.assertIn('PORTFOLIO_UNREALIZED_PNL_OUTLIER', reconciliation.get('portfolio_trade_reconciliation_reason_codes', []))
+
+    def test_reconciliation_summary_handles_none_metrics_as_degraded(self):
+        from apps.mission_control.services.test_console import _build_portfolio_trade_reconciliation_summary
+
+        reconciliation = _build_portfolio_trade_reconciliation_summary(
+            payload={
+                'execution_lineage_summary': {'trades_materialized': 1, 'trades_reused': None},
+                'paper_trade_final_summary': {'created': 0, 'reused': 0},
+                'portfolio_summary': {
+                    'equity': None,
+                    'unrealized_pnl': None,
+                    'realized_pnl': None,
+                    'recent_trades_count': None,
+                    'open_positions': None,
+                },
+            }
+        )
+        self.assertEqual(reconciliation.get('portfolio_trade_reconciliation_status'), 'DEGRADED')
+        self.assertIn('PORTFOLIO_TRADE_RECONCILIATION_MISSING_NUMERIC_FIELD', reconciliation.get('portfolio_trade_reconciliation_reason_codes', []))
+        self.assertIn('PORTFOLIO_TRADE_RECONCILIATION_FALLBACK_USED', reconciliation.get('portfolio_trade_reconciliation_reason_codes', []))
+        self.assertIn('equity', reconciliation.get('missing_numeric_fields', []))
+
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_export_log_json_none_equity_and_runtime_rejection_aliases(self, mock_state_snapshot):
+        from apps.mission_control.services.test_console import export_test_console_log
+
+        payload = self._status_payload()
+        payload['portfolio_summary'] = {
+            'cash': 100.0,
+            'equity': None,
+            'realized_pnl': None,
+            'unrealized_pnl': None,
+            'open_positions': None,
+            'recent_trades_count': None,
+            'account_summary_status': 'PAPER_ACCOUNT_SUMMARY_OK',
+            'account_summary_reason_codes': ['PAPER_ACCOUNT_SCOPE_LIVE_READ_ONLY'],
+        }
+        payload['paper_trade_final_summary'] = {
+            'expected': 1,
+            'available': 1,
+            'attempted': 1,
+            'created': 0,
+            'reused': 0,
+            'blocked': 1,
+            'final_trade_reason_codes': ['PAPER_TRADE_FINAL_BLOCKED_BY_RUNTIME'],
+            'runtime_rejection_summary': (
+                'runtime_rejection_count=1 '
+                'runtime_rejection_reason_codes=PAPER_TRADE_FINAL_BLOCKED_BY_CASH,PAPER_TRADE_FINAL_RUNTIME_REJECTION_CAPTURED'
+            ),
+            'runtime_rejection_reason_codes': ['PAPER_TRADE_FINAL_BLOCKED_BY_CASH', 'PAPER_TRADE_FINAL_RUNTIME_REJECTION_CAPTURED'],
+            'paper_trade_final_summary': 'expected=1 available=1 attempted=1 created=0 reused=0 blocked=1',
+        }
+        payload['text_export'] = ''
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        json_payload = export_test_console_log(fmt='json')
+        self.assertEqual(json_payload.get('reconciliation_status'), 'DEGRADED')
+        self.assertIn('PORTFOLIO_TRADE_RECONCILIATION_FALLBACK_USED', json_payload.get('reconciliation_reason_codes', []))
+        self.assertIn('PAPER_TRADE_FINAL_BLOCKED_BY_CASH', json_payload.get('runtime_rejection_reason_codes', []))
 
     @patch('apps.mission_control.views.export_test_console_log')
     def test_export_log_json_works(self, mock_export):
