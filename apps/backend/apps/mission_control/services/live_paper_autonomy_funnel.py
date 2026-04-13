@@ -12,9 +12,12 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.autonomous_trader.models import (
+    AutonomousDispatchMode,
     AutonomousDispatchRecord,
+    AutonomousDispatchStatus,
     AutonomousExecutionIntakeCandidate,
     AutonomousExecutionDecision,
+    AutonomousExecutionDecisionStatus,
     AutonomousExecutionDecisionType,
     AutonomousExecutionIntakeRun,
     AutonomousExecutionIntakeStatus,
@@ -270,6 +273,166 @@ def _candidate_lineage_key(*, candidate: AutonomousExecutionIntakeCandidate) -> 
         _safe_int(getattr(candidate, 'linked_sizing_plan_id', None)),
         _safe_int(getattr(candidate, 'linked_watch_plan_id', None)),
     )
+
+
+def _dispatch_mode_for_decision(*, decision: AutonomousExecutionDecision) -> str:
+    if decision.decision_type == AutonomousExecutionDecisionType.EXECUTE_REDUCED:
+        return AutonomousDispatchMode.PAPER_REDUCED_EXECUTION
+    return AutonomousDispatchMode.PAPER_EXECUTION
+
+
+def _dispatch_status_for_decision(*, decision: AutonomousExecutionDecision) -> str:
+    if decision.decision_type in {AutonomousExecutionDecisionType.BLOCK, AutonomousExecutionDecisionType.REQUIRE_MANUAL_REVIEW}:
+        return AutonomousDispatchStatus.BLOCKED
+    if decision.decision_type in {AutonomousExecutionDecisionType.KEEP_ON_WATCH, AutonomousExecutionDecisionType.DEFER}:
+        return AutonomousDispatchStatus.SKIPPED
+    return AutonomousDispatchStatus.QUEUED
+
+
+@transaction.atomic
+def _ensure_dispatch_records_for_candidates(
+    *,
+    candidates: list[AutonomousExecutionIntakeCandidate],
+    decision_by_candidate_id: dict[int, AutonomousExecutionDecision],
+    window_start,
+) -> dict[str, Any]:
+    if not candidates or not decision_by_candidate_id:
+        return {
+            'dispatch_by_candidate_id': {},
+            'dispatch_created': 0,
+            'dispatch_reused': 0,
+            'dispatch_blocked': 0,
+            'dispatch_dedupe_applied': 0,
+            'reason_codes': [],
+            'examples': [],
+        }
+
+    decision_ids = [int(decision.id) for decision in decision_by_candidate_id.values()]
+    dispatch_rows = list(
+        AutonomousDispatchRecord.objects.filter(linked_execution_decision_id__in=decision_ids)
+        .select_related('linked_execution_decision', 'linked_execution_decision__linked_intake_candidate')
+        .order_by('linked_execution_decision_id', '-created_at', '-id')
+    )
+    latest_dispatch_by_decision_id: dict[int, AutonomousDispatchRecord] = {}
+    for row in dispatch_rows:
+        decision_id = _safe_int(getattr(row, 'linked_execution_decision_id', None))
+        if decision_id is not None and decision_id not in latest_dispatch_by_decision_id:
+            latest_dispatch_by_decision_id[decision_id] = row
+
+    lineage_dispatch_by_key: dict[tuple[Any, ...], AutonomousDispatchRecord] = {}
+    for candidate in candidates:
+        decision = decision_by_candidate_id.get(int(candidate.id))
+        if decision is None:
+            continue
+        dispatch = latest_dispatch_by_decision_id.get(int(decision.id))
+        if dispatch is not None:
+            lineage_dispatch_by_key.setdefault(_candidate_lineage_key(candidate=candidate), dispatch)
+
+    dispatch_by_candidate_id: dict[int, AutonomousDispatchRecord] = {}
+    reason_codes: list[str] = []
+    examples: list[dict[str, Any]] = []
+    dispatch_created = 0
+    dispatch_reused = 0
+    dispatch_blocked = 0
+    dispatch_dedupe_applied = 0
+
+    for candidate in candidates:
+        candidate_id = int(candidate.id)
+        market_id = _safe_int(getattr(candidate, 'linked_market_id', None))
+        decision = decision_by_candidate_id.get(candidate_id)
+        if decision is None:
+            dispatch_blocked += 1
+            reason_codes.append('PAPER_TRADE_DISPATCH_BLOCKED_BY_RUNTIME')
+            continue
+        lineage_key = _candidate_lineage_key(candidate=candidate)
+        existing_dispatch = latest_dispatch_by_decision_id.get(int(decision.id))
+        if existing_dispatch is not None:
+            dispatch_by_candidate_id[candidate_id] = existing_dispatch
+            lineage_dispatch_by_key.setdefault(lineage_key, existing_dispatch)
+            dispatch_reused += 1
+            reason_codes.extend(['PAPER_TRADE_DISPATCH_REUSED', 'PAPER_TRADE_DISPATCH_ROUTE_AVAILABLE'])
+            if len(examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                examples.append(
+                    {
+                        'execution_candidate_id': candidate_id,
+                        'market_id': market_id,
+                        'reason_code': 'PAPER_TRADE_DISPATCH_REUSED',
+                        'blocking_stage': 'dispatch_record',
+                        'observed_value': f'existing_dispatch_record:{existing_dispatch.id}',
+                        'threshold': 'AutonomousDispatchRecord',
+                    }
+                )
+            continue
+        dedupe_dispatch = lineage_dispatch_by_key.get(lineage_key)
+        if dedupe_dispatch is not None:
+            dispatch_by_candidate_id[candidate_id] = dedupe_dispatch
+            dispatch_reused += 1
+            dispatch_dedupe_applied += 1
+            reason_codes.extend(['PAPER_TRADE_DISPATCH_DEDUPE_REUSED', 'LINEAGE_DEDUPE_REUSED_EXISTING_DISPATCH', 'LINEAGE_DEDUPE_APPLIED'])
+            if len(examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                examples.append(
+                    {
+                        'execution_candidate_id': candidate_id,
+                        'market_id': market_id,
+                        'reason_code': 'PAPER_TRADE_DISPATCH_DEDUPE_REUSED',
+                        'blocking_stage': 'dispatch_record_dedupe',
+                        'observed_value': f'reused_dispatch_record:{dedupe_dispatch.id}',
+                        'threshold': 'lineage/market dedupe key',
+                    }
+                )
+            continue
+        dispatch_status = _dispatch_status_for_decision(decision=decision)
+        reason_hint = ''
+        reason_code = 'PAPER_TRADE_DISPATCH_CREATED'
+        if dispatch_status == AutonomousDispatchStatus.BLOCKED:
+            if decision.decision_type == AutonomousExecutionDecisionType.REQUIRE_MANUAL_REVIEW:
+                reason_hint = 'manual_review_required'
+                reason_codes.append('PAPER_TRADE_DISPATCH_BLOCKED_BY_SAFETY')
+            else:
+                reason_hint = 'risk_or_policy_block'
+                reason_codes.append('PAPER_TRADE_DISPATCH_BLOCKED_BY_POLICY')
+        elif dispatch_status == AutonomousDispatchStatus.SKIPPED:
+            reason_hint = 'deferred_or_watch_only'
+        metadata = {
+            'paper_only': True,
+            'source': 'mission_control_dispatch_bridge',
+            'decision_type': str(decision.decision_type or ''),
+            'decision_status': str(decision.decision_status or AutonomousExecutionDecisionStatus.PROPOSED),
+            'reason_hint': reason_hint,
+        }
+        created_dispatch = AutonomousDispatchRecord.objects.create(
+            linked_execution_decision=decision,
+            dispatch_status=dispatch_status,
+            dispatch_mode=_dispatch_mode_for_decision(decision=decision),
+            dispatch_summary='Paper-only dispatch bridge materialized dispatch record from execution decision.',
+            metadata=metadata,
+        )
+        latest_dispatch_by_decision_id[int(decision.id)] = created_dispatch
+        lineage_dispatch_by_key[lineage_key] = created_dispatch
+        dispatch_by_candidate_id[candidate_id] = created_dispatch
+        dispatch_created += 1
+        reason_codes.extend([reason_code, 'PAPER_TRADE_DISPATCH_ROUTE_AVAILABLE'])
+        if len(examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+            examples.append(
+                {
+                    'execution_candidate_id': candidate_id,
+                    'market_id': market_id,
+                    'reason_code': reason_code,
+                    'blocking_stage': 'dispatch_record_bridge',
+                    'observed_value': f'created_dispatch_record:{created_dispatch.id}',
+                    'threshold': 'AutonomousDispatchRecord',
+                }
+            )
+
+    return {
+        'dispatch_by_candidate_id': dispatch_by_candidate_id,
+        'dispatch_created': int(dispatch_created),
+        'dispatch_reused': int(dispatch_reused),
+        'dispatch_blocked': int(dispatch_blocked),
+        'dispatch_dedupe_applied': int(dispatch_dedupe_applied),
+        'reason_codes': list(dict.fromkeys(reason_codes)),
+        'examples': examples,
+    }
 
 
 @transaction.atomic
@@ -749,6 +912,12 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     paper_trade_decision_dedupe_applied = 0
     paper_trade_decision_reason_codes: list[str] = []
     paper_trade_decision_examples: list[dict[str, Any]] = []
+    paper_trade_dispatch_created = 0
+    paper_trade_dispatch_reused = 0
+    paper_trade_dispatch_blocked = 0
+    paper_trade_dispatch_dedupe_applied = 0
+    paper_trade_dispatch_reason_codes: list[str] = []
+    paper_trade_dispatch_examples: list[dict[str, Any]] = []
     execution_lineage_considered = 0
     execution_lineage_deduplicated = 0
 
@@ -812,17 +981,18 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             paper_trade_decision_examples.extend(list(decision_bridge.get('examples') or []))
             execution_lineage_considered = int(decision_bridge.get('considered_candidates') or 0)
             execution_lineage_deduplicated = int(decision_bridge.get('deduplicated_candidates') or 0)
-            decision_ids = [int(row.id) for row in latest_decision_by_candidate.values()]
-            dispatch_rows = list(
-                AutonomousDispatchRecord.objects.filter(linked_execution_decision_id__in=decision_ids)
-                .select_related('linked_execution_decision')
-                .order_by('linked_execution_decision_id', '-created_at', '-id')
+            dispatch_bridge = _ensure_dispatch_records_for_candidates(
+                candidates=executable_candidates,
+                decision_by_candidate_id=latest_decision_by_candidate,
+                window_start=window_start,
             )
-            latest_dispatch_by_decision: dict[int, AutonomousDispatchRecord] = {}
-            for row in dispatch_rows:
-                decision_id = int(getattr(row, 'linked_execution_decision_id', 0) or 0)
-                if decision_id and decision_id not in latest_dispatch_by_decision:
-                    latest_dispatch_by_decision[decision_id] = row
+            latest_dispatch_by_candidate = dict(dispatch_bridge.get('dispatch_by_candidate_id') or {})
+            paper_trade_dispatch_created = int(dispatch_bridge.get('dispatch_created') or 0)
+            paper_trade_dispatch_reused = int(dispatch_bridge.get('dispatch_reused') or 0)
+            paper_trade_dispatch_blocked = int(dispatch_bridge.get('dispatch_blocked') or 0)
+            paper_trade_dispatch_dedupe_applied = int(dispatch_bridge.get('dispatch_dedupe_applied') or 0)
+            paper_trade_dispatch_reason_codes.extend(list(dispatch_bridge.get('reason_codes') or []))
+            paper_trade_dispatch_examples.extend(list(dispatch_bridge.get('examples') or []))
 
             for candidate_id in executable_candidate_ids:
                 candidate = candidate_by_id.get(candidate_id)
@@ -851,6 +1021,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                     paper_trade_route_blocked += 1
                     paper_trade_route_reason_codes.append('PAPER_TRADE_BLOCKED_BY_RUNTIME')
                     paper_trade_decision_reason_codes.append('PAPER_TRADE_DECISION_BLOCKED_BY_RUNTIME')
+                    paper_trade_dispatch_reason_codes.append('PAPER_TRADE_DISPATCH_BLOCKED_BY_RUNTIME')
                     if len(paper_trade_examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
                         paper_trade_examples.append(
                             {
@@ -866,10 +1037,11 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                         )
                     continue
                 paper_trade_route_attempted += 1
-                dispatch = latest_dispatch_by_decision.get(int(decision.id))
+                dispatch = latest_dispatch_by_candidate.get(candidate_id)
                 if dispatch is None:
                     paper_trade_route_blocked += 1
                     paper_trade_route_reason_codes.append('PAPER_TRADE_BLOCKED_BY_RUNTIME')
+                    paper_trade_dispatch_reason_codes.append('PAPER_TRADE_DISPATCH_BLOCKED_BY_RUNTIME')
                     if len(paper_trade_examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
                         paper_trade_examples.append(
                             {
@@ -886,6 +1058,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                     paper_trade_decision_reason_codes.append('PAPER_TRADE_DECISION_ROUTE_AVAILABLE')
                     continue
                 dispatch_status = str(dispatch.dispatch_status or '')
+                paper_trade_dispatch_reason_codes.append('PAPER_TRADE_DISPATCH_ROUTE_AVAILABLE')
                 if dispatch.linked_paper_trade_id:
                     if dispatch.created_at >= window_start:
                         paper_trade_route_created += 1
@@ -949,26 +1122,32 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         fanout_reason_codes.append('LINEAGE_REUSE_VISIBLE')
     if execution_lineage_deduplicated > 0:
         fanout_reason_codes.append('LINEAGE_DEDUPE_APPLIED')
+    if paper_trade_dispatch_dedupe_applied > 0:
+        fanout_reason_codes.append('LINEAGE_DEDUPE_REUSED_EXISTING_DISPATCH')
     if paper_trade_route_expected > 0 and unique_visible_market_count > 0:
         fanout_ratio = Decimal(str(paper_trade_route_expected)) / Decimal(str(unique_visible_market_count))
         if fanout_ratio > Decimal('3.0'):
             fanout_reason_codes.append('LINEAGE_FANOUT_EXCESSIVE')
         elif fanout_ratio > Decimal('1.0'):
-            fanout_reason_codes.append('LINEAGE_FANOUT_MULTI_ARTIFACT_EXPECTED')
+            fanout_reason_codes.append('LINEAGE_FANOUT_EXPECTED')
         else:
             fanout_reason_codes.append('LINEAGE_FANOUT_ONE_TO_ONE')
     else:
         fanout_reason_codes.append('LINEAGE_FANOUT_INSUFFICIENT_DATA')
     normalized_paper_trade_route_codes = list(dict.fromkeys(paper_trade_route_reason_codes))
     normalized_paper_trade_decision_codes = list(dict.fromkeys(paper_trade_decision_reason_codes))
+    normalized_paper_trade_dispatch_codes = list(dict.fromkeys(paper_trade_dispatch_reason_codes))
     normalized_fanout_codes = list(dict.fromkeys(fanout_reason_codes))
+    aligned_decision_created = int(paper_trade_decision_created)
+    aligned_decision_reused = int(paper_trade_decision_reused)
     execution_lineage_summary = {
         'visible_execution_candidates': int(paper_trade_route_expected),
         'executable_candidates': int(len(executable_candidate_ids)),
         'candidates_considered': int(execution_lineage_considered or len(executable_candidate_ids)),
         'candidates_deduplicated': int(execution_lineage_deduplicated),
-        'decisions_created': int(paper_trade_decision_created),
-        'decisions_reused': int(paper_trade_decision_reused),
+        'decisions_created': aligned_decision_created,
+        'decisions_reused': aligned_decision_reused,
+        'decision_summary_aligned': True,
         'materialized_paper_trades': int(paper_trade_route_created),
         'reused_trade_cycles': int(paper_trade_route_reused),
         'fanout_reason_codes': normalized_fanout_codes,
@@ -1028,11 +1207,23 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'paper_trade_route_reused': int(paper_trade_route_reused),
         'paper_trade_route_blocked': int(paper_trade_route_blocked),
         'paper_trade_route_reason_codes': normalized_paper_trade_route_codes,
-        'paper_trade_decision_created': int(paper_trade_decision_created),
-        'paper_trade_decision_reused': int(paper_trade_decision_reused),
+        'paper_trade_decision_created': aligned_decision_created,
+        'paper_trade_decision_reused': aligned_decision_reused,
         'paper_trade_decision_blocked': int(paper_trade_decision_blocked),
         'paper_trade_decision_dedupe_applied': int(paper_trade_decision_dedupe_applied),
         'paper_trade_decision_reason_codes': normalized_paper_trade_decision_codes,
+        'paper_trade_dispatch_created': int(paper_trade_dispatch_created),
+        'paper_trade_dispatch_reused': int(paper_trade_dispatch_reused),
+        'paper_trade_dispatch_blocked': int(paper_trade_dispatch_blocked),
+        'paper_trade_dispatch_dedupe_applied': int(paper_trade_dispatch_dedupe_applied),
+        'paper_trade_dispatch_reason_codes': normalized_paper_trade_dispatch_codes,
+        'paper_trade_dispatch_summary': (
+            f"route_expected={paper_trade_route_expected} dispatch_created={paper_trade_dispatch_created} "
+            f"dispatch_reused={paper_trade_dispatch_reused} dispatch_blocked={paper_trade_dispatch_blocked} "
+            f"dispatch_dedupe_applied={paper_trade_dispatch_dedupe_applied} "
+            f"paper_trade_dispatch_reason_codes={','.join(normalized_paper_trade_dispatch_codes) or 'none'}"
+        ),
+        'paper_trade_dispatch_examples': paper_trade_dispatch_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
         'paper_trade_decision_summary': (
             f"route_expected={paper_trade_route_expected} decision_created={paper_trade_decision_created} "
             f"decision_reused={paper_trade_decision_reused} decision_blocked={paper_trade_decision_blocked} "
@@ -2984,6 +3175,13 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'paper_trade_decision_reason_codes': paper_execution_summary.get('paper_trade_decision_reason_codes', []),
         'paper_trade_decision_summary': paper_execution_summary.get('paper_trade_decision_summary', ''),
         'paper_trade_decision_examples': paper_execution_summary.get('paper_trade_decision_examples', []),
+        'paper_trade_dispatch_created': paper_execution_summary.get('paper_trade_dispatch_created', 0),
+        'paper_trade_dispatch_reused': paper_execution_summary.get('paper_trade_dispatch_reused', 0),
+        'paper_trade_dispatch_blocked': paper_execution_summary.get('paper_trade_dispatch_blocked', 0),
+        'paper_trade_dispatch_dedupe_applied': paper_execution_summary.get('paper_trade_dispatch_dedupe_applied', 0),
+        'paper_trade_dispatch_reason_codes': paper_execution_summary.get('paper_trade_dispatch_reason_codes', []),
+        'paper_trade_dispatch_summary': paper_execution_summary.get('paper_trade_dispatch_summary', ''),
+        'paper_trade_dispatch_examples': paper_execution_summary.get('paper_trade_dispatch_examples', []),
         'paper_trade_examples': paper_execution_summary.get('paper_trade_examples', []),
         'execution_lineage_summary': paper_execution_summary.get('execution_lineage_summary', {}),
         'execution_readiness_available_count': paper_execution_summary.get('execution_readiness_available_count', 0),
@@ -3150,6 +3348,20 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'paper_trade_route_reused': handoff_diagnostics.get('paper_trade_route_reused', 0),
         'paper_trade_route_blocked': handoff_diagnostics.get('paper_trade_route_blocked', 0),
         'paper_trade_route_reason_codes': handoff_diagnostics.get('paper_trade_route_reason_codes', []),
+        'paper_trade_decision_created': handoff_diagnostics.get('paper_trade_decision_created', 0),
+        'paper_trade_decision_reused': handoff_diagnostics.get('paper_trade_decision_reused', 0),
+        'paper_trade_decision_blocked': handoff_diagnostics.get('paper_trade_decision_blocked', 0),
+        'paper_trade_decision_dedupe_applied': handoff_diagnostics.get('paper_trade_decision_dedupe_applied', 0),
+        'paper_trade_decision_reason_codes': handoff_diagnostics.get('paper_trade_decision_reason_codes', []),
+        'paper_trade_decision_summary': handoff_diagnostics.get('paper_trade_decision_summary', ''),
+        'paper_trade_decision_examples': handoff_diagnostics.get('paper_trade_decision_examples', []),
+        'paper_trade_dispatch_created': handoff_diagnostics.get('paper_trade_dispatch_created', 0),
+        'paper_trade_dispatch_reused': handoff_diagnostics.get('paper_trade_dispatch_reused', 0),
+        'paper_trade_dispatch_blocked': handoff_diagnostics.get('paper_trade_dispatch_blocked', 0),
+        'paper_trade_dispatch_dedupe_applied': handoff_diagnostics.get('paper_trade_dispatch_dedupe_applied', 0),
+        'paper_trade_dispatch_reason_codes': handoff_diagnostics.get('paper_trade_dispatch_reason_codes', []),
+        'paper_trade_dispatch_summary': handoff_diagnostics.get('paper_trade_dispatch_summary', ''),
+        'paper_trade_dispatch_examples': handoff_diagnostics.get('paper_trade_dispatch_examples', []),
         'paper_trade_examples': handoff_diagnostics.get('paper_trade_examples', []),
         'execution_lineage_summary': handoff_diagnostics.get('execution_lineage_summary', {}),
         'execution_readiness_available_count': handoff_diagnostics.get('execution_readiness_available_count', 0),

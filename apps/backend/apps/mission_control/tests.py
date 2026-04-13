@@ -3406,6 +3406,7 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
     def test_paper_trade_decision_bridge_creates_missing_execution_decision(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.autonomous_trader.models import (
+            AutonomousDispatchRecord,
             AutonomousExecutionDecision,
             AutonomousExecutionIntakeCandidate,
             AutonomousExecutionIntakeRun,
@@ -3436,12 +3437,18 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
 
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         self.assertTrue(AutonomousExecutionDecision.objects.filter(linked_intake_candidate=candidate).exists())
+        self.assertTrue(
+            AutonomousDispatchRecord.objects.filter(linked_execution_decision__linked_intake_candidate=candidate).exists()
+        )
         self.assertEqual(diagnostics.get('paper_trade_decision_created'), 1)
         self.assertIn('PAPER_TRADE_DECISION_CREATED', diagnostics.get('paper_trade_decision_reason_codes', []))
+        self.assertEqual(diagnostics.get('paper_trade_dispatch_created'), 1)
+        self.assertIn('PAPER_TRADE_DISPATCH_CREATED', diagnostics.get('paper_trade_dispatch_reason_codes', []))
 
     def test_paper_trade_decision_bridge_reuses_existing_execution_decision(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.autonomous_trader.models import (
+            AutonomousDispatchRecord,
             AutonomousExecutionDecision,
             AutonomousExecutionIntakeCandidate,
             AutonomousExecutionIntakeRun,
@@ -3470,14 +3477,21 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
             approval_status=RiskRuntimeApprovalStatus.APPROVED,
         )
         existing = AutonomousExecutionDecision.objects.create(linked_intake_candidate=candidate, decision_type='EXECUTE_NOW')
+        dispatch = AutonomousDispatchRecord.objects.create(linked_execution_decision=existing, dispatch_status='QUEUED')
 
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         self.assertEqual(AutonomousExecutionDecision.objects.filter(linked_intake_candidate=candidate).count(), 1)
         self.assertEqual(diagnostics.get('paper_trade_decision_reused'), 1)
         self.assertIn('PAPER_TRADE_DECISION_REUSED', diagnostics.get('paper_trade_decision_reason_codes', []))
+        self.assertEqual(diagnostics.get('paper_trade_dispatch_reused'), 1)
+        self.assertIn('PAPER_TRADE_DISPATCH_REUSED', diagnostics.get('paper_trade_dispatch_reason_codes', []))
         self.assertEqual(
             (diagnostics.get('paper_trade_decision_examples') or [{}])[0].get('observed_value'),
             f'existing_execution_decision:{existing.id}',
+        )
+        self.assertEqual(
+            (diagnostics.get('paper_trade_dispatch_examples') or [{}])[0].get('observed_value'),
+            f'existing_dispatch_record:{dispatch.id}',
         )
 
     def test_paper_trade_decision_dedupe_applies_for_same_lineage_market(self):
@@ -3518,8 +3532,45 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(diagnostics.get('paper_trade_decision_dedupe_applied'), 1)
         self.assertIn('LINEAGE_DEDUPE_APPLIED', diagnostics.get('paper_trade_decision_reason_codes', []))
         self.assertIn('LINEAGE_DEDUPE_BLOCKED_DUPLICATE', diagnostics.get('paper_trade_route_reason_codes', []))
+        self.assertEqual(diagnostics.get('paper_trade_dispatch_created'), 1)
+        self.assertIn('PAPER_TRADE_DISPATCH_CREATED', diagnostics.get('paper_trade_dispatch_reason_codes', []))
         lineage = diagnostics.get('execution_lineage_summary') or {}
         self.assertEqual(lineage.get('candidates_deduplicated'), 1)
+        self.assertTrue(lineage.get('decision_summary_aligned'))
+
+    def test_paper_trade_decision_summary_aligned_with_execution_lineage_summary(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import AutonomousExecutionDecision, AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-trade-summary-alignment')
+        risk_decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=risk_decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.7900'),
+            readiness_summary='alignment',
+            readiness_reason_codes=['READY'],
+        )
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        candidate = AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=readiness,
+            linked_approval_review=risk_decision,
+            intake_status=AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+            readiness_confidence=Decimal('0.7900'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+        )
+        AutonomousExecutionDecision.objects.create(linked_intake_candidate=candidate, decision_type='EXECUTE_NOW')
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        decision_summary = diagnostics.get('paper_trade_decision_summary', '')
+        lineage = diagnostics.get('execution_lineage_summary') or {}
+        self.assertIn('decision_reused=1', decision_summary)
+        self.assertEqual(lineage.get('decisions_reused'), 1)
+        self.assertTrue(lineage.get('decision_summary_aligned'))
 
     def test_execution_lineage_summary_surfaces_fanout_reason_codes(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
@@ -5611,6 +5662,9 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('paper_trade_decision_summary:', text_payload)
         self.assertIn('paper_trade_decision_reason_codes=', text_payload)
         self.assertIn('paper_trade_decision_examples=', text_payload)
+        self.assertIn('paper_trade_dispatch_summary:', text_payload)
+        self.assertIn('paper_trade_dispatch_reason_codes=', text_payload)
+        self.assertIn('paper_trade_dispatch_examples=', text_payload)
         self.assertIn('execution_lineage_summary:', text_payload)
         self.assertIn('fanout_reason_codes=', text_payload)
         self.assertIn('candidates_deduplicated=', text_payload)
