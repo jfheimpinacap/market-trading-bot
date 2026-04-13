@@ -449,6 +449,7 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'final_fanout_examples': list(funnel.get('final_fanout_examples') or []),
             'cash_pressure_summary': dict(funnel.get('cash_pressure_summary') or {}),
             'cash_pressure_examples': list(funnel.get('cash_pressure_examples') or []),
+            'position_exposure_summary': dict(funnel.get('position_exposure_summary') or {}),
             'execution_artifact_summary': {
                 'execution_readiness_available_count': int(funnel.get('execution_readiness_available_count') or 0),
                 'readiness_created': int(funnel.get('execution_readiness_created_count') or 0),
@@ -538,6 +539,7 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     final_fanout_examples = payload.get('final_fanout_examples') or []
     cash_pressure = payload.get('cash_pressure_summary') or {}
     cash_pressure_examples = payload.get('cash_pressure_examples') or []
+    position_exposure = payload.get('position_exposure_summary') or {}
     portfolio_trade_reconciliation = payload.get('portfolio_trade_reconciliation_summary') or {}
     execution_artifact = payload.get('execution_artifact_summary') or {}
     execution_artifact_examples = payload.get('execution_artifact_examples') or []
@@ -723,6 +725,17 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         ),
         f"  cash_pressure_reason_codes={','.join(cash_pressure.get('cash_pressure_reason_codes') or []) or 'none'}",
         f"  cash_pressure_examples={cash_pressure_examples or []}",
+        'position_exposure_summary:',
+        (
+            f"  open_positions_detected={position_exposure.get('open_positions_detected', 0)} "
+            f"candidates_blocked_by_active_position={position_exposure.get('candidates_blocked_by_active_position', 0)} "
+            f"candidates_allowed_for_exit={position_exposure.get('candidates_allowed_for_exit', 0)} "
+            f"candidates_allowed_without_exposure={position_exposure.get('candidates_allowed_without_exposure', 0)}"
+        ),
+        (
+            f"  position_exposure_reason_codes="
+            f"{','.join(position_exposure.get('position_exposure_reason_codes') or []) or 'none'}"
+        ),
         'execution_artifact_summary:',
         (
             f"  execution_readiness_available_count={execution_artifact.get('execution_readiness_available_count', 0)} "

@@ -74,6 +74,35 @@ Difference vs runtime rejection:
 
 Safety boundary remains unchanged: no frontend changes, no `/runtime` changes, and strict `REAL_READ_ONLY` + `PAPER_ONLY`.
 
+## Mission Control active-position conservative gate (Prompt 272)
+
+`live_paper_autonomy_funnel` now applies a conservative exposure gate before final `execute_paper_trade` attempts.
+
+- Core rule:
+  - when same market/lineage already has active exposure (open position or active trade lineage), block redundant additive entries;
+  - allow reduce/exit-shaped candidates to pass this gate.
+- New reason codes in existing summaries/export:
+  - `PAPER_TRADE_BLOCKED_BY_ACTIVE_POSITION`
+  - `PAPER_TRADE_BLOCKED_BY_EXISTING_OPEN_TRADE`
+  - `PAPER_TRADE_SKIPPED_BY_POSITION_EXPOSURE`
+  - `PAPER_TRADE_POSITION_GATE_APPLIED`
+  - `PAPER_TRADE_ALLOWED_REDUCE_POSITION`
+  - `PAPER_TRADE_ALLOWED_EXIT_POSITION`
+  - `PAPER_TRADE_POSITION_GATE_BYPASSED_FOR_EXIT`
+- New compact diagnostic block:
+  - `position_exposure_summary`:
+    - `open_positions_detected`
+    - `candidates_blocked_by_active_position`
+    - `candidates_allowed_for_exit`
+    - `candidates_allowed_without_exposure`
+    - `position_exposure_reason_codes`
+
+Difference vs cash blocking:
+- **Active-position gate** prevents redundant fan-out before execution/cash check.
+- **Cash precheck** still applies to candidates selected after exposure gate.
+
+Boundary unchanged: backend-only observability pass, `REAL_READ_ONLY` + `PAPER_ONLY`, no live trading enablement.
+
 ## Scan diagnostics + demo narrative fallback (new)
 
 `apps.research_agent.services.run.run_scan_agent` now writes explicit scan diagnostics under `SourceScanRun.metadata.scan_diagnostics`.
