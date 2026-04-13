@@ -733,6 +733,114 @@ def _ensure_final_paper_trade_for_dispatches(
     }
 
 
+def _build_final_fanout_diagnostics(
+    *,
+    executable_candidates: list[AutonomousExecutionIntakeCandidate],
+    dispatch_by_candidate_id: dict[int, AutonomousDispatchRecord],
+    final_trade_by_candidate_id: dict[int, PaperTrade],
+    trades_materialized: int,
+    trades_reused: int,
+) -> dict[str, Any]:
+    lineage_counters: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for candidate in executable_candidates:
+        candidate_id = int(candidate.id)
+        lineage_key = _candidate_lineage_key(candidate=candidate)
+        market_id = _safe_int(getattr(candidate, 'linked_market_id', None))
+        entry = lineage_counters.setdefault(
+            lineage_key,
+            {
+                'market_id': market_id,
+                'lineage_key': str(lineage_key),
+                'execution_candidate_count': 0,
+                'dispatch_ids': set(),
+                'trade_ids': set(),
+            },
+        )
+        entry['execution_candidate_count'] += 1
+        dispatch = dispatch_by_candidate_id.get(candidate_id)
+        if dispatch is not None:
+            entry['dispatch_ids'].add(int(dispatch.id))
+        final_trade = final_trade_by_candidate_id.get(candidate_id)
+        if final_trade is not None:
+            entry['trade_ids'].add(int(final_trade.id))
+
+    duplicate_execution_candidates = 0
+    duplicate_dispatches = 0
+    duplicate_trades = 0
+    reason_codes: list[str] = []
+    examples: list[dict[str, Any]] = []
+    for entry in lineage_counters.values():
+        dispatch_count = len(entry['dispatch_ids'])
+        trade_count = len(entry['trade_ids'])
+        entry_reason = 'FINAL_LINEAGE_FANOUT_OK'
+        if entry['execution_candidate_count'] > 1:
+            duplicate_execution_candidates += entry['execution_candidate_count'] - 1
+            entry_reason = 'FINAL_LINEAGE_DUPLICATE_EXECUTION_CANDIDATES'
+            reason_codes.append(entry_reason)
+        if dispatch_count > 1:
+            duplicate_dispatches += dispatch_count - 1
+            entry_reason = 'FINAL_LINEAGE_DUPLICATE_DISPATCHES'
+            reason_codes.append(entry_reason)
+        if trade_count > 1:
+            duplicate_trades += trade_count - 1
+            entry_reason = 'FINAL_LINEAGE_DUPLICATE_TRADES'
+            reason_codes.append(entry_reason)
+        if len(examples) < _PAPER_TRADE_EXAMPLES_LIMIT and entry_reason != 'FINAL_LINEAGE_FANOUT_OK':
+            examples.append(
+                {
+                    'market_id': entry['market_id'],
+                    'lineage_key': entry['lineage_key'],
+                    'execution_candidate_count': int(entry['execution_candidate_count']),
+                    'dispatch_count': int(dispatch_count),
+                    'trade_count': int(trade_count),
+                    'reason_code': entry_reason,
+                }
+            )
+
+    if trades_reused > 0:
+        reason_codes.append('FINAL_LINEAGE_REUSE_EXPECTED')
+    if trades_reused > max(3, trades_materialized * 3):
+        reason_codes.append('FINAL_LINEAGE_REUSE_EXCESSIVE')
+
+    unique_markets = {
+        entry.get('market_id')
+        for entry in lineage_counters.values()
+        if entry.get('market_id') is not None
+    }
+    market_fanout_ratio_excessive = bool(
+        unique_markets and (len(executable_candidates) / max(len(unique_markets), 1)) > 3
+    )
+    fanout_excessive = any(
+        (
+            duplicate_execution_candidates > 0,
+            duplicate_dispatches > 0,
+            duplicate_trades > 0,
+            'FINAL_LINEAGE_REUSE_EXCESSIVE' in reason_codes,
+            market_fanout_ratio_excessive,
+        )
+    )
+    reason_codes.append('FINAL_LINEAGE_FANOUT_EXCESSIVE' if fanout_excessive else 'FINAL_LINEAGE_FANOUT_OK')
+    normalized_codes = list(dict.fromkeys(reason_codes))
+    final_status = 'EXCESSIVE' if fanout_excessive else 'OK'
+    lineage_count = len(lineage_counters)
+    return {
+        'final_lineage_count': int(lineage_count),
+        'unique_market_lineages': int(lineage_count),
+        'duplicate_execution_candidates': int(duplicate_execution_candidates),
+        'duplicate_dispatches': int(duplicate_dispatches),
+        'duplicate_trades': int(duplicate_trades),
+        'final_fanout_status': final_status,
+        'final_fanout_reason_codes': normalized_codes,
+        'final_fanout_examples': examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
+        'final_fanout_summary': (
+            f"final_lineage_count={lineage_count} unique_market_lineages={lineage_count} "
+            f"duplicate_execution_candidates={duplicate_execution_candidates} duplicate_dispatches={duplicate_dispatches} "
+            f"duplicate_trades={duplicate_trades} final_fanout_status={final_status} "
+            f"final_fanout_reason_codes={','.join(normalized_codes) or 'none'}"
+        ),
+    }
+
+
 @transaction.atomic
 def _ensure_execution_decisions_for_candidates(
     *,
@@ -1228,6 +1336,11 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     dispatches_deduplicated = 0
     execution_lineage_considered = 0
     execution_lineage_deduplicated = 0
+    executable_candidates: list[AutonomousExecutionIntakeCandidate] = []
+    latest_decision_by_candidate: dict[int, AutonomousExecutionDecision] = {}
+    duplicate_candidate_ids: set[int] = set()
+    latest_dispatch_by_candidate: dict[int, AutonomousDispatchRecord] = {}
+    final_trade_map: dict[int, PaperTrade] = {}
 
     if not route_infra_available and paper_trade_route_expected > 0:
         reason = 'PAPER_TRADE_ROUTE_MISSING' if route_disabled else 'PAPER_TRADE_NO_ELIGIBLE_HANDLER'
@@ -1470,6 +1583,13 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     normalized_fanout_codes = list(dict.fromkeys(fanout_reason_codes))
     aligned_decision_created = int(paper_trade_decision_created)
     aligned_decision_reused = int(paper_trade_decision_reused)
+    final_fanout_summary = _build_final_fanout_diagnostics(
+        executable_candidates=executable_candidates,
+        dispatch_by_candidate_id=latest_dispatch_by_candidate,
+        final_trade_by_candidate_id=final_trade_map,
+        trades_materialized=int(final_trade_created),
+        trades_reused=int(final_trade_reused),
+    )
     execution_lineage_summary = {
         'visible_execution_candidates': int(paper_trade_route_expected),
         'executable_candidates': int(len(executable_candidate_ids)),
@@ -1484,6 +1604,13 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'dispatches_deduplicated': int(dispatches_deduplicated),
         'trades_materialized': int(final_trade_created),
         'trades_reused': int(final_trade_reused),
+        'final_lineage_count': int(final_fanout_summary.get('final_lineage_count') or 0),
+        'unique_market_lineages': int(final_fanout_summary.get('unique_market_lineages') or 0),
+        'duplicate_execution_candidates': int(final_fanout_summary.get('duplicate_execution_candidates') or 0),
+        'duplicate_dispatches': int(final_fanout_summary.get('duplicate_dispatches') or 0),
+        'duplicate_trades': int(final_fanout_summary.get('duplicate_trades') or 0),
+        'final_fanout_status': str(final_fanout_summary.get('final_fanout_status') or 'UNKNOWN'),
+        'final_fanout_reason_codes': list(final_fanout_summary.get('final_fanout_reason_codes') or []),
         'fanout_reason_codes': normalized_fanout_codes,
     }
     return {
@@ -1572,6 +1699,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"final_trade_reason_codes={','.join(normalized_final_trade_codes) or 'none'}"
         ),
         'paper_trade_final_examples': final_trade_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
+        'final_fanout_summary': final_fanout_summary,
+        'final_fanout_examples': list(final_fanout_summary.get('final_fanout_examples') or []),
         'paper_trade_decision_summary': (
             f"route_expected={paper_trade_route_expected} decision_created={paper_trade_decision_created} "
             f"decision_reused={paper_trade_decision_reused} decision_blocked={paper_trade_decision_blocked} "
@@ -3541,6 +3670,8 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'paper_trade_final_examples': paper_execution_summary.get('paper_trade_final_examples', []),
         'paper_trade_examples': paper_execution_summary.get('paper_trade_examples', []),
         'execution_lineage_summary': paper_execution_summary.get('execution_lineage_summary', {}),
+        'final_fanout_summary': paper_execution_summary.get('final_fanout_summary', {}),
+        'final_fanout_examples': paper_execution_summary.get('final_fanout_examples', []),
         'execution_readiness_available_count': paper_execution_summary.get('execution_readiness_available_count', 0),
         'execution_readiness_created_count': paper_execution_summary.get('execution_readiness_created_count', 0),
         'execution_readiness_reused_count': paper_execution_summary.get('execution_readiness_reused_count', 0),
@@ -3730,6 +3861,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'paper_trade_final_examples': handoff_diagnostics.get('paper_trade_final_examples', []),
         'paper_trade_examples': handoff_diagnostics.get('paper_trade_examples', []),
         'execution_lineage_summary': handoff_diagnostics.get('execution_lineage_summary', {}),
+        'final_fanout_summary': handoff_diagnostics.get('final_fanout_summary', {}),
+        'final_fanout_examples': handoff_diagnostics.get('final_fanout_examples', []),
         'execution_readiness_available_count': handoff_diagnostics.get('execution_readiness_available_count', 0),
         'execution_readiness_created_count': handoff_diagnostics.get('execution_readiness_created_count', 0),
         'execution_readiness_reused_count': handoff_diagnostics.get('execution_readiness_reused_count', 0),

@@ -195,6 +195,56 @@ def _build_scan_summary(scan_run: SourceScanRun | None = None) -> dict[str, Any]
     }
 
 
+def _build_portfolio_trade_reconciliation_summary(*, payload: dict[str, Any]) -> dict[str, Any]:
+    paper_trade_final = payload.get('paper_trade_final_summary') or {}
+    lineage = payload.get('execution_lineage_summary') or {}
+    portfolio = payload.get('portfolio_summary') or {}
+    materialized = int(lineage.get('trades_materialized') or paper_trade_final.get('created') or 0)
+    reused = int(lineage.get('trades_reused') or paper_trade_final.get('reused') or 0)
+    recent_trades_count = int(portfolio.get('recent_trades_count') or 0)
+    open_positions = int(portfolio.get('open_positions') or 0)
+    equity = _to_float(portfolio.get('equity'))
+    unrealized_pnl = _to_float(portfolio.get('unrealized_pnl'))
+    reason_codes: list[str] = []
+    if recent_trades_count >= min(1, materialized + reused):
+        reason_codes.append('PORTFOLIO_SCOPE_ALIGNMENT_OK')
+    else:
+        reason_codes.append('PORTFOLIO_SCOPE_ALIGNMENT_MISMATCH')
+    if materialized + reused > max(recent_trades_count, 1):
+        reason_codes.append('PORTFOLIO_TRADE_COUNT_MISMATCH')
+    if reused > max(3, materialized * 3) and open_positions <= 1:
+        reason_codes.append('PORTFOLIO_POSITION_REUSE_ACCUMULATION')
+    if equity > 0 and abs(unrealized_pnl) > (equity * 0.9):
+        reason_codes.append('PORTFOLIO_UNREALIZED_PNL_OUTLIER')
+    if not reason_codes:
+        reason_codes.append('PORTFOLIO_TRADE_RECONCILIATION_OK')
+    status = 'OK'
+    if any(code in reason_codes for code in ['PORTFOLIO_TRADE_COUNT_MISMATCH', 'PORTFOLIO_SCOPE_ALIGNMENT_MISMATCH']):
+        status = 'CHECK'
+    normalized_codes = list(dict.fromkeys(reason_codes))
+    if status == 'OK' and normalized_codes == ['PORTFOLIO_SCOPE_ALIGNMENT_OK']:
+        normalized_codes.insert(0, 'PORTFOLIO_TRADE_RECONCILIATION_OK')
+    return {
+        'portfolio_trade_reconciliation_status': status,
+        'portfolio_trade_reconciliation_reason_codes': normalized_codes,
+        'materialized_paper_trades': materialized,
+        'reused_trade_cycles': reused,
+        'recent_trades_count': recent_trades_count,
+        'open_positions': open_positions,
+        'equity': equity,
+        'unrealized_pnl': unrealized_pnl,
+        'trades_considered': int(materialized + reused),
+        'positions_considered': int(open_positions),
+        'pnl_considered': {'equity': equity, 'unrealized_pnl': unrealized_pnl},
+        'reconciliation_summary': (
+            f"materialized_paper_trades={materialized} reused_trade_cycles={reused} recent_trades_count={recent_trades_count} "
+            f"open_positions={open_positions} equity={equity:.2f} unrealized_pnl={unrealized_pnl:.2f} "
+            f"portfolio_trade_reconciliation_status={status} "
+            f"portfolio_trade_reconciliation_reason_codes={','.join(normalized_codes) or 'none'}"
+        ),
+    }
+
+
 def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, scan_run: SourceScanRun | None = None) -> None:
     bootstrap_status = get_live_paper_bootstrap_status(preset_name=preset_name)
     validation = build_live_paper_validation_digest(preset_name=preset_name)
@@ -289,6 +339,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             },
             'paper_trade_final_examples': list(funnel.get('paper_trade_final_examples') or []),
             'execution_lineage_summary': dict(funnel.get('execution_lineage_summary') or {}),
+            'final_fanout_summary': dict(funnel.get('final_fanout_summary') or {}),
+            'final_fanout_examples': list(funnel.get('final_fanout_examples') or []),
             'execution_artifact_summary': {
                 'execution_readiness_available_count': int(funnel.get('execution_readiness_available_count') or 0),
                 'readiness_created': int(funnel.get('execution_readiness_created_count') or 0),
@@ -333,6 +385,7 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'reason_codes': list(dict.fromkeys(gate.get('reason_codes') or [])),
         }
     )
+    payload['portfolio_trade_reconciliation_summary'] = _build_portfolio_trade_reconciliation_summary(payload=payload)
     active_session = _find_active_preset_session(preset_name=preset_name)
     portfolio = payload.get('portfolio_summary') or {}
     account = get_active_account()
@@ -369,6 +422,9 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     paper_trade_final = payload.get('paper_trade_final_summary') or {}
     paper_trade_final_examples = payload.get('paper_trade_final_examples') or []
     execution_lineage = payload.get('execution_lineage_summary') or {}
+    final_fanout = payload.get('final_fanout_summary') or {}
+    final_fanout_examples = payload.get('final_fanout_examples') or []
+    portfolio_trade_reconciliation = payload.get('portfolio_trade_reconciliation_summary') or {}
     execution_artifact = payload.get('execution_artifact_summary') or {}
     execution_artifact_examples = payload.get('execution_artifact_examples') or []
     shortlist_handoff = payload.get('shortlist_handoff_summary') or {}
@@ -531,6 +587,17 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"reused_trade_cycles={execution_lineage.get('reused_trade_cycles', 0)}"
         ),
         f"  fanout_reason_codes={','.join(execution_lineage.get('fanout_reason_codes') or []) or 'none'}",
+        'final_fanout_summary:',
+        (
+            f"  final_lineage_count={final_fanout.get('final_lineage_count', 0)} "
+            f"unique_market_lineages={final_fanout.get('unique_market_lineages', 0)} "
+            f"duplicate_execution_candidates={final_fanout.get('duplicate_execution_candidates', 0)} "
+            f"duplicate_dispatches={final_fanout.get('duplicate_dispatches', 0)} "
+            f"duplicate_trades={final_fanout.get('duplicate_trades', 0)} "
+            f"final_fanout_status={final_fanout.get('final_fanout_status') or 'UNKNOWN'}"
+        ),
+        f"  final_fanout_reason_codes={','.join(final_fanout.get('final_fanout_reason_codes') or []) or 'none'}",
+        f"  final_fanout_examples={final_fanout_examples or []}",
         'execution_artifact_summary:',
         (
             f"  execution_readiness_available_count={execution_artifact.get('execution_readiness_available_count', 0)} "
@@ -704,6 +771,18 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"  account_summary_status={portfolio.get('account_summary_status')} "
             f"account_summary_reason_codes={','.join(portfolio.get('account_summary_reason_codes') or []) or 'none'}"
         ),
+        'portfolio_trade_reconciliation_summary:',
+        (
+            f"  portfolio_trade_reconciliation_status="
+            f"{portfolio_trade_reconciliation.get('portfolio_trade_reconciliation_status') or 'UNKNOWN'} "
+            f"trades_considered={portfolio_trade_reconciliation.get('trades_considered', 0)} "
+            f"positions_considered={portfolio_trade_reconciliation.get('positions_considered', 0)}"
+        ),
+        (
+            f"  portfolio_trade_reconciliation_reason_codes="
+            f"{','.join(portfolio_trade_reconciliation.get('portfolio_trade_reconciliation_reason_codes') or []) or 'none'}"
+        ),
+        f"  pnl_considered={portfolio_trade_reconciliation.get('pnl_considered') or {}}",
         f"reason_codes: {', '.join(payload.get('reason_codes') or []) or 'none'}",
         f"blockers: {', '.join(blockers) or 'none'}",
         f"warnings: {len(warnings)}",
@@ -952,6 +1031,8 @@ def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
         'summary': 'No test has been executed yet.',
         'history_size': len(history),
     }
+    if not payload.get('portfolio_trade_reconciliation_summary'):
+        payload['portfolio_trade_reconciliation_summary'] = _build_portfolio_trade_reconciliation_summary(payload=payload)
     if fmt == 'json':
         return payload
     return str(payload.get('text_export') or _log_line_items(payload))

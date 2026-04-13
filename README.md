@@ -3408,6 +3408,12 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.
+- **Prompt 267** estabiliza el tramo final paper-only sin tocar `/runtime` ni live trading real:
+  - agrega `final_fanout_summary` + `final_fanout_examples` (máx 3) para diagnosticar fan-out final por lineage/market con `duplicate_execution_candidates|duplicate_dispatches|duplicate_trades`, `final_fanout_status` y reason codes (`FINAL_LINEAGE_*`).
+  - mantiene contención conservadora en el puente final (dedupe/reuse de trade válido existente por lineage/market) para evitar multiplicación artificial sin borrar historial ni alterar fills ya materializados.
+  - agrega `portfolio_trade_reconciliation_summary` para reconciliar explícitamente `materialized_paper_trades`, `reused_trade_cycles`, `recent_trades_count`, `open_positions`, `equity` y `unrealized_pnl` con reason codes (`PORTFOLIO_*`).
+  - el export log del Test Console (`text/json`) incorpora ambos bloques compactos (`final_fanout_summary`, `portfolio_trade_reconciliation_summary`) sin logging paralelo.
+  - mantiene enfoque observability-first y límites **REAL_READ_ONLY + PAPER_ONLY**.
 
 Boundary de seguridad:
 - Mantiene postura **REAL_READ_ONLY + PAPER_ONLY**.
