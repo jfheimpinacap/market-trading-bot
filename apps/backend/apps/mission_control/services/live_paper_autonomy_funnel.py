@@ -468,6 +468,13 @@ def _ensure_final_paper_trade_for_dispatches(
     dispatches_deduplicated = 0
     runtime_rejection_count = 0
     runtime_rejection_reason_codes: list[str] = []
+    cash_available = Decimal('0')
+    cash_budget_remaining = Decimal('0')
+    selected_for_execution = 0
+    blocked_by_cash_precheck = 0
+    deferred_by_budget = 0
+    estimated_cash_selected = Decimal('0')
+    cash_throttle_reason_codes: list[str] = []
     dedupe_trade_by_lineage_key: dict[tuple[Any, ...], PaperTrade] = {}
     dedupe_dispatch_by_lineage_key: dict[tuple[Any, ...], int] = {}
 
@@ -483,9 +490,26 @@ def _ensure_final_paper_trade_for_dispatches(
             'runtime_rejection_count': 0,
             'runtime_rejection_reason_codes': [],
             'runtime_rejection_summary': 'runtime_rejection_count=0 runtime_rejection_reason_codes=none',
+            'cash_available': 0.0,
+            'cash_budget_remaining': 0.0,
+            'selected_for_execution': 0,
+            'blocked_by_cash_precheck': 0,
+            'deferred_by_budget': 0,
+            'estimated_cash_selected': 0.0,
+            'cash_throttle_reason_codes': [],
+            'cash_throttle_summary': (
+                'cash_available=0.00 executable_candidates=0 selected_for_execution=0 '
+                'blocked_by_cash_precheck=0 deferred_by_budget=0 estimated_cash_selected=0.00 '
+                'cash_budget_remaining=0.00 cash_throttle_reason_codes=none'
+            ),
             'reason_codes': [],
             'examples': [],
         }
+
+    account = get_active_account()
+    portfolio_summary = build_account_summary(account=account)
+    cash_available = _as_decimal(portfolio_summary.get('cash_balance', portfolio_summary.get('cash', '0')))
+    cash_budget_remaining = cash_available
 
     for candidate in candidates:
         candidate_id = int(candidate.id)
@@ -633,6 +657,50 @@ def _ensure_final_paper_trade_for_dispatches(
                     }
                 )
             continue
+        estimated_cost = max(Decimal('0.00'), notional.quantize(Decimal('0.01')))
+        if estimated_cost > cash_budget_remaining:
+            final_trade_blocked += 1
+            blocked_by_cash_precheck += 1
+            deferred_by_budget += 1
+            reason_codes.extend(
+                [
+                    'PAPER_TRADE_BLOCKED_BY_CASH_PRECHECK',
+                    'PAPER_TRADE_DEFERRED_BY_CASH_BUDGET',
+                    'PAPER_TRADE_FINAL_BLOCKED_BY_CASH',
+                ]
+            )
+            cash_throttle_reason_codes.extend(
+                [
+                    'PAPER_TRADE_BLOCKED_BY_CASH_PRECHECK',
+                    'PAPER_TRADE_DEFERRED_BY_CASH_BUDGET',
+                    'PAPER_TRADE_FINAL_BLOCKED_BY_CASH',
+                ]
+            )
+            if cash_budget_remaining <= Decimal('0.00'):
+                reason_codes.append('PAPER_TRADE_CASH_BUDGET_EXHAUSTED')
+                cash_throttle_reason_codes.append('PAPER_TRADE_CASH_BUDGET_EXHAUSTED')
+            if len(examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                examples.append(
+                    {
+                        'dispatch_id': int(dispatch.id),
+                        'execution_candidate_id': candidate_id,
+                        'market_id': market_id,
+                        'dispatch_status': dispatch_status,
+                        'linked_paper_trade_id': _safe_int(dispatch.linked_paper_trade_id),
+                        'reason_code': 'PAPER_TRADE_BLOCKED_BY_CASH_PRECHECK',
+                        'blocking_stage': 'final_trade_cash_precheck',
+                        'observed_value': (
+                            f'estimated_cost={estimated_cost} cash_budget_remaining={cash_budget_remaining.quantize(Decimal("0.01"))}'
+                        ),
+                        'threshold': 'estimated_cost<=cash_budget_remaining',
+                    }
+                )
+            continue
+        selected_for_execution += 1
+        estimated_cash_selected += estimated_cost
+        cash_budget_remaining = max(Decimal('0.00'), (cash_budget_remaining - estimated_cost).quantize(Decimal('0.01')))
+        reason_codes.append('PAPER_TRADE_SELECTED_FOR_EXECUTION')
+        cash_throttle_reason_codes.append('PAPER_TRADE_SELECTED_FOR_EXECUTION')
         try:
             result = execute_paper_trade(
                 market=candidate.linked_market,
@@ -780,6 +848,23 @@ def _ensure_final_paper_trade_for_dispatches(
             f"runtime_rejection_count={runtime_rejection_count} "
             f"runtime_rejection_reason_codes={','.join(list(dict.fromkeys(runtime_rejection_reason_codes))) or 'none'}"
         ),
+        'cash_available': float(cash_available.quantize(Decimal('0.01'))),
+        'cash_budget_remaining': float(cash_budget_remaining.quantize(Decimal('0.01'))),
+        'selected_for_execution': int(selected_for_execution),
+        'blocked_by_cash_precheck': int(blocked_by_cash_precheck),
+        'deferred_by_budget': int(deferred_by_budget),
+        'estimated_cash_selected': float(estimated_cash_selected.quantize(Decimal('0.01'))),
+        'cash_throttle_reason_codes': list(dict.fromkeys(cash_throttle_reason_codes)),
+        'cash_throttle_summary': (
+            f"cash_available={cash_available.quantize(Decimal('0.01'))} "
+            f"executable_candidates={len(candidates)} "
+            f"selected_for_execution={selected_for_execution} "
+            f"blocked_by_cash_precheck={blocked_by_cash_precheck} "
+            f"deferred_by_budget={deferred_by_budget} "
+            f"estimated_cash_selected={estimated_cash_selected.quantize(Decimal('0.01'))} "
+            f"cash_budget_remaining={cash_budget_remaining.quantize(Decimal('0.01'))} "
+            f"cash_throttle_reason_codes={','.join(list(dict.fromkeys(cash_throttle_reason_codes))) or 'none'}"
+        ),
         'reason_codes': list(dict.fromkeys(reason_codes)),
         'examples': examples,
     }
@@ -901,13 +986,24 @@ def _build_cash_pressure_diagnostics(
     final_fanout_summary: dict[str, Any],
     final_trade_created: int,
     final_trade_reused: int,
+    final_trade_bridge: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    account = get_active_account()
-    portfolio_summary = build_account_summary(account=account)
-    cash_available = _as_decimal(portfolio_summary.get('cash_balance', portfolio_summary.get('cash', '0')))
+    final_trade_bridge = final_trade_bridge or {}
+    cash_available = _as_decimal(final_trade_bridge.get('cash_available'))
     estimated_cash_required = Decimal('0')
     candidates_blocked_by_cash = 0
     examples: list[dict[str, Any]] = []
+    selected_for_execution = int(final_trade_bridge.get('selected_for_execution') or 0)
+    blocked_by_cash_precheck = int(final_trade_bridge.get('blocked_by_cash_precheck') or 0)
+    deferred_by_budget = int(final_trade_bridge.get('deferred_by_budget') or 0)
+    cash_budget_remaining = _as_decimal(final_trade_bridge.get('cash_budget_remaining'))
+    cash_throttle_reason_codes = list(final_trade_bridge.get('cash_throttle_reason_codes') or [])
+    if cash_available <= Decimal('0.00'):
+        account = get_active_account()
+        portfolio_summary = build_account_summary(account=account)
+        cash_available = _as_decimal(portfolio_summary.get('cash_balance', portfolio_summary.get('cash', '0')))
+    if cash_budget_remaining < Decimal('0.00'):
+        cash_budget_remaining = Decimal('0.00')
 
     for candidate in executable_candidates:
         candidate_id = int(candidate.id)
@@ -950,6 +1046,8 @@ def _build_cash_pressure_diagnostics(
         reason_codes.append('CASH_PRESSURE_HIGH')
     if estimated_cash_required > cash_available:
         reason_codes.append('CASH_PRESSURE_INSUFFICIENT_FOR_ALL')
+    if blocked_by_cash_precheck > 0:
+        reason_codes.append('CASH_PRESSURE_PRECHECK_THROTTLED')
     if blocking_final_trades:
         reason_codes.append('CASH_PRESSURE_BLOCKING_FINAL_TRADES')
     if final_trade_reused > 0:
@@ -964,15 +1062,25 @@ def _build_cash_pressure_diagnostics(
         'estimated_cash_required': float(estimated_cash_required.quantize(Decimal('0.01'))),
         'candidates_blocked_by_cash': int(candidates_blocked_by_cash),
         'candidates_reused': int(final_trade_reused),
+        'selected_for_execution': int(selected_for_execution),
+        'blocked_by_cash_precheck': int(blocked_by_cash_precheck),
+        'deferred_by_budget': int(deferred_by_budget),
+        'cash_budget_remaining': float(cash_budget_remaining.quantize(Decimal('0.01'))),
+        'cash_throttle_reason_codes': list(dict.fromkeys(cash_throttle_reason_codes)),
         'cash_pressure_status': status,
         'cash_pressure_reason_codes': normalized_codes,
         'cash_pressure_summary': (
             f"cash_available={cash_available.quantize(Decimal('0.01'))} "
             f"executable_candidates={estimated_executable} "
+            f"selected_for_execution={selected_for_execution} "
+            f"blocked_by_cash_precheck={blocked_by_cash_precheck} "
+            f"deferred_by_budget={deferred_by_budget} "
             f"estimated_cash_required={estimated_cash_required.quantize(Decimal('0.01'))} "
             f"candidates_blocked_by_cash={candidates_blocked_by_cash} "
             f"candidates_reused={final_trade_reused} "
             f"created={final_trade_created} "
+            f"cash_budget_remaining={cash_budget_remaining.quantize(Decimal('0.01'))} "
+            f"cash_throttle_reason_codes={','.join(list(dict.fromkeys(cash_throttle_reason_codes))) or 'none'} "
             f"cash_pressure_status={status} "
             f"cash_pressure_reason_codes={','.join(normalized_codes) or 'none'}"
         ),
@@ -1473,6 +1581,12 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     final_trade_examples: list[dict[str, Any]] = []
     runtime_rejection_count = 0
     runtime_rejection_reason_codes: list[str] = []
+    final_trade_cash_available = Decimal('0.00')
+    final_trade_cash_budget_remaining = Decimal('0.00')
+    final_trade_selected_for_execution = 0
+    final_trade_blocked_by_cash_precheck = 0
+    final_trade_deferred_by_budget = 0
+    final_trade_cash_throttle_reason_codes: list[str] = []
     dispatches_considered = 0
     dispatches_deduplicated = 0
     execution_lineage_considered = 0
@@ -1482,6 +1596,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     duplicate_candidate_ids: set[int] = set()
     latest_dispatch_by_candidate: dict[int, AutonomousDispatchRecord] = {}
     final_trade_map: dict[int, PaperTrade] = {}
+    final_trade_bridge: dict[str, Any] = {}
 
     if not route_infra_available and paper_trade_route_expected > 0:
         reason = 'PAPER_TRADE_ROUTE_MISSING' if route_disabled else 'PAPER_TRADE_NO_ELIGIBLE_HANDLER'
@@ -1571,9 +1686,15 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             dispatches_deduplicated = int(final_trade_bridge.get('dispatches_deduplicated') or 0)
             runtime_rejection_count = int(final_trade_bridge.get('runtime_rejection_count') or 0)
             runtime_rejection_reason_codes.extend(list(final_trade_bridge.get('runtime_rejection_reason_codes') or []))
+            final_trade_cash_available = _as_decimal(final_trade_bridge.get('cash_available'))
+            final_trade_cash_budget_remaining = _as_decimal(final_trade_bridge.get('cash_budget_remaining'))
+            final_trade_selected_for_execution = int(final_trade_bridge.get('selected_for_execution') or 0)
+            final_trade_blocked_by_cash_precheck = int(final_trade_bridge.get('blocked_by_cash_precheck') or 0)
+            final_trade_deferred_by_budget = int(final_trade_bridge.get('deferred_by_budget') or 0)
+            final_trade_cash_throttle_reason_codes.extend(list(final_trade_bridge.get('cash_throttle_reason_codes') or []))
             final_trade_expected = int(len(executable_candidate_ids))
             final_trade_available = int(sum(1 for dispatch in latest_dispatch_by_candidate.values() if dispatch is not None))
-            final_trade_attempted = int(dispatches_considered)
+            final_trade_attempted = int(final_trade_selected_for_execution or dispatches_considered)
 
             for candidate_id in executable_candidate_ids:
                 candidate = candidate_by_id.get(candidate_id)
@@ -1741,6 +1862,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         final_fanout_summary=final_fanout_summary,
         final_trade_created=int(final_trade_created),
         final_trade_reused=int(final_trade_reused),
+        final_trade_bridge=final_trade_bridge if executable_candidate_ids else {},
     )
     execution_lineage_summary = {
         'visible_execution_candidates': int(paper_trade_route_expected),
@@ -1766,6 +1888,10 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'fanout_reason_codes': normalized_fanout_codes,
         'runtime_rejection_count': int(runtime_rejection_count),
         'runtime_rejection_reason_codes': normalized_runtime_rejection_codes,
+        'selected_for_execution': int(final_trade_selected_for_execution),
+        'blocked_by_cash_precheck': int(final_trade_blocked_by_cash_precheck),
+        'deferred_by_budget': int(final_trade_deferred_by_budget),
+        'cash_throttle_reason_codes': list(dict.fromkeys(final_trade_cash_throttle_reason_codes)),
     }
     return {
         'paper_execution_route_expected': int(route_expected),
@@ -1845,6 +1971,12 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'final_trade_created': int(final_trade_created),
         'final_trade_reused': int(final_trade_reused),
         'final_trade_blocked': int(final_trade_blocked),
+        'cash_available': float(final_trade_cash_available.quantize(Decimal('0.01'))),
+        'selected_for_execution': int(final_trade_selected_for_execution),
+        'blocked_by_cash_precheck': int(final_trade_blocked_by_cash_precheck),
+        'deferred_by_budget': int(final_trade_deferred_by_budget),
+        'cash_budget_remaining': float(final_trade_cash_budget_remaining.quantize(Decimal('0.01'))),
+        'cash_throttle_reason_codes': list(dict.fromkeys(final_trade_cash_throttle_reason_codes)),
         'final_trade_reason_codes': normalized_final_trade_codes,
         'runtime_rejection_summary': (
             f"runtime_rejection_count={runtime_rejection_count} "
@@ -1855,6 +1987,12 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"expected={final_trade_expected} available={final_trade_available} "
             f"attempted={final_trade_attempted} created={final_trade_created} "
             f"reused={final_trade_reused} blocked={final_trade_blocked} "
+            f"cash_available={final_trade_cash_available.quantize(Decimal('0.01'))} "
+            f"selected_for_execution={final_trade_selected_for_execution} "
+            f"blocked_by_cash_precheck={final_trade_blocked_by_cash_precheck} "
+            f"deferred_by_budget={final_trade_deferred_by_budget} "
+            f"cash_budget_remaining={final_trade_cash_budget_remaining.quantize(Decimal('0.01'))} "
+            f"cash_throttle_reason_codes={','.join(list(dict.fromkeys(final_trade_cash_throttle_reason_codes))) or 'none'} "
             f"runtime_rejection_count={runtime_rejection_count} "
             f"runtime_rejection_reason_codes={','.join(normalized_runtime_rejection_codes) or 'none'} "
             f"final_trade_reason_codes={','.join(normalized_final_trade_codes) or 'none'}"

@@ -2859,8 +2859,10 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         self.assertTrue(mock_validation.called)
         self.assertTrue(mock_heartbeat.called)
 
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account', return_value=Mock())
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.execute_paper_trade')
-    def test_final_trade_runtime_rejection_is_captured_without_raising(self, mock_execute):
+    def test_final_trade_runtime_rejection_is_captured_without_raising(self, mock_execute, _mock_account, _mock_summary):
         from apps.autonomous_trader.models import AutonomousDispatchStatus, AutonomousExecutionDecisionType
         from apps.mission_control.services.live_paper_autonomy_funnel import _ensure_final_paper_trade_for_dispatches
         from apps.paper_trading.services.valuation import PaperTradingRejectionError
@@ -2894,6 +2896,62 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         self.assertEqual(bridge.get('runtime_rejection_count'), 1)
         self.assertIn('PAPER_TRADE_FINAL_BLOCKED_BY_CASH', bridge.get('reason_codes', []))
         self.assertIn('PAPER_TRADE_FINAL_RUNTIME_REJECTION_CAPTURED', bridge.get('runtime_rejection_reason_codes', []))
+
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('90.00')})
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account', return_value=Mock())
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.execute_paper_trade')
+    def test_final_trade_cash_precheck_selects_subset_and_defers_rest(self, mock_execute, _mock_account, _mock_summary):
+        from apps.autonomous_trader.models import AutonomousDispatchStatus, AutonomousExecutionDecisionType
+        from apps.mission_control.services.live_paper_autonomy_funnel import _ensure_final_paper_trade_for_dispatches
+        from apps.paper_trading.services.execution import PaperTradingValidationError
+
+        mock_execute.side_effect = [PaperTradingValidationError('forced-test-runtime-validation')] * 2
+        decision = SimpleNamespace(id=201, decision_type=AutonomousExecutionDecisionType.EXECUTE_NOW, decision_confidence=Decimal('0.7000'))
+
+        candidates: list[SimpleNamespace] = []
+        decisions: dict[int, SimpleNamespace] = {}
+        dispatches: dict[int, SimpleNamespace] = {}
+        for idx, notional in enumerate([Decimal('50.00'), Decimal('30.00'), Decimal('40.00')], start=1):
+            candidate_id = 100 + idx
+            candidates.append(
+                SimpleNamespace(
+                    id=candidate_id,
+                    linked_market_id=55 + idx,
+                    linked_market=object(),
+                    linked_execution_readiness=None,
+                    linked_sizing_plan=SimpleNamespace(paper_notional_size=notional),
+                    linked_prediction_context={},
+                    intake_run=SimpleNamespace(linked_cycle_run=SimpleNamespace(id=7000 + idx)),
+                )
+            )
+            decisions[candidate_id] = decision
+            dispatches[candidate_id] = SimpleNamespace(
+                id=300 + idx,
+                dispatch_status=AutonomousDispatchStatus.QUEUED,
+                linked_paper_trade_id=None,
+                linked_paper_trade=None,
+                metadata={},
+                save=Mock(),
+            )
+
+        bridge = _ensure_final_paper_trade_for_dispatches(
+            candidates=candidates,
+            decision_by_candidate_id=decisions,
+            dispatch_by_candidate_id=dispatches,
+            window_start=timezone.now() - timedelta(minutes=60),
+        )
+        self.assertEqual(mock_execute.call_count, 2)
+        self.assertEqual(bridge.get('selected_for_execution'), 2)
+        self.assertEqual(bridge.get('blocked_by_cash_precheck'), 1)
+        self.assertEqual(bridge.get('deferred_by_budget'), 1)
+        self.assertEqual(bridge.get('runtime_rejection_count'), 0)
+        self.assertEqual(bridge.get('final_trade_created'), 0)
+        self.assertIn('PAPER_TRADE_SELECTED_FOR_EXECUTION', bridge.get('cash_throttle_reason_codes', []))
+        self.assertIn('PAPER_TRADE_BLOCKED_BY_CASH_PRECHECK', bridge.get('reason_codes', []))
+        self.assertIn('PAPER_TRADE_DEFERRED_BY_CASH_BUDGET', bridge.get('reason_codes', []))
+        self.assertIn('PAPER_TRADE_FINAL_BLOCKED_BY_CASH', bridge.get('reason_codes', []))
+        self.assertEqual(bridge.get('cash_available'), 90.0)
+        self.assertEqual(bridge.get('cash_budget_remaining'), 10.0)
 
 
 class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
@@ -3575,7 +3633,9 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(lineage.get('candidates_deduplicated'), 1)
         self.assertTrue(lineage.get('decision_summary_aligned'))
 
-    def test_paper_trade_final_bridge_materializes_trade_for_queued_dispatch(self):
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account', return_value=Mock())
+    def test_paper_trade_final_bridge_materializes_trade_for_queued_dispatch(self, _mock_account, _mock_summary):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.autonomous_trader.models import AutonomousDispatchRecord, AutonomousExecutionDecision, AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
         from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
@@ -3663,7 +3723,9 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(diagnostics.get('final_trade_reused'), 1)
         self.assertIn('PAPER_TRADE_FINAL_REUSED', diagnostics.get('final_trade_reason_codes', []))
 
-    def test_paper_trade_final_dedupe_reuses_trade_by_lineage_market(self):
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account', return_value=Mock())
+    def test_paper_trade_final_dedupe_reuses_trade_by_lineage_market(self, _mock_account, _mock_summary):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.autonomous_trader.models import AutonomousDispatchRecord, AutonomousExecutionDecision, AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
         from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
@@ -3791,6 +3853,13 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         cash_pressure = diagnostics.get('cash_pressure_summary') or {}
         self.assertEqual(cash_pressure.get('cash_pressure_status'), 'HIGH')
         self.assertGreaterEqual(cash_pressure.get('candidates_blocked_by_cash', 0), 1)
+        self.assertIn('selected_for_execution', cash_pressure)
+        self.assertIn('blocked_by_cash_precheck', cash_pressure)
+        self.assertIn('deferred_by_budget', cash_pressure)
+        self.assertIn('cash_throttle_reason_codes', cash_pressure)
+        self.assertIn('selected_for_execution=', cash_pressure.get('cash_pressure_summary', ''))
+        self.assertIn('blocked_by_cash_precheck=', cash_pressure.get('cash_pressure_summary', ''))
+        self.assertIn('deferred_by_budget=', cash_pressure.get('cash_pressure_summary', ''))
         self.assertIn('CASH_PRESSURE_INSUFFICIENT_FOR_ALL', cash_pressure.get('cash_pressure_reason_codes', []))
         self.assertIn('CASH_PRESSURE_FANOUT_EXCESSIVE', cash_pressure.get('cash_pressure_reason_codes', []))
         self.assertEqual(len(diagnostics.get('cash_pressure_examples') or []), 3)
