@@ -4517,6 +4517,12 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - `extended_paper_run_gate` incluye `state_mismatch_summary`, `state_mismatch_examples` y `gate_source_summary` para dejar explícito sobre qué fuentes/ventana/scope se está calculando gate/readiness.
   - reparación conservadora: si funnel cae en `STALLED` por vista stale (portfolio activo + ventana funnel vacía), el bloqueo por funnel no pisa por sí solo el gate; se reporta `STATE_GATE_BLOCKED_ON_STALE_VIEW` sin abrir bypass de validation/readiness/attention.
   - límites intactos: observability-first, backend-only, **REAL_READ_ONLY + PAPER_ONLY**, sin live trading real.
+- **Prompt 267 (final fan-out stabilization + portfolio/trade reconciliation):**
+  - agrega `final_fanout_summary` + `final_fanout_examples` (máx 3) para diagnosticar explícitamente el tramo final por lineage/market: `final_lineage_count`, `unique_market_lineages`, `duplicate_execution_candidates`, `duplicate_dispatches`, `duplicate_trades`, `final_fanout_status`, `final_fanout_reason_codes`.
+  - preserva contención conservadora del bridge final: se mantiene dedupe/reuse de trade válido por lineage/market para contener multiplicación práctica sin borrar historial ni tocar fills ya materializados.
+  - agrega `portfolio_trade_reconciliation_summary` para reconciliar `materialized_paper_trades`, `reused_trade_cycles`, `recent_trades_count`, `open_positions`, `equity` y `unrealized_pnl`, con reason codes `PORTFOLIO_*`.
+  - export log de Test Console (`text/json`) integra ambos bloques (`final_fanout_summary`, `portfolio_trade_reconciliation_summary`) sin logging paralelo.
+  - alcance intacto: observability-first, backend-only, **REAL_READ_ONLY + PAPER_ONLY**, sin frontend, sin `/runtime`, sin live trading real.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

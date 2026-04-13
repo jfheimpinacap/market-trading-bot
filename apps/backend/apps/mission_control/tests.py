@@ -3726,6 +3726,30 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertIn('LINEAGE_FANOUT_EXCESSIVE', lineage.get('fanout_reason_codes', []))
         self.assertIn('candidates_considered', lineage)
         self.assertIn('decisions_created', lineage)
+        final_fanout = diagnostics.get('final_fanout_summary') or {}
+        self.assertEqual(final_fanout.get('final_fanout_status'), 'EXCESSIVE')
+        self.assertIn('FINAL_LINEAGE_FANOUT_EXCESSIVE', final_fanout.get('final_fanout_reason_codes', []))
+
+    def test_final_fanout_summary_reports_ok_when_one_to_one(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-trade-fanout-ok')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.8100'),
+            readiness_summary='fanout-ok',
+            readiness_reason_codes=['READY'],
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        final_fanout = diagnostics.get('final_fanout_summary') or {}
+        self.assertEqual(final_fanout.get('final_fanout_status'), 'OK')
+        self.assertIn('FINAL_LINEAGE_FANOUT_OK', final_fanout.get('final_fanout_reason_codes', []))
+        self.assertEqual(final_fanout.get('duplicate_execution_candidates'), 0)
 
     def test_paper_execution_bridge_materializes_candidate_from_readiness(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
@@ -5874,6 +5898,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('paper_trade_final_examples=', text_payload)
         self.assertIn('execution_lineage_summary:', text_payload)
         self.assertIn('fanout_reason_codes=', text_payload)
+        self.assertIn('final_fanout_summary:', text_payload)
+        self.assertIn('final_fanout_reason_codes=', text_payload)
         self.assertIn('candidates_deduplicated=', text_payload)
         self.assertIn('dispatches_considered=', text_payload)
         self.assertIn('trades_materialized=', text_payload)
@@ -5884,6 +5910,32 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('structural_reason_codes=', text_payload)
         self.assertIn('handoff_structural_examples=', text_payload)
         self.assertIn('account_summary_status=', text_payload)
+        self.assertIn('portfolio_trade_reconciliation_summary:', text_payload)
+        self.assertIn('portfolio_trade_reconciliation_reason_codes=', text_payload)
+
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_export_log_json_includes_portfolio_trade_reconciliation_summary(self, mock_state_snapshot):
+        from apps.mission_control.services.test_console import export_test_console_log
+
+        payload = self._status_payload()
+        payload['portfolio_summary'] = {
+            'cash': 100.0,
+            'equity': 1000.0,
+            'realized_pnl': 0.0,
+            'unrealized_pnl': 950.0,
+            'open_positions': 1,
+            'recent_trades_count': 1,
+            'account_summary_status': 'PAPER_ACCOUNT_SUMMARY_OK',
+            'account_summary_reason_codes': ['PAPER_ACCOUNT_SCOPE_LIVE_READ_ONLY'],
+        }
+        payload['execution_lineage_summary'] = {'trades_materialized': 1, 'trades_reused': 8}
+        payload['text_export'] = ''
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        json_payload = export_test_console_log(fmt='json')
+        reconciliation = json_payload.get('portfolio_trade_reconciliation_summary') or {}
+        self.assertIn('PORTFOLIO_POSITION_REUSE_ACCUMULATION', reconciliation.get('portfolio_trade_reconciliation_reason_codes', []))
+        self.assertIn('PORTFOLIO_UNREALIZED_PNL_OUTLIER', reconciliation.get('portfolio_trade_reconciliation_reason_codes', []))
 
     @patch('apps.mission_control.views.export_test_console_log')
     def test_export_log_json_works(self, mock_export):
