@@ -505,6 +505,9 @@ class ExtendedPaperRunGateSerializer(serializers.Serializer):
     gate_summary = serializers.CharField()
     reason_codes = serializers.ListField(child=serializers.CharField())
     checks = ExtendedPaperRunGateCheckSerializer(many=True)
+    state_mismatch_summary = serializers.DictField(required=False)
+    state_mismatch_examples = serializers.ListField(child=serializers.DictField(), required=False)
+    gate_source_summary = serializers.DictField(required=False)
 
 
 
@@ -550,6 +553,8 @@ class TestConsoleStatusSerializer(serializers.Serializer):
     attention_mode = serializers.CharField()
     portfolio_summary = serializers.DictField(required=False)
     scan_summary = serializers.DictField(required=False)
+    state_mismatch_summary = serializers.DictField(required=False)
+    state_mismatch_examples = serializers.ListField(child=serializers.DictField(), required=False)
     blocker_summary = serializers.ListField(child=serializers.CharField(), required=False)
     next_action_hint = serializers.CharField()
     warnings = serializers.ListField(child=serializers.CharField(), required=False)

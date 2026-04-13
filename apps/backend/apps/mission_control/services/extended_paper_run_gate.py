@@ -28,6 +28,15 @@ from apps.mission_control.services.live_paper_validation import (
     VALIDATION_WARNING,
     build_live_paper_validation_digest,
 )
+from apps.mission_control.services.state_consistency import (
+    STATE_GATE_BLOCKED_ON_STALE_VIEW,
+    build_state_consistency_snapshot,
+)
+from apps.paper_trading.services.portfolio import (
+    build_account_financial_summary,
+    build_account_summary,
+    get_active_account,
+)
 
 GATE_ALLOW = 'ALLOW'
 GATE_ALLOW_WITH_CAUTION = 'ALLOW_WITH_CAUTION'
@@ -78,6 +87,21 @@ def build_extended_paper_run_gate(*, preset_name: str | None = None) -> dict[str
     attention = get_live_paper_attention_alert_status()
     funnel = build_live_paper_autonomy_funnel_snapshot(window_minutes=60, preset_name=target_preset)
     bootstrap = get_live_paper_bootstrap_status(preset_name=target_preset)
+    account = get_active_account()
+    portfolio_summary = build_account_summary(account=account)
+    portfolio_financial = build_account_financial_summary(account=account)
+    state_consistency = build_state_consistency_snapshot(
+        funnel=funnel,
+        portfolio_summary={
+            'open_positions': int(portfolio_summary.get('open_positions_count') or 0),
+            'recent_trades_count': len(portfolio_summary.get('recent_trades') or []),
+            'account_summary_status': str(portfolio_financial.get('summary_status') or ''),
+        },
+        funnel_session_detected=None,
+        portfolio_session_detected=None,
+        funnel_scope=None,
+        portfolio_scope=account.slug,
+    )
 
     validation_status = str(validation.get('validation_status') or VALIDATION_BLOCKED).upper()
     readiness_status = str(trend.get('readiness_status') or READINESS_NOT_READY).upper()
@@ -92,7 +116,7 @@ def build_extended_paper_run_gate(*, preset_name: str | None = None) -> dict[str
     fail_count = int(counts.get('fail_count') or 0)
 
     block_by_attention = attention_mode in {ATTENTION_MODE_BLOCKED, ATTENTION_MODE_REVIEW_NOW}
-    block_by_funnel = funnel_status == FUNNEL_STALLED
+    block_by_funnel = funnel_status == FUNNEL_STALLED and not state_consistency.should_ignore_funnel_block
     block_by_validation = validation_status == VALIDATION_BLOCKED
     block_by_readiness = readiness_status == READINESS_NOT_READY
     block_by_latest_trial = latest_trial_status == 'FAIL'
@@ -152,6 +176,8 @@ def build_extended_paper_run_gate(*, preset_name: str | None = None) -> dict[str
         reason_codes.append(_REASON_FUNNEL_THIN_FLOW)
     if block_by_funnel:
         reason_codes.append(_REASON_FUNNEL_STALLED)
+    elif funnel_status == FUNNEL_STALLED and state_consistency.should_ignore_funnel_block:
+        reason_codes.append(STATE_GATE_BLOCKED_ON_STALE_VIEW)
 
     validation_check_status = _CHECK_FAIL if validation_status == VALIDATION_BLOCKED else (_CHECK_WARN if validation_status == VALIDATION_WARNING else _CHECK_PASS)
     trend_check_status = _CHECK_FAIL if (readiness_status == READINESS_NOT_READY or trend_status == 'DEGRADING') else (_CHECK_WARN if trend_status == 'INSUFFICIENT_DATA' or latest_trial_status == 'WARN' else _CHECK_PASS)
@@ -200,7 +226,7 @@ def build_extended_paper_run_gate(*, preset_name: str | None = None) -> dict[str
     gate_summary = (
         f'{gate_status}: validation={validation_status}, readiness={readiness_status}, latest_trial={latest_trial_status or "NONE"}, '
         f'attention={attention_mode}, funnel={funnel_status}, session_active={bool(bootstrap.get("session_active"))}, '
-        f'heartbeat_active={bool(bootstrap.get("heartbeat_active"))}.'
+        f'heartbeat_active={bool(bootstrap.get("heartbeat_active"))}, consistency={state_consistency.summary.get("consistency_status")}.'
     )
 
     return {
@@ -216,4 +242,14 @@ def build_extended_paper_run_gate(*, preset_name: str | None = None) -> dict[str
         'gate_summary': gate_summary,
         'reason_codes': list(dict.fromkeys(reason_codes)),
         'checks': checks,
+        'state_mismatch_summary': state_consistency.summary,
+        'state_mismatch_examples': state_consistency.examples,
+        'gate_source_summary': {
+            'validation_source': 'build_live_paper_validation_digest',
+            'readiness_source': 'build_live_paper_trial_trend_digest',
+            'funnel_source': 'build_live_paper_autonomy_funnel_snapshot:rolling_60m',
+            'portfolio_source': 'paper_trading.services.portfolio',
+            'funnel_scope': target_preset,
+            'portfolio_scope': account.slug,
+        },
     }

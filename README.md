@@ -3400,6 +3400,11 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - añade `paper_trade_final_summary` + `paper_trade_final_examples` en export (`text/json`) con `expected|available|attempted|created|reused|blocked` y `final_trade_reason_codes`.
   - enriquece `execution_lineage_summary` con `dispatches_considered`, `dispatches_deduplicated`, `trades_materialized`, `trades_reused` para hacer explícita la contención del fan-out final.
   - mantiene frontera **REAL_READ_ONLY + PAPER_ONLY**, sin live trading real, sin frontend y sin rediseño de `/runtime`.
+- **Prompt 266** corrige el desacople entre funnel/gate y portfolio real en Mission Control:
+  - agrega diagnóstico reusable `state_mismatch_summary` + `state_mismatch_examples` (máx 3) en Test Console export para explicar inconsistencias entre control plane y estado operacional real.
+  - reason codes explícitos de consistencia (`STATE_SESSION_MISMATCH`, `STATE_WINDOW_MISMATCH`, `STATE_SCOPE_MISMATCH`, `STATE_EMPTY_FALLBACK_APPLIED`, `STATE_PORTFOLIO_ACTIVE_BUT_FUNNEL_EMPTY`, `STATE_GATE_BLOCKED_ON_STALE_VIEW`, `STATE_ALIGNMENT_OK`).
+  - `extended_paper_run_gate` ahora expone fuentes operacionales de cálculo (`gate_source_summary`) y evita bloquear solo por funnel `STALLED` cuando detecta vista stale (portfolio activo + funnel vacío por ventana), sin relajar validación/readiness/attention.
+  - mantiene enfoque observability-first y límites estrictos **REAL_READ_ONLY + PAPER_ONLY** (sin frontend, sin `/runtime`, sin live trading real).
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.

@@ -4508,6 +4508,15 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - refuerza contención de fan-out final por lineage/market/dispatch (`LINEAGE_DEDUPE_APPLIED`, `LINEAGE_DEDUPE_REUSED_EXISTING_TRADE`, `LINEAGE_DEDUPE_BLOCKED_DUPLICATE`) sin rediseñar arquitectura.
   - `execution_lineage_summary` ahora también publica `dispatches_considered`, `dispatches_deduplicated`, `trades_materialized`, `trades_reused` para trazabilidad del tramo final.
   - alcance se mantiene observability-first + **REAL_READ_ONLY + PAPER_ONLY**: backend-only, sin frontend, sin `/runtime`, sin broker real ni dinero real.
+- **Prompt 266 (state mismatch diagnostics + conservative alignment funnel/gate vs portfolio):**
+  - añade módulo reusable `state_consistency` para diagnosticar consistencia entre funnel/control-plane y portfolio real.
+  - Test Console ahora exporta `state_mismatch_summary` con:
+    - `consistency_status`, `funnel_session_detected`, `portfolio_session_detected`,
+    - `state_window_alignment`, `state_scope_alignment`, `state_consistency_reason_codes`,
+    - `state_mismatch_examples` compactos (máx 3).
+  - `extended_paper_run_gate` incluye `state_mismatch_summary`, `state_mismatch_examples` y `gate_source_summary` para dejar explícito sobre qué fuentes/ventana/scope se está calculando gate/readiness.
+  - reparación conservadora: si funnel cae en `STALLED` por vista stale (portfolio activo + ventana funnel vacía), el bloqueo por funnel no pisa por sí solo el gate; se reporta `STATE_GATE_BLOCKED_ON_STALE_VIEW` sin abrir bypass de validation/readiness/attention.
+  - límites intactos: observability-first, backend-only, **REAL_READ_ONLY + PAPER_ONLY**, sin live trading real.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`
