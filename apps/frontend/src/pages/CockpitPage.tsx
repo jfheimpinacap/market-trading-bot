@@ -376,6 +376,16 @@ export function CockpitPage() {
   const testConsolePortfolioSummary = typeof testConsoleStatus?.portfolio_summary === 'string'
     ? testConsoleStatus.portfolio_summary
     : testConsoleStatus?.portfolio_summary?.summary ?? 'n/a';
+  const testConsoleRunActive = Boolean(
+    testConsoleStatus?.test_status
+      && ['RUNNING', 'IN_PROGRESS', 'ACTIVE'].includes(testConsoleStatus.test_status.toUpperCase()),
+  );
+  const testConsoleHasExportableLog = Boolean(
+    testConsoleLog
+      && testConsoleLog !== 'No log exported yet'
+      && testConsoleLog !== 'Unable to export test log',
+  );
+  const testConsoleCanExportLog = Boolean(testConsoleStatus && !testConsoleStatusError);
 
   const loadLivePaperStatus = useCallback(async (): Promise<LivePaperBootstrapStatusResponse | null> => {
     setLivePaperStatusLoading(true);
@@ -1185,21 +1195,39 @@ export function CockpitPage() {
                       ) : null}
                     </ul>
                   ) : null}
-                  <div className="button-row">
+                  <div className="button-row test-console-actions">
                     <button className="secondary-button" type="button" disabled={testConsoleStartLoading || testConsoleStopLoading} onClick={() => void startTestConsoleFromCockpit()}>
                       {testConsoleStartLoading ? 'Starting…' : 'Start test'}
                     </button>
-                    <button className="secondary-button" type="button" disabled={testConsoleStopLoading || testConsoleStartLoading} onClick={() => void stopTestConsoleFromCockpit()}>
-                      {testConsoleStopLoading ? 'Stopping…' : 'Stop test'}
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      title={testConsoleRunActive ? 'Stop active test' : 'Not available: no active test'}
+                      disabled={testConsoleStopLoading || testConsoleStartLoading || !testConsoleRunActive}
+                      onClick={() => void stopTestConsoleFromCockpit()}
+                    >
+                      {testConsoleStopLoading ? 'Stopping…' : testConsoleRunActive ? 'Stop test' : 'Stop test · Not available'}
                     </button>
                     <button className="ghost-button" type="button" disabled={testConsoleStatusLoading} onClick={() => void loadTestConsoleStatus()}>
                       Refresh status
                     </button>
-                    <button className="ghost-button" type="button" disabled={testConsoleExportLoading} onClick={() => void exportTestConsoleLog()}>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      title={testConsoleCanExportLog ? 'Export current test log' : 'Not available: no test status yet'}
+                      disabled={testConsoleExportLoading || !testConsoleCanExportLog}
+                      onClick={() => void exportTestConsoleLog()}
+                    >
                       {testConsoleExportLoading ? 'Exporting…' : 'Export log'}
                     </button>
-                    <button className="ghost-button" type="button" disabled={testConsoleExportLoading} onClick={() => void copyTestConsoleLog()}>
-                      Copy log
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      title={testConsoleHasExportableLog ? 'Copy exported log' : 'Not available: export log first'}
+                      disabled={testConsoleExportLoading || !testConsoleHasExportableLog}
+                      onClick={() => void copyTestConsoleLog()}
+                    >
+                      {testConsoleHasExportableLog ? 'Copy log' : 'Copy log · No data yet'}
                     </button>
                     <button className="ghost-button" type="button" onClick={() => setTestConsoleRawJsonOpen((value) => !value)}>
                       {testConsoleRawJsonOpen ? 'Hide raw JSON' : 'View raw JSON'}
@@ -1207,14 +1235,14 @@ export function CockpitPage() {
                   </div>
                   {testConsoleCopyMessage ? <p className="muted-text">{testConsoleCopyMessage}</p> : null}
                   {testConsoleLogError ? <p className="warning-text">{testConsoleLogError}</p> : null}
-                  <div className="subsection">
+                  <div className="subsection test-console-output-block">
                     <p className="section-label">Exported log</p>
-                    <pre>{testConsoleLog || 'No log exported yet'}</pre>
+                    <pre className="test-console-output">{testConsoleLog || 'No log exported yet'}</pre>
                   </div>
                   {testConsoleRawJsonOpen ? (
-                    <div className="subsection">
+                    <div className="subsection test-console-output-block">
                       <p className="section-label">Raw status JSON</p>
-                      <pre>{JSON.stringify(testConsoleStatus ?? {}, null, 2)}</pre>
+                      <pre className="test-console-output">{JSON.stringify(testConsoleStatus ?? {}, null, 2)}</pre>
                     </div>
                   ) : null}
                 </SectionCard>
