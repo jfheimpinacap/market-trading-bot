@@ -482,8 +482,19 @@ export type TestConsolePortfolioSummary = {
 export type TestConsoleStatusResponse = {
   test_status: string;
   current_phase: string | null;
+  current_step?: number | null;
+  current_step_label?: string | null;
+  completed_steps?: number | null;
+  total_steps?: number | null;
+  progress_state?: 'idle' | 'running' | 'completed' | 'blocked' | 'failed' | 'stopped' | string;
   started_at: string | null;
+  updated_at?: string | null;
   ended_at: string | null;
+  elapsed_seconds?: number | null;
+  last_event?: string | null;
+  last_reason_code?: string | null;
+  export_available?: boolean;
+  is_stale?: boolean;
   validation_status: string | null;
   trial_status: string | null;
   trend_status: string | null;
