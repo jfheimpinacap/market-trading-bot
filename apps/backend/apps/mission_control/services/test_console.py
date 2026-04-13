@@ -274,6 +274,17 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
                 'paper_trade_dispatch_summary': str(funnel.get('paper_trade_dispatch_summary') or ''),
             },
             'paper_trade_dispatch_examples': list(funnel.get('paper_trade_dispatch_examples') or []),
+            'paper_trade_final_summary': {
+                'expected': int(funnel.get('final_trade_expected') or 0),
+                'available': int(funnel.get('final_trade_available') or 0),
+                'attempted': int(funnel.get('final_trade_attempted') or 0),
+                'created': int(funnel.get('final_trade_created') or 0),
+                'reused': int(funnel.get('final_trade_reused') or 0),
+                'blocked': int(funnel.get('final_trade_blocked') or 0),
+                'final_trade_reason_codes': list(funnel.get('final_trade_reason_codes') or []),
+                'paper_trade_final_summary': str(funnel.get('paper_trade_final_summary') or ''),
+            },
+            'paper_trade_final_examples': list(funnel.get('paper_trade_final_examples') or []),
             'execution_lineage_summary': dict(funnel.get('execution_lineage_summary') or {}),
             'execution_artifact_summary': {
                 'execution_readiness_available_count': int(funnel.get('execution_readiness_available_count') or 0),
@@ -338,6 +349,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     paper_trade_decision_examples = payload.get('paper_trade_decision_examples') or []
     paper_trade_dispatch = payload.get('paper_trade_dispatch_summary') or {}
     paper_trade_dispatch_examples = payload.get('paper_trade_dispatch_examples') or []
+    paper_trade_final = payload.get('paper_trade_final_summary') or {}
+    paper_trade_final_examples = payload.get('paper_trade_final_examples') or []
     execution_lineage = payload.get('execution_lineage_summary') or {}
     execution_artifact = payload.get('execution_artifact_summary') or {}
     execution_artifact_examples = payload.get('execution_artifact_examples') or []
@@ -458,6 +471,20 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"{','.join(paper_trade_dispatch.get('paper_trade_dispatch_reason_codes') or []) or 'none'}"
         ),
         f"  paper_trade_dispatch_examples={paper_trade_dispatch_examples or []}",
+        'paper_trade_final_summary:',
+        (
+            f"  expected={paper_trade_final.get('expected', 0)} "
+            f"available={paper_trade_final.get('available', 0)} "
+            f"attempted={paper_trade_final.get('attempted', 0)} "
+            f"created={paper_trade_final.get('created', 0)} "
+            f"reused={paper_trade_final.get('reused', 0)} "
+            f"blocked={paper_trade_final.get('blocked', 0)}"
+        ),
+        (
+            f"  final_trade_reason_codes="
+            f"{','.join(paper_trade_final.get('final_trade_reason_codes') or []) or 'none'}"
+        ),
+        f"  paper_trade_final_examples={paper_trade_final_examples or []}",
         'execution_lineage_summary:',
         (
             f"  visible_execution_candidates={execution_lineage.get('visible_execution_candidates', 0)} "
@@ -466,6 +493,10 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"candidates_deduplicated={execution_lineage.get('candidates_deduplicated', 0)} "
             f"decisions_created={execution_lineage.get('decisions_created', 0)} "
             f"decisions_reused={execution_lineage.get('decisions_reused', 0)} "
+            f"dispatches_considered={execution_lineage.get('dispatches_considered', 0)} "
+            f"dispatches_deduplicated={execution_lineage.get('dispatches_deduplicated', 0)} "
+            f"trades_materialized={execution_lineage.get('trades_materialized', 0)} "
+            f"trades_reused={execution_lineage.get('trades_reused', 0)} "
             f"materialized_paper_trades={execution_lineage.get('materialized_paper_trades', 0)} "
             f"reused_trade_cycles={execution_lineage.get('reused_trade_cycles', 0)}"
         ),
