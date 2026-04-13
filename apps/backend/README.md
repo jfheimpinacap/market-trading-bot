@@ -50,6 +50,30 @@ Safety boundary is unchanged: `REAL_READ_ONLY` + `PAPER_ONLY` only; no live-trad
 
 Safety boundary remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY` only.
 
+## Mission Control cash-aware final precheck (Prompt 271)
+
+`live_paper_autonomy_funnel` now applies a conservative cash precheck immediately before `execute_paper_trade` in the final paper-trade bridge.
+
+- Selection behavior (minimal, no optimizer rewrite):
+  - iterate executable final candidates in stable order,
+  - mark `PAPER_TRADE_SELECTED_FOR_EXECUTION` while budget remains,
+  - mark rest as deferred/blocked when budget is insufficient.
+- New explicit reason codes:
+  - `PAPER_TRADE_BLOCKED_BY_CASH_PRECHECK`
+  - `PAPER_TRADE_DEFERRED_BY_CASH_BUDGET`
+  - `PAPER_TRADE_CASH_BUDGET_EXHAUSTED`
+  - `PAPER_TRADE_FINAL_BLOCKED_BY_CASH`
+- Existing summaries/export now include the compact throttle counters:
+  - `cash_available`, `executable_candidates`, `selected_for_execution`,
+  - `blocked_by_cash_precheck`, `deferred_by_budget`,
+  - `cash_throttle_reason_codes`.
+
+Difference vs runtime rejection:
+- **Cash precheck**: proactive skip/defer before execution attempt.
+- **Runtime rejection**: downstream paper runtime still may reject and is still captured in `runtime_rejection_*` diagnostics.
+
+Safety boundary remains unchanged: no frontend changes, no `/runtime` changes, and strict `REAL_READ_ONLY` + `PAPER_ONLY`.
+
 ## Scan diagnostics + demo narrative fallback (new)
 
 `apps.research_agent.services.run.run_scan_agent` now writes explicit scan diagnostics under `SourceScanRun.metadata.scan_diagnostics`.

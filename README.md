@@ -55,6 +55,31 @@ Mission Control backend now emits compact operational truth for the final paper-
 
 Scope remains observability-first and paper-only (`REAL_READ_ONLY` + `PAPER_ONLY`), with no runtime rewrite and no live-trading enablement.
 
+### Mission Control cash-aware final precheck (Prompt 271)
+
+Mission Control backend now adds a conservative **cash-aware precheck** right before final paper-trade materialization.
+
+- Goal: avoid late runtime rejections when candidates are already known to exceed available paper cash.
+- Rule is intentionally simple/stable (no optimizer):
+  - iterate executable final candidates in stable order,
+  - select while cash budget allows,
+  - defer/block remaining candidates once budget is insufficient.
+- New reason codes in the same existing diagnostic flow include:
+  - `PAPER_TRADE_SELECTED_FOR_EXECUTION`
+  - `PAPER_TRADE_BLOCKED_BY_CASH_PRECHECK`
+  - `PAPER_TRADE_DEFERRED_BY_CASH_BUDGET`
+  - `PAPER_TRADE_CASH_BUDGET_EXHAUSTED`
+  - `PAPER_TRADE_FINAL_BLOCKED_BY_CASH`
+- Existing summaries/export now explicitly surface:
+  - `cash_available`
+  - `executable_candidates`
+  - `selected_for_execution`
+  - `blocked_by_cash_precheck`
+  - `deferred_by_budget`
+  - `cash_throttle_reason_codes`
+
+Clarification: this precheck is **before** `execute_paper_trade`; runtime cash rejection is still captured separately if it happens (for example due concurrent cash changes). Scope remains observability-first and strictly `REAL_READ_ONLY` + `PAPER_ONLY` (no live trading).
+
 ### Scan diagnostics + demo narrative fallback (backend, local V1 paper)
 
 `research_agent` scan runs now persist explicit diagnostics in `SourceScanRun.metadata.scan_diagnostics` so local V1 paper tests can explain zero-signal stalls instead of failing silently.
