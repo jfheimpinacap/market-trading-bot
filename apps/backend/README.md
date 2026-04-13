@@ -4501,6 +4501,13 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - incorpora `paper_trade_dispatch_summary` + `paper_trade_dispatch_examples` en export (`text/json`) con `dispatch_created|dispatch_reused|dispatch_blocked|dispatch_dedupe_applied`.
   - alinea `paper_trade_decision_summary` con `execution_lineage_summary` usando los mismos contadores operacionales de decisiones creadas/reusadas.
   - mantiene límites **REAL_READ_ONLY + PAPER_ONLY**, sin broker routing/live trading real, sin frontend y sin tocar `/runtime`.
+- **Prompt 265 (bridge final dispatch -> linked_paper_trade_id / materialización final paper-only):**
+  - Mission Control repara el último tramo `AutonomousDispatchRecord -> linked_paper_trade_id`: si el dispatch está enrutable y le falta artefacto final, materializa/reutiliza `PaperTrade` y enlaza `AutonomousTradeExecution` / `AutonomousTradeCycleRun` cuando corresponde.
+  - añade diagnóstico reutilizable `paper_trade_final_summary` + `paper_trade_final_examples` (máx 3) con `final_trade_expected|available|attempted|created|reused|blocked` y `final_trade_reason_codes`.
+  - reason codes de bridge final incluyen `PAPER_TRADE_FINAL_CREATED`, `PAPER_TRADE_FINAL_REUSED`, `PAPER_TRADE_FINAL_DEDUPE_REUSED`, `PAPER_TRADE_FINAL_BLOCKED_BY_RUNTIME|POLICY|SAFETY`, `PAPER_TRADE_FINAL_ARTIFACT_MISMATCH_RESOLVED|BLOCKED`.
+  - refuerza contención de fan-out final por lineage/market/dispatch (`LINEAGE_DEDUPE_APPLIED`, `LINEAGE_DEDUPE_REUSED_EXISTING_TRADE`, `LINEAGE_DEDUPE_BLOCKED_DUPLICATE`) sin rediseñar arquitectura.
+  - `execution_lineage_summary` ahora también publica `dispatches_considered`, `dispatches_deduplicated`, `trades_materialized`, `trades_reused` para trazabilidad del tramo final.
+  - alcance se mantiene observability-first + **REAL_READ_ONLY + PAPER_ONLY**: backend-only, sin frontend, sin `/runtime`, sin broker real ni dinero real.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

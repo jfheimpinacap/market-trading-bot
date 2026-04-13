@@ -3538,6 +3538,137 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(lineage.get('candidates_deduplicated'), 1)
         self.assertTrue(lineage.get('decision_summary_aligned'))
 
+    def test_paper_trade_final_bridge_materializes_trade_for_queued_dispatch(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import AutonomousDispatchRecord, AutonomousExecutionDecision, AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-trade-final-created')
+        market.status = 'open'
+        market.current_yes_price = Decimal('0.6200')
+        market.current_market_probability = Decimal('0.6200')
+        market.save(update_fields=['status', 'current_yes_price', 'current_market_probability', 'updated_at'])
+        risk_decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=risk_decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.8200'),
+            readiness_summary='final-created',
+            readiness_reason_codes=['READY'],
+        )
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        candidate = AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=readiness,
+            linked_approval_review=risk_decision,
+            intake_status=AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+            readiness_confidence=Decimal('0.8200'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+        )
+        execution_decision = AutonomousExecutionDecision.objects.create(linked_intake_candidate=candidate, decision_type='EXECUTE_NOW')
+        dispatch = AutonomousDispatchRecord.objects.create(linked_execution_decision=execution_decision, dispatch_status='QUEUED')
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        dispatch.refresh_from_db()
+        self.assertIsNotNone(dispatch.linked_paper_trade_id)
+        self.assertEqual(diagnostics.get('final_trade_created'), 1)
+        self.assertIn('PAPER_TRADE_FINAL_CREATED', diagnostics.get('final_trade_reason_codes', []))
+        self.assertGreaterEqual((diagnostics.get('execution_lineage_summary') or {}).get('trades_materialized', 0), 1)
+
+    def test_paper_trade_final_bridge_reuses_existing_linked_trade(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import AutonomousDispatchRecord, AutonomousExecutionDecision, AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
+        from apps.paper_trading.services.execution import execute_paper_trade
+        from apps.paper_trading.models import PaperTradeType
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-trade-final-reused')
+        market.status = 'open'
+        market.current_yes_price = Decimal('0.6100')
+        market.current_market_probability = Decimal('0.6100')
+        market.save(update_fields=['status', 'current_yes_price', 'current_market_probability', 'updated_at'])
+        risk_decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=risk_decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.8200'),
+            readiness_summary='final-reused',
+            readiness_reason_codes=['READY'],
+        )
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        candidate = AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=readiness,
+            linked_approval_review=risk_decision,
+            intake_status=AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+            readiness_confidence=Decimal('0.8200'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+        )
+        execution_decision = AutonomousExecutionDecision.objects.create(linked_intake_candidate=candidate, decision_type='EXECUTE_NOW')
+        existing_trade = execute_paper_trade(
+            market=market,
+            trade_type=PaperTradeType.BUY,
+            side='YES',
+            quantity=Decimal('10'),
+            notes='seed-existing-trade',
+        ).trade
+        AutonomousDispatchRecord.objects.create(
+            linked_execution_decision=execution_decision,
+            dispatch_status='QUEUED',
+            linked_paper_trade=existing_trade,
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertEqual(diagnostics.get('final_trade_reused'), 1)
+        self.assertIn('PAPER_TRADE_FINAL_REUSED', diagnostics.get('final_trade_reason_codes', []))
+
+    def test_paper_trade_final_dedupe_reuses_trade_by_lineage_market(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import AutonomousDispatchRecord, AutonomousExecutionDecision, AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-trade-final-dedupe')
+        market.status = 'open'
+        market.current_yes_price = Decimal('0.6000')
+        market.current_market_probability = Decimal('0.6000')
+        market.save(update_fields=['status', 'current_yes_price', 'current_market_probability', 'updated_at'])
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        created_dispatches = []
+        for idx in range(2):
+            risk_decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+            readiness = AutonomousExecutionReadiness.objects.create(
+                linked_market=market,
+                linked_approval_review=risk_decision,
+                readiness_status=AutonomousExecutionReadinessStatus.READY,
+                readiness_confidence=Decimal('0.8200'),
+                readiness_summary=f'final-dedupe-{idx}',
+                readiness_reason_codes=['READY'],
+            )
+            candidate = AutonomousExecutionIntakeCandidate.objects.create(
+                intake_run=intake_run,
+                linked_market=market,
+                linked_execution_readiness=readiness,
+                linked_approval_review=risk_decision,
+                intake_status=AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+                readiness_confidence=Decimal('0.8200'),
+                approval_status=RiskRuntimeApprovalStatus.APPROVED,
+                linked_prediction_context={'prediction_candidate_id': 123, 'handoff_id': 456},
+            )
+            execution_decision = AutonomousExecutionDecision.objects.create(linked_intake_candidate=candidate, decision_type='EXECUTE_NOW')
+            created_dispatches.append(AutonomousDispatchRecord.objects.create(linked_execution_decision=execution_decision, dispatch_status='QUEUED'))
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        for dispatch in created_dispatches:
+            dispatch.refresh_from_db()
+        linked_trade_ids = {dispatch.linked_paper_trade_id for dispatch in created_dispatches}
+        self.assertEqual(len(linked_trade_ids), 1)
+        self.assertIn('PAPER_TRADE_FINAL_DEDUPE_REUSED', diagnostics.get('final_trade_reason_codes', []))
+        self.assertIn('LINEAGE_DEDUPE_REUSED_EXISTING_TRADE', (diagnostics.get('execution_lineage_summary') or {}).get('fanout_reason_codes', []))
+
     def test_paper_trade_decision_summary_aligned_with_execution_lineage_summary(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.autonomous_trader.models import AutonomousExecutionDecision, AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
@@ -5665,9 +5796,14 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('paper_trade_dispatch_summary:', text_payload)
         self.assertIn('paper_trade_dispatch_reason_codes=', text_payload)
         self.assertIn('paper_trade_dispatch_examples=', text_payload)
+        self.assertIn('paper_trade_final_summary:', text_payload)
+        self.assertIn('final_trade_reason_codes=', text_payload)
+        self.assertIn('paper_trade_final_examples=', text_payload)
         self.assertIn('execution_lineage_summary:', text_payload)
         self.assertIn('fanout_reason_codes=', text_payload)
         self.assertIn('candidates_deduplicated=', text_payload)
+        self.assertIn('dispatches_considered=', text_payload)
+        self.assertIn('trades_materialized=', text_payload)
         self.assertIn('execution_artifact_summary:', text_payload)
         self.assertIn('execution_artifact_reason_codes=', text_payload)
         self.assertIn('execution_artifact_examples=', text_payload)

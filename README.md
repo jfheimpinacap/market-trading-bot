@@ -3394,6 +3394,12 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - alinea la verdad operacional entre `paper_trade_decision_summary` y `execution_lineage_summary` (`decisions_created|decisions_reused`) para evitar contradicciones diagnósticas.
   - refuerza reason codes de fan-out/dedupe final (`LINEAGE_FANOUT_EXPECTED`, `LINEAGE_DEDUPE_REUSED_EXISTING_DISPATCH`) manteniendo enfoque observability-first.
   - mantiene límites **REAL_READ_ONLY + PAPER_ONLY**: backend-only, sin frontend, sin tocar `/runtime`, sin broker real ni dinero real.
+- **Prompt 265** repara el último bridge `AutonomousDispatchRecord -> linked_paper_trade_id` en paper-only:
+  - Mission Control materializa/reutiliza el trade final cuando existe dispatch `QUEUED|DISPATCHED|PARTIAL|FILLED` sin `linked_paper_trade_id`, enlazando también `AutonomousTradeExecution` y `AutonomousTradeCycleRun` cuando aplica.
+  - agrega dedupe conservadora final por lineage/market para evitar multiplicar trades prácticos del mismo caso (`LINEAGE_DEDUPE_REUSED_EXISTING_TRADE`, `LINEAGE_DEDUPE_BLOCKED_DUPLICATE`).
+  - añade `paper_trade_final_summary` + `paper_trade_final_examples` en export (`text/json`) con `expected|available|attempted|created|reused|blocked` y `final_trade_reason_codes`.
+  - enriquece `execution_lineage_summary` con `dispatches_considered`, `dispatches_deduplicated`, `trades_materialized`, `trades_reused` para hacer explícita la contención del fan-out final.
+  - mantiene frontera **REAL_READ_ONLY + PAPER_ONLY**, sin live trading real, sin frontend y sin rediseño de `/runtime`.
 - Esta consolidación ya integra el fix posterior de funnel:
   - `SHORTLIST_PRESENT_NO_HANDOFF` sólo si hay shortlist real + ausencia de handoff.
   - No depende sólo de `stalled_stage == "research"`.
