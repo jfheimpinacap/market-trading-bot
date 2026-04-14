@@ -349,6 +349,64 @@ def _build_portfolio_trade_reconciliation_summary(*, payload: dict[str, Any]) ->
     }
 
 
+def _build_active_operational_overlay_summary(*, payload: dict[str, Any]) -> tuple[dict[str, Any], str, str]:
+    handoff = payload.get('handoff_summary') or {}
+    portfolio = payload.get('portfolio_summary') or {}
+    state_mismatch = payload.get('state_mismatch_summary') or {}
+    window_empty = (
+        int(handoff.get('shortlisted_signals') or 0) <= 0
+        and int(handoff.get('handoff_candidates') or 0) <= 0
+        and int(handoff.get('consensus_reviews') or 0) <= 0
+        and int(handoff.get('prediction_candidates') or 0) <= 0
+        and int(handoff.get('risk_decisions') or 0) <= 0
+        and int(handoff.get('paper_execution_candidates') or 0) <= 0
+    )
+    active_positions_detected = int(portfolio.get('open_positions') or 0) > 0
+    active_trades_detected = int(portfolio.get('recent_trades_count') or 0) > 0
+    consistency_codes = set(state_mismatch.get('state_consistency_reason_codes') or [])
+    active_runtime_context_detected = bool(
+        active_positions_detected
+        or active_trades_detected
+        or 'STATE_PORTFOLIO_ACTIVE_BUT_FUNNEL_EMPTY' in consistency_codes
+        or 'STATE_WINDOW_MISMATCH' in consistency_codes
+    )
+
+    reason_codes: list[str] = []
+    if window_empty and active_runtime_context_detected:
+        reason_codes.append('ACTIVE_OVERLAY_APPLIED')
+        if active_positions_detected:
+            reason_codes.append('ACTIVE_OVERLAY_POSITION_PRESENT')
+        if active_trades_detected:
+            reason_codes.append('ACTIVE_OVERLAY_RECENT_TRADES_PRESENT')
+        if active_runtime_context_detected:
+            reason_codes.append('ACTIVE_OVERLAY_RUNTIME_CONTEXT_PRESENT')
+        overlay_status = 'APPLIED'
+        effective_funnel_status = 'ACTIVE_WITHOUT_RECENT_FLOW'
+        overlay_summary = (
+            'Rolling window sin flujo reciente, pero el estado operativo sigue activo '
+            f'(open_positions={int(portfolio.get("open_positions") or 0)}, '
+            f'recent_trades_count={int(portfolio.get("recent_trades_count") or 0)}).'
+        )
+    else:
+        reason_codes.append('ACTIVE_OVERLAY_NOT_APPLIED')
+        overlay_status = 'NOT_APPLIED'
+        effective_funnel_status = str(payload.get('funnel_status') or 'UNKNOWN')
+        overlay_summary = 'No se aplicó carry-forward operativo; el estado refleja solo la actividad de la ventana.'
+
+    return (
+        {
+            'overlay_status': overlay_status,
+            'active_positions_detected': bool(active_positions_detected),
+            'active_trades_detected': bool(active_trades_detected),
+            'active_runtime_context_detected': bool(active_runtime_context_detected),
+            'active_operational_overlay_reason_codes': reason_codes,
+            'overlay_summary': overlay_summary,
+        },
+        effective_funnel_status,
+        overlay_summary,
+    )
+
+
 def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, scan_run: SourceScanRun | None = None) -> None:
     bootstrap_status = get_live_paper_bootstrap_status(preset_name=preset_name)
     validation = build_live_paper_validation_digest(preset_name=preset_name)
@@ -513,6 +571,15 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
     )
     payload['state_mismatch_summary'] = consistency.summary
     payload['state_mismatch_examples'] = consistency.examples
+    overlay_summary, effective_funnel_status, overlay_text = _build_active_operational_overlay_summary(payload=payload)
+    payload['active_operational_overlay_summary'] = overlay_summary
+    payload['funnel_status_window'] = str(funnel.get('funnel_status') or 'UNKNOWN')
+    payload['funnel_status'] = effective_funnel_status
+    payload['summary'] = (
+        f"funnel_status={payload.get('funnel_status')} window_funnel_status={payload.get('funnel_status_window')} "
+        f"overlay_status={overlay_summary.get('overlay_status')} gate_status={payload.get('gate_status')}. "
+        f"{overlay_text}"
+    )
 
 
 def _log_line_items(payload: dict[str, Any]) -> str:
@@ -569,6 +636,7 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     prediction_status_examples = payload.get('prediction_status_examples') or []
     state_mismatch_summary = payload.get('state_mismatch_summary') or {}
     state_mismatch_examples = payload.get('state_mismatch_examples') or []
+    active_operational_overlay = payload.get('active_operational_overlay_summary') or {}
 
     lines = [
         '=== Mission Control Test Console Export ===',
@@ -587,6 +655,19 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         f"current_session_status: {payload.get('current_session_status')}",
         f"attention_mode: {payload.get('attention_mode')}",
         f"funnel_status: {payload.get('funnel_status')}",
+        f"funnel_status_window: {payload.get('funnel_status_window') or payload.get('funnel_status')}",
+        'active_operational_overlay_summary:',
+        f"  overlay_status={active_operational_overlay.get('overlay_status') or 'UNKNOWN'}",
+        (
+            f"  active_positions_detected={bool(active_operational_overlay.get('active_positions_detected'))} "
+            f"active_trades_detected={bool(active_operational_overlay.get('active_trades_detected'))} "
+            f"active_runtime_context_detected={bool(active_operational_overlay.get('active_runtime_context_detected'))}"
+        ),
+        (
+            f"  active_operational_overlay_reason_codes="
+            f"{','.join(active_operational_overlay.get('active_operational_overlay_reason_codes') or []) or 'none'}"
+        ),
+        f"  overlay_summary={active_operational_overlay.get('overlay_summary') or ''}",
         'state_mismatch_summary:',
         f"  consistency_status={state_mismatch_summary.get('consistency_status') or 'UNKNOWN'}",
         f"  funnel_session_detected={state_mismatch_summary.get('funnel_session_detected') or 'UNKNOWN'}",
@@ -1169,9 +1250,12 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
     finally:
         payload['ended_at'] = timezone.now()
         payload['updated_at'] = timezone.now()
+        overlay = payload.get('active_operational_overlay_summary') or {}
         payload['summary'] = (
             f"{payload['test_status']}: phase={payload.get('current_phase')} trial={payload.get('trial_status')} "
-            f"validation={payload.get('validation_status')} gate={payload.get('gate_status')}"
+            f"validation={payload.get('validation_status')} gate={payload.get('gate_status')} "
+            f"funnel_status={payload.get('funnel_status')} window_funnel_status={payload.get('funnel_status_window') or payload.get('funnel_status')} "
+            f"overlay_status={overlay.get('overlay_status') or 'UNKNOWN'}"
         )
         payload['text_export'] = _log_line_items(payload)
         payload = _augment_progress(payload)
@@ -1253,6 +1337,11 @@ def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
     payload['reconciliation_reason_codes'] = list(payload['portfolio_trade_reconciliation_summary'].get('portfolio_trade_reconciliation_reason_codes') or [])
     payload.setdefault('runtime_rejection_summary', str((payload.get('paper_trade_final_summary') or {}).get('runtime_rejection_summary') or ''))
     payload.setdefault('runtime_rejection_reason_codes', list((payload.get('paper_trade_final_summary') or {}).get('runtime_rejection_reason_codes') or []))
+    if not payload.get('active_operational_overlay_summary'):
+        overlay, effective_funnel_status, _overlay_text = _build_active_operational_overlay_summary(payload=payload)
+        payload['active_operational_overlay_summary'] = overlay
+        payload['funnel_status_window'] = str(payload.get('funnel_status_window') or payload.get('funnel_status') or 'UNKNOWN')
+        payload['funnel_status'] = effective_funnel_status
     if fmt == 'json':
         return payload
     return str(payload.get('text_export') or _log_line_items(payload))

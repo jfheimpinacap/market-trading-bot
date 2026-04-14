@@ -6132,6 +6132,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('handoff_summary:', text_payload)
         self.assertIn('state_mismatch_summary:', text_payload)
         self.assertIn('state_consistency_reason_codes=', text_payload)
+        self.assertIn('active_operational_overlay_summary:', text_payload)
+        self.assertIn('active_operational_overlay_reason_codes=', text_payload)
         self.assertIn('shortlisted_signals=', text_payload)
         self.assertIn('shortlist_handoff_summary:', text_payload)
         self.assertIn('handoff_attempted=', text_payload)
@@ -6251,6 +6253,59 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('PORTFOLIO_TRADE_RECONCILIATION_FALLBACK_USED', reconciliation.get('portfolio_trade_reconciliation_reason_codes', []))
         self.assertIn('equity', reconciliation.get('missing_numeric_fields', []))
 
+    def test_active_operational_overlay_applied_when_window_empty_with_active_portfolio(self):
+        from apps.mission_control.services.test_console import _build_active_operational_overlay_summary
+
+        overlay, effective_status, _summary = _build_active_operational_overlay_summary(
+            payload={
+                'funnel_status': 'STALLED',
+                'handoff_summary': {
+                    'shortlisted_signals': 0,
+                    'handoff_candidates': 0,
+                    'consensus_reviews': 0,
+                    'prediction_candidates': 0,
+                    'risk_decisions': 0,
+                    'paper_execution_candidates': 0,
+                },
+                'portfolio_summary': {'open_positions': 1, 'recent_trades_count': 10},
+                'state_mismatch_summary': {
+                    'state_consistency_reason_codes': [
+                        'STATE_PORTFOLIO_ACTIVE_BUT_FUNNEL_EMPTY',
+                        'STATE_WINDOW_MISMATCH',
+                    ]
+                },
+            }
+        )
+        self.assertEqual(overlay.get('overlay_status'), 'APPLIED')
+        self.assertEqual(effective_status, 'ACTIVE_WITHOUT_RECENT_FLOW')
+        self.assertTrue(overlay.get('active_positions_detected'))
+        self.assertTrue(overlay.get('active_trades_detected'))
+        self.assertIn('ACTIVE_OVERLAY_APPLIED', overlay.get('active_operational_overlay_reason_codes', []))
+        self.assertIn('ACTIVE_OVERLAY_POSITION_PRESENT', overlay.get('active_operational_overlay_reason_codes', []))
+        self.assertIn('ACTIVE_OVERLAY_RECENT_TRADES_PRESENT', overlay.get('active_operational_overlay_reason_codes', []))
+
+    def test_active_operational_overlay_not_applied_when_window_empty_and_no_active_portfolio(self):
+        from apps.mission_control.services.test_console import _build_active_operational_overlay_summary
+
+        overlay, effective_status, _summary = _build_active_operational_overlay_summary(
+            payload={
+                'funnel_status': 'STALLED',
+                'handoff_summary': {
+                    'shortlisted_signals': 0,
+                    'handoff_candidates': 0,
+                    'consensus_reviews': 0,
+                    'prediction_candidates': 0,
+                    'risk_decisions': 0,
+                    'paper_execution_candidates': 0,
+                },
+                'portfolio_summary': {'open_positions': 0, 'recent_trades_count': 0},
+                'state_mismatch_summary': {'state_consistency_reason_codes': ['STATE_ALIGNMENT_OK']},
+            }
+        )
+        self.assertEqual(overlay.get('overlay_status'), 'NOT_APPLIED')
+        self.assertEqual(effective_status, 'STALLED')
+        self.assertIn('ACTIVE_OVERLAY_NOT_APPLIED', overlay.get('active_operational_overlay_reason_codes', []))
+
     @patch('apps.mission_control.services.test_console._get_state_snapshot')
     def test_export_log_json_none_equity_and_runtime_rejection_aliases(self, mock_state_snapshot):
         from apps.mission_control.services.test_console import export_test_console_log
@@ -6286,6 +6341,8 @@ class TestConsoleApiTests(TestCase):
 
         json_payload = export_test_console_log(fmt='json')
         self.assertEqual(json_payload.get('reconciliation_status'), 'DEGRADED')
+        self.assertIn('active_operational_overlay_summary', json_payload)
+        self.assertIn('overlay_status', json_payload.get('active_operational_overlay_summary', {}))
         self.assertIn('PORTFOLIO_TRADE_RECONCILIATION_FALLBACK_USED', json_payload.get('reconciliation_reason_codes', []))
         self.assertIn('PAPER_TRADE_FINAL_BLOCKED_BY_CASH', json_payload.get('runtime_rejection_reason_codes', []))
 
