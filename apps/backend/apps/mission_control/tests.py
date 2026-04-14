@@ -4067,6 +4067,68 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(diagnostics.get('candidates_blocked_by_cash'), 0)
         self.assertIn('CASH_PRESSURE_SECONDARY_TO_POSITION_GATE', diagnostics.get('cash_pressure_reason_codes', []))
 
+    def test_position_exposure_summary_uses_final_gate_source_of_truth(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_position_exposure_summary_from_final_trade_gate
+
+        summary = _build_position_exposure_summary_from_final_trade_gate(
+            final_trade_bridge={
+                'blocked_by_active_position': 2,
+                'allowed_for_exit': 0,
+                'allowed_without_exposure': 0,
+                'open_positions_detected': 0,
+                'active_dispatch_exposures_detected': 0,
+                'position_exposure_reason_codes': ['POSITION_EXPOSURE_GATE_APPLIED'],
+            },
+            portfolio_summary={'open_positions': 1},
+            dominant_blocking_gate='POSITION_EXPOSURE_GATE',
+        )
+
+        self.assertEqual(summary.get('open_positions_detected'), 1)
+        self.assertEqual(summary.get('candidates_blocked_by_active_position'), 2)
+        self.assertIn('POSITION_EXPOSURE_GATE_APPLIED', summary.get('position_exposure_reason_codes', []))
+        self.assertIn('POSITION_EXPOSURE_ACTIVE_POSITION_PRESENT', summary.get('position_exposure_reason_codes', []))
+
+    def test_position_exposure_summary_keeps_active_trade_lineage_without_open_positions(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_position_exposure_summary_from_final_trade_gate
+
+        summary = _build_position_exposure_summary_from_final_trade_gate(
+            final_trade_bridge={
+                'blocked_by_active_position': 1,
+                'allowed_for_exit': 0,
+                'allowed_without_exposure': 0,
+                'open_positions_detected': 1,
+                'active_dispatch_exposures_detected': 1,
+                'position_exposure_reason_codes': ['POSITION_EXPOSURE_EXISTING_OPEN_TRADE'],
+            },
+            portfolio_summary={'open_positions': 0},
+            dominant_blocking_gate='POSITION_EXPOSURE_GATE',
+        )
+
+        self.assertEqual(summary.get('open_positions_detected'), 1)
+        self.assertEqual(summary.get('active_dispatch_exposures_detected'), 1)
+        self.assertIn('POSITION_EXPOSURE_EXISTING_OPEN_TRADE', summary.get('position_exposure_reason_codes', []))
+
+    def test_position_exposure_summary_marks_exit_bypass_and_without_exposure_paths(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_position_exposure_summary_from_final_trade_gate
+
+        summary = _build_position_exposure_summary_from_final_trade_gate(
+            final_trade_bridge={
+                'blocked_by_active_position': 0,
+                'allowed_for_exit': 2,
+                'allowed_without_exposure': 3,
+                'open_positions_detected': 0,
+                'active_dispatch_exposures_detected': 0,
+                'position_exposure_reason_codes': [],
+            },
+            portfolio_summary={'open_positions': 0},
+            dominant_blocking_gate='NONE',
+        )
+
+        self.assertEqual(summary.get('candidates_allowed_for_exit'), 2)
+        self.assertEqual(summary.get('candidates_allowed_without_exposure'), 3)
+        self.assertIn('POSITION_EXPOSURE_EXIT_ALLOWED', summary.get('position_exposure_reason_codes', []))
+        self.assertIn('POSITION_EXPOSURE_ALLOWED_WITHOUT_EXPOSURE', summary.get('position_exposure_reason_codes', []))
+
     def test_final_fanout_summary_reports_ok_when_one_to_one(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus

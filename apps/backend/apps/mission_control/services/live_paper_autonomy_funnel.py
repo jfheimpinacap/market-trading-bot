@@ -1001,6 +1001,52 @@ def _ensure_final_paper_trade_for_dispatches(
     }
 
 
+def _build_position_exposure_summary_from_final_trade_gate(
+    *,
+    final_trade_bridge: dict[str, Any],
+    portfolio_summary: dict[str, Any] | None = None,
+    dominant_blocking_gate: str = 'NONE',
+) -> dict[str, Any]:
+    portfolio_summary = portfolio_summary or {}
+    portfolio_open_positions = int(
+        portfolio_summary.get('open_positions')
+        or portfolio_summary.get('open_positions_count')
+        or 0
+    )
+    blocked_by_active_position = int(final_trade_bridge.get('blocked_by_active_position') or 0)
+    allowed_for_exit = int(final_trade_bridge.get('allowed_for_exit') or 0)
+    allowed_without_exposure = int(final_trade_bridge.get('allowed_without_exposure') or 0)
+    active_dispatch_exposures_detected = int(final_trade_bridge.get('active_dispatch_exposures_detected') or 0)
+    open_positions_detected = max(
+        int(final_trade_bridge.get('open_positions_detected') or 0),
+        portfolio_open_positions,
+    )
+
+    reason_codes = list(final_trade_bridge.get('position_exposure_reason_codes') or [])
+    if blocked_by_active_position > 0:
+        reason_codes.append('POSITION_EXPOSURE_GATE_APPLIED')
+        if portfolio_open_positions > 0:
+            reason_codes.append('POSITION_EXPOSURE_ACTIVE_POSITION_PRESENT')
+        if active_dispatch_exposures_detected > 0:
+            reason_codes.append('POSITION_EXPOSURE_EXISTING_OPEN_TRADE')
+    if allowed_for_exit > 0:
+        reason_codes.append('POSITION_EXPOSURE_EXIT_ALLOWED')
+    if allowed_without_exposure > 0:
+        reason_codes.append('POSITION_EXPOSURE_ALLOWED_WITHOUT_EXPOSURE')
+    if not reason_codes:
+        reason_codes.append('POSITION_EXPOSURE_NONE')
+
+    return {
+        'open_positions_detected': int(open_positions_detected),
+        'active_dispatch_exposures_detected': int(active_dispatch_exposures_detected),
+        'candidates_blocked_by_active_position': int(blocked_by_active_position),
+        'candidates_allowed_for_exit': int(allowed_for_exit),
+        'candidates_allowed_without_exposure': int(allowed_without_exposure),
+        'position_exposure_reason_codes': list(dict.fromkeys(reason_codes)),
+        'dominant_blocking_gate': dominant_blocking_gate,
+    }
+
+
 def _build_final_fanout_diagnostics(
     *,
     executable_candidates: list[AutonomousExecutionIntakeCandidate],
@@ -2033,6 +2079,15 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         secondary_pressure = 'CASH_PRESSURE_POTENTIAL'
     cash_pressure_summary['dominant_blocking_gate'] = dominant_blocking_gate
     cash_pressure_summary['secondary_pressure'] = secondary_pressure
+    position_exposure_summary = _build_position_exposure_summary_from_final_trade_gate(
+        final_trade_bridge=final_trade_bridge,
+        dominant_blocking_gate=dominant_blocking_gate,
+    )
+    open_positions_detected = int(position_exposure_summary.get('open_positions_detected') or 0)
+    final_trade_blocked_by_active_position = int(position_exposure_summary.get('candidates_blocked_by_active_position') or 0)
+    final_trade_allowed_for_exit = int(position_exposure_summary.get('candidates_allowed_for_exit') or 0)
+    final_trade_allowed_without_exposure = int(position_exposure_summary.get('candidates_allowed_without_exposure') or 0)
+    position_exposure_reason_codes = list(position_exposure_summary.get('position_exposure_reason_codes') or [])
     execution_lineage_summary = {
         'visible_execution_candidates': int(paper_trade_route_expected),
         'executable_candidates': int(len(executable_candidate_ids)),
@@ -2068,14 +2123,6 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'cash_throttle_reason_codes': list(dict.fromkeys(final_trade_cash_throttle_reason_codes)),
         'dominant_blocking_gate': dominant_blocking_gate,
         'secondary_pressure': secondary_pressure,
-    }
-    position_exposure_summary = {
-        'open_positions_detected': int(open_positions_detected),
-        'candidates_blocked_by_active_position': int(final_trade_blocked_by_active_position),
-        'candidates_allowed_for_exit': int(final_trade_allowed_for_exit),
-        'candidates_allowed_without_exposure': int(final_trade_allowed_without_exposure),
-        'position_exposure_reason_codes': list(dict.fromkeys(position_exposure_reason_codes)),
-        'dominant_blocking_gate': dominant_blocking_gate,
     }
     return {
         'paper_execution_route_expected': int(route_expected),
