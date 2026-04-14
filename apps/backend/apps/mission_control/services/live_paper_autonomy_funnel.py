@@ -4231,6 +4231,7 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'final_fanout_examples': paper_execution_summary.get('final_fanout_examples', []),
         'cash_pressure_summary': paper_execution_summary.get('cash_pressure_summary', {}),
         'cash_pressure_examples': paper_execution_summary.get('cash_pressure_examples', []),
+        'position_exposure_summary': paper_execution_summary.get('position_exposure_summary', {}),
         'execution_readiness_available_count': paper_execution_summary.get('execution_readiness_available_count', 0),
         'execution_readiness_created_count': paper_execution_summary.get('execution_readiness_created_count', 0),
         'execution_readiness_reused_count': paper_execution_summary.get('execution_readiness_reused_count', 0),
