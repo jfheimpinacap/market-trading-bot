@@ -34,7 +34,10 @@ Safety boundary is unchanged: `REAL_READ_ONLY` + `PAPER_ONLY` only; no live-trad
   - `cash_available`
   - `executable_candidates`
   - `estimated_cash_required`
-  - `candidates_blocked_by_cash`
+  - `candidates_at_risk_by_cash` (potential pressure)
+  - `candidates_blocked_by_cash_precheck` (effective cash blocking)
+  - `candidates_blocked_by_active_position` (effective position-gate blocking)
+  - `candidates_blocked_by_cash` (compat field aligned to effective cash precheck blocking)
   - `candidates_reused`
   - `cash_pressure_status`
   - `cash_pressure_reason_codes`
@@ -96,10 +99,16 @@ Safety boundary remains unchanged: no frontend changes, no `/runtime` changes, a
     - `candidates_allowed_for_exit`
     - `candidates_allowed_without_exposure`
     - `position_exposure_reason_codes`
+  - Position reason codes also include normalized `POSITION_EXPOSURE_*` diagnostics.
 
 Difference vs cash blocking:
 - **Active-position gate** prevents redundant fan-out before execution/cash check.
 - **Cash precheck** still applies to candidates selected after exposure gate.
+
+Final-blocking hierarchy semantics:
+- `paper_trade_final_summary` now exposes `dominant_blocking_gate` and `secondary_pressure`.
+- Position exposure is dominant when it blocks candidates before cash precheck.
+- Cash pressure remains observable as secondary potential pressure (via `candidates_at_risk_by_cash`) without effective double-counting.
 
 Boundary unchanged: backend-only observability pass, `REAL_READ_ONLY` + `PAPER_ONLY`, no live trading enablement.
 

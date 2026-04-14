@@ -3004,8 +3004,76 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         self.assertEqual(bridge.get('allowed_without_exposure'), 0)
         self.assertEqual(bridge.get('allowed_for_exit'), 0)
         self.assertEqual(bridge.get('blocked_by_cash_precheck'), 0)
+        self.assertEqual(bridge.get('open_positions_detected'), 1)
+        self.assertIn('POSITION_EXPOSURE_GATE_APPLIED', bridge.get('position_exposure_reason_codes', []))
         self.assertIn('PAPER_TRADE_BLOCKED_BY_ACTIVE_POSITION', bridge.get('reason_codes', []))
         self.assertIn('PAPER_TRADE_POSITION_GATE_APPLIED', bridge.get('reason_codes', []))
+
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.AutonomousDispatchRecord.objects.filter')
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.execute_paper_trade')
+    def test_final_trade_position_exposure_uses_existing_open_trade_when_positions_are_zero(
+        self,
+        mock_execute,
+        mock_account,
+        _mock_summary,
+        mock_dispatch_filter,
+    ):
+        from apps.autonomous_trader.models import AutonomousDispatchStatus, AutonomousExecutionDecisionType
+        from apps.mission_control.services.live_paper_autonomy_funnel import _ensure_final_paper_trade_for_dispatches
+
+        positions_filter = Mock()
+        positions_filter.values_list.return_value = []
+        account = Mock()
+        account.positions.filter.return_value = positions_filter
+        mock_account.return_value = account
+
+        candidate = SimpleNamespace(
+            id=101,
+            linked_market_id=55,
+            linked_market=object(),
+            linked_execution_readiness=None,
+            linked_sizing_plan=SimpleNamespace(paper_notional_size=Decimal('50.00')),
+            linked_prediction_context={},
+            linked_portfolio_context={},
+            reason_codes=[],
+            execution_context_summary='',
+            intake_run=SimpleNamespace(linked_cycle_run=None),
+        )
+        decision = SimpleNamespace(
+            id=201,
+            decision_type=AutonomousExecutionDecisionType.EXECUTE_NOW,
+            decision_confidence=Decimal('0.7000'),
+            reason_codes=[],
+            metadata={},
+        )
+        dispatch = SimpleNamespace(
+            id=301,
+            dispatch_status=AutonomousDispatchStatus.QUEUED,
+            linked_paper_trade_id=None,
+            linked_paper_trade=None,
+            metadata={},
+        )
+        active_dispatch = SimpleNamespace(linked_execution_decision=SimpleNamespace(linked_intake_candidate=candidate))
+        mock_queryset = Mock()
+        mock_queryset.exclude.return_value = mock_queryset
+        mock_queryset.select_related.return_value = mock_queryset
+        mock_queryset.order_by.return_value = [active_dispatch]
+        mock_dispatch_filter.return_value = mock_queryset
+
+        bridge = _ensure_final_paper_trade_for_dispatches(
+            candidates=[candidate],
+            decision_by_candidate_id={101: decision},
+            dispatch_by_candidate_id={101: dispatch},
+            window_start=timezone.now() - timedelta(minutes=60),
+        )
+        mock_execute.assert_not_called()
+        self.assertEqual(bridge.get('blocked_by_active_position'), 1)
+        self.assertEqual(bridge.get('open_positions_detected'), 1)
+        self.assertEqual(bridge.get('active_dispatch_exposures_detected'), 1)
+        self.assertIn('POSITION_EXPOSURE_EXISTING_OPEN_TRADE', bridge.get('position_exposure_reason_codes', []))
+        self.assertIn('PAPER_TRADE_BLOCKED_BY_EXISTING_OPEN_TRADE', bridge.get('reason_codes', []))
 
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
@@ -3959,7 +4027,7 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         cash_pressure = diagnostics.get('cash_pressure_summary') or {}
         self.assertEqual(cash_pressure.get('cash_pressure_status'), 'HIGH')
-        self.assertGreaterEqual(cash_pressure.get('candidates_blocked_by_cash', 0), 1)
+        self.assertGreaterEqual(cash_pressure.get('candidates_at_risk_by_cash', 0), 1)
         self.assertIn('selected_for_execution', cash_pressure)
         self.assertIn('blocked_by_cash_precheck', cash_pressure)
         self.assertIn('deferred_by_budget', cash_pressure)
@@ -3967,9 +4035,37 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertIn('selected_for_execution=', cash_pressure.get('cash_pressure_summary', ''))
         self.assertIn('blocked_by_cash_precheck=', cash_pressure.get('cash_pressure_summary', ''))
         self.assertIn('deferred_by_budget=', cash_pressure.get('cash_pressure_summary', ''))
+        self.assertIn('candidates_at_risk_by_cash=', cash_pressure.get('cash_pressure_summary', ''))
         self.assertIn('CASH_PRESSURE_INSUFFICIENT_FOR_ALL', cash_pressure.get('cash_pressure_reason_codes', []))
         self.assertIn('CASH_PRESSURE_FANOUT_EXCESSIVE', cash_pressure.get('cash_pressure_reason_codes', []))
         self.assertEqual(len(diagnostics.get('cash_pressure_examples') or []), 3)
+
+    def test_cash_pressure_does_not_double_count_candidates_blocked_by_position_gate(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_cash_pressure_diagnostics
+
+        candidate = SimpleNamespace(id=11, linked_market_id=77, intake_status='READY', linked_sizing_plan=SimpleNamespace(paper_notional_size=Decimal('50.00')))
+        diagnostics = _build_cash_pressure_diagnostics(
+            executable_candidates=[candidate],
+            dispatch_by_candidate_id={},
+            final_trade_reason_codes=['PAPER_TRADE_POSITION_GATE_APPLIED', 'PAPER_TRADE_BLOCKED_BY_ACTIVE_POSITION'],
+            final_fanout_summary={'final_fanout_status': 'OK'},
+            final_trade_created=0,
+            final_trade_reused=0,
+            final_trade_bridge={
+                'cash_available': 10,
+                'blocked_by_cash_precheck': 0,
+                'deferred_by_budget': 0,
+                'selected_for_execution': 0,
+                'cash_budget_remaining': 10,
+                'blocked_by_active_position': 1,
+            },
+        )
+
+        self.assertEqual(diagnostics.get('candidates_at_risk_by_cash'), 1)
+        self.assertEqual(diagnostics.get('candidates_blocked_by_cash_precheck'), 0)
+        self.assertEqual(diagnostics.get('candidates_blocked_by_active_position'), 1)
+        self.assertEqual(diagnostics.get('candidates_blocked_by_cash'), 0)
+        self.assertIn('CASH_PRESSURE_SECONDARY_TO_POSITION_GATE', diagnostics.get('cash_pressure_reason_codes', []))
 
     def test_final_fanout_summary_reports_ok_when_one_to_one(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
