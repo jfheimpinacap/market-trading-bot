@@ -43,7 +43,10 @@ Mission Control backend now emits compact operational truth for the final paper-
   - `cash_available`
   - `executable_candidates`
   - `estimated_cash_required`
-  - `candidates_blocked_by_cash`
+  - `candidates_at_risk_by_cash` (potential pressure)
+  - `candidates_blocked_by_cash_precheck` (effective cash blocking)
+  - `candidates_blocked_by_active_position` (effective non-cash dominant blocking)
+  - `candidates_blocked_by_cash` (compat field, now aligned to effective cash precheck blocking)
   - `candidates_reused`
   - `cash_pressure_status`
   - `cash_pressure_reason_codes`
@@ -98,10 +101,16 @@ Mission Control backend now adds a conservative **active position / active trade
   - `PAPER_TRADE_POSITION_GATE_BYPASSED_FOR_EXIT`
 - New compact block:
   - `position_exposure_summary` (`open_positions_detected`, blocked/allowed counters, reason codes).
+  - Includes normalized position reason codes (`POSITION_EXPOSURE_*`) and aligns with the final bridge when blocking comes from active trade lineage.
 
 Cash vs exposure clarification:
 - **Active-position gate** blocks redundant additive exposure before cash pressure is hit.
 - **Cash precheck** still handles remaining selected candidates against available paper cash.
+
+Final diagnostic hierarchy clarification:
+- `paper_trade_final_summary` now publishes `dominant_blocking_gate` and `secondary_pressure`.
+- If candidates are blocked by position exposure before cash precheck, that gate is the dominant blocker.
+- Cash pressure remains visible as potential secondary pressure (`candidates_at_risk_by_cash`) without double-counting as effective cash blocking.
 
 Scope remains unchanged: observability-first, backend-only, `REAL_READ_ONLY` + `PAPER_ONLY`.
 

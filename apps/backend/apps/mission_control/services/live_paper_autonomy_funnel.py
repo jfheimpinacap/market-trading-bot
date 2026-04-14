@@ -697,7 +697,9 @@ def _ensure_final_paper_trade_for_dispatches(
             blocked_by_active_position += 1
             position_exposure_reason_codes.extend(
                 [
+                    'POSITION_EXPOSURE_GATE_APPLIED',
                     'PAPER_TRADE_POSITION_GATE_APPLIED',
+                    'POSITION_EXPOSURE_ACTIVE_POSITION_PRESENT',
                     'PAPER_TRADE_SKIPPED_BY_POSITION_EXPOSURE',
                     'PAPER_TRADE_BLOCKED_BY_ACTIVE_POSITION',
                 ]
@@ -711,6 +713,7 @@ def _ensure_final_paper_trade_for_dispatches(
             )
             if has_active_trade:
                 reason_codes.append('PAPER_TRADE_BLOCKED_BY_EXISTING_OPEN_TRADE')
+                position_exposure_reason_codes.append('POSITION_EXPOSURE_EXISTING_OPEN_TRADE')
                 position_exposure_reason_codes.append('PAPER_TRADE_BLOCKED_BY_EXISTING_OPEN_TRADE')
             if len(examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
                 examples.append(
@@ -731,10 +734,14 @@ def _ensure_final_paper_trade_for_dispatches(
             allowed_for_exit += 1
             if reduce_or_exit_type == 'exit':
                 reason_codes.extend(['PAPER_TRADE_ALLOWED_EXIT_POSITION', 'PAPER_TRADE_POSITION_GATE_BYPASSED_FOR_EXIT'])
-                position_exposure_reason_codes.extend(['PAPER_TRADE_ALLOWED_EXIT_POSITION', 'PAPER_TRADE_POSITION_GATE_BYPASSED_FOR_EXIT'])
+                position_exposure_reason_codes.extend(
+                    ['POSITION_EXPOSURE_EXIT_ALLOWED', 'PAPER_TRADE_ALLOWED_EXIT_POSITION', 'PAPER_TRADE_POSITION_GATE_BYPASSED_FOR_EXIT']
+                )
             else:
                 reason_codes.extend(['PAPER_TRADE_ALLOWED_REDUCE_POSITION', 'PAPER_TRADE_POSITION_GATE_BYPASSED_FOR_EXIT'])
-                position_exposure_reason_codes.extend(['PAPER_TRADE_ALLOWED_REDUCE_POSITION', 'PAPER_TRADE_POSITION_GATE_BYPASSED_FOR_EXIT'])
+                position_exposure_reason_codes.extend(
+                    ['POSITION_EXPOSURE_EXIT_ALLOWED', 'PAPER_TRADE_ALLOWED_REDUCE_POSITION', 'PAPER_TRADE_POSITION_GATE_BYPASSED_FOR_EXIT']
+                )
         else:
             allowed_without_exposure += 1
 
@@ -944,6 +951,14 @@ def _ensure_final_paper_trade_for_dispatches(
                 }
             )
 
+    exposure_detected_count = len(open_positions_by_market)
+    if exposure_detected_count == 0 and active_dispatch_lineages:
+        exposure_detected_count = len(active_dispatch_lineages)
+    if exposure_detected_count == 0 and blocked_by_active_position > 0:
+        exposure_detected_count = 1
+    if not position_exposure_reason_codes:
+        position_exposure_reason_codes.append('POSITION_EXPOSURE_NONE')
+
     return {
         'final_trade_by_candidate_id': final_trade_by_candidate_id,
         'final_trade_created': int(final_trade_created),
@@ -966,7 +981,8 @@ def _ensure_final_paper_trade_for_dispatches(
         'blocked_by_active_position': int(blocked_by_active_position),
         'allowed_without_exposure': int(allowed_without_exposure),
         'allowed_for_exit': int(allowed_for_exit),
-        'open_positions_detected': int(len(open_positions_by_market)),
+        'open_positions_detected': int(exposure_detected_count),
+        'active_dispatch_exposures_detected': int(len(active_dispatch_lineages)),
         'position_exposure_reason_codes': list(dict.fromkeys(position_exposure_reason_codes)),
         'estimated_cash_selected': float(estimated_cash_selected.quantize(Decimal('0.01'))),
         'cash_throttle_reason_codes': list(dict.fromkeys(cash_throttle_reason_codes)),
@@ -1110,10 +1126,11 @@ def _build_cash_pressure_diagnostics(
     final_trade_bridge = final_trade_bridge or {}
     cash_available = _as_decimal(final_trade_bridge.get('cash_available'))
     estimated_cash_required = Decimal('0')
-    candidates_blocked_by_cash = 0
+    candidates_at_risk_by_cash = 0
     examples: list[dict[str, Any]] = []
     selected_for_execution = int(final_trade_bridge.get('selected_for_execution') or 0)
     blocked_by_cash_precheck = int(final_trade_bridge.get('blocked_by_cash_precheck') or 0)
+    blocked_by_active_position = int(final_trade_bridge.get('blocked_by_active_position') or 0)
     deferred_by_budget = int(final_trade_bridge.get('deferred_by_budget') or 0)
     cash_budget_remaining = _as_decimal(final_trade_bridge.get('cash_budget_remaining'))
     cash_throttle_reason_codes = list(final_trade_bridge.get('cash_throttle_reason_codes') or [])
@@ -1138,7 +1155,7 @@ def _build_cash_pressure_diagnostics(
         candidate_reason = 'CASH_PRESSURE_OK'
         candidate_status = str(candidate.intake_status or '')
         if estimated_cost > cash_available:
-            candidates_blocked_by_cash += 1
+            candidates_at_risk_by_cash += 1
             candidate_reason = 'CASH_PRESSURE_INSUFFICIENT_FOR_ALL'
             candidate_status = 'BLOCKED_BY_CASH_PRESSURE'
         if len(examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
@@ -1157,7 +1174,7 @@ def _build_cash_pressure_diagnostics(
     estimated_executable = len(executable_candidates)
     blocking_final_trades = 'PAPER_TRADE_FINAL_BLOCKED_BY_CASH' in final_trade_reason_codes
     fanout_excessive = str(final_fanout_summary.get('final_fanout_status') or 'UNKNOWN') == 'EXCESSIVE'
-    if candidates_blocked_by_cash == 0 and estimated_cash_required <= cash_available:
+    if candidates_at_risk_by_cash == 0 and estimated_cash_required <= cash_available:
         status = 'OK'
         reason_codes.append('CASH_PRESSURE_OK')
     else:
@@ -1167,8 +1184,12 @@ def _build_cash_pressure_diagnostics(
         reason_codes.append('CASH_PRESSURE_INSUFFICIENT_FOR_ALL')
     if blocked_by_cash_precheck > 0:
         reason_codes.append('CASH_PRESSURE_PRECHECK_THROTTLED')
+    if candidates_at_risk_by_cash > 0:
+        reason_codes.append('CASH_PRESSURE_POTENTIAL_RISK_VISIBLE')
     if blocking_final_trades:
         reason_codes.append('CASH_PRESSURE_BLOCKING_FINAL_TRADES')
+    if blocked_by_active_position > 0:
+        reason_codes.append('CASH_PRESSURE_SECONDARY_TO_POSITION_GATE')
     if final_trade_reused > 0:
         reason_codes.append('CASH_PRESSURE_REUSE_EXPECTED')
     if fanout_excessive:
@@ -1179,7 +1200,10 @@ def _build_cash_pressure_diagnostics(
         'cash_available': float(cash_available.quantize(Decimal('0.01'))),
         'executable_candidates': int(estimated_executable),
         'estimated_cash_required': float(estimated_cash_required.quantize(Decimal('0.01'))),
-        'candidates_blocked_by_cash': int(candidates_blocked_by_cash),
+        'candidates_at_risk_by_cash': int(candidates_at_risk_by_cash),
+        'candidates_blocked_by_cash_precheck': int(blocked_by_cash_precheck),
+        'candidates_blocked_by_active_position': int(blocked_by_active_position),
+        'candidates_blocked_by_cash': int(blocked_by_cash_precheck),
         'candidates_reused': int(final_trade_reused),
         'selected_for_execution': int(selected_for_execution),
         'blocked_by_cash_precheck': int(blocked_by_cash_precheck),
@@ -1195,7 +1219,10 @@ def _build_cash_pressure_diagnostics(
             f"blocked_by_cash_precheck={blocked_by_cash_precheck} "
             f"deferred_by_budget={deferred_by_budget} "
             f"estimated_cash_required={estimated_cash_required.quantize(Decimal('0.01'))} "
-            f"candidates_blocked_by_cash={candidates_blocked_by_cash} "
+            f"candidates_at_risk_by_cash={candidates_at_risk_by_cash} "
+            f"candidates_blocked_by_cash_precheck={blocked_by_cash_precheck} "
+            f"candidates_blocked_by_active_position={blocked_by_active_position} "
+            f"candidates_blocked_by_cash={blocked_by_cash_precheck} "
             f"candidates_reused={final_trade_reused} "
             f"created={final_trade_created} "
             f"cash_budget_remaining={cash_budget_remaining.quantize(Decimal('0.01'))} "
@@ -1994,6 +2021,18 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         final_trade_reused=int(final_trade_reused),
         final_trade_bridge=final_trade_bridge if executable_candidate_ids else {},
     )
+    dominant_blocking_gate = 'NONE'
+    if final_trade_blocked_by_active_position > 0:
+        dominant_blocking_gate = 'POSITION_EXPOSURE_GATE'
+    elif final_trade_blocked_by_cash_precheck > 0:
+        dominant_blocking_gate = 'CASH_PRECHECK'
+    elif final_trade_blocked > 0:
+        dominant_blocking_gate = 'RUNTIME_OR_POLICY'
+    secondary_pressure = 'NONE'
+    if int(cash_pressure_summary.get('candidates_at_risk_by_cash') or 0) > 0:
+        secondary_pressure = 'CASH_PRESSURE_POTENTIAL'
+    cash_pressure_summary['dominant_blocking_gate'] = dominant_blocking_gate
+    cash_pressure_summary['secondary_pressure'] = secondary_pressure
     execution_lineage_summary = {
         'visible_execution_candidates': int(paper_trade_route_expected),
         'executable_candidates': int(len(executable_candidate_ids)),
@@ -2027,6 +2066,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'open_positions_detected': int(open_positions_detected),
         'position_exposure_reason_codes': list(dict.fromkeys(position_exposure_reason_codes)),
         'cash_throttle_reason_codes': list(dict.fromkeys(final_trade_cash_throttle_reason_codes)),
+        'dominant_blocking_gate': dominant_blocking_gate,
+        'secondary_pressure': secondary_pressure,
     }
     position_exposure_summary = {
         'open_positions_detected': int(open_positions_detected),
@@ -2034,6 +2075,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'candidates_allowed_for_exit': int(final_trade_allowed_for_exit),
         'candidates_allowed_without_exposure': int(final_trade_allowed_without_exposure),
         'position_exposure_reason_codes': list(dict.fromkeys(position_exposure_reason_codes)),
+        'dominant_blocking_gate': dominant_blocking_gate,
     }
     return {
         'paper_execution_route_expected': int(route_expected),
@@ -2124,6 +2166,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'position_exposure_reason_codes': list(dict.fromkeys(position_exposure_reason_codes)),
         'cash_budget_remaining': float(final_trade_cash_budget_remaining.quantize(Decimal('0.01'))),
         'cash_throttle_reason_codes': list(dict.fromkeys(final_trade_cash_throttle_reason_codes)),
+        'dominant_blocking_gate': dominant_blocking_gate,
+        'secondary_pressure': secondary_pressure,
         'final_trade_reason_codes': normalized_final_trade_codes,
         'runtime_rejection_summary': (
             f"runtime_rejection_count={runtime_rejection_count} "
@@ -2143,6 +2187,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"allowed_without_exposure={final_trade_allowed_without_exposure} "
             f"open_positions_detected={open_positions_detected} "
             f"cash_budget_remaining={final_trade_cash_budget_remaining.quantize(Decimal('0.01'))} "
+            f"dominant_blocking_gate={dominant_blocking_gate} "
+            f"secondary_pressure={secondary_pressure} "
             f"position_exposure_reason_codes={','.join(list(dict.fromkeys(position_exposure_reason_codes))) or 'none'} "
             f"cash_throttle_reason_codes={','.join(list(dict.fromkeys(final_trade_cash_throttle_reason_codes))) or 'none'} "
             f"runtime_rejection_count={runtime_rejection_count} "
