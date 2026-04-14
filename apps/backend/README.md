@@ -95,11 +95,13 @@ Safety boundary remains unchanged: no frontend changes, no `/runtime` changes, a
 - New compact diagnostic block:
   - `position_exposure_summary`:
     - `open_positions_detected`
+    - `active_dispatch_exposures_detected`
     - `candidates_blocked_by_active_position`
     - `candidates_allowed_for_exit`
     - `candidates_allowed_without_exposure`
     - `position_exposure_reason_codes`
-  - Position reason codes also include normalized `POSITION_EXPOSURE_*` diagnostics.
+  - `position_exposure_summary` now comes from the same final-gate source (`final_trade_position_gate` bridge counters + portfolio exposure context) used by `paper_trade_final_summary`.
+  - Position reason codes include normalized `POSITION_EXPOSURE_*` diagnostics (`..._ACTIVE_POSITION_PRESENT`, `..._EXISTING_OPEN_TRADE`, `..._EXIT_ALLOWED`, `..._ALLOWED_WITHOUT_EXPOSURE`, `..._NONE`).
 
 Difference vs cash blocking:
 - **Active-position gate** prevents redundant fan-out before execution/cash check.

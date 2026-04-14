@@ -101,7 +101,8 @@ Mission Control backend now adds a conservative **active position / active trade
   - `PAPER_TRADE_POSITION_GATE_BYPASSED_FOR_EXIT`
 - New compact block:
   - `position_exposure_summary` (`open_positions_detected`, blocked/allowed counters, reason codes).
-  - Includes normalized position reason codes (`POSITION_EXPOSURE_*`) and aligns with the final bridge when blocking comes from active trade lineage.
+  - Uses the same source of truth as `final_trade_position_gate` (final-trade bridge counters + portfolio exposure context), so it stays aligned with `paper_trade_final_summary`.
+  - Includes normalized position reason codes (`POSITION_EXPOSURE_*`), including active position presence, existing open trade lineage, exit bypass, and no-exposure paths.
 
 Cash vs exposure clarification:
 - **Active-position gate** blocks redundant additive exposure before cash pressure is hit.
