@@ -102,6 +102,7 @@ Mission Control backend now adds a conservative **active position / active trade
 - New compact block:
   - `position_exposure_summary` (`open_positions_detected`, blocked/allowed counters, reason codes).
   - Uses the same source of truth as `final_trade_position_gate` (final-trade bridge counters + portfolio exposure context), so it stays aligned with `paper_trade_final_summary`.
+  - Snapshot/export/status serializers now propagate that same object end-to-end (no late zero-default reconstruction), so `paper_trade_final_summary` and `position_exposure_summary` stay consistent in text/json exports.
   - Includes normalized position reason codes (`POSITION_EXPOSURE_*`), including active position presence, existing open trade lineage, exit bypass, and no-exposure paths.
 
 Cash vs exposure clarification:

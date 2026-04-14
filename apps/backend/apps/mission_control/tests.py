@@ -2859,6 +2859,28 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         self.assertTrue(mock_validation.called)
         self.assertTrue(mock_heartbeat.called)
 
+    @patch(
+        'apps.mission_control.services.live_paper_autonomy_funnel._build_handoff_diagnostics',
+        return_value={
+            'position_exposure_summary': {
+                'open_positions_detected': 1,
+                'candidates_blocked_by_active_position': 1,
+                'candidates_allowed_for_exit': 0,
+                'candidates_allowed_without_exposure': 0,
+                'position_exposure_reason_codes': ['POSITION_EXPOSURE_GATE_APPLIED'],
+                'dominant_blocking_gate': 'POSITION_EXPOSURE_GATE',
+            }
+        },
+    )
+    def test_funnel_snapshot_propagates_position_exposure_summary_without_override(self, _mock_handoff):
+        from apps.mission_control.services.live_paper_autonomy_funnel import build_live_paper_autonomy_funnel_snapshot
+
+        payload = build_live_paper_autonomy_funnel_snapshot(window_minutes=60, preset_name='live_read_only_paper_conservative')
+        summary = payload.get('position_exposure_summary') or {}
+        self.assertEqual(summary.get('open_positions_detected'), 1)
+        self.assertEqual(summary.get('candidates_blocked_by_active_position'), 1)
+        self.assertIn('POSITION_EXPOSURE_GATE_APPLIED', summary.get('position_exposure_reason_codes', []))
+
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account', return_value=Mock())
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.execute_paper_trade')
@@ -3005,6 +3027,7 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         self.assertEqual(bridge.get('allowed_for_exit'), 0)
         self.assertEqual(bridge.get('blocked_by_cash_precheck'), 0)
         self.assertEqual(bridge.get('open_positions_detected'), 1)
+        self.assertEqual((bridge.get('portfolio_exposure_context') or {}).get('open_positions'), 0)
         self.assertIn('POSITION_EXPOSURE_GATE_APPLIED', bridge.get('position_exposure_reason_codes', []))
         self.assertIn('PAPER_TRADE_BLOCKED_BY_ACTIVE_POSITION', bridge.get('reason_codes', []))
         self.assertIn('PAPER_TRADE_POSITION_GATE_APPLIED', bridge.get('reason_codes', []))
@@ -6389,6 +6412,56 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('PORTFOLIO_POSITION_REUSE_ACCUMULATION', reconciliation.get('portfolio_trade_reconciliation_reason_codes', []))
         self.assertIn('PORTFOLIO_UNREALIZED_PNL_OUTLIER', reconciliation.get('portfolio_trade_reconciliation_reason_codes', []))
         self.assertIn('cash_pressure_summary', json_payload)
+
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_export_log_preserves_position_exposure_summary_from_snapshot(self, mock_state_snapshot):
+        from apps.mission_control.services.test_console import export_test_console_log
+
+        payload = self._status_payload()
+        payload['text_export'] = ''
+        payload['position_exposure_summary'] = {
+            'open_positions_detected': 1,
+            'candidates_blocked_by_active_position': 1,
+            'candidates_allowed_for_exit': 0,
+            'candidates_allowed_without_exposure': 0,
+            'position_exposure_reason_codes': [
+                'POSITION_EXPOSURE_GATE_APPLIED',
+                'POSITION_EXPOSURE_ACTIVE_POSITION_PRESENT',
+            ],
+            'dominant_blocking_gate': 'POSITION_EXPOSURE_GATE',
+        }
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        json_payload = export_test_console_log(fmt='json')
+        summary = json_payload.get('position_exposure_summary') or {}
+        self.assertEqual(summary.get('open_positions_detected'), 1)
+        self.assertEqual(summary.get('candidates_blocked_by_active_position'), 1)
+        self.assertIn('POSITION_EXPOSURE_GATE_APPLIED', summary.get('position_exposure_reason_codes', []))
+
+        text_payload = export_test_console_log(fmt='text')
+        self.assertIn('position_exposure_summary:', text_payload)
+        self.assertIn('open_positions_detected=1', text_payload)
+        self.assertIn('candidates_blocked_by_active_position=1', text_payload)
+        self.assertIn('POSITION_EXPOSURE_GATE_APPLIED', text_payload)
+
+    def test_test_console_status_serializer_preserves_position_exposure_summary(self):
+        from apps.mission_control.serializers import TestConsoleStatusSerializer
+
+        payload = self._status_payload()
+        payload['position_exposure_summary'] = {
+            'open_positions_detected': 1,
+            'candidates_blocked_by_active_position': 1,
+            'candidates_allowed_for_exit': 0,
+            'candidates_allowed_without_exposure': 0,
+            'position_exposure_reason_codes': ['POSITION_EXPOSURE_GATE_APPLIED'],
+        }
+
+        serializer = TestConsoleStatusSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        summary = serializer.validated_data.get('position_exposure_summary') or {}
+        self.assertEqual(summary.get('open_positions_detected'), 1)
+        self.assertEqual(summary.get('candidates_blocked_by_active_position'), 1)
+        self.assertIn('POSITION_EXPOSURE_GATE_APPLIED', summary.get('position_exposure_reason_codes', []))
 
     def test_reconciliation_summary_handles_none_metrics_as_degraded(self):
         from apps.mission_control.services.test_console import _build_portfolio_trade_reconciliation_summary

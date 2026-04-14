@@ -531,6 +531,7 @@ def _ensure_final_paper_trade_for_dispatches(
             ),
             'reason_codes': [],
             'examples': [],
+            'portfolio_exposure_context': {'open_positions': 0},
         }
 
     account = get_active_account()
@@ -998,6 +999,10 @@ def _ensure_final_paper_trade_for_dispatches(
         ),
         'reason_codes': list(dict.fromkeys(reason_codes)),
         'examples': examples,
+        'portfolio_exposure_context': {
+            'open_positions': int(portfolio_summary.get('open_positions') or 0),
+            'open_positions_count': int(portfolio_summary.get('open_positions_count') or 0),
+        },
     }
 
 
@@ -2081,6 +2086,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     cash_pressure_summary['secondary_pressure'] = secondary_pressure
     position_exposure_summary = _build_position_exposure_summary_from_final_trade_gate(
         final_trade_bridge=final_trade_bridge,
+        portfolio_summary=dict(final_trade_bridge.get('portfolio_exposure_context') or {}),
         dominant_blocking_gate=dominant_blocking_gate,
     )
     open_positions_detected = int(position_exposure_summary.get('open_positions_detected') or 0)
