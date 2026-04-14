@@ -3506,6 +3506,9 @@ Diagnóstico downstream consolidado (scan exitoso pero pipeline frenado):
   - mantiene contención conservadora en el puente final (dedupe/reuse de trade válido existente por lineage/market) para evitar multiplicación artificial sin borrar historial ni alterar fills ya materializados.
   - agrega `portfolio_trade_reconciliation_summary` para reconciliar explícitamente `materialized_paper_trades`, `reused_trade_cycles`, `recent_trades_count`, `open_positions`, `equity` y `unrealized_pnl` con reason codes (`PORTFOLIO_*`).
   - el export log del Test Console (`text/json`) incorpora ambos bloques compactos (`final_fanout_summary`, `portfolio_trade_reconciliation_summary`) sin logging paralelo.
+  - agrega `active_operational_overlay_summary` para diagnosticar cuándo la rolling window está vacía pero el sistema sigue operativamente activo por portfolio/trades fuera de ventana.
+  - diferencia explícitamente `funnel_status_window` (actividad real de la ventana) vs `funnel_status` efectivo (`ACTIVE_WITHOUT_RECENT_FLOW` cuando aplica carry-forward), sin inventar handoff/prediction/risk/exec recientes.
+  - mantiene enfoque observability-first con `REAL_READ_ONLY + PAPER_ONLY` (sin habilitar live trading real).
   - mantiene enfoque observability-first y límites **REAL_READ_ONLY + PAPER_ONLY**.
 
 Boundary de seguridad:

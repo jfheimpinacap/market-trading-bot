@@ -4614,6 +4614,9 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - preserva contención conservadora del bridge final: se mantiene dedupe/reuse de trade válido por lineage/market para contener multiplicación práctica sin borrar historial ni tocar fills ya materializados.
   - agrega `portfolio_trade_reconciliation_summary` para reconciliar `materialized_paper_trades`, `reused_trade_cycles`, `recent_trades_count`, `open_positions`, `equity` y `unrealized_pnl`, con reason codes `PORTFOLIO_*`.
   - export log de Test Console (`text/json`) integra ambos bloques (`final_fanout_summary`, `portfolio_trade_reconciliation_summary`) sin logging paralelo.
+  - agrega `active_operational_overlay_summary` para distinguir “window vacía” vs “sistema activo por carry-forward operativo” usando señales de `portfolio_summary` + `state_mismatch_summary`.
+  - expone `funnel_status_window` (estado crudo por rolling window) y ajusta `funnel_status` efectivo a `ACTIVE_WITHOUT_RECENT_FLOW` cuando corresponde, sin fabricar actividad reciente.
+  - mantiene `REAL_READ_ONLY + PAPER_ONLY` y observabilidad-first (sin cambios en runtime core ni live trading real).
   - alcance intacto: observability-first, backend-only, **REAL_READ_ONLY + PAPER_ONLY**, sin frontend, sin `/runtime`, sin live trading real.
 
 Endpoints:

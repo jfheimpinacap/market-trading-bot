@@ -539,6 +539,8 @@ class TestConsoleStatusSerializer(serializers.Serializer):
     gate_status = serializers.CharField()
     extended_run_status = serializers.CharField()
     funnel_status = serializers.CharField()
+    funnel_status_window = serializers.CharField(required=False)
+    active_operational_overlay_summary = serializers.DictField(required=False)
     handoff_summary = serializers.DictField(required=False)
     paper_execution_summary = serializers.DictField(required=False)
     paper_execution_examples = serializers.ListField(child=serializers.DictField(), required=False)
