@@ -2881,6 +2881,37 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         self.assertEqual(summary.get('candidates_blocked_by_active_position'), 1)
         self.assertIn('POSITION_EXPOSURE_GATE_APPLIED', summary.get('position_exposure_reason_codes', []))
 
+    @patch(
+        'apps.mission_control.services.live_paper_autonomy_funnel._build_paper_execution_diagnostics',
+        return_value={
+            'paper_execution_visible_count': 0,
+            'position_exposure_summary': {
+                'open_positions_detected': 1,
+                'candidates_blocked_by_active_position': 1,
+                'candidates_allowed_for_exit': 0,
+                'candidates_allowed_without_exposure': 0,
+                'position_exposure_reason_codes': [
+                    'POSITION_EXPOSURE_GATE_APPLIED',
+                    'POSITION_EXPOSURE_ACTIVE_POSITION_PRESENT',
+                ],
+                'dominant_blocking_gate': 'POSITION_EXPOSURE_GATE',
+            },
+            'paper_trade_final_summary': 'expected=1 blocked=1',
+            'cash_pressure_summary': {
+                'candidates_blocked_by_cash': 0,
+                'cash_pressure_reason_codes': ['CASH_PRESSURE_SECONDARY_TO_POSITION_GATE'],
+            },
+        },
+    )
+    def test_handoff_diagnostics_propagates_position_exposure_from_final_gate_summary(self, _mock_execution_diagnostics):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        summary = diagnostics.get('position_exposure_summary') or {}
+        self.assertEqual(summary.get('open_positions_detected'), 1)
+        self.assertEqual(summary.get('candidates_blocked_by_active_position'), 1)
+        self.assertIn('POSITION_EXPOSURE_GATE_APPLIED', summary.get('position_exposure_reason_codes', []))
+
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account', return_value=Mock())
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.execute_paper_trade')
@@ -6462,6 +6493,83 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(summary.get('open_positions_detected'), 1)
         self.assertEqual(summary.get('candidates_blocked_by_active_position'), 1)
         self.assertIn('POSITION_EXPOSURE_GATE_APPLIED', summary.get('position_exposure_reason_codes', []))
+
+    @patch('apps.mission_control.services.test_console.build_state_consistency_snapshot')
+    @patch('apps.mission_control.services.test_console.get_active_account')
+    @patch('apps.mission_control.services.test_console._find_active_preset_session', return_value=None)
+    @patch('apps.mission_control.services.test_console._build_scan_summary', return_value={'runs': 0})
+    @patch('apps.mission_control.services.test_console._build_portfolio_summary', return_value={'open_positions': 1, 'recent_trades_count': 0})
+    @patch('apps.mission_control.services.test_console.get_live_paper_attention_alert_status', return_value={'attention_mode': 'HEALTHY'})
+    @patch('apps.mission_control.services.test_console.get_extended_paper_run_status', return_value={'extended_run_active': False, 'gate_status': 'ALLOW_WITH_CAUTION'})
+    @patch('apps.mission_control.services.test_console.build_extended_paper_run_gate', return_value={'gate_status': 'ALLOW_WITH_CAUTION', 'next_action_hint': 'ok', 'reason_codes': []})
+    @patch('apps.mission_control.services.test_console.build_live_paper_trial_trend_digest', return_value={'trend_status': 'STABLE', 'readiness_status': 'READY_FOR_EXTENDED_RUN'})
+    @patch('apps.mission_control.services.test_console.build_live_paper_validation_digest', return_value={'validation_status': 'READY'})
+    @patch('apps.mission_control.services.test_console.get_live_paper_bootstrap_status', return_value={'session_active': True, 'heartbeat_active': True, 'current_session_status': 'RUNNING'})
+    @patch('apps.mission_control.services.test_console.build_live_paper_autonomy_funnel_snapshot')
+    def test_sync_operational_snapshot_keeps_position_exposure_summary_as_single_source_of_truth(
+        self,
+        mock_funnel,
+        _mock_bootstrap,
+        _mock_validation,
+        _mock_trend,
+        _mock_gate,
+        _mock_extended,
+        _mock_attention,
+        _mock_portfolio,
+        _mock_scan,
+        _mock_find_session,
+        mock_get_active_account,
+        mock_consistency,
+    ):
+        from apps.mission_control.services.test_console import _sync_operational_snapshot
+
+        mock_get_active_account.return_value = SimpleNamespace(slug='demo-paper-account')
+        mock_consistency.return_value = SimpleNamespace(summary={'state_consistency_reason_codes': ['STATE_ALIGNMENT_OK']}, examples=[])
+        mock_funnel.return_value = {
+            'window_minutes': 60,
+            'funnel_status': 'ACTIVE',
+            'shortlisted_signals': 0,
+            'handoff_candidates': 0,
+            'consensus_reviews': 0,
+            'prediction_candidates': 0,
+            'risk_decisions': 0,
+            'paper_execution_candidates': 0,
+            'handoff_reason_codes': [],
+            'paper_trade_final_summary': 'expected=40 blocked=40',
+            'runtime_rejection_summary': '',
+            'runtime_rejection_reason_codes': [],
+            'cash_pressure_summary': {
+                'candidates_blocked_by_cash': 0,
+                'cash_pressure_reason_codes': ['CASH_PRESSURE_SECONDARY_TO_POSITION_GATE'],
+            },
+            'position_exposure_summary': {
+                'open_positions_detected': 1,
+                'candidates_blocked_by_active_position': 40,
+                'candidates_allowed_for_exit': 0,
+                'candidates_allowed_without_exposure': 0,
+                'position_exposure_reason_codes': [
+                    'POSITION_EXPOSURE_GATE_APPLIED',
+                    'POSITION_EXPOSURE_ACTIVE_POSITION_PRESENT',
+                ],
+                'dominant_blocking_gate': 'POSITION_EXPOSURE_GATE',
+            },
+            'final_trade_expected': 40,
+            'final_trade_available': 40,
+            'final_trade_attempted': 40,
+            'final_trade_created': 0,
+            'final_trade_reused': 0,
+            'final_trade_blocked': 40,
+            'final_trade_reason_codes': [
+                'PAPER_TRADE_POSITION_GATE_APPLIED',
+                'PAPER_TRADE_BLOCKED_BY_ACTIVE_POSITION',
+            ],
+        }
+
+        payload = {}
+        _sync_operational_snapshot(payload=payload, preset_name='live_read_only_paper_conservative')
+        self.assertEqual(payload.get('position_exposure_summary'), mock_funnel.return_value['position_exposure_summary'])
+        self.assertEqual(payload.get('paper_trade_final_summary', {}).get('blocked'), 40)
+        self.assertEqual(payload.get('cash_pressure_summary', {}).get('candidates_blocked_by_cash'), 0)
 
     def test_reconciliation_summary_handles_none_metrics_as_degraded(self):
         from apps.mission_control.services.test_console import _build_portfolio_trade_reconciliation_summary

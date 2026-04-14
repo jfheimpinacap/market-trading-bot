@@ -116,6 +116,18 @@ Final diagnostic hierarchy clarification:
 
 Scope remains unchanged: observability-first, backend-only, `REAL_READ_ONLY` + `PAPER_ONLY`.
 
+### Mission Control position-exposure final propagation fix (Prompt 277)
+
+Backend-only fix to remove the last-mile contradiction where `paper_trade_final_summary` showed active-position blocking but `position_exposure_summary` could still appear as zeroed defaults in final status/export payloads.
+
+- `position_exposure_summary` is now forwarded from the same final-gate source in `live_paper_autonomy_funnel` handoff diagnostics (no late omission/default replacement).
+- Test Console status and export consume that same propagated object, keeping text/json output aligned with:
+  - `paper_trade_final_summary`
+  - `portfolio_summary`
+  - `cash_pressure_summary`
+- No gate policy changes were introduced (active-position gate, cash precheck, and fan-out logic remain unchanged).
+- Safety boundary remains strict: observability-first with `REAL_READ_ONLY` + `PAPER_ONLY` (no live trading enablement).
+
 ### Scan diagnostics + demo narrative fallback (backend, local V1 paper)
 
 `research_agent` scan runs now persist explicit diagnostics in `SourceScanRun.metadata.scan_diagnostics` so local V1 paper tests can explain zero-signal stalls instead of failing silently.

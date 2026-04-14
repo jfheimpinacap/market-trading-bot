@@ -115,6 +115,21 @@ Final-blocking hierarchy semantics:
 
 Boundary unchanged: backend-only observability pass, `REAL_READ_ONLY` + `PAPER_ONLY`, no live trading enablement.
 
+## Mission Control position-exposure final propagation fix (Prompt 277)
+
+Small backend observability fix for the final funnel/status/export mile:
+
+- `position_exposure_summary` is now propagated directly from the final-gate diagnostics object inside the handoff diagnostics payload (same source of truth as `paper_trade_final_summary` counters/reason codes).
+- This removes late-path omission/default-zero behavior in Test Console status/export payload composition.
+- Export/text/json now keep `position_exposure_summary`, `paper_trade_final_summary`, and `portfolio_summary` coherent for active-position scenarios.
+
+No runtime policy changes were made:
+- active-position gate behavior unchanged,
+- cash precheck behavior unchanged,
+- fan-out/runtime behavior unchanged.
+
+System boundary remains `REAL_READ_ONLY` + `PAPER_ONLY` (no live execution enablement).
+
 ## Scan diagnostics + demo narrative fallback (new)
 
 `apps.research_agent.services.run.run_scan_agent` now writes explicit scan diagnostics under `SourceScanRun.metadata.scan_diagnostics`.
