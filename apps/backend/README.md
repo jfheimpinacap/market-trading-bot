@@ -101,6 +101,7 @@ Safety boundary remains unchanged: no frontend changes, no `/runtime` changes, a
     - `candidates_allowed_without_exposure`
     - `position_exposure_reason_codes`
   - `position_exposure_summary` now comes from the same final-gate source (`final_trade_position_gate` bridge counters + portfolio exposure context) used by `paper_trade_final_summary`.
+  - The snapshot/test-console/export serialization path keeps this same summary instance (no fallback overwrite to zero counters), so text/json outputs match final-gate diagnostics.
   - Position reason codes include normalized `POSITION_EXPOSURE_*` diagnostics (`..._ACTIVE_POSITION_PRESENT`, `..._EXISTING_OPEN_TRADE`, `..._EXIT_ALLOWED`, `..._ALLOWED_WITHOUT_EXPOSURE`, `..._NONE`).
 
 Difference vs cash blocking:
