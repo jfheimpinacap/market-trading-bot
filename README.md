@@ -201,6 +201,21 @@ Backend Mission Control now aligns execution-stage summaries with pre-creation s
 
 Scope remains backend-only, observability-first, and strict `REAL_READ_ONLY` + `PAPER_ONLY` (no frontend/runtime changes and no live trading enablement).
 
+### Mission Control execution reason-code prioritization (Prompt 283)
+
+Backend Mission Control now prioritizes suppression semantics when readiness exists but candidate creation was suppressed **before creation**.
+
+- Reason-code priority update (no logic changes to gates/runtime):
+  - dominant reason remains `PAPER_EXECUTION_CANDIDATE_NOT_CREATED_DUE_TO_SUPPRESSION` (+ `PAPER_EXECUTION_READINESS_WITHOUT_CANDIDATE`) when suppression is the real cause.
+  - `PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH` is now reserved for actual artifact/source mismatch cases.
+- Coherency intent:
+  - `paper_execution_visibility_summary`,
+  - `execution_artifact_summary`,
+  - `execution_candidate_creation_gate_summary`
+  now narrate the same suppression-first story without noisy mismatch labeling.
+
+Scope remains backend-only, observability-first, and strict `REAL_READ_ONLY` + `PAPER_ONLY` (no frontend/runtime changes and no live trading enablement).
+
 ### Scan diagnostics + demo narrative fallback (backend, local V1 paper)
 
 `research_agent` scan runs now persist explicit diagnostics in `SourceScanRun.metadata.scan_diagnostics` so local V1 paper tests can explain zero-signal stalls instead of failing silently.

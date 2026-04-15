@@ -4112,6 +4112,53 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
 
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
+    def test_execution_visibility_prefers_suppression_reason_over_model_mismatch(self, mock_get_active_account, _mock_summary):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import AutonomousExecutionIntakeCandidate
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        positions_filter = Mock()
+        positions_filter.values_list.return_value = []
+        account = Mock()
+        account.positions.filter.return_value = positions_filter
+        mock_get_active_account.return_value = account
+
+        markets = [self._provider_and_market(f'visibility-suppression-dominant-{idx}') for idx in range(4)]
+        for market in markets:
+            decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+            AutonomousExecutionReadiness.objects.create(
+                linked_market=market,
+                linked_approval_review=decision,
+                readiness_status=AutonomousExecutionReadinessStatus.READY,
+                readiness_confidence=Decimal('0.8000'),
+                readiness_summary='visibility-suppression-dominant',
+                readiness_reason_codes=['READY'],
+            )
+        positions_filter.values_list.return_value = [market.id for market in markets]
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        creation_gate = diagnostics.get('execution_candidate_creation_gate_summary') or {}
+        self.assertEqual(AutonomousExecutionIntakeCandidate.objects.count(), 0)
+        self.assertEqual(creation_gate.get('candidates_suppressed_before_creation'), 4)
+        self.assertEqual(diagnostics.get('execution_candidate_created_count'), 0)
+        self.assertEqual(diagnostics.get('execution_candidate_visible_count'), 0)
+        self.assertEqual(diagnostics.get('execution_candidate_hidden_count'), 0)
+        self.assertEqual(diagnostics.get('execution_artifact_blocked_count'), 4)
+        self.assertIn(
+            'PAPER_EXECUTION_CANDIDATE_NOT_CREATED_DUE_TO_SUPPRESSION',
+            diagnostics.get('execution_artifact_reason_codes', []),
+        )
+        self.assertIn(
+            'PAPER_EXECUTION_READINESS_WITHOUT_CANDIDATE',
+            diagnostics.get('execution_artifact_reason_codes', []),
+        )
+        self.assertNotIn(
+            'PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH',
+            diagnostics.get('execution_artifact_reason_codes', []),
+        )
+
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
     def test_execution_candidate_creation_gate_allows_reduce_before_creation(self, mock_get_active_account, _mock_summary):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
