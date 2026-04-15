@@ -3,10 +3,17 @@ from .base import *  # noqa: F403, F401
 DEBUG = False
 ENVIRONMENT = 'test'
 
+# Force a fully portable test database backend independent from local PostgreSQL.
+# Supports override via DJANGO_TEST_DB_NAME when a file-backed SQLite DB is needed.
+TEST_DB_NAME = get_env('DJANGO_TEST_DB_NAME', ':memory:')
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'test.sqlite3',
+        'NAME': TEST_DB_NAME,
+        'TEST': {
+            'NAME': TEST_DB_NAME,
+        },
     },
 }
 
