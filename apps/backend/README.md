@@ -4652,6 +4652,15 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - `handoff_summary.paper_execution_candidates` queda alineado con `execution_candidate_visible_count` downstream.
   - reason codes explícitos del tramo final: `PAPER_EXECUTION_CANDIDATE_CREATED|REUSED`, `PAPER_EXECUTION_ARTIFACT_MISMATCH_RESOLVED|BLOCKED`, `PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH`, `...HIDDEN_BY_STATUS`, `...HIDDEN_BY_WINDOW`.
   - mantiene observability-first, `REAL_READ_ONLY + PAPER_ONLY`, sin tocar frontend ni `/runtime`.
+- **Prompt 282 (alineación semántica readiness vs candidate en execution stage):**
+  - corrige inflación semántica en execution stage cuando aplica supresión pre-creation:
+    - `paper_execution_summary.route_created|route_reused` pasan a representar sólo lifecycle de `AutonomousExecutionReadiness`.
+    - `paper_execution_visibility_summary.created|reused|visible|hidden` pasan a contar sólo `AutonomousExecutionIntakeCandidate` realmente existentes.
+    - agrega `missing` en visibility summary para readiness sin candidate (por ejemplo `suppressed_before_creation`).
+  - reason codes de ruta se alinean con readiness real (`PAPER_EXECUTION_READINESS_CREATED|REUSED`) y se elimina la lectura engañosa de `PAPER_EXECUTION_CREATED` en eventos sin candidate.
+  - cuando falta candidate, el motivo ahora distingue explícitamente supresión pre-creation (`PAPER_EXECUTION_CANDIDATE_NOT_CREATED_DUE_TO_SUPPRESSION`) versus mismatch real de artefacto.
+  - `execution_artifact_summary` añade `candidate_missing` y queda coherente con `execution_candidate_creation_gate_summary` + `paper_execution_visibility_summary`.
+  - alcance intacto: backend-only, observability-first, `REAL_READ_ONLY + PAPER_ONLY`, sin frontend ni `/runtime`, sin live trading real.
 - **Prompt 259 (diagnóstico explícito candidate visible -> paper trade / trade cycle):**
   - agrega `paper_trade_summary` + `paper_trade_examples` (máx 3) para explicar por qué un `AutonomousExecutionIntakeCandidate` visible no termina en paper trade materializado.
   - nueva telemetría de ruta final: `paper_trade_route_expected|available|attempted|created|reused|blocked` + `paper_trade_route_reason_codes`.
