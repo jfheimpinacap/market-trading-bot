@@ -128,7 +128,7 @@ Backend-only fix to remove the last-mile contradiction where `paper_trade_final_
 - No gate policy changes were introduced (active-position gate, cash precheck, and fan-out logic remain unchanged).
 - Safety boundary remains strict: observability-first with `REAL_READ_ONLY` + `PAPER_ONLY` (no live trading enablement).
 
-### Mission Control early execution-promotion exposure gate (Prompt 279)
+### Mission Control early execution-promotion exposure gate (Prompts 279–280)
 
 Backend Mission Control now applies a **small early pre-filter** in `_build_paper_execution_diagnostics` right before promoting executable intake candidates to execution decision stage.
 
@@ -142,8 +142,17 @@ Backend Mission Control now applies a **small early pre-filter** in `_build_pape
     - `EXECUTION_PROMOTION_ALLOWED_FOR_EXIT`
   - allow candidates without active exposure:
     - `EXECUTION_PROMOTION_ALLOWED_WITHOUT_EXPOSURE`
-- New compact diagnostics block:
-  - `execution_promotion_gate_summary` with suppressed/allowed counters + reason codes.
+- New compact diagnostics blocks:
+  - `execution_promotion_gate_summary` now separates:
+    - `candidates_visible` (execution-stage visible candidates),
+    - `candidates_promoted_to_decision` (subset actually promoted downstream),
+    - `candidates_suppressed_by_active_position` / `candidates_suppressed_by_existing_open_trade`,
+    - `candidates_allowed_for_exit` / `candidates_allowed_without_exposure`,
+    - `execution_promotion_gate_reason_codes`.
+  - `execution_promotion_gate_examples` (compact examples, max 3).
+- Operational semantics clarification:
+  - `paper_execution_candidates` remains the visible execution-stage count;
+  - promoted/suppressed counters are explicit in the promotion-gate block and mirrored in `execution_lineage_summary`.
 - Clarification:
   - this is an **early promotion suppression** to reduce downstream decision/dispatch/final-fanout pressure;
   - the existing final exposure gate remains unchanged and still acts as final safety backstop.

@@ -502,6 +502,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
                 'paper_trade_final_summary': str(funnel.get('paper_trade_final_summary') or ''),
             },
             'paper_trade_final_examples': list(funnel.get('paper_trade_final_examples') or []),
+            'execution_promotion_gate_summary': dict(funnel.get('execution_promotion_gate_summary') or {}),
+            'execution_promotion_gate_examples': list(funnel.get('execution_promotion_gate_examples') or []),
             'execution_lineage_summary': dict(funnel.get('execution_lineage_summary') or {}),
             'final_fanout_summary': dict(funnel.get('final_fanout_summary') or {}),
             'final_fanout_examples': list(funnel.get('final_fanout_examples') or []),
@@ -601,6 +603,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     paper_trade_dispatch_examples = payload.get('paper_trade_dispatch_examples') or []
     paper_trade_final = payload.get('paper_trade_final_summary') or {}
     paper_trade_final_examples = payload.get('paper_trade_final_examples') or []
+    execution_promotion_gate = payload.get('execution_promotion_gate_summary') or {}
+    execution_promotion_gate_examples = payload.get('execution_promotion_gate_examples') or []
     execution_lineage = payload.get('execution_lineage_summary') or {}
     final_fanout = payload.get('final_fanout_summary') or {}
     final_fanout_examples = payload.get('final_fanout_examples') or []
@@ -768,6 +772,20 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"{','.join(paper_trade_final.get('final_trade_reason_codes') or []) or 'none'}"
         ),
         f"  paper_trade_final_examples={paper_trade_final_examples or []}",
+        'execution_promotion_gate_summary:',
+        (
+            f"  candidates_visible={execution_promotion_gate.get('candidates_visible', 0)} "
+            f"candidates_promoted_to_decision={execution_promotion_gate.get('candidates_promoted_to_decision', 0)} "
+            f"candidates_suppressed_by_active_position={execution_promotion_gate.get('candidates_suppressed_by_active_position', 0)} "
+            f"candidates_suppressed_by_existing_open_trade={execution_promotion_gate.get('candidates_suppressed_by_existing_open_trade', 0)} "
+            f"candidates_allowed_for_exit={execution_promotion_gate.get('candidates_allowed_for_exit', 0)} "
+            f"candidates_allowed_without_exposure={execution_promotion_gate.get('candidates_allowed_without_exposure', 0)}"
+        ),
+        (
+            f"  execution_promotion_gate_reason_codes="
+            f"{','.join(execution_promotion_gate.get('execution_promotion_gate_reason_codes') or []) or 'none'}"
+        ),
+        f"  execution_promotion_gate_examples={execution_promotion_gate_examples or []}",
         'execution_lineage_summary:',
         (
             f"  visible_execution_candidates={execution_lineage.get('visible_execution_candidates', 0)} "
