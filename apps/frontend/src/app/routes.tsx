@@ -93,14 +93,6 @@ export type AppRoute = NavRoute & {
 };
 
 export const appRoutes: AppRoute[] = [
-
-  {
-    label: 'Cockpit',
-    path: '/cockpit',
-    description: 'Single-pane operational command center that centralizes posture, incidents, governance, queue pressure, and trace drill-down for manual-first paper/sandbox operations.',
-    component: CockpitPage,
-  },
-
   {
     label: 'Dashboard',
     path: '/',
@@ -108,6 +100,13 @@ export const appRoutes: AppRoute[] = [
     component: DashboardPage,
     match: (pathname) => pathname === '/',
   },
+  {
+    label: 'Cockpit (Advanced)',
+    path: '/cockpit',
+    description: 'Advanced technical cockpit with funnel diagnostics, validation internals, LLM detail, and execution controls for operator-level analysis.',
+    component: CockpitPage,
+  },
+
   {
     label: 'Markets',
     path: '/markets',
