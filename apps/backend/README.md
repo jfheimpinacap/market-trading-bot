@@ -130,6 +130,25 @@ No runtime policy changes were made:
 
 System boundary remains `REAL_READ_ONLY` + `PAPER_ONLY` (no live execution enablement).
 
+## Mission Control early execution-promotion exposure suppression (Prompt 279)
+
+`live_paper_autonomy_funnel` now adds a minimal **early promotion gate** inside `_build_paper_execution_diagnostics`, immediately before `_ensure_execution_decisions_for_candidates(...)`.
+
+- Goal: avoid promoting redundant additive execution candidates when active exposure is already present for the same market/lineage.
+- Early-gate reason codes:
+  - `EXECUTION_PROMOTION_SUPPRESSED_BY_ACTIVE_POSITION`
+  - `EXECUTION_PROMOTION_SUPPRESSED_BY_EXISTING_OPEN_TRADE`
+  - `EXECUTION_PROMOTION_ALLOWED_FOR_EXIT`
+  - `EXECUTION_PROMOTION_ALLOWED_WITHOUT_EXPOSURE`
+- Export observability (compact):
+  - `execution_promotion_gate_summary` with suppressed/allowed counters and normalized reason codes.
+
+Design intent:
+- early suppression reduces pressure on decision/dispatch/final-fanout stages,
+- final exposure policy remains unchanged (this is not a replacement of final gate logic).
+
+Boundaries remain unchanged: backend-only observability, strict `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` rewrite, no live-trading enablement.
+
 ## Scan diagnostics + demo narrative fallback (new)
 
 `apps.research_agent.services.run.run_scan_agent` now writes explicit scan diagnostics under `SourceScanRun.metadata.scan_diagnostics`.

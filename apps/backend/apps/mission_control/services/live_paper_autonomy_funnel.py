@@ -1793,6 +1793,11 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     dispatches_deduplicated = 0
     execution_lineage_considered = 0
     execution_lineage_deduplicated = 0
+    promotion_suppressed_by_active_position = 0
+    promotion_suppressed_by_existing_open_trade = 0
+    promotion_allowed_for_exit = 0
+    promotion_allowed_without_exposure = 0
+    promotion_gate_reason_codes: list[str] = []
     executable_candidates: list[AutonomousExecutionIntakeCandidate] = []
     latest_decision_by_candidate: dict[int, AutonomousExecutionDecision] = {}
     duplicate_candidate_ids: set[int] = set()
@@ -1849,6 +1854,91 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
 
         if executable_candidate_ids:
             executable_candidates = [candidate_by_id[candidate_id] for candidate_id in executable_candidate_ids if candidate_id in candidate_by_id]
+            promotion_gate_candidates: list[AutonomousExecutionIntakeCandidate] = []
+            if executable_candidates:
+                account = get_active_account()
+                open_positions_by_market: set[int] = set()
+                open_position_values = account.positions.filter(status='OPEN', quantity__gt=0).values_list('market_id', flat=True)
+                try:
+                    open_positions_by_market = {
+                        int(market_id)
+                        for market_id in open_position_values
+                        if market_id is not None
+                    }
+                except TypeError:
+                    open_positions_by_market = set()
+                active_dispatch_candidate_ids_by_lineage: dict[tuple[Any, ...], set[int]] = {}
+                existing_dispatch_candidate_ids = set(
+                    AutonomousDispatchRecord.objects.filter(
+                        linked_execution_decision__linked_intake_candidate_id__in=executable_candidate_ids
+                    ).values_list('linked_execution_decision__linked_intake_candidate_id', flat=True)
+                )
+                candidate_market_ids = list(
+                    {
+                        _safe_int(getattr(candidate, 'linked_market_id', None))
+                        for candidate in executable_candidates
+                        if _safe_int(getattr(candidate, 'linked_market_id', None)) is not None
+                    }
+                )
+                if candidate_market_ids:
+                    active_dispatches = (
+                        AutonomousDispatchRecord.objects.filter(
+                            linked_execution_decision__linked_intake_candidate__linked_market_id__in=candidate_market_ids,
+                            dispatch_status__in=[
+                                AutonomousDispatchStatus.QUEUED,
+                                AutonomousDispatchStatus.DISPATCHED,
+                                AutonomousDispatchStatus.PARTIAL,
+                                AutonomousDispatchStatus.FILLED,
+                            ],
+                        )
+                        .select_related('linked_execution_decision__linked_intake_candidate')
+                        .order_by('-created_at', '-id')
+                    )
+                    for active_dispatch in active_dispatches:
+                        linked_candidate = getattr(getattr(active_dispatch, 'linked_execution_decision', None), 'linked_intake_candidate', None)
+                        if linked_candidate is None:
+                            continue
+                        active_lineage_key = _candidate_lineage_key(candidate=linked_candidate)
+                        linked_candidate_id = _safe_int(getattr(linked_candidate, 'id', None))
+                        if linked_candidate_id is None:
+                            continue
+                        active_dispatch_candidate_ids_by_lineage.setdefault(active_lineage_key, set()).add(linked_candidate_id)
+                for candidate in executable_candidates:
+                    market_id = _safe_int(getattr(candidate, 'linked_market_id', None))
+                    candidate_lineage_key = _candidate_lineage_key(candidate=candidate)
+                    if int(candidate.id) in existing_dispatch_candidate_ids:
+                        promotion_allowed_without_exposure += 1
+                        promotion_gate_reason_codes.append('EXECUTION_PROMOTION_ALLOWED_WITHOUT_EXPOSURE')
+                        promotion_gate_candidates.append(candidate)
+                        continue
+                    token_sources: list[str] = []
+                    token_sources.extend(str(code or '') for code in list(getattr(candidate, 'reason_codes', []) or []))
+                    token_sources.append(str(getattr(candidate, 'execution_context_summary', '') or ''))
+                    portfolio_context = dict(getattr(candidate, 'linked_portfolio_context', {}) or {})
+                    token_sources.extend(str(value or '') for value in portfolio_context.values())
+                    token_blob = ' '.join(token_sources).upper()
+                    reduce_or_exit = str(getattr(candidate, 'intake_status', '') or '') == AutonomousExecutionIntakeStatus.READY_REDUCED or any(
+                        token in token_blob for token in {'EXIT', 'CLOSE', 'CLOSING', 'REDUCE', 'DE-RISK', 'DERISK', 'TRIM'}
+                    )
+                    if not reduce_or_exit:
+                        has_active_position = market_id in open_positions_by_market if market_id is not None else False
+                        active_candidate_ids = active_dispatch_candidate_ids_by_lineage.get(candidate_lineage_key, set())
+                        has_active_trade = any(existing_id != int(candidate.id) for existing_id in active_candidate_ids)
+                        if has_active_position:
+                            promotion_suppressed_by_active_position += 1
+                            promotion_gate_reason_codes.append('EXECUTION_PROMOTION_SUPPRESSED_BY_ACTIVE_POSITION')
+                        elif has_active_trade:
+                            promotion_suppressed_by_existing_open_trade += 1
+                            promotion_gate_reason_codes.append('EXECUTION_PROMOTION_SUPPRESSED_BY_EXISTING_OPEN_TRADE')
+                        else:
+                            promotion_allowed_without_exposure += 1
+                            promotion_gate_reason_codes.append('EXECUTION_PROMOTION_ALLOWED_WITHOUT_EXPOSURE')
+                            promotion_gate_candidates.append(candidate)
+                        continue
+                    promotion_allowed_for_exit += 1
+                    promotion_gate_reason_codes.append('EXECUTION_PROMOTION_ALLOWED_FOR_EXIT')
+                    promotion_gate_candidates.append(candidate)
+            executable_candidates = promotion_gate_candidates
             decision_bridge = _ensure_execution_decisions_for_candidates(candidates=executable_candidates, window_start=window_start)
             latest_decision_by_candidate = dict(decision_bridge.get('decision_by_candidate_id') or {})
             duplicate_candidate_ids = set(decision_bridge.get('duplicate_candidate_ids') or set())
@@ -1899,14 +1989,12 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             open_positions_detected = int(final_trade_bridge.get('open_positions_detected') or 0)
             position_exposure_reason_codes.extend(list(final_trade_bridge.get('position_exposure_reason_codes') or []))
             final_trade_cash_throttle_reason_codes.extend(list(final_trade_bridge.get('cash_throttle_reason_codes') or []))
-            final_trade_expected = int(len(executable_candidate_ids))
+            final_trade_expected = int(len(executable_candidates))
             final_trade_available = int(sum(1 for dispatch in latest_dispatch_by_candidate.values() if dispatch is not None))
             final_trade_attempted = int(final_trade_selected_for_execution or dispatches_considered)
 
-            for candidate_id in executable_candidate_ids:
-                candidate = candidate_by_id.get(candidate_id)
-                if candidate is None:
-                    continue
+            for candidate in executable_candidates:
+                candidate_id = int(candidate.id)
                 market_id = _safe_int(getattr(candidate, 'linked_market_id', None))
                 if candidate_id in duplicate_candidate_ids:
                     paper_trade_route_blocked += 1
@@ -2033,6 +2121,10 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         fanout_reason_codes.append('LINEAGE_REUSE_VISIBLE')
     if execution_lineage_deduplicated > 0:
         fanout_reason_codes.append('LINEAGE_DEDUPE_APPLIED')
+    if promotion_suppressed_by_active_position > 0:
+        fanout_reason_codes.append('EXECUTION_PROMOTION_SUPPRESSED_BY_ACTIVE_POSITION')
+    if promotion_suppressed_by_existing_open_trade > 0:
+        fanout_reason_codes.append('EXECUTION_PROMOTION_SUPPRESSED_BY_EXISTING_OPEN_TRADE')
     if paper_trade_dispatch_dedupe_applied > 0:
         fanout_reason_codes.append('LINEAGE_DEDUPE_REUSED_EXISTING_DISPATCH')
     if dispatches_deduplicated > 0:
@@ -2053,8 +2145,16 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     normalized_final_trade_codes = list(dict.fromkeys(final_trade_reason_codes))
     normalized_runtime_rejection_codes = list(dict.fromkeys(runtime_rejection_reason_codes))
     normalized_fanout_codes = list(dict.fromkeys(fanout_reason_codes))
+    normalized_promotion_gate_codes = list(dict.fromkeys(promotion_gate_reason_codes))
     aligned_decision_created = int(paper_trade_decision_created)
     aligned_decision_reused = int(paper_trade_decision_reused)
+    execution_promotion_gate_summary = {
+        'suppressed_by_active_position': int(promotion_suppressed_by_active_position),
+        'suppressed_by_existing_open_trade': int(promotion_suppressed_by_existing_open_trade),
+        'allowed_for_exit': int(promotion_allowed_for_exit),
+        'allowed_without_exposure': int(promotion_allowed_without_exposure),
+        'execution_promotion_gate_reason_codes': normalized_promotion_gate_codes,
+    }
     final_fanout_summary = _build_final_fanout_diagnostics(
         executable_candidates=executable_candidates,
         dispatch_by_candidate_id=latest_dispatch_by_candidate,
@@ -2097,7 +2197,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     execution_lineage_summary = {
         'visible_execution_candidates': int(paper_trade_route_expected),
         'executable_candidates': int(len(executable_candidate_ids)),
-        'candidates_considered': int(execution_lineage_considered or len(executable_candidate_ids)),
+        'candidates_considered': int(execution_lineage_considered or len(executable_candidates)),
         'candidates_deduplicated': int(execution_lineage_deduplicated),
         'decisions_created': aligned_decision_created,
         'decisions_reused': aligned_decision_reused,
@@ -2129,6 +2229,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'cash_throttle_reason_codes': list(dict.fromkeys(final_trade_cash_throttle_reason_codes)),
         'dominant_blocking_gate': dominant_blocking_gate,
         'secondary_pressure': secondary_pressure,
+        'execution_promotion_gate_summary': execution_promotion_gate_summary,
     }
     return {
         'paper_execution_route_expected': int(route_expected),
@@ -2143,7 +2244,10 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"route_expected={route_expected} route_available={route_available} route_attempted={route_attempted} "
             f"route_created={route_created} route_reused={route_reused} route_blocked={route_blocked} "
             f"route_missing_status_count={route_missing_status_count} "
-            f"paper_execution_route_reason_codes={','.join(normalized_codes) or 'none'}"
+            f"paper_execution_route_reason_codes={','.join(normalized_codes) or 'none'} "
+            f"promotion_suppressed={promotion_suppressed_by_active_position + promotion_suppressed_by_existing_open_trade} "
+            f"promotion_allowed_for_exit={promotion_allowed_for_exit} "
+            f"promotion_allowed_without_exposure={promotion_allowed_without_exposure}"
         ),
         'paper_execution_examples': examples,
         'paper_execution_created_count': int(visibility_created_count),
@@ -2258,7 +2362,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"route_expected={paper_trade_route_expected} decision_created={paper_trade_decision_created} "
             f"decision_reused={paper_trade_decision_reused} decision_blocked={paper_trade_decision_blocked} "
             f"decision_dedupe_applied={paper_trade_decision_dedupe_applied} "
-            f"paper_trade_decision_reason_codes={','.join(normalized_paper_trade_decision_codes) or 'none'}"
+            f"paper_trade_decision_reason_codes={','.join(normalized_paper_trade_decision_codes) or 'none'} "
+            f"promotion_suppressed={promotion_suppressed_by_active_position + promotion_suppressed_by_existing_open_trade}"
         ),
         'paper_trade_decision_examples': paper_trade_decision_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
         'paper_trade_summary': (
@@ -2267,9 +2372,11 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"route_reused={paper_trade_route_reused} route_blocked={paper_trade_route_blocked} "
             f"runtime_rejection_count={runtime_rejection_count} "
             f"runtime_rejection_reason_codes={','.join(normalized_runtime_rejection_codes) or 'none'} "
-            f"paper_trade_route_reason_codes={','.join(normalized_paper_trade_route_codes) or 'none'}"
+            f"paper_trade_route_reason_codes={','.join(normalized_paper_trade_route_codes) or 'none'} "
+            f"execution_promotion_gate_reason_codes={','.join(normalized_promotion_gate_codes) or 'none'}"
         ),
         'paper_trade_examples': paper_trade_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
+        'execution_promotion_gate_summary': execution_promotion_gate_summary,
         'execution_lineage_summary': execution_lineage_summary,
     }
 
@@ -4226,6 +4333,7 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'paper_trade_final_summary': paper_execution_summary.get('paper_trade_final_summary', ''),
         'paper_trade_final_examples': paper_execution_summary.get('paper_trade_final_examples', []),
         'paper_trade_examples': paper_execution_summary.get('paper_trade_examples', []),
+        'execution_promotion_gate_summary': paper_execution_summary.get('execution_promotion_gate_summary', {}),
         'execution_lineage_summary': paper_execution_summary.get('execution_lineage_summary', {}),
         'final_fanout_summary': paper_execution_summary.get('final_fanout_summary', {}),
         'final_fanout_examples': paper_execution_summary.get('final_fanout_examples', []),

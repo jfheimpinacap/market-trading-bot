@@ -4057,6 +4057,173 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(final_fanout.get('final_fanout_status'), 'EXCESSIVE')
         self.assertIn('FINAL_LINEAGE_FANOUT_EXCESSIVE', final_fanout.get('final_fanout_reason_codes', []))
 
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
+    def test_execution_promotion_gate_suppresses_additive_candidate_with_active_position(self, mock_get_active_account, _mock_summary):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        positions_filter = Mock()
+        positions_filter.values_list.return_value = [55]
+        account = Mock()
+        account.positions.filter.return_value = positions_filter
+        mock_get_active_account.return_value = account
+
+        market = self._provider_and_market('promotion-gate-active-position')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.8100'),
+            readiness_summary='promotion-gate-active-position',
+            readiness_reason_codes=['READY'],
+        )
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=readiness,
+            linked_approval_review=decision,
+            intake_status=AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+            readiness_confidence=Decimal('0.8100'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+        )
+        positions_filter.values_list.return_value = [market.id]
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        gate = diagnostics.get('execution_promotion_gate_summary') or {}
+        self.assertEqual(gate.get('suppressed_by_active_position'), 1)
+        self.assertEqual(diagnostics.get('paper_trade_decision_created'), 0)
+        self.assertIn('EXECUTION_PROMOTION_SUPPRESSED_BY_ACTIVE_POSITION', gate.get('execution_promotion_gate_reason_codes', []))
+        self.assertIn('promotion_suppressed=1', diagnostics.get('paper_execution_summary', ''))
+
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
+    def test_execution_promotion_gate_suppresses_additive_candidate_with_existing_open_trade(
+        self,
+        mock_get_active_account,
+        _mock_summary,
+    ):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import (
+            AutonomousDispatchRecord,
+            AutonomousExecutionDecision,
+            AutonomousExecutionIntakeCandidate,
+            AutonomousExecutionIntakeRun,
+            AutonomousExecutionIntakeStatus,
+        )
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        positions_filter = Mock()
+        positions_filter.values_list.return_value = []
+        account = Mock()
+        account.positions.filter.return_value = positions_filter
+        mock_get_active_account.return_value = account
+
+        market = self._provider_and_market('promotion-gate-active-trade')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.8100'),
+            readiness_summary='promotion-gate-active-trade',
+            readiness_reason_codes=['READY'],
+        )
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        existing_candidate = AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=readiness,
+            linked_approval_review=decision,
+            intake_status=AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+            readiness_confidence=Decimal('0.8100'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+            linked_prediction_context={'prediction_candidate_id': 111, 'handoff_id': 222},
+        )
+        previous_decision = AutonomousExecutionDecision.objects.create(linked_intake_candidate=existing_candidate, decision_type='EXECUTE_NOW')
+        AutonomousDispatchRecord.objects.create(linked_execution_decision=previous_decision, dispatch_status='QUEUED')
+        next_decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        next_readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=next_decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY,
+            readiness_confidence=Decimal('0.8100'),
+            readiness_summary='promotion-gate-active-trade-next',
+            readiness_reason_codes=['READY'],
+        )
+        AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=next_readiness,
+            linked_approval_review=next_decision,
+            intake_status=AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
+            readiness_confidence=Decimal('0.8100'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+            linked_prediction_context={'prediction_candidate_id': 111, 'handoff_id': 222},
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        gate = diagnostics.get('execution_promotion_gate_summary') or {}
+        self.assertEqual(gate.get('suppressed_by_existing_open_trade'), 1)
+        self.assertEqual(diagnostics.get('paper_trade_decision_created'), 0)
+        self.assertIn('EXECUTION_PROMOTION_SUPPRESSED_BY_EXISTING_OPEN_TRADE', gate.get('execution_promotion_gate_reason_codes', []))
+
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
+    @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
+    def test_execution_promotion_gate_allows_reduce_or_exit_candidates(self, mock_get_active_account, _mock_summary):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.autonomous_trader.models import AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
+        from apps.risk_agent.models import AutonomousExecutionReadiness, AutonomousExecutionReadinessStatus, RiskRuntimeApprovalStatus
+
+        positions_filter = Mock()
+        positions_filter.values_list.return_value = [55]
+        account = Mock()
+        account.positions.filter.return_value = positions_filter
+        mock_get_active_account.return_value = account
+
+        market = self._provider_and_market('promotion-gate-reduce')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        readiness = AutonomousExecutionReadiness.objects.create(
+            linked_market=market,
+            linked_approval_review=decision,
+            readiness_status=AutonomousExecutionReadinessStatus.READY_REDUCED,
+            readiness_confidence=Decimal('0.8100'),
+            readiness_summary='promotion-gate-reduce',
+            readiness_reason_codes=['READY_REDUCED'],
+        )
+        intake_run = AutonomousExecutionIntakeRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        AutonomousExecutionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            linked_execution_readiness=readiness,
+            linked_approval_review=decision,
+            intake_status=AutonomousExecutionIntakeStatus.READY_REDUCED,
+            readiness_confidence=Decimal('0.8100'),
+            approval_status=RiskRuntimeApprovalStatus.APPROVED_REDUCED,
+            reason_codes=['REDUCE_POSITION'],
+            linked_portfolio_context={'position_action': 'reduce'},
+            execution_context_summary='reduce position',
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        gate = diagnostics.get('execution_promotion_gate_summary') or {}
+        self.assertEqual(gate.get('allowed_for_exit'), 1)
+        self.assertEqual(diagnostics.get('paper_trade_decision_created'), 1)
+        self.assertIn('EXECUTION_PROMOTION_ALLOWED_FOR_EXIT', gate.get('execution_promotion_gate_reason_codes', []))
+        self.assertIn('execution_promotion_gate_summary', diagnostics.get('execution_lineage_summary', {}))
+
+    def test_execution_promotion_gate_summary_keeps_existing_summaries(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertIn('execution_promotion_gate_summary', diagnostics)
+        self.assertIn('cash_pressure_summary', diagnostics)
+        self.assertIn('position_exposure_summary', diagnostics)
+        self.assertIn('paper_trade_final_summary', diagnostics)
+
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary')
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
     def test_cash_pressure_summary_reports_insufficient_cash_and_fanout_excessive(self, mock_get_active_account, mock_build_account_summary):
