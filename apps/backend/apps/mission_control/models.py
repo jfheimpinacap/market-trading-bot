@@ -132,6 +132,40 @@ class MissionControlStep(TimeStampedModel):
         ordering = ['started_at', 'id']
 
 
+class LlmShadowAnalysisArtifact(TimeStampedModel):
+    provider = models.CharField(max_length=32, default='ollama')
+    model = models.CharField(max_length=80, default='unknown')
+    llm_shadow_reasoning_status = models.CharField(max_length=16, default='UNAVAILABLE')
+    stance = models.CharField(max_length=16, default='unclear')
+    confidence = models.CharField(max_length=16, default='low')
+    summary = models.TextField(blank=True)
+    key_risks = models.JSONField(default=list, blank=True)
+    key_supporting_points = models.JSONField(default=list, blank=True)
+    recommendation_mode = models.CharField(max_length=24, default='observe')
+    shadow_only = models.BooleanField(default=True)
+    advisory_only = models.BooleanField(default=True)
+    non_blocking = models.BooleanField(default=True)
+    shadow_timestamp = models.DateTimeField(default=timezone.now)
+    focus_case_source = models.CharField(max_length=64, blank=True)
+    source_scope = models.CharField(max_length=80, blank=True)
+    test_run_reference = models.CharField(max_length=96, blank=True)
+    market_id = models.PositiveIntegerField(null=True, blank=True)
+    handoff_id = models.PositiveIntegerField(null=True, blank=True)
+    prediction_candidate_id = models.PositiveIntegerField(null=True, blank=True)
+    risk_decision_id = models.PositiveIntegerField(null=True, blank=True)
+    shortlist_signal_id = models.PositiveIntegerField(null=True, blank=True)
+    runtime_session = models.ForeignKey('AutonomousRuntimeSession', null=True, blank=True, on_delete=models.SET_NULL, related_name='llm_shadow_artifacts')
+    focus_case_details = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-shadow_timestamp', '-id']
+        indexes = [
+            models.Index(fields=['market_id', '-shadow_timestamp'], name='mc_llm_shadow_market_ts_idx'),
+            models.Index(fields=['runtime_session', '-shadow_timestamp'], name='mc_llm_shadow_runtime_ts_idx'),
+            models.Index(fields=['source_scope', '-shadow_timestamp'], name='mc_llm_shadow_scope_ts_idx'),
+        ]
+
+
 class AutonomousMissionRuntimeRun(TimeStampedModel):
     started_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)
