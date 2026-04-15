@@ -294,7 +294,7 @@ export function MissionControlPage() {
   }, [load]);
 
   return (
-    <div className="page-stack">
+    <div className="page-stack mission-control-page">
       <PageHeader
         eyebrow="Mission control"
         title="Autonomous Runner"

@@ -1123,7 +1123,7 @@ export function CockpitPage() {
   }, [investigateScope, queuedInvestigationScope, tuningPanel]);
 
   return (
-    <div className="page-stack">
+    <div className="page-stack cockpit-page">
       <PageHeader
         eyebrow="Operator cockpit"
         title="/cockpit"

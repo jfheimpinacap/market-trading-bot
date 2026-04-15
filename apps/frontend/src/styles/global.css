@@ -420,7 +420,7 @@ button {
 
 .markets-filters {
   display: grid;
-  gap: 16px;
+  gap: 12px;
 }
 
 .markets-filters__header,
@@ -438,26 +438,27 @@ button {
 .markets-filters__grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .field-group {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   color: var(--text-main);
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .text-input,
 .select-input {
   width: 100%;
-  min-height: 38px;
-  border-radius: 10px;
+  min-height: 34px;
+  border-radius: 9px;
   border: 1px solid var(--border-soft);
   background: #fff;
-  padding: 0 10px;
+  padding: 0 9px;
   color: var(--text-main);
+  font-size: 0.88rem;
 }
 
 .text-input:focus,
@@ -479,9 +480,9 @@ button {
 .markets-table th,
 .markets-table td {
   text-align: left;
-  padding: 9px 8px;
+  padding: 7px 8px;
   border-bottom: 1px solid var(--border-soft);
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .markets-table th {
@@ -497,6 +498,24 @@ button {
 
 .markets-table--compact {
   min-width: 720px;
+}
+
+.markets-table__title-col {
+  min-width: 260px;
+  width: 34%;
+}
+
+.markets-table__short-col {
+  white-space: nowrap;
+}
+
+.markets-table__paper-col {
+  min-width: 180px;
+}
+
+.markets-table__number-col {
+  white-space: nowrap;
+  text-align: right;
 }
 
 .market-link {
@@ -769,7 +788,7 @@ button {
 .dashboard-stat-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .dashboard-stat-card,
@@ -782,8 +801,8 @@ button {
 
 .dashboard-stat-card {
   display: grid;
-  gap: 10px;
-  padding: 18px;
+  gap: 8px;
+  padding: 14px;
 }
 
 .dashboard-stat-card__value {
@@ -803,7 +822,7 @@ button {
 .dashboard-module-list,
 .dashboard-recent-list {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .dashboard-module-list {
@@ -814,7 +833,7 @@ button {
 
 .dashboard-link-card,
 .dashboard-recent-list__item {
-  padding: 18px;
+  padding: 14px;
   text-decoration: none;
   transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
@@ -846,7 +865,7 @@ button {
 }
 
 .dashboard-module-list__item {
-  padding: 16px 18px;
+  padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid var(--border-soft);
   background: var(--bg-panel-alt);
@@ -1263,13 +1282,15 @@ button {
 .market-trade-layout {
   grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
   align-items: start;
+  gap: 12px;
 }
 
 .market-trade-form {
   border: 1px solid var(--border-soft);
   border-radius: 18px;
   background: #fbfcff;
-  padding: 20px;
+  padding: 14px;
+  gap: 12px;
 }
 
 .trade-risk-panel,
@@ -1552,7 +1573,7 @@ button {
 
 .market-trade-form__group {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .market-trade-form__label {
@@ -1566,11 +1587,11 @@ button {
 .trade-toggle-group {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .trade-toggle-button {
-  min-height: 48px;
+  min-height: 40px;
   border: 1px solid var(--border-soft);
   border-radius: 14px;
   background: #ffffff;
@@ -2481,12 +2502,13 @@ button {
 
 .button-row {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .ghost-button {
-  padding: 0.5rem 0.9rem;
+  padding: 0.38rem 0.7rem;
   border-radius: 0.5rem;
   border: 1px solid var(--color-border, #334155);
   background: transparent;
@@ -2517,7 +2539,7 @@ button {
 }
 
 .test-console-progress {
-  margin: 6px 0 10px;
+  margin: 4px 0 8px;
 }
 
 .test-console-progress__bar {
@@ -2537,7 +2559,7 @@ button {
 
 .test-console-output {
   margin: 0;
-  max-height: 220px;
+  max-height: 180px;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
@@ -2545,8 +2567,9 @@ button {
   border: 1px solid var(--border-soft);
   border-radius: 8px;
   background: var(--bg-panel-alt);
-  padding: 10px;
-  line-height: 1.35;
+  padding: 8px 9px;
+  line-height: 1.32;
+  font-size: 0.83rem;
   color: var(--text-main);
 }
 
@@ -2588,9 +2611,9 @@ button {
 .data-table th,
 .data-table td {
   text-align: left;
-  padding: 8px 8px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--border-soft);
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .data-table th {
@@ -2607,7 +2630,7 @@ button {
 .system-metadata-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px 12px;
 }
 
 .trace-badge {
@@ -2657,7 +2680,7 @@ button {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.65rem;
+  gap: 0.45rem;
 }
 
 .key-value-list li {
@@ -2665,7 +2688,91 @@ button {
   justify-content: space-between;
   gap: 1rem;
   border-bottom: 1px dashed var(--border-soft);
-  padding-bottom: 0.45rem;
+  padding-bottom: 0.35rem;
+}
+
+.subsection {
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-panel-alt);
+}
+
+.subsection .section-label {
+  margin-bottom: 2px;
+}
+
+.page-header__actions .button-row {
+  justify-content: flex-end;
+}
+
+.page-header__actions .button-row .secondary-button,
+.page-header__actions .button-row .primary-button,
+.page-header__actions .button-row .ghost-button {
+  padding: 6px 10px;
+}
+
+.data-table td .button-row {
+  gap: 0.38rem;
+}
+
+.data-table td .button-row .secondary-button,
+.data-table td .button-row .primary-button,
+.data-table td .button-row .ghost-button {
+  padding: 5px 8px;
+}
+
+.cockpit-page {
+  gap: 10px;
+}
+
+.cockpit-page .panel {
+  padding: 12px;
+}
+
+.cockpit-page .section-card__header {
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.cockpit-page .test-console-actions {
+  margin-top: -2px;
+}
+
+.cockpit-page .test-console-actions .secondary-button,
+.cockpit-page .test-console-actions .ghost-button {
+  padding: 5px 8px;
+}
+
+.mission-control-page {
+  gap: 10px;
+}
+
+.mission-control-page .panel {
+  padding: 12px;
+}
+
+.mission-control-page .system-metadata-grid {
+  font-size: 0.92rem;
+}
+
+.mission-control-page ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.mission-control-page li {
+  margin-bottom: 6px;
+}
+
+.dashboard-page {
+  gap: 10px;
+}
+
+.dashboard-page .panel {
+  padding: 12px;
 }
 
 .key-value-list li span {
