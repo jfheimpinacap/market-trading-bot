@@ -184,6 +184,23 @@ Backend Mission Control now adds a **pre-creation exposure gate** when bridging 
 
 Scope stays backend-only, observability-first, and strict `REAL_READ_ONLY` + `PAPER_ONLY` (no `/runtime` rewrite, no live trading enablement).
 
+### Mission Control execution-stage semantic alignment (Prompt 282)
+
+Backend Mission Control now aligns execution-stage summaries with pre-creation suppression semantics so readiness artifacts are no longer counted as created/visible execution candidates.
+
+- Semantic split is now explicit:
+  - `route_created` / `route_reused` in `paper_execution_summary` refer to **AutonomousExecutionReadiness** lifecycle.
+  - `created` / `reused` / `visible` / `hidden` in `paper_execution_visibility_summary` refer to **AutonomousExecutionIntakeCandidate** lifecycle only.
+  - `missing` in visibility summary means readiness exists but candidate was not created (for example suppression before creation).
+- Reason codes were aligned to avoid false “candidate created” interpretation:
+  - `PAPER_EXECUTION_READINESS_CREATED`
+  - `PAPER_EXECUTION_READINESS_REUSED`
+  - `PAPER_EXECUTION_CANDIDATE_NOT_CREATED_DUE_TO_SUPPRESSION`
+  - `PAPER_EXECUTION_CREATED` is no longer used for readiness-only events.
+- `execution_artifact_summary`, `paper_execution_visibility_summary`, and `execution_candidate_creation_gate_summary` now tell the same operational story when pre-creation suppression is active.
+
+Scope remains backend-only, observability-first, and strict `REAL_READ_ONLY` + `PAPER_ONLY` (no frontend/runtime changes and no live trading enablement).
+
 ### Scan diagnostics + demo narrative fallback (backend, local V1 paper)
 
 `research_agent` scan runs now persist explicit diagnostics in `SourceScanRun.metadata.scan_diagnostics` so local V1 paper tests can explain zero-signal stalls instead of failing silently.

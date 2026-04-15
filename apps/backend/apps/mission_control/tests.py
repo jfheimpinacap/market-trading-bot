@@ -3596,7 +3596,7 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         codes = diagnostics.get('paper_execution_route_reason_codes') or []
         self.assertEqual(diagnostics.get('paper_execution_route_reused'), 1)
         self.assertEqual(diagnostics.get('paper_execution_route_created'), 0)
-        self.assertIn('PAPER_EXECUTION_REUSED_EXISTING_CANDIDATE', codes)
+        self.assertIn('PAPER_EXECUTION_READINESS_REUSED', codes)
         self.assertEqual(diagnostics.get('paper_execution_visible_count'), 1)
         self.assertEqual(diagnostics.get('paper_execution_candidates'), 1)
         self.assertIn('PAPER_EXECUTION_VISIBLE_IN_FUNNEL', diagnostics.get('paper_execution_visibility_reason_codes', []))
@@ -4087,9 +4087,21 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         promotion_gate = diagnostics.get('execution_promotion_gate_summary') or {}
         self.assertEqual(AutonomousExecutionIntakeCandidate.objects.count(), 0)
         self.assertEqual(diagnostics.get('paper_execution_candidates'), 0)
+        self.assertEqual(diagnostics.get('paper_execution_created_count'), 0)
+        self.assertEqual(diagnostics.get('paper_execution_visible_count'), 0)
+        self.assertEqual(diagnostics.get('paper_execution_hidden_count'), 0)
+        self.assertIn('missing=1', diagnostics.get('paper_execution_visibility_summary', ''))
         self.assertEqual(creation_gate.get('candidates_suppressed_before_creation'), 1)
         self.assertEqual(creation_gate.get('candidates_created'), 0)
         self.assertEqual(promotion_gate.get('candidates_visible'), 0)
+        self.assertEqual(diagnostics.get('execution_candidate_created_count'), 0)
+        self.assertEqual(diagnostics.get('execution_candidate_visible_count'), 0)
+        self.assertEqual(diagnostics.get('execution_candidate_hidden_count'), 0)
+        self.assertIn('candidate_missing=1', diagnostics.get('execution_artifact_summary', ''))
+        self.assertIn(
+            'PAPER_EXECUTION_CANDIDATE_NOT_CREATED_DUE_TO_SUPPRESSION',
+            diagnostics.get('paper_execution_visibility_reason_codes', []),
+        )
         self.assertIn(
             'EXECUTION_CANDIDATE_CREATION_SUPPRESSED_BY_ACTIVE_POSITION',
             creation_gate.get('execution_candidate_creation_gate_reason_codes', []),

@@ -1622,6 +1622,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     visibility_reused_count = 0
     visibility_visible_count = 0
     visibility_hidden_count = 0
+    visibility_missing_count = 0
     visibility_reason_codes: list[str] = []
     visibility_examples: list[dict[str, Any]] = []
     latest_readiness_by_decision_id: dict[int, AutonomousExecutionReadiness] = {}
@@ -1733,10 +1734,10 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                 route_attempted += 1
                 if readiness.created_at >= window_start:
                     route_created += 1
-                    reason_code = 'PAPER_EXECUTION_CREATED'
+                    reason_code = 'PAPER_EXECUTION_READINESS_CREATED'
                 else:
                     route_reused += 1
-                    reason_code = 'PAPER_EXECUTION_REUSED_EXISTING_CANDIDATE'
+                    reason_code = 'PAPER_EXECUTION_READINESS_REUSED'
                 blocking_stage = 'paper_execution_readiness'
                 observed_value = str(readiness.readiness_status or '')
                 threshold = 'READY|READY_REDUCED'
@@ -1766,10 +1767,6 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             continue
 
         visibility_source = 'created' if readiness.created_at >= window_start else 'reused'
-        if visibility_source == 'created':
-            visibility_created_count += 1
-        else:
-            visibility_reused_count += 1
         intake_candidate = latest_intake_by_readiness_id.get(int(readiness.id))
         source_model = 'AutonomousExecutionIntakeCandidate'
         source_stage = 'execution_intake'
@@ -1789,11 +1786,24 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             if intake_candidate is None:
                 source_model = 'AutonomousExecutionReadiness'
                 source_stage = 'risk_execution_readiness'
-                visibility_reason_code = 'PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH'
+                visibility_reason_code = 'PAPER_EXECUTION_CANDIDATE_NOT_CREATED_DUE_TO_SUPPRESSION'
+                if any(
+                    int(example.get('readiness_id') or 0) == int(readiness.id)
+                    and str(example.get('creation_outcome') or '') == 'suppressed_before_creation'
+                    for example in creation_gate_examples
+                ):
+                    visibility_reason_code = 'PAPER_EXECUTION_CANDIDATE_NOT_CREATED_DUE_TO_SUPPRESSION'
+                else:
+                    visibility_reason_code = 'PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH'
+                visibility_missing_count += 1
             else:
                 source_model = 'AutonomousExecutionIntakeCandidate'
                 source_stage = 'execution_intake'
                 status_value = str(intake_candidate.intake_status or '')
+                if intake_candidate.created_at >= window_start:
+                    visibility_created_count += 1
+                else:
+                    visibility_reused_count += 1
                 if intake_candidate.created_at < window_start:
                     visibility_reason_code = 'PAPER_EXECUTION_CANDIDATE_HIDDEN_BY_WINDOW'
                 elif _is_visible_execution_intake_status(status_value):
@@ -1803,6 +1813,10 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                     visibility_reason_code = 'PAPER_EXECUTION_CANDIDATE_HIDDEN_BY_STATUS'
         else:
             status_value = str(intake_candidate.intake_status or '')
+            if intake_candidate.created_at >= window_start:
+                visibility_created_count += 1
+            else:
+                visibility_reused_count += 1
             if intake_candidate.created_at < window_start:
                 visibility_reason_code = 'PAPER_EXECUTION_CANDIDATE_HIDDEN_BY_WINDOW'
             elif _is_visible_execution_intake_status(status_value):
@@ -1811,17 +1825,18 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             else:
                 visibility_reason_code = 'PAPER_EXECUTION_CANDIDATE_HIDDEN_BY_STATUS'
 
-        if not visible_in_funnel and visibility_reason_code == 'PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH':
+        if not visible_in_funnel and visibility_reason_code in {
+            'PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH',
+            'PAPER_EXECUTION_CANDIDATE_NOT_CREATED_DUE_TO_SUPPRESSION',
+        }:
             visibility_reason_codes.append(visibility_reason_code)
-            visibility_reason_codes.append(
-                'PAPER_EXECUTION_CREATED_BUT_NOT_COUNTED' if visibility_source == 'created' else 'PAPER_EXECUTION_REUSED_BUT_NOT_COUNTED'
-            )
+            visibility_reason_codes.append('PAPER_EXECUTION_READINESS_WITHOUT_CANDIDATE')
         else:
             visibility_reason_codes.append(visibility_reason_code)
 
         if visible_in_funnel:
             visibility_visible_count += 1
-        else:
+        elif intake_candidate is not None:
             visibility_hidden_count += 1
 
         if len(visibility_examples) < _PAPER_EXECUTION_VISIBILITY_EXAMPLES_LIMIT:
@@ -1841,7 +1856,12 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             )
         if visible_in_funnel and visibility_reason_code == 'PAPER_EXECUTION_VISIBLE_IN_FUNNEL':
             visibility_reason_codes.append('PAPER_EXECUTION_ARTIFACT_MISMATCH_RESOLVED')
-        elif visibility_reason_code in {'PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH', 'PAPER_EXECUTION_CANDIDATE_HIDDEN_BY_STATUS', 'PAPER_EXECUTION_CANDIDATE_HIDDEN_BY_WINDOW'}:
+        elif visibility_reason_code in {
+            'PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH',
+            'PAPER_EXECUTION_CANDIDATE_NOT_CREATED_DUE_TO_SUPPRESSION',
+            'PAPER_EXECUTION_CANDIDATE_HIDDEN_BY_STATUS',
+            'PAPER_EXECUTION_CANDIDATE_HIDDEN_BY_WINDOW',
+        }:
             visibility_reason_codes.append('PAPER_EXECUTION_ARTIFACT_MISMATCH_BLOCKED')
 
         artifact_reason_code = (
@@ -1874,12 +1894,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     normalized_creation_gate_codes = list(dict.fromkeys(creation_gate_reason_codes))
     execution_readiness_created = sum(1 for source in readiness_source_by_id.values() if source == 'created')
     execution_readiness_reused = sum(1 for source in readiness_source_by_id.values() if source == 'reused')
-    execution_candidate_created = sum(
-        1
-        for candidate in latest_intake_by_readiness_id.values()
-        if str((candidate.metadata or {}).get('source') or '') == 'mission_control_execution_artifact_bridge' and candidate.created_at >= window_start
-    )
-    execution_candidate_reused = max(0, len(latest_intake_by_readiness_id) - execution_candidate_created)
+    execution_candidate_created = int(visibility_created_count)
+    execution_candidate_reused = int(visibility_reused_count)
     execution_artifact_blocked_count = max(0, len(latest_readiness_by_decision_id) - visibility_visible_count)
     execution_examples = visibility_examples[:3]
     visible_candidate_ids: list[int] = []
@@ -2474,7 +2490,10 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'paper_execution_visibility_summary': (
             f"created={visibility_created_count} reused={visibility_reused_count} "
             f"visible={visibility_visible_count} hidden={visibility_hidden_count} "
+            f"missing={visibility_missing_count} "
             f"paper_execution_visibility_reason_codes={','.join(normalized_visibility_codes) or 'none'} "
+            "created/reused/visible/hidden describe AutonomousExecutionIntakeCandidate; "
+            "missing means readiness exists without candidate creation; "
             "route_created means AutonomousExecutionReadiness persisted; "
             "funnel visibility uses AutonomousExecutionIntakeCandidate in current window."
         ),
@@ -2493,6 +2512,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"readiness_created={execution_readiness_created} readiness_reused={execution_readiness_reused} "
             f"candidate_created={execution_candidate_created} candidate_reused={execution_candidate_reused} "
             f"candidate_visible={visibility_visible_count} candidate_hidden={visibility_hidden_count} "
+            f"candidate_missing={visibility_missing_count} "
             f"execution_artifact_blocked_count={execution_artifact_blocked_count} "
             f"execution_artifact_reason_codes={','.join(normalized_visibility_codes) or 'none'}"
         ),
