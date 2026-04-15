@@ -12,9 +12,9 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
 - **Precedent-aware decision support (new):** research, prediction, risk, signal-fusion, and postmortem now consume semantic precedents automatically in internal flows with conservative influence and explicit audit trails (`AgentPrecedentUse`).
 
-### Mission Control Ollama shadow analyst (Prompt 288)
+### Mission Control Ollama shadow analyst (Prompt 289)
 
-Mission Control/Test Console now includes an **Ollama local shadow analyst** path that reads real pipeline artifacts and emits a compact `llm_shadow_summary` in status/export payloads.
+Mission Control/Test Console now includes an **Ollama local shadow analyst** path that reads real pipeline artifacts, emits a compact `llm_shadow_summary` in status/export payloads, and persists each shadow output as a reusable historical backend artifact.
 
 - Scope is strict shadow mode only:
   - advisory-only, non-blocking;
@@ -28,10 +28,13 @@ Mission Control/Test Console now includes an **Ollama local shadow analyst** pat
   - `OLLAMA_TIMEOUT_SECONDS`.
 - Failure mode is safe:
   - if Ollama is down/unreachable/timeout/invalid response, the pipeline continues and reports `llm_shadow_reasoning_status=DEGRADED|UNAVAILABLE`.
+  - degraded/unavailable snapshots can also be persisted as non-blocking historical artifacts.
 - Export/status now includes compact fields:
   - `provider`, `model`, `llm_shadow_reasoning_status`, `stance`, `confidence`,
   - `recommendation_mode`, `summary`, `key_risks`, `key_supporting_points`,
-  - plus explicit shadow safety flags (`shadow_only`, `advisory_only`, `non_blocking`).
+  - plus explicit shadow safety flags (`shadow_only`, `advisory_only`, `non_blocking`),
+  - plus historical references (`latest_llm_shadow_summary`, `llm_shadow_history_count`, `llm_shadow_recent_history`).
+- Persisted artifact associations (when available) include: `market_id`, `handoff_id`, `prediction_candidate_id`, `risk_decision_id`, `shortlist_signal_id`, runtime session reference, and source scope/preset.
 
 ### Mission Control observability hardening (Prompt 267)
 

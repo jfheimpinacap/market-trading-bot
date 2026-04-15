@@ -11,9 +11,9 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 - Make the demo dataset feel alive locally without real provider integrations, trading, or websockets.
 - Provide precedent-aware agent support via `memory_retrieval` with conservative and auditable influence on research/prediction/risk/signals/postmortem.
 
-## Ollama shadow mode in Mission Control/Test Console (Prompt 288)
+## Ollama shadow mode in Mission Control/Test Console (Prompt 289)
 
-Backend now exposes a compact `llm_shadow_summary` block in Mission Control Test Console status/export.
+Backend now exposes a compact `llm_shadow_summary` block in Mission Control Test Console status/export and persists each result as a reusable historical artifact (`LlmShadowAnalysisArtifact`).
 
 - Integration target:
   - local Ollama (`/api/chat`) through existing `llm_local` client.
@@ -25,6 +25,14 @@ Backend now exposes a compact `llm_shadow_summary` block in Mission Control Test
   - still `REAL_READ_ONLY` + `PAPER_ONLY`.
 - Safe degradation:
   - Ollama unavailable/timeout/parse failure yields `llm_shadow_reasoning_status=UNAVAILABLE|DEGRADED` and does not fail the run/export.
+  - degraded/unavailable summaries can still be persisted as non-blocking artifacts for historical traceability.
+- Artifact association context (when available):
+  - `market_id`, `handoff_id`, `prediction_candidate_id`, `risk_decision_id`, `shortlist_signal_id`,
+  - runtime session reference and source scope/preset.
+- Status/export compatibility fields:
+  - `latest_llm_shadow_summary`
+  - `llm_shadow_history_count`
+  - `llm_shadow_recent_history` (small recent list for the same market/case scope)
 
 ### Env knobs
 
@@ -44,6 +52,9 @@ Backend now exposes a compact `llm_shadow_summary` block in Mission Control Test
    - `GET /api/mission-control/test-console/status/`
    - `GET /api/mission-control/test-console/export-log/?format=json`
 4. Confirm `llm_shadow_summary` appears with `shadow_only=true`, `advisory_only=true`, `non_blocking=true`.
+5. Confirm historical metadata appears:
+   - `llm_shadow_history_count >= 1`
+   - `latest_llm_shadow_summary.artifact_id` populated when persistence succeeds.
 
 ## Mission Control funnel/export hardening (Prompt 267)
 

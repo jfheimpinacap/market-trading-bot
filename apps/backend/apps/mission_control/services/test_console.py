@@ -112,6 +112,9 @@ _state = _ConsoleState(
             'key_supporting_points': [],
             'recommendation_mode': 'observe',
         },
+        'latest_llm_shadow_summary': {},
+        'llm_shadow_history_count': 0,
+        'llm_shadow_recent_history': [],
         'attention_mode': 'UNKNOWN',
         'portfolio_summary': {},
         'scan_summary': {},
@@ -587,6 +590,9 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
     )
     payload['portfolio_trade_reconciliation_summary'] = _build_portfolio_trade_reconciliation_summary(payload=payload)
     payload['llm_shadow_summary'] = build_llm_shadow_summary(payload=payload, funnel=funnel)
+    payload['latest_llm_shadow_summary'] = dict(payload['llm_shadow_summary'].get('latest_llm_shadow_summary') or payload['llm_shadow_summary'])
+    payload['llm_shadow_history_count'] = int(payload['llm_shadow_summary'].get('llm_shadow_history_count') or 0)
+    payload['llm_shadow_recent_history'] = list(payload['llm_shadow_summary'].get('llm_shadow_recent_history') or [])
     payload['reconciliation_status'] = str(payload['portfolio_trade_reconciliation_summary'].get('portfolio_trade_reconciliation_status') or 'UNKNOWN')
     payload['reconciliation_reason_codes'] = list(payload['portfolio_trade_reconciliation_summary'].get('portfolio_trade_reconciliation_reason_codes') or [])
     active_session = _find_active_preset_session(preset_name=preset_name)
@@ -743,6 +749,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         f"  summary={llm_shadow.get('summary') or ''}",
         f"  key_risks={llm_shadow.get('key_risks') or []}",
         f"  key_supporting_points={llm_shadow.get('key_supporting_points') or []}",
+        f"  history_count={payload.get('llm_shadow_history_count') or 0}",
+        f"  artifact_id={llm_shadow.get('artifact_id')}",
         'paper_execution_summary:',
         (
             f"  route_expected={paper_execution.get('route_expected', 0)} "
@@ -1423,6 +1431,9 @@ def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
         payload['funnel_status'] = effective_funnel_status
     if not payload.get('llm_shadow_summary'):
         payload['llm_shadow_summary'] = build_llm_shadow_summary(payload=payload, funnel={})
+    payload['latest_llm_shadow_summary'] = dict(payload.get('latest_llm_shadow_summary') or payload['llm_shadow_summary'].get('latest_llm_shadow_summary') or payload['llm_shadow_summary'])
+    payload['llm_shadow_history_count'] = int(payload.get('llm_shadow_history_count') or payload['llm_shadow_summary'].get('llm_shadow_history_count') or 0)
+    payload['llm_shadow_recent_history'] = list(payload.get('llm_shadow_recent_history') or payload['llm_shadow_summary'].get('llm_shadow_recent_history') or [])
     if fmt == 'json':
         return payload
     return str(payload.get('text_export') or _log_line_items(payload))

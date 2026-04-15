@@ -33,6 +33,7 @@ from apps.mission_control.models import (
     MissionControlSession,
     MissionControlState,
     GovernanceReviewItem,
+    LlmShadowAnalysisArtifact,
 )
 from apps.runtime_governor.models import RuntimeMode
 from apps.llm_local.errors import LlmUnavailableError
@@ -7153,6 +7154,12 @@ class TestConsoleApiTests(TestCase):
         self.assertTrue(result.get('shadow_only'))
         self.assertTrue(result.get('advisory_only'))
         self.assertTrue(result.get('non_blocking'))
+        self.assertEqual(result.get('market_id'), 20)
+        artifact = LlmShadowAnalysisArtifact.objects.order_by('-id').first()
+        self.assertIsNotNone(artifact)
+        self.assertEqual(artifact.market_id, 20)
+        self.assertEqual(artifact.llm_shadow_reasoning_status, 'OK')
+        self.assertGreaterEqual(int(result.get('llm_shadow_history_count') or 0), 1)
 
     @override_settings(OLLAMA_ENABLED=True, LLM_PROVIDER='ollama', OLLAMA_MODEL='demo-shadow-model')
     @patch('apps.mission_control.services.llm_shadow.OllamaChatClient.chat_json', side_effect=LlmUnavailableError('Ollama down'))
@@ -7163,6 +7170,9 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(result.get('llm_shadow_reasoning_status'), 'UNAVAILABLE')
         self.assertEqual(result.get('stance'), 'unclear')
         self.assertEqual(result.get('recommendation_mode'), 'observe')
+        artifact = LlmShadowAnalysisArtifact.objects.order_by('-id').first()
+        self.assertIsNotNone(artifact)
+        self.assertEqual(artifact.llm_shadow_reasoning_status, 'UNAVAILABLE')
 
     @patch('apps.mission_control.services.test_console.build_llm_shadow_summary')
     @patch('apps.mission_control.services.test_console.build_state_consistency_snapshot')
@@ -7216,6 +7226,7 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(payload.get('gate_status'), 'ALLOW')
         self.assertEqual(payload.get('reason_codes'), ['VALIDATION_READY'])
         self.assertEqual(payload.get('llm_shadow_summary', {}).get('stance'), 'bearish')
+        self.assertEqual(payload.get('llm_shadow_history_count'), 0)
 
     @patch('apps.mission_control.views.start_test_console')
     def test_preserves_real_read_only_and_paper_only_boundaries(self, mock_start):
@@ -7242,3 +7253,93 @@ class TestConsoleApiTests(TestCase):
         result = bootstrap_live_read_only_paper_session()
         self.assertIn('stack_snapshot', result)
         self.assertTrue(result['stack_snapshot']['paper_trading']['paper_only'])
+
+    @override_settings(OLLAMA_ENABLED=True, LLM_PROVIDER='ollama', OLLAMA_MODEL='demo-shadow-model')
+    @patch('apps.mission_control.services.llm_shadow.Market.objects.filter')
+    @patch('apps.mission_control.services.llm_shadow.OllamaChatClient.chat_json')
+    def test_llm_shadow_artifact_is_associated_to_focus_case(self, mock_chat_json, mock_market_filter):
+        from apps.mission_control.services.llm_shadow import build_llm_shadow_summary
+
+        mock_chat_json.return_value = {
+            'stance': 'bullish',
+            'confidence': 'medium',
+            'summary': 'Advisory summary.',
+            'key_risks': ['Volatility'],
+            'key_supporting_points': ['Trend stable'],
+            'recommendation_mode': 'observe',
+            'llm_shadow_reasoning_status': 'OK',
+        }
+        mock_market_filter.return_value.first.return_value = SimpleNamespace(id=20, title='m', current_market_probability=Decimal('0.5500'))
+        payload = self._status_payload()
+        payload['runtime_session_id'] = 123
+        build_llm_shadow_summary(
+            payload=payload,
+            funnel={'prediction_risk_examples': [{'market_id': 20, 'handoff_id': 7, 'prediction_candidate_id': 19, 'risk_decision_id': 23, 'signal_id': 10}]},
+        )
+        artifact = LlmShadowAnalysisArtifact.objects.order_by('-id').first()
+        self.assertEqual(artifact.market_id, 20)
+        self.assertEqual(artifact.handoff_id, 7)
+        self.assertEqual(artifact.prediction_candidate_id, 19)
+        self.assertEqual(artifact.risk_decision_id, 23)
+        self.assertEqual(artifact.shortlist_signal_id, 10)
+        self.assertEqual(artifact.source_scope, 'live_read_only_paper_conservative')
+
+    @patch('apps.mission_control.services.test_console.build_llm_shadow_summary')
+    def test_status_payload_includes_latest_llm_shadow_summary_and_history_count(self, mock_shadow):
+        from apps.mission_control.services.test_console import _sync_operational_snapshot
+
+        mock_shadow.return_value = {
+            'provider': 'ollama',
+            'model': 'demo-shadow-model',
+            'shadow_only': True,
+            'advisory_only': True,
+            'non_blocking': True,
+            'llm_shadow_reasoning_status': 'OK',
+            'stance': 'unclear',
+            'confidence': 'low',
+            'summary': 's',
+            'key_risks': [],
+            'key_supporting_points': [],
+            'recommendation_mode': 'observe',
+            'llm_shadow_history_count': 4,
+            'latest_llm_shadow_summary': {'artifact_id': 9, 'llm_shadow_reasoning_status': 'OK'},
+            'llm_shadow_recent_history': [{'artifact_id': 9}],
+        }
+        with patch('apps.mission_control.services.test_console.build_live_paper_autonomy_funnel_snapshot', return_value={'window_minutes': 60, 'funnel_status': 'ACTIVE'}), patch(
+            'apps.mission_control.services.test_console.get_live_paper_bootstrap_status',
+            return_value={'session_active': True, 'heartbeat_active': True, 'current_session_status': 'RUNNING'},
+        ), patch(
+            'apps.mission_control.services.test_console.build_live_paper_validation_digest',
+            return_value={'validation_status': 'READY'},
+        ), patch(
+            'apps.mission_control.services.test_console.build_live_paper_trial_trend_digest',
+            return_value={'trend_status': 'STABLE', 'readiness_status': 'READY_FOR_EXTENDED_RUN'},
+        ), patch(
+            'apps.mission_control.services.test_console.build_extended_paper_run_gate',
+            return_value={'gate_status': 'ALLOW', 'next_action_hint': 'ok', 'reason_codes': []},
+        ), patch(
+            'apps.mission_control.services.test_console.get_extended_paper_run_status',
+            return_value={'extended_run_active': False, 'gate_status': 'ALLOW'},
+        ), patch(
+            'apps.mission_control.services.test_console.get_live_paper_attention_alert_status',
+            return_value={'attention_mode': 'HEALTHY'},
+        ), patch(
+            'apps.mission_control.services.test_console._build_portfolio_summary',
+            return_value={'open_positions': 0, 'recent_trades_count': 0},
+        ), patch(
+            'apps.mission_control.services.test_console._build_scan_summary',
+            return_value={'runs': 0},
+        ), patch(
+            'apps.mission_control.services.test_console._find_active_preset_session',
+            return_value=None,
+        ), patch(
+            'apps.mission_control.services.test_console.get_active_account',
+            return_value=SimpleNamespace(slug='demo-paper-account'),
+        ), patch(
+            'apps.mission_control.services.test_console.build_state_consistency_snapshot',
+            return_value=SimpleNamespace(summary={}, examples=[]),
+        ):
+            payload = {}
+            _sync_operational_snapshot(payload=payload, preset_name='live_read_only_paper_conservative')
+        self.assertEqual(payload.get('llm_shadow_history_count'), 4)
+        self.assertEqual(payload.get('latest_llm_shadow_summary', {}).get('artifact_id'), 9)
