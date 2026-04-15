@@ -128,6 +128,28 @@ Backend-only fix to remove the last-mile contradiction where `paper_trade_final_
 - No gate policy changes were introduced (active-position gate, cash precheck, and fan-out logic remain unchanged).
 - Safety boundary remains strict: observability-first with `REAL_READ_ONLY` + `PAPER_ONLY` (no live trading enablement).
 
+### Mission Control early execution-promotion exposure gate (Prompt 279)
+
+Backend Mission Control now applies a **small early pre-filter** in `_build_paper_execution_diagnostics` right before promoting executable intake candidates to execution decision stage.
+
+- Purpose: suppress redundant additive promotion when active exposure already exists for the same market/lineage.
+- Behavior:
+  - suppress additive promotion with active market position:
+    - `EXECUTION_PROMOTION_SUPPRESSED_BY_ACTIVE_POSITION`
+  - suppress additive promotion with existing open-trade lineage:
+    - `EXECUTION_PROMOTION_SUPPRESSED_BY_EXISTING_OPEN_TRADE`
+  - allow reduce/exit-shaped candidates:
+    - `EXECUTION_PROMOTION_ALLOWED_FOR_EXIT`
+  - allow candidates without active exposure:
+    - `EXECUTION_PROMOTION_ALLOWED_WITHOUT_EXPOSURE`
+- New compact diagnostics block:
+  - `execution_promotion_gate_summary` with suppressed/allowed counters + reason codes.
+- Clarification:
+  - this is an **early promotion suppression** to reduce downstream decision/dispatch/final-fanout pressure;
+  - the existing final exposure gate remains unchanged and still acts as final safety backstop.
+
+Scope remains backend-only, observability-first, and strict `REAL_READ_ONLY` + `PAPER_ONLY` (no live trading enablement).
+
 ### Scan diagnostics + demo narrative fallback (backend, local V1 paper)
 
 `research_agent` scan runs now persist explicit diagnostics in `SourceScanRun.metadata.scan_diagnostics` so local V1 paper tests can explain zero-signal stalls instead of failing silently.
