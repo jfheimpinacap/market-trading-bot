@@ -163,10 +163,10 @@ export function PortfolioPage() {
       const updatedAccount = await revaluePaperPortfolio();
       setAccount(updatedAccount);
       await loadPortfolio();
-      setRevalueMessage(`Portfolio revalued successfully. Last backend update: ${formatTechnicalTimestamp(updatedAccount.updated_at)}.`);
+      setRevalueMessage(`Portafolio actualizado correctamente. Última actualización: ${formatTechnicalTimestamp(updatedAccount.updated_at)}.`);
       publishDemoFlowRefresh('portfolio-revalued');
     } catch (error) {
-      setRevalueError(getErrorMessage(error, 'Could not revalue the demo portfolio.'));
+      setRevalueError(getErrorMessage(error, 'No se pudo actualizar la valuación del portafolio.'));
     } finally {
       setIsRevaluing(false);
     }
@@ -181,10 +181,10 @@ export function PortfolioPage() {
 
   const lastUpdatedLabel = useMemo(() => {
     if (!account?.updated_at) {
-      return 'Waiting for the first successful account response.';
+      return 'Esperando la primera actualización de cuenta.';
     }
 
-    return `Last account refresh: ${formatTechnicalTimestamp(account.updated_at)}.`;
+    return `Última actualización de cuenta: ${formatTechnicalTimestamp(account.updated_at)}.`;
   }, [account?.updated_at]);
 
   const currency = account?.currency ?? summary?.account.currency ?? 'USD';
@@ -197,70 +197,48 @@ export function PortfolioPage() {
 
   const workflowItems = useMemo<WorkflowStatusItem[]>(() => [
     {
-      label: 'Active exposure',
+      label: 'Exposición activa',
       value: `${openPositions.length} open positions`,
-      helperText: openPositions.length > 0 ? 'Use the linked market detail pages to inspect why each position exists.' : 'No active exposure yet. Start from Markets or Signals to place a first paper trade.',
+      helperText: openPositions.length > 0 ? 'Revisa posiciones abiertas para entender dónde está el riesgo actual.' : 'Todavía no hay exposición activa. Puedes empezar desde Markets.',
       tone: openPositions.length > 0 ? 'ready' : 'neutral',
       href: '/markets',
-      linkLabel: 'Explore markets',
+      linkLabel: 'Ver mercados',
     },
     {
-      label: 'Trade history',
+      label: 'Historial de operaciones',
       value: `${trades.length} trades`,
-      helperText: trades.length > 0 ? 'Each trade row can now take you back to market detail and forward into review.' : 'No executed trades yet. Open a market and use the trade panel to populate this history.',
+      helperText: trades.length > 0 ? 'Úsalo para revisar actividad reciente y detectar cambios de ritmo.' : 'Aún no hay operaciones ejecutadas.',
       tone: trades.length > 0 ? 'ready' : 'warning',
     },
     {
-      label: 'Review coverage',
+      label: 'Cobertura de revisiones',
       value: `${reviews.length} reviews`,
-      helperText: reviews.length > 0 ? 'Recent reviews are surfaced below so portfolio changes stay tied to post-mortem outcomes.' : 'Generate trade reviews after a few demo trades to close the learning loop.',
+      helperText: reviews.length > 0 ? 'Las revisiones ayudan a entender por qué cambió el resultado del portafolio.' : 'Sin revisiones recientes todavía.',
       tone: reviews.length > 0 ? 'ready' : 'neutral',
       href: '/postmortem',
-      linkLabel: 'Open post-mortem',
+      linkLabel: 'Abrir revisiones',
     },
     {
-      label: 'Portfolio governor',
-      value: 'Aggregate exposure checks',
-      helperText: 'Run governance to refresh concentration and throttling before adding new entries.',
-      tone: 'neutral',
-      href: '/portfolio-governor',
-      linkLabel: 'Open portfolio governor',
-    },
-    {
-      label: 'Snapshot history',
+      label: 'Historial de capital',
       value: `${snapshots.length} snapshots`,
-      helperText: snapshots.length > 1 ? 'The equity chart below should now reflect revalue runs and recent portfolio changes.' : 'Run revalue or simulation steps to build more history for the equity chart.',
+      helperText: snapshots.length > 1 ? 'La curva de capital ya tiene historial suficiente para detectar tendencia.' : 'Aún no hay historial suficiente para tendencia.',
       tone: snapshots.length > 1 ? 'ready' : 'neutral',
     },
   ], [openPositions.length, reviews.length, snapshots.length, trades.length]);
 
   const contextLinks = useMemo<ContextLinkItem[]>(() => [
     {
-      title: 'Explore more markets',
-      description: 'Jump back into the catalog when you want to add or compare exposure from another market.',
+      title: 'Buscar nuevas oportunidades',
+      description: 'Vuelve al catálogo cuando quieras abrir o comparar nuevas posiciones.',
       href: '/markets',
-      actionLabel: 'Open markets',
+      actionLabel: 'Abrir Markets',
       tone: 'primary',
     },
     {
-      title: 'Review signals before trading again',
-      description: 'Signals helps identify the next demo opportunity before you commit another paper trade.',
+      title: 'Revisar señales',
+      description: 'Si quieres más contexto antes de operar, revisa Signals.',
       href: '/signals',
-      actionLabel: 'Open signals',
-      tone: 'secondary',
-    },
-    {
-      title: 'Close the loop in post-mortem',
-      description: 'Open review detail to understand what happened after execution and what the demo system learned.',
-      href: '/postmortem',
-      actionLabel: 'Open reviews',
-      tone: 'neutral',
-    },
-    {
-      title: 'Govern open positions',
-      description: 'Review hold/reduce/close lifecycle decisions for active paper exposure.',
-      href: '/positions',
-      actionLabel: 'Open positions',
+      actionLabel: 'Abrir Signals',
       tone: 'secondary',
     },
   ], []);
@@ -268,9 +246,9 @@ export function PortfolioPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Paper trading"
+        eyebrow="Portafolio paper"
         title="Portfolio"
-        description="Live local demo portfolio view for balances, open positions, execution history, and the retrospective links that connect portfolio changes back to markets and post-mortem."
+        description="Vista principal del portafolio paper para revisar saldo, posiciones y actividad reciente sin entrar en detalle técnico."
         actions={
           <RevalueToolbar
             onRevalue={handleRevalue}
@@ -283,25 +261,25 @@ export function PortfolioPage() {
       />
 
       <WorkflowStatusPanel
-        title="Portfolio in the end-to-end flow"
-        description="This page should now feel like the bridge between market execution and post-mortem: inspect the impact, follow the trade, then open the related review."
+        title="Estado general del portafolio"
+        description="Revisa impacto, actividad y evolución del capital en una sola vista."
         items={workflowItems}
       />
 
       <ContextLinksPanel
-        title="Continue from portfolio"
-        description="Use these links when the portfolio tells you enough and you want to return to discovery, signals, or the learning loop."
+        title="Siguientes pasos"
+        description="Accesos rápidos para continuar el flujo principal."
         links={contextLinks}
       />
 
       {totalFailure ? (
         <EmptyState
-          eyebrow="Backend unavailable"
-          title="Could not load the paper trading workspace"
-          description={`The frontend could not load any of the paper trading endpoints from ${API_BASE_URL}. Verify the backend is running and seed the demo account with \`cd apps/backend && python manage.py seed_paper_account\`.`}
+          eyebrow="Servicio no disponible"
+          title="No pudimos cargar el portafolio paper"
+          description={`El frontend no pudo obtener datos desde ${API_BASE_URL}. Verifica que el backend esté activo y que exista una cuenta demo.`}
           action={
             <button className="secondary-button" type="button" onClick={() => void loadPortfolio()}>
-              Retry portfolio requests
+              Reintentar
             </button>
           }
         />

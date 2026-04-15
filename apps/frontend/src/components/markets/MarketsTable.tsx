@@ -27,17 +27,17 @@ export function MarketsTable({ markets }: MarketsTableProps) {
       <table className="markets-table">
         <thead>
           <tr>
-            <th className="markets-table__title-col">Title</th>
-            <th className="markets-table__short-col">Source</th>
-            <th className="markets-table__short-col">Provider</th>
-            <th className="markets-table__paper-col">Paper mode</th>
-            <th className="markets-table__short-col">Category</th>
-            <th className="markets-table__short-col">Status</th>
-            <th className="markets-table__short-col">Probability</th>
-            <th className="markets-table__number-col">Liquidity</th>
-            <th className="markets-table__number-col">24h volume</th>
-            <th className="markets-table__number-col">Resolution time</th>
-            <th className="markets-table__short-col">Activity</th>
+            <th className="markets-table__title-col">Mercado</th>
+            <th className="markets-table__short-col">Fuente</th>
+            <th className="markets-table__short-col">Proveedor</th>
+            <th className="markets-table__paper-col">Estado paper</th>
+            <th className="markets-table__short-col">Categoría</th>
+            <th className="markets-table__short-col">Estado</th>
+            <th className="markets-table__short-col">Probabilidad</th>
+            <th className="markets-table__number-col">Liquidez</th>
+            <th className="markets-table__number-col">Volumen 24h</th>
+            <th className="markets-table__number-col">Cierre estimado</th>
+            <th className="markets-table__short-col">Actividad</th>
           </tr>
         </thead>
         <tbody>
@@ -46,7 +46,7 @@ export function MarketsTable({ markets }: MarketsTableProps) {
               <td className="markets-table__title-col">
                 <a href={`/markets/${market.id}`} className="market-link" onClick={(event) => handleMarketClick(event, market.id)}>
                   <strong>{market.title}</strong>
-                  <span>{market.event_title ?? 'Standalone market'}</span>
+                  <span>{market.event_title ?? 'Mercado independiente'}</span>
                 </a>
               </td>
               <td className="markets-table__short-col">
@@ -57,10 +57,10 @@ export function MarketsTable({ markets }: MarketsTableProps) {
               </td>
               <td className="markets-table__paper-col">
                 {market.paper_tradable ? (
-                  <span className="market-badge market-badge--open">Paper-tradable</span>
+                  <span className="market-badge market-badge--open">Apto para paper</span>
                 ) : (
                   <div className="table-inline-stack">
-                    <span className="market-badge market-badge--closed">Not paper-tradable</span>
+                    <span className="market-badge market-badge--closed">No apto para paper</span>
                     {market.paper_tradable_reason ? <span className="muted-text">{market.paper_tradable_reason}</span> : null}
                   </div>
                 )}

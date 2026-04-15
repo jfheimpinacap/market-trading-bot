@@ -61,7 +61,7 @@ export function MarketsPage() {
           return;
         }
 
-        setCatalogError(getErrorMessage(error, 'Could not load market summary and filter metadata.'));
+        setCatalogError(getErrorMessage(error, 'No se pudo cargar el resumen de mercados y filtros.'));
       } finally {
         if (isMounted) {
           setCatalogLoading(false);
@@ -121,7 +121,7 @@ export function MarketsPage() {
           return;
         }
 
-        setMarketsError(getErrorMessage(error, 'Could not load markets for the selected filters.'));
+        setMarketsError(getErrorMessage(error, 'No se pudieron cargar mercados para los filtros seleccionados.'));
       } finally {
         if (isMounted) {
           setMarketsLoading(false);
@@ -154,31 +154,31 @@ export function MarketsPage() {
   );
   const selectedSource = filters.source_type || 'all';
   const emptyTitle = selectedSource === 'real_read_only'
-    ? 'No real read-only markets found'
+    ? 'No hay mercados reales disponibles'
     : selectedSource === 'demo'
-      ? 'No demo markets found'
-      : 'No markets found for the selected filters';
+      ? 'No hay mercados demo con esos filtros'
+      : 'No encontramos mercados con esos filtros';
   const emptyDescription = selectedSource === 'real_read_only'
-    ? 'No real markets are currently ingested in this local environment. Run the backend ingestion flow first, then refresh this page.'
+    ? 'Todavía no hay mercados reales cargados en este entorno local. Puedes seguir con mercados demo mientras tanto.'
     : selectedSource === 'demo'
-      ? 'No demo markets match the current filters. Try clearing filters or reseeding demo markets.'
-      : 'Try clearing one or more filters to broaden the catalog.';
+      ? 'Prueba limpiar uno o más filtros para ampliar la búsqueda.'
+      : 'Puedes limpiar filtros o cambiar la fuente para ver más opciones.';
 
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Discovery"
+        eyebrow="Exploración"
         title="Markets"
-        description="Explore local demo markets and real provider markets in read-only mode, with clear source labels to avoid mixing simulation and real data."
+        description="Explora oportunidades en modo simple: mercados demo y mercados reales en solo lectura, siempre separados claramente."
       />
 
       <DataStateWrapper
         isLoading={catalogLoading}
         isError={Boolean(catalogError)}
         errorMessage={catalogError ?? undefined}
-        loadingTitle="Loading market workspace"
-        loadingDescription="Requesting summary cards, providers, and categories from the local backend."
-        errorTitle="Could not load market workspace"
+        loadingTitle="Cargando vista de mercados"
+        loadingDescription="Consultando resumen, proveedores y categorías."
+        errorTitle="No se pudo cargar la vista de mercados"
       >
         {summary ? <MarketsSummaryCards summary={summary} /> : null}
 
@@ -186,24 +186,24 @@ export function MarketsPage() {
 
         <SectionCard
           eyebrow="Catalog"
-          title="Market list"
-          description="Desktop-first table for browsing markets by source/provider and opening detail pages with clear read-only versus paper-demo context."
-          aside={<span className="muted-text">{activeFilterCount} active filters · {demoMarketCount} demo · {realMarketCount} real · {realPaperTradableCount} real paper-tradable</span>}
+          title="Lista de mercados"
+          description="Lista principal para revisar mercados y abrir el detalle cuando quieras profundizar."
+          aside={<span className="muted-text">{activeFilterCount} filtros activos · {demoMarketCount} demo · {realMarketCount} reales · {realPaperTradableCount} aptos para paper</span>}
         >
           <DataStateWrapper
             isLoading={marketsLoading}
             isError={Boolean(marketsError)}
             errorMessage={marketsError ?? undefined}
             isEmpty={!marketsLoading && !marketsError && markets.length === 0}
-            loadingTitle="Loading markets"
-            loadingDescription="Querying the local backend for market rows that match the current filters."
-            errorTitle="Could not load market list"
+            loadingTitle="Cargando mercados"
+            loadingDescription="Buscando mercados que cumplan los filtros actuales."
+            errorTitle="No se pudo cargar la lista"
             emptyTitle={emptyTitle}
             emptyDescription={emptyDescription}
             action={
               activeFilterCount > 0 ? (
                 <button className="secondary-button" type="button" onClick={() => setFilters(defaultFilters)}>
-                  Clear filters
+                  Limpiar filtros
                 </button>
               ) : undefined
             }
