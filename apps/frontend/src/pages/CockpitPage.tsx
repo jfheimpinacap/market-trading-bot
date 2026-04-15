@@ -71,6 +71,7 @@ import type {
   LivePaperTrialRunStatus,
   LivePaperTrialRunStatusResponse,
   LivePaperValidationDigestResponse,
+  LlmShadowSummary,
   TestConsoleStatusResponse,
 } from '../types/missionControl';
 import type {
@@ -119,6 +120,10 @@ const formatSignedMoney = (value: string | null | undefined, currency = 'USD') =
   const parsed = parseNumber(value);
   if (parsed === null) return 'n/a';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 2, signDisplay: 'always' }).format(parsed);
+};
+const normalizeTextList = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item ?? '').trim()).filter((item) => Boolean(item));
 };
 
 const toneFromStatus = (status: string | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
@@ -406,6 +411,17 @@ export function CockpitPage() {
       && testConsoleLog !== 'Unable to export test log',
   );
   const testConsoleCanExportLog = Boolean(testConsoleStatus && !testConsoleStatusError);
+  const llmShadowSummary = testConsoleStatus?.llm_shadow_summary ?? null;
+  const latestLlmShadowSummary = (testConsoleStatus?.latest_llm_shadow_summary ?? llmShadowSummary) as LlmShadowSummary | null;
+  const llmShadowHistory = useMemo(
+    () => (testConsoleStatus?.llm_shadow_recent_history ?? []).slice(0, 3),
+    [testConsoleStatus?.llm_shadow_recent_history],
+  );
+  const llmShadowKeyRisks = normalizeTextList(latestLlmShadowSummary?.key_risks);
+  const llmShadowSupportingPoints = normalizeTextList(latestLlmShadowSummary?.key_supporting_points);
+  const llmAuxSignalSummary = testConsoleStatus?.llm_aux_signal_summary ?? null;
+  const llmAuxReasonCodes = normalizeTextList(llmAuxSignalSummary?.aux_signal_reason_codes);
+  const llmShadowHistoryCount = testConsoleStatus?.llm_shadow_history_count ?? llmShadowHistory.length;
 
   const loadLivePaperStatus = useCallback(async (): Promise<LivePaperBootstrapStatusResponse | null> => {
     setLivePaperStatusLoading(true);
@@ -1278,6 +1294,63 @@ export function CockpitPage() {
                   </div>
                   {testConsoleCopyMessage ? <p className="muted-text">{testConsoleCopyMessage}</p> : null}
                   {testConsoleLogError ? <p className="warning-text">{testConsoleLogError}</p> : null}
+                  <SectionCard
+                    eyebrow="Advanced analysis layer"
+                    title="LLM Shadow + Aux Signal (advisory-only)"
+                    description="Auxiliary analysis only. This panel does not decide execution, remains paper-only, and is intentionally separated from core action controls."
+                  >
+                    <div className="button-row">
+                      <StatusBadge tone="pending">ADVANCED</StatusBadge>
+                      <StatusBadge tone={latestLlmShadowSummary?.advisory_only === false ? 'offline' : 'ready'}>advisory_only={String(latestLlmShadowSummary?.advisory_only ?? true)}</StatusBadge>
+                      <StatusBadge tone={Boolean(latestLlmShadowSummary?.affects_execution) ? 'offline' : 'ready'}>affects_execution={String(Boolean(latestLlmShadowSummary?.affects_execution))}</StatusBadge>
+                      <StatusBadge tone={latestLlmShadowSummary?.paper_only === false ? 'offline' : 'ready'}>paper_only={String(latestLlmShadowSummary?.paper_only ?? true)}</StatusBadge>
+                      <StatusBadge tone="neutral">analysis_auxiliary_layer</StatusBadge>
+                    </div>
+                    <ul className="key-value-list">
+                      <li><span>Provider / model</span><strong>{latestLlmShadowSummary?.provider ?? 'n/a'} / {latestLlmShadowSummary?.model ?? 'n/a'}</strong></li>
+                      <li><span>Shadow reasoning status</span><strong><StatusBadge tone={toneFromStatus(latestLlmShadowSummary?.llm_shadow_reasoning_status)}>{latestLlmShadowSummary?.llm_shadow_reasoning_status ?? 'UNAVAILABLE'}</StatusBadge></strong></li>
+                      <li><span>Stance</span><strong>{latestLlmShadowSummary?.stance ?? 'unclear'}</strong></li>
+                      <li><span>Confidence</span><strong>{latestLlmShadowSummary?.confidence ?? 'low'}</strong></li>
+                      <li><span>Recommendation mode</span><strong>{latestLlmShadowSummary?.recommendation_mode ?? 'observe'}</strong></li>
+                      <li><span>Summary</span><strong>{latestLlmShadowSummary?.summary ?? 'No LLM shadow summary available yet.'}</strong></li>
+                      <li><span>Aux signal status</span><strong><StatusBadge tone={toneFromStatus(llmAuxSignalSummary?.aux_signal_status)}>{llmAuxSignalSummary?.aux_signal_status ?? 'DISABLED'}</StatusBadge></strong></li>
+                      <li><span>Aux recommendation</span><strong>{llmAuxSignalSummary?.aux_signal_recommendation ?? 'observe'}</strong></li>
+                      <li><span>Aux signal weight</span><strong>{llmAuxSignalSummary?.aux_signal_weight ?? 0}</strong></li>
+                      <li><span>Aux summary</span><strong>{llmAuxSignalSummary?.summary ?? 'No aux signal summary.'}</strong></li>
+                    </ul>
+                    <div className="content-grid content-grid--two-columns">
+                      <div className="subsection">
+                        <p className="section-label">Key risks</p>
+                        {llmShadowKeyRisks.length > 0 ? <ul>{llmShadowKeyRisks.map((risk, index) => <li key={`${risk}-${index}`}>{risk}</li>)}</ul> : <p className="muted-text">No key risks reported.</p>}
+                      </div>
+                      <div className="subsection">
+                        <p className="section-label">Supporting points</p>
+                        {llmShadowSupportingPoints.length > 0 ? <ul>{llmShadowSupportingPoints.map((point, index) => <li key={`${point}-${index}`}>{point}</li>)}</ul> : <p className="muted-text">No supporting points reported.</p>}
+                      </div>
+                    </div>
+                    <div className="subsection">
+                      <p className="section-label">Aux signal reason codes</p>
+                      {llmAuxReasonCodes.length > 0 ? <ul>{llmAuxReasonCodes.map((reasonCode, index) => <li key={`${reasonCode}-${index}`}>{reasonCode}</li>)}</ul> : <p className="muted-text">No aux reason codes.</p>}
+                    </div>
+                    <div className="subsection">
+                      <p className="section-label">Recent shadow artifacts (last {llmShadowHistory.length})</p>
+                      <p className="muted-text">Total persisted history: {llmShadowHistoryCount}.</p>
+                      {llmShadowHistory.length > 0 ? (
+                        <ul className="key-value-list">
+                          {llmShadowHistory.map((item, index) => (
+                            <li key={`llm-shadow-history-${item.artifact_id ?? index}`}>
+                              <span>
+                                {formatDate(item.timestamp)} · stance={item.stance ?? 'unclear'} · confidence={item.confidence ?? 'low'}
+                              </span>
+                              <strong>{item.recommendation_mode ?? 'observe'} · {item.llm_shadow_reasoning_status ?? 'UNAVAILABLE'}</strong>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="muted-text">No recent shadow artifacts yet.</p>
+                      )}
+                    </div>
+                  </SectionCard>
                   <div className="subsection test-console-output-block">
                     <p className="section-label">Exported log</p>
                     <pre className="test-console-output">{testConsoleLog || 'No log exported yet'}</pre>
