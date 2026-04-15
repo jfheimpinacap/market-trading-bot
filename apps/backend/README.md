@@ -199,6 +199,27 @@ Execution-stage diagnostics now prioritize suppression semantics when an executi
 
 Boundaries remain unchanged: backend-only, observability-first, strict `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` rewrite, no live-trading enablement.
 
+## Mission Control internal consolidation pass (Prompt 285)
+
+Backend-only consolidation/refactor pass focused on cleanup and semantic clarity, with no functional behavior changes.
+
+- `live_paper_autonomy_funnel` consolidation:
+  - shared helper for lineage anchor resolution across readiness/candidate lifecycle paths;
+  - shared helper for reason-code normalization/deduplication in diagnostic blocks.
+- naming/alias posture:
+  - canonical counters remain `candidates_*` in gate summaries;
+  - backward-compatible aliases remain in `execution_promotion_gate_summary` for existing readers/tests.
+- `test_console` consolidation:
+  - introduced shared coercion helpers (`int`/`str`/`list`) to reduce repeated funnel summary mapping patterns;
+  - preserved payload contract and existing summary keys.
+
+Out of scope (explicitly unchanged):
+- no gate/cash/suppression policy changes,
+- no runtime or frontend changes,
+- no live-trading enablement.
+
+Safety boundary remains unchanged: `REAL_READ_ONLY` + `PAPER_ONLY`.
+
 ## Scan diagnostics + demo narrative fallback (new)
 
 `apps.research_agent.services.run.run_scan_agent` now writes explicit scan diagnostics under `SourceScanRun.metadata.scan_diagnostics`.

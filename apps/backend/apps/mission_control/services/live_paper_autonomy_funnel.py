@@ -92,6 +92,16 @@ _EXECUTABLE_INTAKE_STATUSES = {
 }
 
 
+def _unique_codes(codes: list[str] | tuple[str, ...] | None) -> list[str]:
+    return list(dict.fromkeys(str(code or '') for code in list(codes or []) if str(code or '').strip()))
+
+
+def _resolve_lineage_anchor(*, prediction_candidate_id: int | None, handoff_id: int | None, approval_review_id: Any) -> str:
+    if prediction_candidate_id is not None or handoff_id is not None:
+        return f'prediction:{prediction_candidate_id}|handoff:{handoff_id}'
+    return f"approval:{_safe_int(approval_review_id)}"
+
+
 def _quantized(value: Decimal) -> str:
     return str(value.quantize(Decimal('0.0001')))
 
@@ -277,10 +287,11 @@ def _candidate_lineage_key(*, candidate: AutonomousExecutionIntakeCandidate) -> 
     prediction_context = dict(getattr(candidate, 'linked_prediction_context', {}) or {})
     prediction_candidate_id = _safe_int(prediction_context.get('prediction_candidate_id') or prediction_context.get('linked_prediction_candidate_id'))
     handoff_id = _safe_int(prediction_context.get('handoff_id') or prediction_context.get('linked_handoff_id'))
-    if prediction_candidate_id is not None or handoff_id is not None:
-        ancestry_anchor = f'prediction:{prediction_candidate_id}|handoff:{handoff_id}'
-    else:
-        ancestry_anchor = f"approval:{_safe_int(getattr(candidate, 'linked_approval_review_id', None))}"
+    ancestry_anchor = _resolve_lineage_anchor(
+        prediction_candidate_id=prediction_candidate_id,
+        handoff_id=handoff_id,
+        approval_review_id=getattr(candidate, 'linked_approval_review_id', None),
+    )
     return (
         _safe_int(getattr(candidate, 'linked_market_id', None)),
         ancestry_anchor,
@@ -293,10 +304,11 @@ def _readiness_lineage_key(*, readiness: AutonomousExecutionReadiness) -> tuple[
     linked_candidate = getattr(getattr(readiness, 'linked_approval_review', None), 'linked_candidate', None)
     prediction_candidate_id = _safe_int(getattr(linked_candidate, 'linked_prediction_intake_candidate_id', None))
     handoff_id = _safe_int(getattr(linked_candidate, 'linked_risk_ready_prediction_handoff_id', None))
-    if prediction_candidate_id is not None or handoff_id is not None:
-        ancestry_anchor = f'prediction:{prediction_candidate_id}|handoff:{handoff_id}'
-    else:
-        ancestry_anchor = f"approval:{_safe_int(getattr(readiness, 'linked_approval_review_id', None))}"
+    ancestry_anchor = _resolve_lineage_anchor(
+        prediction_candidate_id=prediction_candidate_id,
+        handoff_id=handoff_id,
+        approval_review_id=getattr(readiness, 'linked_approval_review_id', None),
+    )
     return (
         _safe_int(getattr(readiness, 'linked_market_id', None)),
         ancestry_anchor,
@@ -489,7 +501,7 @@ def _ensure_dispatch_records_for_candidates(
         'dispatch_reused': int(dispatch_reused),
         'dispatch_blocked': int(dispatch_blocked),
         'dispatch_dedupe_applied': int(dispatch_dedupe_applied),
-        'reason_codes': list(dict.fromkeys(reason_codes)),
+        'reason_codes': _unique_codes(reason_codes),
         'examples': examples,
     }
 
@@ -996,10 +1008,10 @@ def _ensure_final_paper_trade_for_dispatches(
         'dispatches_considered': int(dispatches_considered),
         'dispatches_deduplicated': int(dispatches_deduplicated),
         'runtime_rejection_count': int(runtime_rejection_count),
-        'runtime_rejection_reason_codes': list(dict.fromkeys(runtime_rejection_reason_codes)),
+        'runtime_rejection_reason_codes': _unique_codes(runtime_rejection_reason_codes),
         'runtime_rejection_summary': (
             f"runtime_rejection_count={runtime_rejection_count} "
-            f"runtime_rejection_reason_codes={','.join(list(dict.fromkeys(runtime_rejection_reason_codes))) or 'none'}"
+            f"runtime_rejection_reason_codes={','.join(_unique_codes(runtime_rejection_reason_codes)) or 'none'}"
         ),
         'cash_available': float(cash_available.quantize(Decimal('0.01'))),
         'cash_budget_remaining': float(cash_budget_remaining.quantize(Decimal('0.01'))),
@@ -1011,9 +1023,9 @@ def _ensure_final_paper_trade_for_dispatches(
         'allowed_for_exit': int(allowed_for_exit),
         'open_positions_detected': int(exposure_detected_count),
         'active_dispatch_exposures_detected': int(len(active_dispatch_lineages)),
-        'position_exposure_reason_codes': list(dict.fromkeys(position_exposure_reason_codes)),
+        'position_exposure_reason_codes': _unique_codes(position_exposure_reason_codes),
         'estimated_cash_selected': float(estimated_cash_selected.quantize(Decimal('0.01'))),
-        'cash_throttle_reason_codes': list(dict.fromkeys(cash_throttle_reason_codes)),
+        'cash_throttle_reason_codes': _unique_codes(cash_throttle_reason_codes),
         'cash_throttle_summary': (
             f"cash_available={cash_available.quantize(Decimal('0.01'))} "
             f"executable_candidates={len(candidates)} "
@@ -1022,9 +1034,9 @@ def _ensure_final_paper_trade_for_dispatches(
             f"deferred_by_budget={deferred_by_budget} "
             f"estimated_cash_selected={estimated_cash_selected.quantize(Decimal('0.01'))} "
             f"cash_budget_remaining={cash_budget_remaining.quantize(Decimal('0.01'))} "
-            f"cash_throttle_reason_codes={','.join(list(dict.fromkeys(cash_throttle_reason_codes))) or 'none'}"
+            f"cash_throttle_reason_codes={','.join(_unique_codes(cash_throttle_reason_codes)) or 'none'}"
         ),
-        'reason_codes': list(dict.fromkeys(reason_codes)),
+        'reason_codes': _unique_codes(reason_codes),
         'examples': examples,
         'portfolio_exposure_context': {
             'open_positions': int(portfolio_summary.get('open_positions') or 0),
@@ -1074,7 +1086,7 @@ def _build_position_exposure_summary_from_final_trade_gate(
         'candidates_blocked_by_active_position': int(blocked_by_active_position),
         'candidates_allowed_for_exit': int(allowed_for_exit),
         'candidates_allowed_without_exposure': int(allowed_without_exposure),
-        'position_exposure_reason_codes': list(dict.fromkeys(reason_codes)),
+        'position_exposure_reason_codes': _unique_codes(reason_codes),
         'dominant_blocking_gate': dominant_blocking_gate,
     }
 
@@ -1167,7 +1179,7 @@ def _build_final_fanout_diagnostics(
         )
     )
     reason_codes.append('FINAL_LINEAGE_FANOUT_EXCESSIVE' if fanout_excessive else 'FINAL_LINEAGE_FANOUT_OK')
-    normalized_codes = list(dict.fromkeys(reason_codes))
+    normalized_codes = _unique_codes(reason_codes)
     if blocked_by_active_position > 0:
         normalized_codes = list(dict.fromkeys(normalized_codes + ['FINAL_LINEAGE_CONTAINED_BY_POSITION_GATE']))
     final_status = 'EXCESSIVE' if fanout_excessive else 'OK'
@@ -1273,7 +1285,7 @@ def _build_cash_pressure_diagnostics(
     if fanout_excessive:
         reason_codes.append('CASH_PRESSURE_FANOUT_EXCESSIVE')
 
-    normalized_codes = list(dict.fromkeys(reason_codes))
+    normalized_codes = _unique_codes(reason_codes)
     return {
         'cash_available': float(cash_available.quantize(Decimal('0.01'))),
         'executable_candidates': int(estimated_executable),
@@ -1287,7 +1299,7 @@ def _build_cash_pressure_diagnostics(
         'blocked_by_cash_precheck': int(blocked_by_cash_precheck),
         'deferred_by_budget': int(deferred_by_budget),
         'cash_budget_remaining': float(cash_budget_remaining.quantize(Decimal('0.01'))),
-        'cash_throttle_reason_codes': list(dict.fromkeys(cash_throttle_reason_codes)),
+        'cash_throttle_reason_codes': _unique_codes(cash_throttle_reason_codes),
         'cash_pressure_status': status,
         'cash_pressure_reason_codes': normalized_codes,
         'cash_pressure_summary': (
@@ -1304,7 +1316,7 @@ def _build_cash_pressure_diagnostics(
             f"candidates_reused={final_trade_reused} "
             f"created={final_trade_created} "
             f"cash_budget_remaining={cash_budget_remaining.quantize(Decimal('0.01'))} "
-            f"cash_throttle_reason_codes={','.join(list(dict.fromkeys(cash_throttle_reason_codes))) or 'none'} "
+            f"cash_throttle_reason_codes={','.join(_unique_codes(cash_throttle_reason_codes)) or 'none'} "
             f"cash_pressure_status={status} "
             f"cash_pressure_reason_codes={','.join(normalized_codes) or 'none'}"
         ),
@@ -1439,7 +1451,7 @@ def _ensure_execution_decisions_for_candidates(
         'decision_reused': int(decision_reused),
         'decision_blocked': int(decision_blocked),
         'decision_dedupe_applied': int(decision_dedupe_applied),
-        'reason_codes': list(dict.fromkeys(reason_codes)),
+        'reason_codes': _unique_codes(reason_codes),
         'examples': examples,
         'considered_candidates': int(len(candidate_ids)),
         'deduplicated_candidates': int(len(duplicate_candidate_ids)),
@@ -1909,7 +1921,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                 }
             )
 
-    normalized_codes = list(dict.fromkeys(reason_codes))
+    normalized_codes = _unique_codes(reason_codes)
     normalized_visibility_codes = list(dict.fromkeys([code for code in visibility_reason_codes if code]))
     normalized_creation_gate_codes = list(dict.fromkeys(creation_gate_reason_codes))
     execution_readiness_created = sum(1 for source in readiness_source_by_id.values() if source == 'created')
@@ -2367,13 +2379,13 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             fanout_reason_codes.append('LINEAGE_FANOUT_ONE_TO_ONE')
     else:
         fanout_reason_codes.append('LINEAGE_FANOUT_INSUFFICIENT_DATA')
-    normalized_paper_trade_route_codes = list(dict.fromkeys(paper_trade_route_reason_codes))
-    normalized_paper_trade_decision_codes = list(dict.fromkeys(paper_trade_decision_reason_codes))
-    normalized_paper_trade_dispatch_codes = list(dict.fromkeys(paper_trade_dispatch_reason_codes))
-    normalized_final_trade_codes = list(dict.fromkeys(final_trade_reason_codes))
-    normalized_runtime_rejection_codes = list(dict.fromkeys(runtime_rejection_reason_codes))
-    normalized_fanout_codes = list(dict.fromkeys(fanout_reason_codes))
-    normalized_promotion_gate_codes = list(dict.fromkeys(promotion_gate_reason_codes))
+    normalized_paper_trade_route_codes = _unique_codes(paper_trade_route_reason_codes)
+    normalized_paper_trade_decision_codes = _unique_codes(paper_trade_decision_reason_codes)
+    normalized_paper_trade_dispatch_codes = _unique_codes(paper_trade_dispatch_reason_codes)
+    normalized_final_trade_codes = _unique_codes(final_trade_reason_codes)
+    normalized_runtime_rejection_codes = _unique_codes(runtime_rejection_reason_codes)
+    normalized_fanout_codes = _unique_codes(fanout_reason_codes)
+    normalized_promotion_gate_codes = _unique_codes(promotion_gate_reason_codes)
     aligned_decision_created = int(paper_trade_decision_created)
     aligned_decision_reused = int(paper_trade_decision_reused)
     promotion_suppressed_total = int(promotion_suppressed_by_active_position + promotion_suppressed_by_existing_open_trade)
@@ -2474,7 +2486,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'allowed_for_exit': int(final_trade_allowed_for_exit),
         'allowed_without_exposure': int(final_trade_allowed_without_exposure),
         'open_positions_detected': int(open_positions_detected),
-        'position_exposure_reason_codes': list(dict.fromkeys(position_exposure_reason_codes)),
+        'position_exposure_reason_codes': _unique_codes(position_exposure_reason_codes),
         'cash_throttle_reason_codes': list(dict.fromkeys(final_trade_cash_throttle_reason_codes)),
         'dominant_blocking_gate': dominant_blocking_gate,
         'secondary_pressure': secondary_pressure,
@@ -2576,7 +2588,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'allowed_for_exit': int(final_trade_allowed_for_exit),
         'allowed_without_exposure': int(final_trade_allowed_without_exposure),
         'open_positions_detected': int(open_positions_detected),
-        'position_exposure_reason_codes': list(dict.fromkeys(position_exposure_reason_codes)),
+        'position_exposure_reason_codes': _unique_codes(position_exposure_reason_codes),
         'cash_budget_remaining': float(final_trade_cash_budget_remaining.quantize(Decimal('0.01'))),
         'cash_throttle_reason_codes': list(dict.fromkeys(final_trade_cash_throttle_reason_codes)),
         'dominant_blocking_gate': dominant_blocking_gate,
@@ -2602,8 +2614,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"cash_budget_remaining={final_trade_cash_budget_remaining.quantize(Decimal('0.01'))} "
             f"dominant_blocking_gate={dominant_blocking_gate} "
             f"secondary_pressure={secondary_pressure} "
-            f"position_exposure_reason_codes={','.join(list(dict.fromkeys(position_exposure_reason_codes))) or 'none'} "
-            f"cash_throttle_reason_codes={','.join(list(dict.fromkeys(final_trade_cash_throttle_reason_codes))) or 'none'} "
+            f"position_exposure_reason_codes={','.join(_unique_codes(position_exposure_reason_codes)) or 'none'} "
+            f"cash_throttle_reason_codes={','.join(_unique_codes(final_trade_cash_throttle_reason_codes)) or 'none'} "
             f"runtime_rejection_count={runtime_rejection_count} "
             f"runtime_rejection_reason_codes={','.join(normalized_runtime_rejection_codes) or 'none'} "
             f"final_trade_reason_codes={','.join(normalized_final_trade_codes) or 'none'}"
@@ -2881,7 +2893,7 @@ def _materialize_prediction_artifacts_for_risk(
                 }
             )
 
-    summary['prediction_artifact_reason_codes'] = list(dict.fromkeys(reason_codes))
+    summary['prediction_artifact_reason_codes'] = _unique_codes(reason_codes)
     summary['prediction_artifact_summary'] = (
         f"artifact_expected={summary['prediction_artifact_expected_count']} "
         f"conviction_review_available={summary['conviction_review_available_count']} "
