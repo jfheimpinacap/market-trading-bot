@@ -307,7 +307,7 @@ export function DashboardPage() {
   }, [paperSummary?.open_positions_count, reviewsSummary?.total_reviews, signalsSummary?.actionable_signals, summary?.active_markets]);
 
   return (
-    <div className="page-stack">
+    <div className="page-stack dashboard-page">
       <PageHeader
         eyebrow="Control center"
         title={PROJECT_NAME}
