@@ -1,575 +1,370 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+
 import { PageHeader } from '../components/PageHeader';
 import { SectionCard } from '../components/SectionCard';
-import { StatusCard } from '../components/StatusCard';
-import { DashboardStatGrid } from '../components/dashboard/DashboardStatGrid';
-import { ModuleStatusList } from '../components/dashboard/ModuleStatusList';
-import { QuickLinksPanel } from '../components/dashboard/QuickLinksPanel';
-import { RecentMarketsPanel } from '../components/dashboard/RecentMarketsPanel';
 import { StatusBadge } from '../components/dashboard/StatusBadge';
-import { WorkflowStatusPanel } from '../components/flow/WorkflowStatusPanel';
-import { LatestSignalsList } from '../components/signals/LatestSignalsList';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { useSystemHealth } from '../app/SystemHealthProvider';
-import { API_BASE_URL, PROJECT_NAME } from '../lib/config';
-import { dashboardModules, dashboardQuickLinks, localEnvironmentHighlights, nextProjectSteps } from '../lib/dashboard';
+import { PROJECT_NAME } from '../lib/config';
 import { navigate } from '../lib/router';
-import { useDemoFlowRefresh } from '../hooks/useDemoFlowRefresh';
-import { getMarketSystemSummary, getMarkets } from '../services/markets';
-import { getPaperSummary } from '../services/paperTrading';
-import { getReviewsSummary } from '../services/reviews';
-import { getSignals, getSignalsSummary } from '../services/signals';
-import { getTradeProposals } from '../services/proposals';
-import type { MarketListItem, MarketSystemSummary } from '../types/markets';
-import type { DashboardStatCard, RecentMarketItem } from '../types/dashboard';
-import type { PaperPortfolioSummary } from '../types/paperTrading';
-import type { TradeReviewSummary } from '../types/reviews';
-import type { MarketSignal, SignalSummary } from '../types/signals';
-import type { TradeProposal } from '../types/proposals';
-import type { WorkflowStatusItem } from '../types/demoFlow';
+import { getCockpitAttention, getCockpitSummary } from '../services/cockpit';
+import { getTestConsoleStatus } from '../services/missionControl';
+import { getPaperSnapshots, getPaperSummary } from '../services/paperTrading';
+import type { CockpitAttentionItem } from '../types/cockpit';
+import type { LlmAuxSignalSummary, TestConsoleStatusResponse } from '../types/missionControl';
+import type { PaperPortfolioSnapshot, PaperPortfolioSummary } from '../types/paperTrading';
+
+const toNumber = (value: string | null | undefined) => {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatMoney = (value: string | null | undefined) => {
+  const parsed = toNumber(value);
+  if (parsed === null) return 'n/a';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 2,
+  }).format(parsed);
+};
+
+const formatSignedMoney = (value: string | null | undefined) => {
+  const parsed = toNumber(value);
+  if (parsed === null) return 'n/a';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 2,
+    signDisplay: 'always',
+  }).format(parsed);
+};
+
+const formatTimestamp = (value: string | null | undefined) => {
+  if (!value) return 'n/a';
+  return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+};
+
+const statusTone = (status: string | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
+  const normalized = (status ?? '').toUpperCase();
+  if (['ACTIVE', 'READY', 'RUNNING', 'PASS', 'ALLOW', 'NORMAL', 'NO_ACTION'].includes(normalized)) return 'ready';
+  if (['PAUSED', 'WARNING', 'WARN', 'ALLOW_WITH_CAUTION', 'REVIEW_SOON', 'MONITOR_ONLY', 'CAUTION'].includes(normalized)) return 'pending';
+  if (['STOPPED', 'BLOCKED', 'FAIL', 'BLOCK', 'REVIEW_NOW'].includes(normalized)) return 'offline';
+  return 'neutral';
+};
+
+const getExecutivePhrase = (status: TestConsoleStatusResponse | null) => {
+  if (!status) return 'Sin datos operativos recientes. Revisar consola avanzada.';
+  if (status.gate_status === 'BLOCK' || status.validation_status === 'BLOCKED') {
+    return 'En revisión: hay bloqueos que requieren atención antes de continuar.';
+  }
+  if (status.attention_mode === 'REVIEW_NOW' || status.attention_mode === 'REVIEW_SOON') {
+    return 'Operando con cautela: se recomienda revisión manual.';
+  }
+  if (status.test_status?.toUpperCase() === 'RUNNING') {
+    return 'Funcionando normal: monitoreo activo en curso.';
+  }
+  return 'Funcionando estable en modo paper con supervisión.';
+};
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-function formatBooleanFlag(value: boolean | undefined) {
-  return value ? 'Configured' : 'Not configured';
-}
-
-function formatCatalogSeeded(summary: MarketSystemSummary | null) {
-  if (!summary) {
-    return 'Checking demo catalog';
+function MiniTrendChart({
+  points,
+  label,
+  color,
+}: {
+  points: Array<{ xLabel: string; value: number | null }>;
+  label: string;
+  color: string;
+}) {
+  const usable = points.filter((point): point is { xLabel: string; value: number } => point.value !== null);
+  if (usable.length < 2) {
+    return <p className="muted-text">Not enough data for {label.toLowerCase()} trend yet.</p>;
   }
 
-  return summary.total_markets > 0 ? 'Seeded demo catalog detected' : 'No demo markets found yet';
-}
+  const min = Math.min(...usable.map((point) => point.value));
+  const max = Math.max(...usable.map((point) => point.value));
+  const range = Math.max(max - min, 1);
+  const polyline = usable
+    .map((point, index) => {
+      const x = (index / Math.max(usable.length - 1, 1)) * 100;
+      const y = 100 - ((point.value - min) / range) * 100;
+      return `${x},${y}`;
+    })
+    .join(' ');
 
-function buildStats(summary: MarketSystemSummary): DashboardStatCard[] {
-  return [
-    {
-      label: 'Providers',
-      value: String(summary.total_providers),
-      helperText: 'Registered market data providers in the local demo dataset.',
-    },
-    {
-      label: 'Events',
-      value: String(summary.total_events),
-      helperText: 'Underlying events currently exposed by the read-only API.',
-    },
-    {
-      label: 'Markets',
-      value: String(summary.total_markets),
-      helperText: 'Contracts available to inspect from the seeded backend catalog.',
-    },
-    {
-      label: 'Active markets',
-      value: String(summary.active_markets),
-      helperText: 'Contracts that still appear open or active in the local dataset.',
-    },
-    {
-      label: 'Resolved markets',
-      value: String(summary.resolved_markets),
-      helperText: 'Contracts already settled in the demo catalog.',
-    },
-    {
-      label: 'Snapshots',
-      value: String(summary.total_snapshots),
-      helperText: 'Historical rows available for quick inspection in market detail views.',
-    },
-  ];
-}
-
-function mapRecentMarkets(markets: MarketListItem[]): RecentMarketItem[] {
-  return [...markets]
-    .sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())
-    .slice(0, 5)
-    .map((market) => ({
-      id: market.id,
-      title: market.title,
-      providerName: market.provider.name,
-      eventTitle: market.event_title,
-      status: market.status,
-      probability: market.current_market_probability,
-      updatedAt: market.updated_at,
-    }));
+  return (
+    <div className="executive-chart">
+      <div className="executive-chart__header">
+        <strong>{label}</strong>
+        <span className="muted-text">{usable[usable.length - 1].xLabel}</span>
+      </div>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label={`${label} trend`}>
+        <polyline points={polyline} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
 }
 
 export function DashboardPage() {
   const health = useSystemHealth();
-  const [summary, setSummary] = useState<MarketSystemSummary | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(true);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [recentMarkets, setRecentMarkets] = useState<RecentMarketItem[]>([]);
-  const [recentMarketsLoading, setRecentMarketsLoading] = useState(true);
-  const [recentMarketsError, setRecentMarketsError] = useState<string | null>(null);
-  const [signalsSummary, setSignalsSummary] = useState<SignalSummary | null>(null);
-  const [latestSignals, setLatestSignals] = useState<MarketSignal[]>([]);
-  const [signalsLoading, setSignalsLoading] = useState(true);
-  const [signalsError, setSignalsError] = useState<string | null>(null);
-  const [reviewsSummary, setReviewsSummary] = useState<TradeReviewSummary | null>(null);
-  const [reviewsLoading, setReviewsLoading] = useState(true);
-  const [reviewsError, setReviewsError] = useState<string | null>(null);
   const [paperSummary, setPaperSummary] = useState<PaperPortfolioSummary | null>(null);
-  const [paperSummaryLoading, setPaperSummaryLoading] = useState(true);
-  const [paperSummaryError, setPaperSummaryError] = useState<string | null>(null);
-  const [proposals, setProposals] = useState<TradeProposal[]>([]);
-  const [proposalsLoading, setProposalsLoading] = useState(true);
-  const [proposalsError, setProposalsError] = useState<string | null>(null);
-  const [realMarketCount, setRealMarketCount] = useState(0);
-  const [realPaperTradableCount, setRealPaperTradableCount] = useState(0);
-  const [realProviders, setRealProviders] = useState<string[]>([]);
-  const [realContextLoading, setRealContextLoading] = useState(true);
-  const [realContextError, setRealContextError] = useState<string | null>(null);
+  const [paperSnapshots, setPaperSnapshots] = useState<PaperPortfolioSnapshot[]>([]);
+  const [paperLoading, setPaperLoading] = useState(true);
+  const [paperError, setPaperError] = useState<string | null>(null);
+  const [testConsoleStatus, setTestConsoleStatus] = useState<TestConsoleStatusResponse | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [attentionItems, setAttentionItems] = useState<CockpitAttentionItem[]>([]);
+  const [attentionLoading, setAttentionLoading] = useState(true);
+  const [attentionError, setAttentionError] = useState<string | null>(null);
 
-  const loadSummary = useCallback(async () => {
-    setSummaryLoading(true);
-    setSummaryError(null);
+  const loadExecutiveData = useCallback(async () => {
+    setPaperLoading(true);
+    setPaperError(null);
+    setStatusLoading(true);
+    setStatusError(null);
+    setAttentionLoading(true);
+    setAttentionError(null);
 
-    try {
-      const response = await getMarketSystemSummary();
-      setSummary(response);
-    } catch (error) {
-      setSummaryError(getErrorMessage(error, 'Could not load market system summary.'));
-    } finally {
-      setSummaryLoading(false);
-    }
-  }, []);
-
-  const loadRecentMarkets = useCallback(async () => {
-    setRecentMarketsLoading(true);
-    setRecentMarketsError(null);
-
-    try {
-      const response = await getMarkets();
-      setRecentMarkets(mapRecentMarkets(response));
-    } catch (error) {
-      setRecentMarketsError(getErrorMessage(error, 'Could not load recent markets from the local catalog.'));
-    } finally {
-      setRecentMarketsLoading(false);
-    }
-  }, []);
-
-  const loadRealContext = useCallback(async () => {
-    setRealContextLoading(true);
-    setRealContextError(null);
-
-    try {
-      const response = await getMarkets({ source_type: 'real_read_only' });
-      setRealMarketCount(response.length);
-      setRealPaperTradableCount(response.filter((market) => market.paper_tradable).length);
-      setRealProviders(Array.from(new Set(response.map((market) => market.provider.name))).sort((left, right) => left.localeCompare(right)));
-    } catch (error) {
-      setRealMarketCount(0);
-      setRealPaperTradableCount(0);
-      setRealProviders([]);
-      setRealContextError(getErrorMessage(error, 'Could not load real read-only market context.'));
-    } finally {
-      setRealContextLoading(false);
-    }
-  }, []);
-
-  const loadSignalsContext = useCallback(async () => {
-    setSignalsLoading(true);
-    setSignalsError(null);
-
-    try {
-      const [summaryResponse, latestSignalsResponse] = await Promise.all([
-        getSignalsSummary(),
-        getSignals({ ordering: '-created_at' }),
-      ]);
-      setSignalsSummary(summaryResponse);
-      setLatestSignals(latestSignalsResponse.slice(0, 3));
-    } catch (error) {
-      setSignalsError(getErrorMessage(error, 'Could not load demo signals from the local backend.'));
-    } finally {
-      setSignalsLoading(false);
-    }
-  }, []);
-
-  const loadReviewsSummary = useCallback(async () => {
-    setReviewsLoading(true);
-    setReviewsError(null);
-
-    try {
-      const response = await getReviewsSummary();
-      setReviewsSummary(response);
-    } catch (error) {
-      setReviewsError(getErrorMessage(error, 'Could not load demo trade reviews summary.'));
-    } finally {
-      setReviewsLoading(false);
-    }
-  }, []);
-
-  const loadPaperSummary = useCallback(async () => {
-    setPaperSummaryLoading(true);
-    setPaperSummaryError(null);
-
-    try {
-      const response = await getPaperSummary();
-      setPaperSummary(response);
-    } catch (error) {
-      setPaperSummary(null);
-      setPaperSummaryError(getErrorMessage(error, 'Could not load the paper portfolio summary.'));
-    } finally {
-      setPaperSummaryLoading(false);
-    }
-  }, []);
-
-
-  const loadProposalsContext = useCallback(async () => {
-    setProposalsLoading(true);
-    setProposalsError(null);
-
-    try {
-      const response = await getTradeProposals();
-      setProposals(response);
-    } catch (error) {
-      setProposals([]);
-      setProposalsError(getErrorMessage(error, 'Could not load trade proposals summary.'));
-    } finally {
-      setProposalsLoading(false);
-    }
-  }, []);
-
-  const refreshDashboard = useCallback(async () => {
     await Promise.all([
-      loadSummary(),
-      loadRecentMarkets(),
-      loadRealContext(),
-      loadSignalsContext(),
-      loadReviewsSummary(),
-      loadPaperSummary(),
-      loadProposalsContext(),
+      (async () => {
+        try {
+          const [summary, snapshots] = await Promise.all([getPaperSummary(), getPaperSnapshots()]);
+          setPaperSummary(summary);
+          setPaperSnapshots(snapshots.slice(-12));
+        } catch (error) {
+          setPaperSummary(null);
+          setPaperSnapshots([]);
+          setPaperError(getErrorMessage(error, 'No se pudo cargar el estado paper.'));
+        } finally {
+          setPaperLoading(false);
+        }
+      })(),
+      (async () => {
+        try {
+          const response = await getTestConsoleStatus();
+          setTestConsoleStatus(response);
+        } catch (error) {
+          setTestConsoleStatus(null);
+          setStatusError(getErrorMessage(error, 'No se pudo cargar el estado operativo.'));
+        } finally {
+          setStatusLoading(false);
+        }
+      })(),
+      (async () => {
+        try {
+          const snapshot = await getCockpitSummary();
+          const response = getCockpitAttention(snapshot);
+          setAttentionItems(response.slice(0, 4));
+        } catch (error) {
+          setAttentionItems([]);
+          setAttentionError(getErrorMessage(error, 'No se pudieron cargar alertas priorizadas.'));
+        } finally {
+          setAttentionLoading(false);
+        }
+      })(),
     ]);
-  }, [loadPaperSummary, loadProposalsContext, loadRealContext, loadRecentMarkets, loadReviewsSummary, loadSignalsContext, loadSummary]);
+  }, []);
 
   useEffect(() => {
-    void refreshDashboard();
-  }, [refreshDashboard]);
+    void loadExecutiveData();
+  }, [loadExecutiveData]);
 
-  useDemoFlowRefresh(refreshDashboard);
+  const executiveTone = statusTone(testConsoleStatus?.validation_status ?? health.backendStatus);
+  const llmHint = testConsoleStatus?.llm_aux_signal_summary ?? null;
 
-  const backendDescription = health.isLoading
-    ? 'Checking the local Django health endpoint.'
-    : health.isError
-      ? 'Backend is currently offline from the frontend perspective. Verify that Django is running and VITE_API_BASE_URL is correct.'
-      : 'Backend healthcheck loaded successfully from the local API and is ready for dashboard integrations.';
+  const kpis = useMemo(
+    () => [
+      { label: 'Equity', value: formatMoney(paperSummary?.account.equity) },
+      { label: 'Cash', value: formatMoney(paperSummary?.account.cash_balance) },
+      { label: 'Unrealized PnL', value: formatSignedMoney(paperSummary?.account.unrealized_pnl) },
+      { label: 'Realized PnL', value: formatSignedMoney(paperSummary?.account.realized_pnl) },
+      { label: 'Open positions', value: String(paperSummary?.open_positions_count ?? 0) },
+      { label: 'Recent trades', value: String(paperSummary?.recent_trades.length ?? 0) },
+    ],
+    [paperSummary],
+  );
 
-  const overallEnvironmentTone = health.isError ? 'offline' : health.isLoading ? 'loading' : 'online';
-  const overallEnvironmentLabel = health.isError
-    ? 'Backend offline'
-    : health.isLoading
-      ? 'Checking services'
-      : 'Local environment ready';
+  const equityPoints = useMemo(
+    () => paperSnapshots.map((snapshot) => ({ xLabel: formatTimestamp(snapshot.captured_at), value: toNumber(snapshot.equity) })),
+    [paperSnapshots],
+  );
 
-  const marketStats = useMemo(() => (summary ? buildStats(summary) : []), [summary]);
-  const actionableProposals = useMemo(() => proposals.filter((proposal) => proposal.is_actionable), [proposals]);
-  const workflowItems = useMemo<WorkflowStatusItem[]>(() => {
-    const openPositions = paperSummary?.open_positions_count ?? 0;
-    const recentReviews = reviewsSummary?.total_reviews ?? 0;
-    const actionableSignals = signalsSummary?.actionable_signals ?? 0;
-    const activeMarkets = summary?.active_markets ?? 0;
+  const pnlPoints = useMemo(
+    () => paperSnapshots.map((snapshot) => ({ xLabel: formatTimestamp(snapshot.captured_at), value: toNumber(snapshot.total_pnl) })),
+    [paperSnapshots],
+  );
 
-    return [
-      {
-        label: '1. Discover',
-        value: `${activeMarkets} active markets`,
-        helperText: 'Start in Markets to inspect the demo catalog and find contracts that deserve attention.',
-        tone: activeMarkets > 0 ? 'ready' : 'warning',
-        href: '/markets',
-        linkLabel: 'Explore markets',
-      },
-      {
-        label: '2. Validate',
-        value: `${actionableSignals} actionable signals`,
-        helperText: 'Signals gives the quickest view of demo opportunities that can be escalated into market detail.',
-        tone: actionableSignals > 0 ? 'ready' : 'neutral',
-        href: '/signals',
-        linkLabel: 'Review signals',
-      },
-      {
-        label: '3. Execute',
-        value: `${openPositions} open positions`,
-        helperText: 'Paper execution happens from market detail after the risk check approves or cautions the trade.',
-        tone: openPositions > 0 ? 'ready' : 'neutral',
-        href: '/portfolio',
-        linkLabel: 'Inspect portfolio',
-      },
-      {
-        label: '4. Review',
-        value: `${recentReviews} recent reviews`,
-        helperText: 'Post-mortem closes the loop with outcomes, lessons, and links back to the trade context.',
-        tone: recentReviews > 0 ? 'ready' : 'neutral',
-        href: '/postmortem',
-        linkLabel: 'Open post-mortem',
-      },
-    ];
-  }, [paperSummary?.open_positions_count, reviewsSummary?.total_reviews, signalsSummary?.actionable_signals, summary?.active_markets]);
+  const latestTrade = paperSummary?.recent_trades[0] ?? null;
+  const hasCriticalAttention = attentionItems.some((item) => item.severity === 'CRITICAL' || item.severity === 'HIGH');
 
   return (
-    <div className="page-stack dashboard-page">
+    <div className="page-stack dashboard-page executive-dashboard-page">
       <PageHeader
-        eyebrow="Control center"
-        title={PROJECT_NAME}
-        description="Local-first dashboard connected to the Django backend so you can move through the full demo workflow from market discovery to review without feeling like each module is isolated."
-        actions={<StatusBadge tone={overallEnvironmentTone}>{overallEnvironmentLabel}</StatusBadge>}
+        eyebrow="Vista principal"
+        title={`${PROJECT_NAME} · Executive Control Center`}
+        description="Resumen simple para validar estado operativo, capital paper y actividad reciente en una sola vista."
+        actions={(
+          <div className="button-row">
+            <button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Vista avanzada</button>
+            <button type="button" className="ghost-button" onClick={() => navigate('/mission-control')}>Mission Control</button>
+            <StatusBadge tone={executiveTone}>{getExecutivePhrase(testConsoleStatus)}</StatusBadge>
+          </div>
+        )}
       />
 
       <section className="content-grid content-grid--two-columns">
-        <StatusCard
-          title="Backend API"
-          status={health.backendStatus}
-          description={backendDescription}
-          details={[
-            { label: 'Health endpoint', value: `${API_BASE_URL}/api/health/` },
-            { label: 'Environment', value: health.data?.environment ?? 'Unavailable' },
-            { label: 'App mode', value: health.data?.app_mode?.toUpperCase() ?? 'Unavailable' },
-            { label: 'Database', value: formatBooleanFlag(health.data?.database_configured) },
-            { label: 'Redis', value: formatBooleanFlag(health.data?.redis_configured) },
-            { label: 'Redis required', value: formatBooleanFlag(health.data?.redis_required) },
-          ]}
-        />
-
         <SectionCard
-          eyebrow="Local environment"
-          title="Development context"
-          description="This app is optimized for local development with a demo dataset, explicit backend visibility, and manual control over seed / signal / review generation."
-          aside={
-            <StatusBadge tone={summaryError ? 'offline' : summary && summary.total_markets > 0 ? 'ready' : 'loading'}>
-              {summaryError ? 'Summary unavailable' : formatCatalogSeeded(summary)}
-            </StatusBadge>
-          }
-        >
-          <dl className="dashboard-key-value-list">
-            {localEnvironmentHighlights.map((item) => (
-              <div key={item.label}>
-                <dt>{item.label}</dt>
-                <dd>{item.value}</dd>
-              </div>
-            ))}
-            <div>
-              <dt>Health state</dt>
-              <dd>{health.backendStatus}</dd>
-            </div>
-            <div>
-              <dt>Demo catalog</dt>
-              <dd>{formatCatalogSeeded(summary)}</dd>
-            </div>
-          </dl>
-        </SectionCard>
-      </section>
-
-      <WorkflowStatusPanel
-        title="Current demo flow"
-        description="Recommended narrative: discover a market, validate the signal, evaluate risk in market detail, execute a paper trade, check portfolio impact, and finish in post-mortem."
-        items={workflowItems}
-      />
-
-      <SectionCard
-        eyebrow="Catalog summary"
-        title="Market system overview"
-        description="Metrics below come directly from GET /api/markets/system-summary/ and help confirm the seeded demo dataset is available."
-      >
-        <DataStateWrapper
-          isLoading={summaryLoading}
-          isError={Boolean(summaryError)}
-          errorMessage={summaryError ?? undefined}
-          isEmpty={!summaryLoading && !summaryError && !summary}
-          loadingTitle="Loading market summary"
-          loadingDescription="Requesting provider, event, market, and snapshot totals from the backend."
-          errorTitle="Could not load market summary"
-          emptyTitle="No summary data available"
-          emptyDescription="The backend responded without market summary data. Verify the demo seed and the read-only endpoints."
-        >
-          <DashboardStatGrid stats={marketStats} />
-        </DataStateWrapper>
-      </SectionCard>
-
-      <SectionCard
-        eyebrow="Real data visibility"
-        title="Read-only provider connectivity"
-        description="Quick visibility for real provider ingestion while keeping the app execution model strictly demo/paper."
-        aside={<StatusBadge tone={realContextError ? 'offline' : realMarketCount > 0 ? 'ready' : 'pending'}>{realMarketCount > 0 ? 'Connected' : 'Not ingested yet'}</StatusBadge>}
-      >
-        <DataStateWrapper
-          isLoading={realContextLoading}
-          isError={Boolean(realContextError)}
-          errorMessage={realContextError ?? undefined}
-          loadingTitle="Loading real market context"
-          loadingDescription="Checking read-only real markets from the shared markets endpoint."
-          errorTitle="Could not load real market context"
-          isEmpty={!realContextLoading && !realContextError && realMarketCount === 0}
-          emptyTitle="No real markets ingested yet"
-          emptyDescription="Run the backend ingestion command for Kalshi or Polymarket, then refresh this dashboard."
-        >
-          <dl className="dashboard-key-value-list">
-            <div><dt>Real markets</dt><dd>{realMarketCount}</dd></div>
-            <div><dt>Real paper-tradable</dt><dd>{realPaperTradableCount}</dd></div>
-            <div><dt>Real providers</dt><dd>{realProviders.length > 0 ? realProviders.join(', ') : '—'}</dd></div>
-            <div><dt>Trading mode</dt><dd>Paper/demo only</dd></div>
-          </dl>
-          <button className="secondary-button" type="button" onClick={() => navigate('/markets')}>
-            Explore real read-only markets
-          </button>
-        </DataStateWrapper>
-      </SectionCard>
-
-      <section className="content-grid content-grid--two-columns">
-        <SectionCard
-          eyebrow="Navigation"
-          title="Quick links"
-          description="These links intentionally mirror the recommended end-to-end workflow so the landing page reads like a guided operator console."
-        >
-          <QuickLinksPanel links={dashboardQuickLinks} />
-        </SectionCard>
-
-        <SectionCard
-          eyebrow="Proposal engine"
-          title="Trade proposals snapshot"
-          description="Compact summary for proposal throughput and actionability before entering market detail and trade evaluation."
-          aside={
-            <StatusBadge tone={proposalsError ? 'offline' : proposalsLoading ? 'loading' : 'ready'}>
-              {proposalsLoading ? 'Syncing proposals' : 'Proposals synced'}
-            </StatusBadge>
-          }
+          eyebrow="Estado general"
+          title="Salud operativa del bot"
+          description="Lectura rápida del estado de ejecución autónoma en paper mode."
         >
           <DataStateWrapper
-            isLoading={proposalsLoading}
-            isError={Boolean(proposalsError)}
-            errorMessage={proposalsError ?? undefined}
-            loadingTitle="Loading proposals snapshot"
-            loadingDescription="Requesting proposal engine demo records for dashboard context."
-            errorTitle="Could not load proposals snapshot"
+            isLoading={statusLoading}
+            isError={Boolean(statusError)}
+            errorMessage={statusError ?? undefined}
+            loadingTitle="Cargando estado operativo"
+            loadingDescription="Consultando estado consolidado del test console."
+            errorTitle="No se pudo cargar el estado operativo"
           >
             <dl className="dashboard-key-value-list">
-              <div><dt>Total proposals</dt><dd>{proposals.length}</dd></div>
-              <div><dt>Actionable proposals</dt><dd>{actionableProposals.length}</dd></div>
-              <div><dt>Latest proposal</dt><dd>{proposals[0] ? `#${proposals[0].id} · ${proposals[0].direction}` : 'No proposals yet'}</dd></div>
+              <div><dt>Bot status</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.test_status)}>{testConsoleStatus?.test_status ?? 'n/a'}</StatusBadge></dd></div>
+              <div><dt>Validation</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.validation_status)}>{testConsoleStatus?.validation_status ?? 'n/a'}</StatusBadge></dd></div>
+              <div><dt>Gate</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.gate_status)}>{testConsoleStatus?.gate_status ?? 'n/a'}</StatusBadge></dd></div>
+              <div><dt>Attention mode</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.attention_mode)}>{testConsoleStatus?.attention_mode ?? 'n/a'}</StatusBadge></dd></div>
+              <div><dt>Funnel</dt><dd>{testConsoleStatus?.funnel_status ?? 'n/a'}</dd></div>
+              <div><dt>Última actualización</dt><dd>{formatTimestamp(testConsoleStatus?.updated_at ?? testConsoleStatus?.started_at)}</dd></div>
             </dl>
           </DataStateWrapper>
         </SectionCard>
-      </section>
 
-      <section className="content-grid content-grid--two-columns">
         <SectionCard
-          eyebrow="Execution status"
-          title="Project modules"
-          description="A compact view of what is already usable versus what remains intentionally deferred in the roadmap."
+          eyebrow="Navegación"
+          title="Detalle técnico"
+          description="La complejidad diagnóstica permanece en la vista avanzada."
+          aside={<StatusBadge tone="neutral">Modo operador</StatusBadge>}
         >
-          <ModuleStatusList modules={dashboardModules} />
+          <ul className="bullet-list compact-list">
+            <li>Cockpit (advanced): funnel, bloques técnicos, diagnósticos LLM y export detallado.</li>
+            <li>Mission Control: trial, gate y controles operativos.</li>
+            <li>Runtime / Trace: investigación profunda y auditoría de decisiones.</li>
+          </ul>
+          <div className="button-row">
+            <button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Ir a vista avanzada</button>
+            <button type="button" className="ghost-button" onClick={() => navigate('/trace')}>Abrir Trace</button>
+          </div>
         </SectionCard>
       </section>
 
-      <section className="content-grid content-grid--two-columns">
-        <SectionCard
-          eyebrow="Pipeline summary"
-          title="Cross-module indicators"
-          description="Small, current indicators that help explain where the demo flow already has data and where you may need to seed or generate more context."
-          aside={<StatusBadge tone={paperSummaryError ? 'offline' : paperSummaryLoading ? 'loading' : 'ready'}>{paperSummaryLoading ? 'Syncing flow' : 'Flow synced'}</StatusBadge>}
+      <SectionCard eyebrow="KPIs" title="Capital y desempeño" description="Métricas clave para saber si el bot gana, pierde o se mantiene estable.">
+        <DataStateWrapper
+          isLoading={paperLoading}
+          isError={Boolean(paperError)}
+          errorMessage={paperError ?? undefined}
+          loadingTitle="Cargando KPIs paper"
+          loadingDescription="Consultando summary de portafolio paper."
+          errorTitle="No se pudieron cargar los KPIs"
         >
-          <dl className="dashboard-key-value-list">
-            <div><dt>Active markets</dt><dd>{summary?.active_markets ?? '—'}</dd></div>
-            <div><dt>Actionable signals</dt><dd>{signalsSummary?.actionable_signals ?? '—'}</dd></div>
-            <div><dt>Open positions</dt><dd>{paperSummary?.open_positions_count ?? '—'}</dd></div>
-            <div><dt>Recent reviews</dt><dd>{reviewsSummary?.total_reviews ?? '—'}</dd></div>
-            <div><dt>Recent trades</dt><dd>{paperSummary?.recent_trades.length ?? '—'}</dd></div>
-            <div><dt>Next best step</dt><dd>{signalsSummary && signalsSummary.actionable_signals > 0 ? 'Open Signals or a market detail page.' : 'Generate signals or inspect active markets.'}</dd></div>
-          </dl>
-          {paperSummaryError ? <p className="paper-inline-notice">Portfolio summary unavailable: {paperSummaryError}</p> : null}
-        </SectionCard>
-
-        <SectionCard
-          eyebrow="Post-mortem bridge"
-          title="Trade reviews at a glance"
-          description="Small summary from GET /api/reviews/summary/ so the dashboard can point operators toward the retrospective workflow without redesigning the landing page."
-          aside={
-            <StatusBadge tone={reviewsError ? 'offline' : reviewsSummary && reviewsSummary.unfavorable_reviews > 0 ? 'neutral' : reviewsLoading ? 'loading' : 'ready'}>
-              {reviewsSummary ? `${reviewsSummary.total_reviews} reviews` : reviewsLoading ? 'Reviews loading' : 'No reviews'}
-            </StatusBadge>
-          }
-        >
-          <DataStateWrapper
-            isLoading={reviewsLoading}
-            isError={Boolean(reviewsError)}
-            errorMessage={reviewsError ?? undefined}
-            isEmpty={!reviewsLoading && !reviewsError && !reviewsSummary}
-            loadingTitle="Loading review summary"
-            loadingDescription="Requesting post-mortem summary counters from the backend."
-            errorTitle="Could not load review summary"
-            emptyTitle="No reviews summary available"
-            emptyDescription="Run `cd apps/backend && python manage.py generate_trade_reviews` to generate demo trade reviews for the retrospective module."
-          >
-            {reviewsSummary ? (
-              <dl className="dashboard-key-value-list">
-                <div><dt>Total reviews</dt><dd>{reviewsSummary.total_reviews}</dd></div>
-                <div><dt>Favorable</dt><dd>{reviewsSummary.favorable_reviews}</dd></div>
-                <div><dt>Unfavorable</dt><dd>{reviewsSummary.unfavorable_reviews}</dd></div>
-                <div><dt>Stale</dt><dd>{reviewsSummary.stale_reviews}</dd></div>
-                <div><dt>Latest review</dt><dd>{reviewsSummary.latest_reviewed_at ?? '—'}</dd></div>
-                <div><dt>Next step</dt><dd>Open /postmortem for the review queue and detail view.</dd></div>
-              </dl>
-            ) : null}
-          </DataStateWrapper>
-        </SectionCard>
-
-        <SectionCard
-          eyebrow="Recent catalog activity"
-          title="Recent markets"
-          description="A lightweight sample from GET /api/markets/ so the dashboard feels tied to the live demo catalog instead of acting like a placeholder."
-          aside={<StatusBadge tone="neutral">Top 5 records</StatusBadge>}
-        >
-          <DataStateWrapper
-            isLoading={recentMarketsLoading}
-            isError={Boolean(recentMarketsError)}
-            errorMessage={recentMarketsError ?? undefined}
-            isEmpty={!recentMarketsLoading && !recentMarketsError && recentMarkets.length === 0}
-            loadingTitle="Loading recent markets"
-            loadingDescription="Requesting a small sample of markets from the local backend."
-            errorTitle="Could not load recent markets"
-            emptyTitle="No markets available yet"
-            emptyDescription="Seed the demo catalog or verify the read-only markets endpoint to populate this section."
-          >
-            <RecentMarketsPanel markets={recentMarkets} />
-          </DataStateWrapper>
-        </SectionCard>
-
-        <SectionCard
-          eyebrow="Signals bridge"
-          title="Latest demo signals"
-          description="A small operator view that connects market discovery, evaluation, and eventual paper execution."
-          aside={
-            <StatusBadge tone={signalsError ? 'offline' : signalsSummary && signalsSummary.actionable_signals > 0 ? 'ready' : 'loading'}>
-              {signalsSummary ? `${signalsSummary.actionable_signals} actionable` : 'Signals loading'}
-            </StatusBadge>
-          }
-        >
-          <DataStateWrapper
-            isLoading={signalsLoading}
-            isError={Boolean(signalsError)}
-            errorMessage={signalsError ?? undefined}
-            isEmpty={!signalsLoading && !signalsError && latestSignals.length === 0}
-            loadingTitle="Loading latest signals"
-            loadingDescription="Requesting the most recent demo signals from the local backend."
-            errorTitle="Could not load latest signals"
-            emptyTitle="No signals available yet"
-            emptyDescription="Run `cd apps/backend && python manage.py generate_demo_signals` to populate the signals workspace."
-          >
-            <LatestSignalsList signals={latestSignals} />
-          </DataStateWrapper>
-        </SectionCard>
-      </section>
-
-      <SectionCard
-        eyebrow="Roadmap"
-        title="Next steps"
-        description="The dashboard still stays sober and technical, but now it also clarifies what remains manual in the demo flow."
-      >
-        <ul className="bullet-list">
-          {nextProjectSteps.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ul>
+          <div className="dashboard-stat-grid">
+            {kpis.map((kpi) => (
+              <article key={kpi.label} className="dashboard-stat-card">
+                <span>{kpi.label}</span>
+                <strong>{kpi.value}</strong>
+              </article>
+            ))}
+          </div>
+        </DataStateWrapper>
       </SectionCard>
+
+      <section className="content-grid content-grid--two-columns">
+        <SectionCard eyebrow="Tendencia" title="Equity reciente" description="Evolución compacta del capital paper.">
+          <DataStateWrapper
+            isLoading={paperLoading}
+            isError={Boolean(paperError)}
+            errorMessage={paperError ?? undefined}
+            loadingTitle="Cargando tendencia"
+            loadingDescription="Preparando serie de snapshots de equity."
+            errorTitle="No se pudo mostrar la tendencia"
+          >
+            <MiniTrendChart points={equityPoints} label="Equity" color="#5e9dff" />
+          </DataStateWrapper>
+        </SectionCard>
+
+        <SectionCard eyebrow="Tendencia" title="PnL total reciente" description="Lectura visual simple para detectar deriva positiva o negativa.">
+          <DataStateWrapper
+            isLoading={paperLoading}
+            isError={Boolean(paperError)}
+            errorMessage={paperError ?? undefined}
+            loadingTitle="Cargando tendencia"
+            loadingDescription="Preparando serie de snapshots de PnL."
+            errorTitle="No se pudo mostrar la tendencia"
+          >
+            <MiniTrendChart points={pnlPoints} label="Total PnL" color="#35c58a" />
+          </DataStateWrapper>
+        </SectionCard>
+      </section>
+
+      <section className="content-grid content-grid--two-columns">
+        <SectionCard eyebrow="Actividad reciente" title="Qué hizo el bot" description="Última acción relevante y último trade ejecutado.">
+          <DataStateWrapper
+            isLoading={paperLoading || statusLoading}
+            isError={Boolean(paperError) || Boolean(statusError)}
+            errorMessage={paperError ?? statusError ?? undefined}
+            loadingTitle="Cargando actividad"
+            loadingDescription="Unificando últimos eventos operativos y trades recientes."
+            errorTitle="No se pudo cargar actividad reciente"
+          >
+            <dl className="dashboard-key-value-list">
+              <div><dt>Último evento operativo</dt><dd>{testConsoleStatus?.last_event ?? 'n/a'}</dd></div>
+              <div><dt>Último motivo</dt><dd>{testConsoleStatus?.last_reason_code ?? 'n/a'}</dd></div>
+              <div><dt>Última acción de mercado</dt><dd>{latestTrade ? `${latestTrade.trade_type} ${latestTrade.side} · ${latestTrade.market__title}` : 'Sin trades recientes'}</dd></div>
+              <div><dt>Hora último trade</dt><dd>{latestTrade ? formatTimestamp(latestTrade.executed_at) : 'n/a'}</dd></div>
+              <div><dt>Resumen corto</dt><dd>{testConsoleStatus?.next_action_hint ?? 'Sin acciones sugeridas por ahora.'}</dd></div>
+            </dl>
+          </DataStateWrapper>
+        </SectionCard>
+
+        <SectionCard
+          eyebrow="Alertas y revisión"
+          title="Atención prioritaria"
+          description="Solo señales de revisión importantes y un hint auxiliar LLM resumido."
+          aside={<StatusBadge tone={hasCriticalAttention ? 'offline' : 'ready'}>{hasCriticalAttention ? 'Revisión requerida' : 'Sin alertas críticas'}</StatusBadge>}
+        >
+          <DataStateWrapper
+            isLoading={attentionLoading}
+            isError={Boolean(attentionError)}
+            errorMessage={attentionError ?? undefined}
+            loadingTitle="Cargando alertas"
+            loadingDescription="Consultando elementos de atención priorizada del cockpit."
+            errorTitle="No se pudieron cargar alertas"
+          >
+            <ul className="bullet-list compact-list">
+              {attentionItems.length === 0 ? <li>Sin items prioritarios en este momento.</li> : null}
+              {attentionItems.map((item) => (
+                <li key={item.id}>
+                  <strong>{item.severity}:</strong> {item.title} — {item.summary}
+                </li>
+              ))}
+            </ul>
+            <div className="executive-llm-hint">
+              <strong>Hint auxiliar LLM:</strong>{' '}
+              {llmHint?.aux_signal_status ? `(${llmHint.aux_signal_status})` : '(sin señal)'} {getLlmHintText(llmHint)}
+            </div>
+          </DataStateWrapper>
+        </SectionCard>
+      </section>
     </div>
   );
+}
+
+function getLlmHintText(summary: LlmAuxSignalSummary | null) {
+  if (!summary?.enabled) return 'sin alerta auxiliar.';
+  if (summary.aux_signal_recommendation) return summary.aux_signal_recommendation.toLowerCase();
+  if (summary.summary) return summary.summary;
+  return 'señal auxiliar disponible en vista avanzada.';
 }
