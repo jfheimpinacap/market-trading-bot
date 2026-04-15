@@ -550,6 +550,7 @@ class TestConsoleStatusSerializer(serializers.Serializer):
     latest_llm_shadow_summary = serializers.DictField(required=False)
     llm_shadow_history_count = serializers.IntegerField(required=False)
     llm_shadow_recent_history = serializers.ListField(child=serializers.DictField(), required=False)
+    llm_aux_signal_summary = serializers.DictField(required=False)
     paper_execution_summary = serializers.DictField(required=False)
     paper_execution_examples = serializers.ListField(child=serializers.DictField(), required=False)
     paper_execution_visibility_summary = serializers.DictField(required=False)

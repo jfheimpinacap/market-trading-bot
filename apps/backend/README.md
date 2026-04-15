@@ -56,6 +56,37 @@ Backend now exposes a compact `llm_shadow_summary` block in Mission Control Test
    - `llm_shadow_history_count >= 1`
    - `latest_llm_shadow_summary.artifact_id` populated when persistence succeeds.
 
+## Ollama auxiliary signal in Mission Control/Test Console (Prompt 290)
+
+Backend now exposes `llm_aux_signal_summary` as an explicit advisory layer derived from persisted shadow context (`latest_llm_shadow_summary` / associated `LlmShadowAnalysisArtifact`) for paper-only review prioritization.
+
+- Toggle:
+  - `OLLAMA_AUX_SIGNAL_ENABLED` (default: `false`).
+- Safety contract:
+  - advisory-only (`advisory_only=true`);
+  - execution-neutral (`affects_execution=false`);
+  - no changes to scoring/risk core/sizing/dispatch/final trade;
+  - still `REAL_READ_ONLY` + `PAPER_ONLY`.
+- Export/status fields:
+  - `enabled`, `source_artifact_id`, `aux_signal_status`, `aux_signal_recommendation`,
+  - `aux_signal_reason_codes`, `aux_signal_weight`,
+  - explicit paper boundary flags.
+
+### Quick test
+
+1. Enable local shadow mode as in Prompt 289 (`OLLAMA_ENABLED=true`).
+2. Enable auxiliary layer:
+   - `OLLAMA_AUX_SIGNAL_ENABLED=true`
+3. Run:
+   - `POST /api/mission-control/test-console/start/`
+   - `GET /api/mission-control/test-console/status/`
+   - `GET /api/mission-control/test-console/export-log/?format=json`
+4. Verify:
+   - `llm_aux_signal_summary.enabled=true`
+   - `llm_aux_signal_summary.advisory_only=true`
+   - `llm_aux_signal_summary.affects_execution=false`
+   - pipeline remains paper-only.
+
 ## Mission Control funnel/export hardening (Prompt 267)
 
 Mission Control backend observability paths now treat expected paper-runtime trade rejections as degradable diagnostics instead of unhandled server errors.

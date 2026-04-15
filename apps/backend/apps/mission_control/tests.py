@@ -6514,6 +6514,33 @@ class TestConsoleApiTests(TestCase):
                 'key_supporting_points': ['Signal trend remains coherent'],
                 'recommendation_mode': 'worth_review',
             },
+            'latest_llm_shadow_summary': {
+                'artifact_id': 42,
+                'provider': 'ollama',
+                'model': 'llama3.2:3b',
+                'shadow_only': True,
+                'advisory_only': True,
+                'non_blocking': True,
+                'llm_shadow_reasoning_status': 'OK',
+                'stance': 'bullish',
+                'confidence': 'medium',
+                'summary': 'Shadow analysis indicates supportive setup with clear watchpoints.',
+                'key_risks': ['Liquidity could fade'],
+                'key_supporting_points': ['Signal trend remains coherent'],
+                'recommendation_mode': 'worth_review',
+            },
+            'llm_aux_signal_summary': {
+                'enabled': False,
+                'source_artifact_id': 42,
+                'aux_signal_status': 'DISABLED',
+                'aux_signal_recommendation': 'observe',
+                'aux_signal_reason_codes': ['LLM_AUX_SIGNAL_DISABLED'],
+                'aux_signal_weight': 0.0,
+                'advisory_only': True,
+                'affects_execution': False,
+                'paper_only': True,
+                'real_read_only': True,
+            },
             'downstream_route_examples': [
                 {'signal_id': 10, 'market_id': 20, 'expected_route': 'research_pursuit_review', 'reason_code': 'DOWNSTREAM_ROUTE_CREATED_HANDOFF'}
             ],
@@ -6676,6 +6703,8 @@ class TestConsoleApiTests(TestCase):
         text_payload = export_test_console_log(fmt='text')
         self.assertIn('handoff_summary:', text_payload)
         self.assertIn('llm_shadow_summary:', text_payload)
+        self.assertIn('llm_aux_signal_summary:', text_payload)
+        self.assertIn('affects_execution=False', text_payload)
         self.assertIn('llm_shadow_reasoning_status=OK', text_payload)
         self.assertIn('state_mismatch_summary:', text_payload)
         self.assertIn('state_consistency_reason_codes=', text_payload)
@@ -7080,6 +7109,7 @@ class TestConsoleApiTests(TestCase):
             'extended_run_status',
             'funnel_status',
             'llm_shadow_summary',
+            'llm_aux_signal_summary',
             'attention_mode',
             'portfolio_summary',
             'scan_summary',
@@ -7227,6 +7257,7 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(payload.get('reason_codes'), ['VALIDATION_READY'])
         self.assertEqual(payload.get('llm_shadow_summary', {}).get('stance'), 'bearish')
         self.assertEqual(payload.get('llm_shadow_history_count'), 0)
+        self.assertFalse(bool(payload.get('llm_aux_signal_summary', {}).get('affects_execution')))
 
     @patch('apps.mission_control.views.start_test_console')
     def test_preserves_real_read_only_and_paper_only_boundaries(self, mock_start):
@@ -7343,3 +7374,98 @@ class TestConsoleApiTests(TestCase):
             _sync_operational_snapshot(payload=payload, preset_name='live_read_only_paper_conservative')
         self.assertEqual(payload.get('llm_shadow_history_count'), 4)
         self.assertEqual(payload.get('latest_llm_shadow_summary', {}).get('artifact_id'), 9)
+
+    @override_settings(OLLAMA_AUX_SIGNAL_ENABLED=False)
+    def test_llm_aux_signal_toggle_off_disables_aux_signal(self):
+        from apps.mission_control.services.llm_aux_signal import build_llm_aux_signal_summary
+
+        payload = self._status_payload()
+        result = build_llm_aux_signal_summary(payload=payload)
+        self.assertFalse(result.get('enabled'))
+        self.assertEqual(result.get('aux_signal_status'), 'DISABLED')
+        self.assertIn('LLM_AUX_SIGNAL_DISABLED', result.get('aux_signal_reason_codes') or [])
+        self.assertFalse(bool(result.get('affects_execution')))
+
+    @override_settings(OLLAMA_AUX_SIGNAL_ENABLED=True)
+    def test_llm_aux_signal_toggle_on_uses_latest_artifact_summary(self):
+        from apps.mission_control.services.llm_aux_signal import build_llm_aux_signal_summary
+
+        payload = self._status_payload()
+        payload['latest_llm_shadow_summary'] = {
+            'artifact_id': 777,
+            'llm_shadow_reasoning_status': 'OK',
+            'recommendation_mode': 'worth_review',
+            'confidence': 'high',
+            'stance': 'bearish',
+            'advisory_only': True,
+            'shadow_only': True,
+        }
+        result = build_llm_aux_signal_summary(payload=payload)
+        self.assertTrue(result.get('enabled'))
+        self.assertEqual(result.get('source_artifact_id'), 777)
+        self.assertEqual(result.get('aux_signal_status'), 'REVIEW_PRIORITIZED')
+        self.assertEqual(result.get('aux_signal_recommendation'), 'prioritize_human_review')
+        self.assertFalse(bool(result.get('affects_execution')))
+
+    @override_settings(OLLAMA_AUX_SIGNAL_ENABLED=True)
+    @patch('apps.mission_control.services.test_console.build_llm_shadow_summary')
+    def test_status_payload_includes_llm_aux_signal_summary(self, mock_shadow):
+        from apps.mission_control.services.test_console import _sync_operational_snapshot
+
+        mock_shadow.return_value = {
+            'provider': 'ollama',
+            'model': 'demo-shadow-model',
+            'shadow_only': True,
+            'advisory_only': True,
+            'non_blocking': True,
+            'llm_shadow_reasoning_status': 'OK',
+            'stance': 'bearish',
+            'confidence': 'high',
+            'summary': 's',
+            'key_risks': [],
+            'key_supporting_points': [],
+            'recommendation_mode': 'worth_review',
+            'artifact_id': 11,
+            'llm_shadow_history_count': 1,
+            'latest_llm_shadow_summary': {'artifact_id': 11, 'llm_shadow_reasoning_status': 'OK', 'recommendation_mode': 'worth_review', 'confidence': 'high', 'stance': 'bearish', 'advisory_only': True, 'shadow_only': True},
+            'llm_shadow_recent_history': [{'artifact_id': 11}],
+        }
+        with patch('apps.mission_control.services.test_console.build_live_paper_autonomy_funnel_snapshot', return_value={'window_minutes': 60, 'funnel_status': 'ACTIVE'}), patch(
+            'apps.mission_control.services.test_console.get_live_paper_bootstrap_status',
+            return_value={'session_active': True, 'heartbeat_active': True, 'current_session_status': 'RUNNING'},
+        ), patch(
+            'apps.mission_control.services.test_console.build_live_paper_validation_digest',
+            return_value={'validation_status': 'READY'},
+        ), patch(
+            'apps.mission_control.services.test_console.build_live_paper_trial_trend_digest',
+            return_value={'trend_status': 'STABLE', 'readiness_status': 'READY_FOR_EXTENDED_RUN'},
+        ), patch(
+            'apps.mission_control.services.test_console.build_extended_paper_run_gate',
+            return_value={'gate_status': 'ALLOW', 'next_action_hint': 'ok', 'reason_codes': []},
+        ), patch(
+            'apps.mission_control.services.test_console.get_extended_paper_run_status',
+            return_value={'extended_run_active': False, 'gate_status': 'ALLOW'},
+        ), patch(
+            'apps.mission_control.services.test_console.get_live_paper_attention_alert_status',
+            return_value={'attention_mode': 'HEALTHY'},
+        ), patch(
+            'apps.mission_control.services.test_console._build_portfolio_summary',
+            return_value={'open_positions': 0, 'recent_trades_count': 0},
+        ), patch(
+            'apps.mission_control.services.test_console._build_scan_summary',
+            return_value={'runs': 0},
+        ), patch(
+            'apps.mission_control.services.test_console._find_active_preset_session',
+            return_value=None,
+        ), patch(
+            'apps.mission_control.services.test_console.get_active_account',
+            return_value=SimpleNamespace(slug='demo-paper-account'),
+        ), patch(
+            'apps.mission_control.services.test_console.build_state_consistency_snapshot',
+            return_value=SimpleNamespace(summary={}, examples=[]),
+        ):
+            payload = {}
+            _sync_operational_snapshot(payload=payload, preset_name='live_read_only_paper_conservative')
+        self.assertIn('llm_aux_signal_summary', payload)
+        self.assertTrue(payload['llm_aux_signal_summary']['enabled'])
+        self.assertFalse(bool(payload['llm_aux_signal_summary']['affects_execution']))

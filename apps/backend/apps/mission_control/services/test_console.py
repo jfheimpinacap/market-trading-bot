@@ -24,6 +24,7 @@ from apps.mission_control.services.live_paper_bootstrap import (
 from apps.mission_control.services.live_paper_trial_run import run_live_paper_trial_run
 from apps.mission_control.services.live_paper_trial_trend import build_live_paper_trial_trend_digest
 from apps.mission_control.services.live_paper_validation import build_live_paper_validation_digest
+from apps.mission_control.services.llm_aux_signal import build_llm_aux_signal_summary
 from apps.mission_control.services.llm_shadow import build_llm_shadow_summary
 from apps.mission_control.services.session_heartbeat import get_runner_state, pause_runner
 from apps.mission_control.services.session_runtime import pause_session
@@ -115,6 +116,18 @@ _state = _ConsoleState(
         'latest_llm_shadow_summary': {},
         'llm_shadow_history_count': 0,
         'llm_shadow_recent_history': [],
+        'llm_aux_signal_summary': {
+            'enabled': False,
+            'source_artifact_id': None,
+            'aux_signal_status': 'DISABLED',
+            'aux_signal_recommendation': 'observe',
+            'aux_signal_reason_codes': ['LLM_AUX_SIGNAL_DISABLED'],
+            'aux_signal_weight': 0.0,
+            'advisory_only': True,
+            'affects_execution': False,
+            'paper_only': True,
+            'real_read_only': True,
+        },
         'attention_mode': 'UNKNOWN',
         'portfolio_summary': {},
         'scan_summary': {},
@@ -593,6 +606,7 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
     payload['latest_llm_shadow_summary'] = dict(payload['llm_shadow_summary'].get('latest_llm_shadow_summary') or payload['llm_shadow_summary'])
     payload['llm_shadow_history_count'] = int(payload['llm_shadow_summary'].get('llm_shadow_history_count') or 0)
     payload['llm_shadow_recent_history'] = list(payload['llm_shadow_summary'].get('llm_shadow_recent_history') or [])
+    payload['llm_aux_signal_summary'] = build_llm_aux_signal_summary(payload=payload)
     payload['reconciliation_status'] = str(payload['portfolio_trade_reconciliation_summary'].get('portfolio_trade_reconciliation_status') or 'UNKNOWN')
     payload['reconciliation_reason_codes'] = list(payload['portfolio_trade_reconciliation_summary'].get('portfolio_trade_reconciliation_reason_codes') or [])
     active_session = _find_active_preset_session(preset_name=preset_name)
@@ -680,6 +694,7 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     state_mismatch_examples = payload.get('state_mismatch_examples') or []
     active_operational_overlay = payload.get('active_operational_overlay_summary') or {}
     llm_shadow = payload.get('llm_shadow_summary') or {}
+    llm_aux_signal = payload.get('llm_aux_signal_summary') or {}
 
     lines = [
         '=== Mission Control Test Console Export ===',
@@ -751,6 +766,21 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         f"  key_supporting_points={llm_shadow.get('key_supporting_points') or []}",
         f"  history_count={payload.get('llm_shadow_history_count') or 0}",
         f"  artifact_id={llm_shadow.get('artifact_id')}",
+        'llm_aux_signal_summary:',
+        f"  enabled={bool(llm_aux_signal.get('enabled', False))}",
+        f"  source_artifact_id={llm_aux_signal.get('source_artifact_id')}",
+        f"  aux_signal_status={llm_aux_signal.get('aux_signal_status') or 'DISABLED'}",
+        f"  aux_signal_recommendation={llm_aux_signal.get('aux_signal_recommendation') or 'observe'}",
+        (
+            f"  aux_signal_reason_codes="
+            f"{','.join(llm_aux_signal.get('aux_signal_reason_codes') or []) or 'none'}"
+        ),
+        f"  aux_signal_weight={llm_aux_signal.get('aux_signal_weight') if llm_aux_signal else 0.0}",
+        (
+            f"  advisory_only={bool(llm_aux_signal.get('advisory_only', True))} "
+            f"affects_execution={bool(llm_aux_signal.get('affects_execution', False))} "
+            f"paper_only={bool(llm_aux_signal.get('paper_only', True))}"
+        ),
         'paper_execution_summary:',
         (
             f"  route_expected={paper_execution.get('route_expected', 0)} "
@@ -1434,6 +1464,7 @@ def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
     payload['latest_llm_shadow_summary'] = dict(payload.get('latest_llm_shadow_summary') or payload['llm_shadow_summary'].get('latest_llm_shadow_summary') or payload['llm_shadow_summary'])
     payload['llm_shadow_history_count'] = int(payload.get('llm_shadow_history_count') or payload['llm_shadow_summary'].get('llm_shadow_history_count') or 0)
     payload['llm_shadow_recent_history'] = list(payload.get('llm_shadow_recent_history') or payload['llm_shadow_summary'].get('llm_shadow_recent_history') or [])
+    payload['llm_aux_signal_summary'] = build_llm_aux_signal_summary(payload=payload)
     if fmt == 'json':
         return payload
     return str(payload.get('text_export') or _log_line_items(payload))
