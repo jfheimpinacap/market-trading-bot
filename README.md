@@ -36,6 +36,22 @@ Mission Control/Test Console now includes an **Ollama local shadow analyst** pat
   - plus historical references (`latest_llm_shadow_summary`, `llm_shadow_history_count`, `llm_shadow_recent_history`).
 - Persisted artifact associations (when available) include: `market_id`, `handoff_id`, `prediction_candidate_id`, `risk_decision_id`, `shortlist_signal_id`, runtime session reference, and source scope/preset.
 
+### Mission Control Ollama auxiliary signal (Prompt 290)
+
+Mission Control/Test Console now adds an explicit **paper-only auxiliary signal** layer (`llm_aux_signal_summary`) that reuses persisted shadow outputs (`latest_llm_shadow_summary` / `LlmShadowAnalysisArtifact`) as an auditable review-priority hint.
+
+- Toggle (default conservative):
+  - `OLLAMA_AUX_SIGNAL_ENABLED=false` by default.
+- Contract is strictly non-execution:
+  - advisory-only;
+  - `affects_execution=false`;
+  - no sizing/dispatch/final-trade mutation;
+  - keeps `REAL_READ_ONLY` + `PAPER_ONLY`.
+- Status/export now include compact auxiliary fields:
+  - `enabled`, `source_artifact_id`, `aux_signal_status`, `aux_signal_recommendation`,
+  - `aux_signal_reason_codes`, `aux_signal_weight`,
+  - plus explicit safety flags (`advisory_only=true`, `affects_execution=false`, `paper_only=true`).
+
 ### Mission Control observability hardening (Prompt 267)
 
 Backend Mission Control observability now degrades safely (HTTP 200) when paper-only runtime rejects a final trade (for example insufficient paper cash), instead of bubbling an unhandled exception from funnel/gate/status/export GET flows.
