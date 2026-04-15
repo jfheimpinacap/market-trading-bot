@@ -101,7 +101,7 @@ export const appRoutes: AppRoute[] = [
     match: (pathname) => pathname === '/',
   },
   {
-    label: 'Cockpit (Advanced)',
+    label: 'Advanced / Cockpit',
     path: '/cockpit',
     description: 'Advanced technical cockpit with funnel diagnostics, validation internals, LLM detail, and execution controls for operator-level analysis.',
     component: CockpitPage,
