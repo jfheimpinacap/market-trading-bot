@@ -20,22 +20,22 @@ export function DataStateWrapper({
   isError,
   errorMessage,
   isEmpty = false,
-  emptyTitle = 'No data available',
-  emptyDescription = 'There is nothing to show right now.',
-  loadingTitle = 'Loading data',
-  loadingDescription = 'Please wait while the frontend requests the local backend.',
-  errorTitle = 'Could not load data',
+  emptyTitle = 'Sin datos por ahora',
+  emptyDescription = 'Todavía no hay información para mostrar en este bloque.',
+  loadingTitle = 'Cargando información',
+  loadingDescription = 'Estamos consultando datos del sistema.',
+  errorTitle = 'No se pudo cargar la información',
   action,
 }: DataStateWrapperProps) {
   if (isLoading) {
-    return <EmptyState title={loadingTitle} description={loadingDescription} action={action} eyebrow="Loading" />;
+    return <EmptyState title={loadingTitle} description={loadingDescription} action={action} eyebrow="Cargando" />;
   }
 
   if (isError) {
     return (
       <EmptyState
         title={errorTitle}
-        description={errorMessage ?? 'Backend is not available or returned an unexpected response.'}
+        description={errorMessage ?? 'El sistema no respondió como se esperaba. Intenta nuevamente en unos segundos.'}
         action={action}
         eyebrow="Error"
       />
@@ -43,7 +43,7 @@ export function DataStateWrapper({
   }
 
   if (isEmpty) {
-    return <EmptyState title={emptyTitle} description={emptyDescription} action={action} eyebrow="Empty" />;
+    return <EmptyState title={emptyTitle} description={emptyDescription} action={action} eyebrow="Sin datos" />;
   }
 
   return <>{children}</>;

@@ -83,7 +83,7 @@ function MiniTrendChart({
 }) {
   const usable = points.filter((point): point is { xLabel: string; value: number } => point.value !== null);
   if (usable.length < 2) {
-    return <p className="muted-text">Not enough data for {label.toLowerCase()} trend yet.</p>;
+    return <p className="muted-text">Sin historial suficiente para ver la tendencia de {label.toLowerCase()} todavía.</p>;
   }
 
   const min = Math.min(...usable.map((point) => point.value));
@@ -180,12 +180,12 @@ export function DashboardPage() {
 
   const kpis = useMemo(
     () => [
-      { label: 'Equity', value: formatMoney(paperSummary?.account.equity) },
-      { label: 'Cash', value: formatMoney(paperSummary?.account.cash_balance) },
-      { label: 'Unrealized PnL', value: formatSignedMoney(paperSummary?.account.unrealized_pnl) },
-      { label: 'Realized PnL', value: formatSignedMoney(paperSummary?.account.realized_pnl) },
-      { label: 'Open positions', value: String(paperSummary?.open_positions_count ?? 0) },
-      { label: 'Recent trades', value: String(paperSummary?.recent_trades.length ?? 0) },
+      { label: 'Capital total', value: formatMoney(paperSummary?.account.equity) },
+      { label: 'Saldo disponible', value: formatMoney(paperSummary?.account.cash_balance) },
+      { label: 'Resultado no realizado', value: formatSignedMoney(paperSummary?.account.unrealized_pnl) },
+      { label: 'Resultado realizado', value: formatSignedMoney(paperSummary?.account.realized_pnl) },
+      { label: 'Posiciones abiertas', value: String(paperSummary?.open_positions_count ?? 0) },
+      { label: 'Operaciones recientes', value: String(paperSummary?.recent_trades.length ?? 0) },
     ],
     [paperSummary],
   );
@@ -212,7 +212,6 @@ export function DashboardPage() {
         actions={(
           <div className="button-row">
             <button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Vista avanzada</button>
-            <button type="button" className="ghost-button" onClick={() => navigate('/mission-control')}>Mission Control</button>
             <StatusBadge tone={executiveTone}>{getExecutivePhrase(testConsoleStatus)}</StatusBadge>
           </div>
         )}
@@ -233,11 +232,11 @@ export function DashboardPage() {
             errorTitle="No se pudo cargar el estado operativo"
           >
             <dl className="dashboard-key-value-list">
-              <div><dt>Bot status</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.test_status)}>{testConsoleStatus?.test_status ?? 'n/a'}</StatusBadge></dd></div>
-              <div><dt>Validation</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.validation_status)}>{testConsoleStatus?.validation_status ?? 'n/a'}</StatusBadge></dd></div>
-              <div><dt>Gate</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.gate_status)}>{testConsoleStatus?.gate_status ?? 'n/a'}</StatusBadge></dd></div>
-              <div><dt>Attention mode</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.attention_mode)}>{testConsoleStatus?.attention_mode ?? 'n/a'}</StatusBadge></dd></div>
-              <div><dt>Funnel</dt><dd>{testConsoleStatus?.funnel_status ?? 'n/a'}</dd></div>
+              <div><dt>Estado del bot</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.test_status)}>{testConsoleStatus?.test_status ?? 'Sin dato'}</StatusBadge></dd></div>
+              <div><dt>Validación</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.validation_status)}>{testConsoleStatus?.validation_status ?? 'Sin dato'}</StatusBadge></dd></div>
+              <div><dt>Permiso operativo</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.gate_status)}>{testConsoleStatus?.gate_status ?? 'Sin dato'}</StatusBadge></dd></div>
+              <div><dt>Nivel de atención</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.attention_mode)}>{testConsoleStatus?.attention_mode ?? 'Sin dato'}</StatusBadge></dd></div>
+              <div><dt>Flujo operativo</dt><dd>{testConsoleStatus?.funnel_status ?? 'Sin dato'}</dd></div>
               <div><dt>Última actualización</dt><dd>{formatTimestamp(testConsoleStatus?.updated_at ?? testConsoleStatus?.started_at)}</dd></div>
             </dl>
           </DataStateWrapper>
@@ -256,12 +255,11 @@ export function DashboardPage() {
           </ul>
           <div className="button-row">
             <button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Ir a vista avanzada</button>
-            <button type="button" className="ghost-button" onClick={() => navigate('/trace')}>Abrir Trace</button>
           </div>
         </SectionCard>
       </section>
 
-      <SectionCard eyebrow="KPIs" title="Capital y desempeño" description="Métricas clave para saber si el bot gana, pierde o se mantiene estable.">
+      <SectionCard eyebrow="Resumen financiero" title="Capital y resultado" description="Métricas clave para saber si el bot gana, pierde o se mantiene estable.">
         <DataStateWrapper
           isLoading={paperLoading}
           isError={Boolean(paperError)}
@@ -282,7 +280,7 @@ export function DashboardPage() {
       </SectionCard>
 
       <section className="content-grid content-grid--two-columns">
-        <SectionCard eyebrow="Tendencia" title="Equity reciente" description="Evolución compacta del capital paper.">
+        <SectionCard eyebrow="Tendencia" title="Capital reciente" description="Evolución compacta del capital paper.">
           <DataStateWrapper
             isLoading={paperLoading}
             isError={Boolean(paperError)}
@@ -295,7 +293,7 @@ export function DashboardPage() {
           </DataStateWrapper>
         </SectionCard>
 
-        <SectionCard eyebrow="Tendencia" title="PnL total reciente" description="Lectura visual simple para detectar deriva positiva o negativa.">
+        <SectionCard eyebrow="Tendencia" title="Ganancia/Pérdida reciente" description="Lectura visual simple para detectar deriva positiva o negativa.">
           <DataStateWrapper
             isLoading={paperLoading}
             isError={Boolean(paperError)}

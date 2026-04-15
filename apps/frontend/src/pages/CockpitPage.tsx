@@ -1141,23 +1141,20 @@ export function CockpitPage() {
   return (
     <div className="page-stack cockpit-page">
       <PageHeader
-        eyebrow="Operator cockpit"
-        title="/cockpit"
-        description="Single-pane operational command center for manual-first paper/sandbox supervision. Centralizes posture, incidents, governance, and trace-oriented drill-down without replacing specialized pages."
-        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => void loadCockpit()}>Refresh cockpit</button><button className="ghost-button" type="button" onClick={() => navigate('/scan-agent')}>Scan agent</button><button className="ghost-button" type="button" onClick={() => navigate('/autonomy-seed')}>Autonomy seed</button><button className="ghost-button" type="button" onClick={() => navigate('/autonomy-seed-review')}>Seed review</button><button className="ghost-button" type="button" onClick={() => navigate('/evaluation')}>Evaluation</button><button className="ghost-button" type="button" onClick={() => navigate('/tuning')}>Tuning</button><button className="ghost-button" type="button" onClick={() => navigate('/experiments')}>Experiments</button></div>}
+        eyebrow="Advanced / Cockpit"
+        title="Centro avanzado de operación"
+        description="Vista avanzada para diagnóstico, revisión y supervisión manual. La vista principal permanece en Dashboard."
+        actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => void loadCockpit()}>Actualizar cockpit</button><button className="ghost-button" type="button" onClick={() => navigate('/mission-control')}>Abrir Mission Control</button></div>}
       />
 
-      <SectionCard eyebrow="Quick actions" title="Manual-first controls" description="Triggers existing operations; no new execution logic is introduced.">
+      <SectionCard eyebrow="Acciones rápidas" title="Controles manuales principales" description="Atajos de operación frecuentes. Las opciones más técnicas están en módulos específicos.">
         <div className="button-row">
-          <button className="primary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('MISSION_CONTROL_START')}>Start mission</button>
-          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('MISSION_CONTROL_PAUSE')}>Pause mission</button>
-          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('MISSION_CONTROL_RESUME')}>Resume mission</button>
-          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('INCIDENT_DETECTION')}>Run incident detection</button>
-          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('CERTIFICATION_REVIEW')}>Run certification review</button>
-          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('PORTFOLIO_GOVERNANCE')}>Run portfolio governance</button>
-          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('PROFILE_GOVERNANCE')}>Run profile governance</button>
-          <button className="ghost-button" type="button" disabled={runningAction !== null || !snapshot?.rollout?.current_run?.id} onClick={() => void runAction('ROLLOUT_PAUSE')}>Pause rollout</button>
-          <button className="ghost-button" type="button" disabled={runningAction !== null || !snapshot?.rollout?.current_run?.id} onClick={() => void runAction('ROLLOUT_ROLLBACK')}>Rollback rollout</button>
+          <button className="primary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('MISSION_CONTROL_START')}>Iniciar misión</button>
+          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('MISSION_CONTROL_PAUSE')}>Pausar misión</button>
+          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('MISSION_CONTROL_RESUME')}>Reanudar misión</button>
+          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('INCIDENT_DETECTION')}>Detectar incidentes</button>
+          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('CERTIFICATION_REVIEW')}>Revisar certificación</button>
+          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('PORTFOLIO_GOVERNANCE')}>Revisar gobernanza de portfolio</button>
         </div>
         {actionMessage ? <p className="success-text">{actionMessage}</p> : null}
         {actionError ? <p className="error-text">{actionError}</p> : null}
@@ -2061,7 +2058,7 @@ export function CockpitPage() {
             </div>
 
             <SectionCard eyebrow="Attention queue" title="Prioritized attention and trace drill-down" description="Severity-first queue across incidents, parity, queue pressure, and blocked opportunities.">
-              {attention.length === 0 ? <EmptyState eyebrow="Attention" title="No urgent blockers" description="No critical/high attention items were detected in this snapshot." /> : (
+              {attention.length === 0 ? <EmptyState eyebrow="Atención" title="Sin alertas urgentes" description="No hay bloqueos críticos en este momento. Continúa con monitoreo normal." /> : (
                 <div className="cockpit-attention-list">
                   {attention.map((item) => (
                     <article key={item.id} className="cockpit-attention-item">
@@ -2367,7 +2364,7 @@ export function CockpitPage() {
                   </ul>
                   <p className="muted-text">{reviewQueue.queue_summary}</p>
                   {(reviewAging?.items ?? reviewQueue.items).length === 0 ? (
-                    <EmptyState eyebrow="Runtime tuning queue" title="No queue items" description="No scopes match the current unresolved/status filters." />
+                    <EmptyState eyebrow="Cola de revisión" title="Sin elementos pendientes" description="No hay ámbitos que coincidan con los filtros actuales." />
                   ) : (
                     <div className="cockpit-attention-list">
                       {(reviewAging?.items ?? reviewQueue.items).map((item) => (
@@ -2435,7 +2432,7 @@ export function CockpitPage() {
                   </ul>
                   <p className="muted-text">{tuningPanel.panel_summary}</p>
                   {tuningPanel.items.length === 0 ? (
-                    <EmptyState eyebrow="Runtime tuning" title="No runtime tuning attention required" description="All currently tracked scopes are stable for cockpit attention filtering." />
+                    <EmptyState eyebrow="Runtime tuning" title="Sin revisión urgente de tuning" description="Los ámbitos monitoreados se ven estables con el filtro actual." />
                   ) : (
                     <div className="cockpit-attention-list">
                       {tuningPanel.items.map((item) => {
