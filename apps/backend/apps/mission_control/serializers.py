@@ -546,6 +546,7 @@ class TestConsoleStatusSerializer(serializers.Serializer):
     funnel_status_window = serializers.CharField(required=False)
     active_operational_overlay_summary = serializers.DictField(required=False)
     handoff_summary = serializers.DictField(required=False)
+    llm_shadow_summary = serializers.DictField(required=False)
     paper_execution_summary = serializers.DictField(required=False)
     paper_execution_examples = serializers.ListField(child=serializers.DictField(), required=False)
     paper_execution_visibility_summary = serializers.DictField(required=False)

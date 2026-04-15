@@ -11,6 +11,40 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 - Make the demo dataset feel alive locally without real provider integrations, trading, or websockets.
 - Provide precedent-aware agent support via `memory_retrieval` with conservative and auditable influence on research/prediction/risk/signals/postmortem.
 
+## Ollama shadow mode in Mission Control/Test Console (Prompt 288)
+
+Backend now exposes a compact `llm_shadow_summary` block in Mission Control Test Console status/export.
+
+- Integration target:
+  - local Ollama (`/api/chat`) through existing `llm_local` client.
+  - real context from the current funnel snapshot (market link/handoff/prediction/risk/exposure/reason-code artifacts) for one focus case.
+- Shadow-only contract:
+  - advisory-only + non-blocking;
+  - no scoring/gating/risk/execution mutation;
+  - no trade creation;
+  - still `REAL_READ_ONLY` + `PAPER_ONLY`.
+- Safe degradation:
+  - Ollama unavailable/timeout/parse failure yields `llm_shadow_reasoning_status=UNAVAILABLE|DEGRADED` and does not fail the run/export.
+
+### Env knobs
+
+- `OLLAMA_ENABLED` (preferred toggle; falls back to `LLM_ENABLED`).
+- `OLLAMA_BASE_URL` (default: `http://localhost:11434`).
+- `OLLAMA_MODEL` (alias for `OLLAMA_CHAT_MODEL`).
+- `OLLAMA_TIMEOUT_SECONDS`.
+
+### Local tryout
+
+1. Start Ollama locally and pull a model (for example `ollama pull llama3.2:3b`).
+2. Set env:
+   - `OLLAMA_ENABLED=true`
+   - `OLLAMA_BASE_URL=http://localhost:11434`
+   - `OLLAMA_MODEL=llama3.2:3b`
+3. Run a Test Console cycle (`POST /api/mission-control/test-console/start/`) and inspect:
+   - `GET /api/mission-control/test-console/status/`
+   - `GET /api/mission-control/test-console/export-log/?format=json`
+4. Confirm `llm_shadow_summary` appears with `shadow_only=true`, `advisory_only=true`, `non_blocking=true`.
+
 ## Mission Control funnel/export hardening (Prompt 267)
 
 Mission Control backend observability paths now treat expected paper-runtime trade rejections as degradable diagnostics instead of unhandled server errors.

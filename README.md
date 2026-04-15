@@ -12,6 +12,27 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
 - **Precedent-aware decision support (new):** research, prediction, risk, signal-fusion, and postmortem now consume semantic precedents automatically in internal flows with conservative influence and explicit audit trails (`AgentPrecedentUse`).
 
+### Mission Control Ollama shadow analyst (Prompt 288)
+
+Mission Control/Test Console now includes an **Ollama local shadow analyst** path that reads real pipeline artifacts and emits a compact `llm_shadow_summary` in status/export payloads.
+
+- Scope is strict shadow mode only:
+  - advisory-only, non-blocking;
+  - does **not** change scoring/gating/risk/execution;
+  - does **not** create trades;
+  - remains strict `REAL_READ_ONLY` + `PAPER_ONLY`.
+- Config (local env):
+  - `OLLAMA_ENABLED` (or `LLM_ENABLED`) to enable/disable shadow analysis.
+  - `OLLAMA_BASE_URL` (default `http://localhost:11434`).
+  - `OLLAMA_MODEL` (alias for `OLLAMA_CHAT_MODEL`).
+  - `OLLAMA_TIMEOUT_SECONDS`.
+- Failure mode is safe:
+  - if Ollama is down/unreachable/timeout/invalid response, the pipeline continues and reports `llm_shadow_reasoning_status=DEGRADED|UNAVAILABLE`.
+- Export/status now includes compact fields:
+  - `provider`, `model`, `llm_shadow_reasoning_status`, `stance`, `confidence`,
+  - `recommendation_mode`, `summary`, `key_risks`, `key_supporting_points`,
+  - plus explicit shadow safety flags (`shadow_only`, `advisory_only`, `non_blocking`).
+
 ### Mission Control observability hardening (Prompt 267)
 
 Backend Mission Control observability now degrades safely (HTTP 200) when paper-only runtime rejects a final trade (for example insufficient paper cash), instead of bubbling an unhandled exception from funnel/gate/status/export GET flows.

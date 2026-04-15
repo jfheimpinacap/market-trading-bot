@@ -24,6 +24,7 @@ from apps.mission_control.services.live_paper_bootstrap import (
 from apps.mission_control.services.live_paper_trial_run import run_live_paper_trial_run
 from apps.mission_control.services.live_paper_trial_trend import build_live_paper_trial_trend_digest
 from apps.mission_control.services.live_paper_validation import build_live_paper_validation_digest
+from apps.mission_control.services.llm_shadow import build_llm_shadow_summary
 from apps.mission_control.services.session_heartbeat import get_runner_state, pause_runner
 from apps.mission_control.services.session_runtime import pause_session
 from apps.mission_control.services.state_consistency import build_state_consistency_snapshot
@@ -97,6 +98,20 @@ _state = _ConsoleState(
         'funnel_status': 'UNKNOWN',
         'handoff_summary': {},
         'downstream_route_summary': {},
+        'llm_shadow_summary': {
+            'provider': 'ollama',
+            'model': 'unknown',
+            'shadow_only': True,
+            'advisory_only': True,
+            'non_blocking': True,
+            'llm_shadow_reasoning_status': 'UNAVAILABLE',
+            'stance': 'unclear',
+            'confidence': 'low',
+            'summary': 'LLM shadow analysis is not available yet.',
+            'key_risks': [],
+            'key_supporting_points': [],
+            'recommendation_mode': 'observe',
+        },
         'attention_mode': 'UNKNOWN',
         'portfolio_summary': {},
         'scan_summary': {},
@@ -571,6 +586,7 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
         }
     )
     payload['portfolio_trade_reconciliation_summary'] = _build_portfolio_trade_reconciliation_summary(payload=payload)
+    payload['llm_shadow_summary'] = build_llm_shadow_summary(payload=payload, funnel=funnel)
     payload['reconciliation_status'] = str(payload['portfolio_trade_reconciliation_summary'].get('portfolio_trade_reconciliation_status') or 'UNKNOWN')
     payload['reconciliation_reason_codes'] = list(payload['portfolio_trade_reconciliation_summary'].get('portfolio_trade_reconciliation_reason_codes') or [])
     active_session = _find_active_preset_session(preset_name=preset_name)
@@ -657,6 +673,7 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     state_mismatch_summary = payload.get('state_mismatch_summary') or {}
     state_mismatch_examples = payload.get('state_mismatch_examples') or []
     active_operational_overlay = payload.get('active_operational_overlay_summary') or {}
+    llm_shadow = payload.get('llm_shadow_summary') or {}
 
     lines = [
         '=== Mission Control Test Console Export ===',
@@ -710,6 +727,22 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"paper_execution_candidates={handoff_summary.get('paper_execution_candidates', 0)}"
         ),
         f"  handoff_reason_codes={','.join(handoff_summary.get('handoff_reason_codes') or []) or 'none'}",
+        'llm_shadow_summary:',
+        f"  provider={llm_shadow.get('provider') or 'ollama'} model={llm_shadow.get('model') or 'unknown'}",
+        f"  llm_shadow_reasoning_status={llm_shadow.get('llm_shadow_reasoning_status') or 'UNAVAILABLE'}",
+        (
+            f"  shadow_only={bool(llm_shadow.get('shadow_only', True))} "
+            f"advisory_only={bool(llm_shadow.get('advisory_only', True))} "
+            f"non_blocking={bool(llm_shadow.get('non_blocking', True))}"
+        ),
+        (
+            f"  stance={llm_shadow.get('stance') or 'unclear'} "
+            f"confidence={llm_shadow.get('confidence') or 'low'} "
+            f"recommendation_mode={llm_shadow.get('recommendation_mode') or 'observe'}"
+        ),
+        f"  summary={llm_shadow.get('summary') or ''}",
+        f"  key_risks={llm_shadow.get('key_risks') or []}",
+        f"  key_supporting_points={llm_shadow.get('key_supporting_points') or []}",
         'paper_execution_summary:',
         (
             f"  route_expected={paper_execution.get('route_expected', 0)} "
@@ -1388,6 +1421,8 @@ def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
         payload['active_operational_overlay_summary'] = overlay
         payload['funnel_status_window'] = str(payload.get('funnel_status_window') or payload.get('funnel_status') or 'UNKNOWN')
         payload['funnel_status'] = effective_funnel_status
+    if not payload.get('llm_shadow_summary'):
+        payload['llm_shadow_summary'] = build_llm_shadow_summary(payload=payload, funnel={})
     if fmt == 'json':
         return payload
     return str(payload.get('text_export') or _log_line_items(payload))
