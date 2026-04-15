@@ -1798,6 +1798,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     promotion_allowed_for_exit = 0
     promotion_allowed_without_exposure = 0
     promotion_gate_reason_codes: list[str] = []
+    promotion_gate_examples: list[dict[str, Any]] = []
     executable_candidates: list[AutonomousExecutionIntakeCandidate] = []
     latest_decision_by_candidate: dict[int, AutonomousExecutionDecision] = {}
     duplicate_candidate_ids: set[int] = set()
@@ -1927,17 +1928,61 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                         if has_active_position:
                             promotion_suppressed_by_active_position += 1
                             promotion_gate_reason_codes.append('EXECUTION_PROMOTION_SUPPRESSED_BY_ACTIVE_POSITION')
+                            if len(promotion_gate_examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                                promotion_gate_examples.append(
+                                    {
+                                        'execution_candidate_id': int(candidate.id),
+                                        'market_id': market_id,
+                                        'candidate_status': str(getattr(candidate, 'intake_status', '') or ''),
+                                        'reason_code': 'EXECUTION_PROMOTION_SUPPRESSED_BY_ACTIVE_POSITION',
+                                        'promotion_outcome': 'suppressed',
+                                        'exposure_gate': 'active_position',
+                                    }
+                                )
                         elif has_active_trade:
                             promotion_suppressed_by_existing_open_trade += 1
                             promotion_gate_reason_codes.append('EXECUTION_PROMOTION_SUPPRESSED_BY_EXISTING_OPEN_TRADE')
+                            if len(promotion_gate_examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                                promotion_gate_examples.append(
+                                    {
+                                        'execution_candidate_id': int(candidate.id),
+                                        'market_id': market_id,
+                                        'candidate_status': str(getattr(candidate, 'intake_status', '') or ''),
+                                        'reason_code': 'EXECUTION_PROMOTION_SUPPRESSED_BY_EXISTING_OPEN_TRADE',
+                                        'promotion_outcome': 'suppressed',
+                                        'exposure_gate': 'existing_open_trade',
+                                    }
+                                )
                         else:
                             promotion_allowed_without_exposure += 1
                             promotion_gate_reason_codes.append('EXECUTION_PROMOTION_ALLOWED_WITHOUT_EXPOSURE')
                             promotion_gate_candidates.append(candidate)
+                            if len(promotion_gate_examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                                promotion_gate_examples.append(
+                                    {
+                                        'execution_candidate_id': int(candidate.id),
+                                        'market_id': market_id,
+                                        'candidate_status': str(getattr(candidate, 'intake_status', '') or ''),
+                                        'reason_code': 'EXECUTION_PROMOTION_ALLOWED_WITHOUT_EXPOSURE',
+                                        'promotion_outcome': 'promoted',
+                                        'exposure_gate': 'clear',
+                                    }
+                                )
                         continue
                     promotion_allowed_for_exit += 1
                     promotion_gate_reason_codes.append('EXECUTION_PROMOTION_ALLOWED_FOR_EXIT')
                     promotion_gate_candidates.append(candidate)
+                    if len(promotion_gate_examples) < _PAPER_TRADE_EXAMPLES_LIMIT:
+                        promotion_gate_examples.append(
+                            {
+                                'execution_candidate_id': int(candidate.id),
+                                'market_id': market_id,
+                                'candidate_status': str(getattr(candidate, 'intake_status', '') or ''),
+                                'reason_code': 'EXECUTION_PROMOTION_ALLOWED_FOR_EXIT',
+                                'promotion_outcome': 'promoted',
+                                'exposure_gate': 'exit_or_reduce',
+                            }
+                        )
             executable_candidates = promotion_gate_candidates
             decision_bridge = _ensure_execution_decisions_for_candidates(candidates=executable_candidates, window_start=window_start)
             latest_decision_by_candidate = dict(decision_bridge.get('decision_by_candidate_id') or {})
@@ -2148,7 +2193,17 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     normalized_promotion_gate_codes = list(dict.fromkeys(promotion_gate_reason_codes))
     aligned_decision_created = int(paper_trade_decision_created)
     aligned_decision_reused = int(paper_trade_decision_reused)
+    promotion_suppressed_total = int(promotion_suppressed_by_active_position + promotion_suppressed_by_existing_open_trade)
+    promoted_to_decision = int(len(executable_candidates))
     execution_promotion_gate_summary = {
+        'candidates_visible': int(paper_trade_route_expected),
+        'candidates_promoted_to_decision': promoted_to_decision,
+        'candidates_suppressed_total': promotion_suppressed_total,
+        'candidates_suppressed_by_active_position': int(promotion_suppressed_by_active_position),
+        'candidates_suppressed_by_existing_open_trade': int(promotion_suppressed_by_existing_open_trade),
+        'candidates_allowed_for_exit': int(promotion_allowed_for_exit),
+        'candidates_allowed_without_exposure': int(promotion_allowed_without_exposure),
+        # Backward-compatible aliases used by existing tests/readers.
         'suppressed_by_active_position': int(promotion_suppressed_by_active_position),
         'suppressed_by_existing_open_trade': int(promotion_suppressed_by_existing_open_trade),
         'allowed_for_exit': int(promotion_allowed_for_exit),
@@ -2197,6 +2252,10 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     execution_lineage_summary = {
         'visible_execution_candidates': int(paper_trade_route_expected),
         'executable_candidates': int(len(executable_candidate_ids)),
+        'promoted_to_decision': promoted_to_decision,
+        'promotion_suppressed_total': promotion_suppressed_total,
+        'promotion_suppressed_by_active_position': int(promotion_suppressed_by_active_position),
+        'promotion_suppressed_by_existing_open_trade': int(promotion_suppressed_by_existing_open_trade),
         'candidates_considered': int(execution_lineage_considered or len(executable_candidates)),
         'candidates_deduplicated': int(execution_lineage_deduplicated),
         'decisions_created': aligned_decision_created,
@@ -2245,7 +2304,9 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"route_created={route_created} route_reused={route_reused} route_blocked={route_blocked} "
             f"route_missing_status_count={route_missing_status_count} "
             f"paper_execution_route_reason_codes={','.join(normalized_codes) or 'none'} "
-            f"promotion_suppressed={promotion_suppressed_by_active_position + promotion_suppressed_by_existing_open_trade} "
+            f"candidates_visible={paper_trade_route_expected} "
+            f"promoted_to_decision={promoted_to_decision} "
+            f"promotion_suppressed={promotion_suppressed_total} "
             f"promotion_allowed_for_exit={promotion_allowed_for_exit} "
             f"promotion_allowed_without_exposure={promotion_allowed_without_exposure}"
         ),
@@ -2363,7 +2424,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"decision_reused={paper_trade_decision_reused} decision_blocked={paper_trade_decision_blocked} "
             f"decision_dedupe_applied={paper_trade_decision_dedupe_applied} "
             f"paper_trade_decision_reason_codes={','.join(normalized_paper_trade_decision_codes) or 'none'} "
-            f"promotion_suppressed={promotion_suppressed_by_active_position + promotion_suppressed_by_existing_open_trade}"
+            f"promoted_to_decision={promoted_to_decision} "
+            f"promotion_suppressed={promotion_suppressed_total}"
         ),
         'paper_trade_decision_examples': paper_trade_decision_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
         'paper_trade_summary': (
@@ -2377,6 +2439,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         ),
         'paper_trade_examples': paper_trade_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
         'execution_promotion_gate_summary': execution_promotion_gate_summary,
+        'execution_promotion_gate_examples': promotion_gate_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
         'execution_lineage_summary': execution_lineage_summary,
     }
 
@@ -4334,6 +4397,7 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'paper_trade_final_examples': paper_execution_summary.get('paper_trade_final_examples', []),
         'paper_trade_examples': paper_execution_summary.get('paper_trade_examples', []),
         'execution_promotion_gate_summary': paper_execution_summary.get('execution_promotion_gate_summary', {}),
+        'execution_promotion_gate_examples': paper_execution_summary.get('execution_promotion_gate_examples', []),
         'execution_lineage_summary': paper_execution_summary.get('execution_lineage_summary', {}),
         'final_fanout_summary': paper_execution_summary.get('final_fanout_summary', {}),
         'final_fanout_examples': paper_execution_summary.get('final_fanout_examples', []),
@@ -4531,6 +4595,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'paper_trade_final_examples': handoff_diagnostics.get('paper_trade_final_examples', []),
         'paper_trade_examples': handoff_diagnostics.get('paper_trade_examples', []),
         'execution_lineage_summary': handoff_diagnostics.get('execution_lineage_summary', {}),
+        'execution_promotion_gate_summary': handoff_diagnostics.get('execution_promotion_gate_summary', {}),
+        'execution_promotion_gate_examples': handoff_diagnostics.get('execution_promotion_gate_examples', []),
         'final_fanout_summary': handoff_diagnostics.get('final_fanout_summary', {}),
         'final_fanout_examples': handoff_diagnostics.get('final_fanout_examples', []),
         'cash_pressure_summary': handoff_diagnostics.get('cash_pressure_summary', {}),

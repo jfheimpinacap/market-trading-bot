@@ -4094,9 +4094,15 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
 
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         gate = diagnostics.get('execution_promotion_gate_summary') or {}
+        lineage = diagnostics.get('execution_lineage_summary') or {}
         self.assertEqual(gate.get('suppressed_by_active_position'), 1)
+        self.assertEqual(gate.get('candidates_visible'), 1)
+        self.assertEqual(gate.get('candidates_promoted_to_decision'), 0)
+        self.assertEqual(gate.get('candidates_suppressed_by_active_position'), 1)
         self.assertEqual(diagnostics.get('paper_trade_decision_created'), 0)
         self.assertIn('EXECUTION_PROMOTION_SUPPRESSED_BY_ACTIVE_POSITION', gate.get('execution_promotion_gate_reason_codes', []))
+        self.assertEqual(lineage.get('promoted_to_decision'), 0)
+        self.assertEqual(lineage.get('promotion_suppressed_by_active_position'), 1)
         self.assertIn('promotion_suppressed=1', diagnostics.get('paper_execution_summary', ''))
 
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
@@ -4168,6 +4174,9 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         gate = diagnostics.get('execution_promotion_gate_summary') or {}
         self.assertEqual(gate.get('suppressed_by_existing_open_trade'), 1)
+        self.assertEqual(gate.get('candidates_visible'), 2)
+        self.assertEqual(gate.get('candidates_promoted_to_decision'), 1)
+        self.assertEqual(gate.get('candidates_suppressed_by_existing_open_trade'), 1)
         self.assertEqual(diagnostics.get('paper_trade_decision_created'), 0)
         self.assertIn('EXECUTION_PROMOTION_SUPPRESSED_BY_EXISTING_OPEN_TRADE', gate.get('execution_promotion_gate_reason_codes', []))
 
@@ -4211,6 +4220,9 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         gate = diagnostics.get('execution_promotion_gate_summary') or {}
         self.assertEqual(gate.get('allowed_for_exit'), 1)
+        self.assertEqual(gate.get('candidates_visible'), 1)
+        self.assertEqual(gate.get('candidates_promoted_to_decision'), 1)
+        self.assertEqual(gate.get('candidates_allowed_for_exit'), 1)
         self.assertEqual(diagnostics.get('paper_trade_decision_created'), 1)
         self.assertIn('EXECUTION_PROMOTION_ALLOWED_FOR_EXIT', gate.get('execution_promotion_gate_reason_codes', []))
         self.assertIn('execution_promotion_gate_summary', diagnostics.get('execution_lineage_summary', {}))
@@ -6564,6 +6576,9 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('paper_trade_final_summary:', text_payload)
         self.assertIn('final_trade_reason_codes=', text_payload)
         self.assertIn('paper_trade_final_examples=', text_payload)
+        self.assertIn('execution_promotion_gate_summary:', text_payload)
+        self.assertIn('candidates_promoted_to_decision=', text_payload)
+        self.assertIn('execution_promotion_gate_reason_codes=', text_payload)
         self.assertIn('execution_lineage_summary:', text_payload)
         self.assertIn('fanout_reason_codes=', text_payload)
         self.assertIn('final_fanout_summary:', text_payload)
@@ -6610,6 +6625,33 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('PORTFOLIO_POSITION_REUSE_ACCUMULATION', reconciliation.get('portfolio_trade_reconciliation_reason_codes', []))
         self.assertIn('PORTFOLIO_UNREALIZED_PNL_OUTLIER', reconciliation.get('portfolio_trade_reconciliation_reason_codes', []))
         self.assertIn('cash_pressure_summary', json_payload)
+
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_export_log_json_includes_execution_promotion_gate_summary(self, mock_state_snapshot):
+        from apps.mission_control.services.test_console import export_test_console_log
+
+        payload = self._status_payload()
+        payload['text_export'] = ''
+        payload['execution_promotion_gate_summary'] = {
+            'candidates_visible': 3,
+            'candidates_promoted_to_decision': 1,
+            'candidates_suppressed_by_active_position': 1,
+            'candidates_suppressed_by_existing_open_trade': 1,
+            'candidates_allowed_for_exit': 0,
+            'candidates_allowed_without_exposure': 1,
+            'execution_promotion_gate_reason_codes': [
+                'EXECUTION_PROMOTION_SUPPRESSED_BY_ACTIVE_POSITION',
+                'EXECUTION_PROMOTION_SUPPRESSED_BY_EXISTING_OPEN_TRADE',
+            ],
+        }
+        payload['execution_promotion_gate_examples'] = [{'execution_candidate_id': 11, 'reason_code': 'EXECUTION_PROMOTION_SUPPRESSED_BY_ACTIVE_POSITION'}]
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        json_payload = export_test_console_log(fmt='json')
+        summary = json_payload.get('execution_promotion_gate_summary') or {}
+        self.assertEqual(summary.get('candidates_visible'), 3)
+        self.assertEqual(summary.get('candidates_promoted_to_decision'), 1)
+        self.assertEqual(len(json_payload.get('execution_promotion_gate_examples') or []), 1)
 
     @patch('apps.mission_control.services.test_console._get_state_snapshot')
     def test_export_log_preserves_position_exposure_summary_from_snapshot(self, mock_state_snapshot):

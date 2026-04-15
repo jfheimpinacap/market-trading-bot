@@ -130,7 +130,7 @@ No runtime policy changes were made:
 
 System boundary remains `REAL_READ_ONLY` + `PAPER_ONLY` (no live execution enablement).
 
-## Mission Control early execution-promotion exposure suppression (Prompt 279)
+## Mission Control early execution-promotion exposure suppression (Prompts 279–280)
 
 `live_paper_autonomy_funnel` now adds a minimal **early promotion gate** inside `_build_paper_execution_diagnostics`, immediately before `_ensure_execution_decisions_for_candidates(...)`.
 
@@ -141,7 +141,18 @@ System boundary remains `REAL_READ_ONLY` + `PAPER_ONLY` (no live execution enabl
   - `EXECUTION_PROMOTION_ALLOWED_FOR_EXIT`
   - `EXECUTION_PROMOTION_ALLOWED_WITHOUT_EXPOSURE`
 - Export observability (compact):
-  - `execution_promotion_gate_summary` with suppressed/allowed counters and normalized reason codes.
+  - `execution_promotion_gate_summary` now exposes:
+    - `candidates_visible`
+    - `candidates_promoted_to_decision`
+    - `candidates_suppressed_by_active_position`
+    - `candidates_suppressed_by_existing_open_trade`
+    - `candidates_allowed_for_exit`
+    - `candidates_allowed_without_exposure`
+    - `execution_promotion_gate_reason_codes`
+  - `execution_promotion_gate_examples` for compact traceability.
+- Semantic split:
+  - `paper_execution_candidates` = execution candidates visible at intake stage;
+  - promoted/suppressed counts = early promotion-gate outcomes, aligned with `execution_lineage_summary` and Test Console export/status.
 
 Design intent:
 - early suppression reduces pressure on decision/dispatch/final-fanout stages,
