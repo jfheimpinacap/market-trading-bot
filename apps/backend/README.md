@@ -1769,12 +1769,16 @@ CORS is configured for local Vite defaults only:
 Set `VITE_API_BASE_URL` in the frontend to the backend URL, typically `http://localhost:8000/api`.
 
 ## Testing
-Run backend market tests with the dedicated test settings:
+Use the dedicated test settings for portable runs (`config.settings.test`). This profile forces SQLite (in-memory by default) and does not require a local PostgreSQL instance, while leaving normal local/Docker PostgreSQL settings unchanged.
 
 ```bash
 cd apps/backend
-DJANGO_SETTINGS_MODULE=config.settings.test python manage.py test apps.markets
+python manage.py test apps.mission_control.tests --settings=config.settings.test
+python manage.py test apps.paper_trading.tests --settings=config.settings.test
+python manage.py test apps.research_agent.tests --settings=config.settings.test
 ```
+
+If needed, use `DJANGO_TEST_DB_NAME` to switch from in-memory SQLite to a file-backed SQLite test DB.
 
 ## What is intentionally not implemented yet
 This stage does **not** add:
