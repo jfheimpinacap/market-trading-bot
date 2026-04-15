@@ -53,19 +53,19 @@ button {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: 236px minmax(0, 1fr);
 }
 
 .sidebar {
   position: sticky;
   top: 0;
   height: 100vh;
-  padding: 20px 16px;
+  padding: 16px 14px;
   background: #101a2d;
   color: #f3f7ff;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -75,6 +75,22 @@ button {
 .section-card h2,
 .panel h3 {
   margin: 0;
+}
+
+.topbar h1,
+.page-header h1 {
+  font-size: 1.28rem;
+  line-height: 1.2;
+}
+
+.section-card h2 {
+  font-size: 1rem;
+  line-height: 1.28;
+}
+
+.panel h3 {
+  font-size: 0.92rem;
+  line-height: 1.3;
 }
 
 .sidebar__brand p:last-child {
@@ -142,7 +158,7 @@ button {
   align-items: center;
   justify-content: space-between;
   border-radius: 10px;
-  padding: 9px 10px;
+  padding: 7px 9px;
   text-decoration: none;
   color: rgba(243, 247, 255, 0.8);
   border: 1px solid transparent;
@@ -178,7 +194,7 @@ button {
 }
 
 .app-shell__main {
-  padding: 20px;
+  padding: 16px;
 }
 
 .topbar,
@@ -191,12 +207,26 @@ button {
 }
 
 .topbar {
-  padding: 16px 20px;
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.topbar__context {
+  display: grid;
+  gap: 3px;
+}
+
+.topbar__title {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--brand);
 }
 
 .topbar__description,
@@ -207,28 +237,29 @@ button {
 .panel dd,
 .panel dt {
   color: var(--text-muted);
+  font-size: 0.9rem;
 }
 
 .topbar__meta {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   justify-items: end;
   color: var(--text-soft);
-  font-size: 0.94rem;
+  font-size: 0.8rem;
 }
 
 .app-shell__content,
 .page-stack {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .page-header {
-  padding: 18px 20px;
+  padding: 14px 16px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
 }
 
 .page-header__actions {
@@ -237,17 +268,17 @@ button {
 }
 
 .section-label {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  font-size: 0.68rem;
   font-weight: 700;
   color: var(--brand);
 }
 
 .content-grid {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .content-grid--two-columns {
@@ -259,7 +290,7 @@ button {
 }
 
 .panel {
-  padding: 16px;
+  padding: 13px;
 }
 
 .status-card__header,
@@ -268,7 +299,7 @@ button {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .status-badge,
@@ -276,9 +307,9 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
+  padding: 3px 7px;
   border-radius: 999px;
-  font-size: 0.76rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: capitalize;
 }

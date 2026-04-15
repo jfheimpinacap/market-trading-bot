@@ -9,9 +9,8 @@ type TopbarProps = {
 export function Topbar({ route }: TopbarProps) {
   return (
     <header className="topbar">
-      <div>
-        <p className="section-label">Current section</p>
-        <h1>{route?.label ?? 'Page not found'}</h1>
+      <div className="topbar__context">
+        <p className="topbar__title">{route?.label ?? 'Page not found'}</p>
         <p className="topbar__description">
           {route?.description ?? 'The requested route does not exist in the current frontend scaffold.'}
         </p>
