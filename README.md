@@ -216,6 +216,22 @@ Backend Mission Control now prioritizes suppression semantics when readiness exi
 
 Scope remains backend-only, observability-first, and strict `REAL_READ_ONLY` + `PAPER_ONLY` (no frontend/runtime changes and no live trading enablement).
 
+### Mission Control internal consolidation pass (Prompt 285)
+
+Final backend-only cleanup pass to reduce diagnostic duplication and clarify internal semantics without changing pipeline behavior.
+
+- `live_paper_autonomy_funnel`:
+  - consolidated repeated lineage-anchor resolution used by readiness/candidate lifecycles into one internal helper;
+  - consolidated repeated reason-code de-duplication into one helper (`_unique_codes`) used across dispatch/final-trade/summary assembly paths;
+  - kept backward-compatible promotion-gate aliases (`suppressed_by_active_position`, `suppressed_by_existing_open_trade`, `allowed_for_exit`, `allowed_without_exposure`) while preserving the canonical `candidates_*` fields as source of truth.
+- `test_console`:
+  - consolidated repeated funnel field coercion (`int`/`str`/`list`) into shared helpers for snapshot assembly;
+  - reduced repeated summary mapping boilerplate for execution/trade diagnostic blocks.
+- No business-logic or gate-policy changes:
+  - no changes to cash precheck, suppression-before-promotion, suppression-before-creation, final gate behavior, runtime mode, or frontend.
+
+Safety boundary remains strict: observability-first with `REAL_READ_ONLY` + `PAPER_ONLY`.
+
 ### Scan diagnostics + demo narrative fallback (backend, local V1 paper)
 
 `research_agent` scan runs now persist explicit diagnostics in `SourceScanRun.metadata.scan_diagnostics` so local V1 paper tests can explain zero-signal stalls instead of failing silently.
