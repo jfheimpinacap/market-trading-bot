@@ -479,6 +479,38 @@ export type TestConsolePortfolioSummary = {
   open_positions?: number | null;
 };
 
+export type LlmShadowSummary = {
+  artifact_id?: number | null;
+  provider?: string | null;
+  model?: string | null;
+  llm_shadow_reasoning_status?: string | null;
+  stance?: string | null;
+  confidence?: string | null;
+  recommendation_mode?: string | null;
+  summary?: string | null;
+  key_risks?: string[];
+  key_supporting_points?: string[];
+  advisory_only?: boolean;
+  affects_execution?: boolean;
+  paper_only?: boolean;
+  shadow_only?: boolean;
+  non_blocking?: boolean;
+  timestamp?: string | null;
+};
+
+export type LlmAuxSignalSummary = {
+  enabled?: boolean;
+  source_artifact_id?: number | null;
+  aux_signal_status?: string | null;
+  aux_signal_recommendation?: string | null;
+  aux_signal_reason_codes?: string[];
+  aux_signal_weight?: number | null;
+  advisory_only?: boolean;
+  affects_execution?: boolean;
+  paper_only?: boolean;
+  summary?: string | null;
+};
+
 export type TestConsoleStatusResponse = {
   test_status: string;
   current_phase: string | null;
@@ -505,6 +537,11 @@ export type TestConsoleStatusResponse = {
   funnel_status: string | null;
   scan_summary?: TestConsoleScanSummary | string | null;
   portfolio_summary?: TestConsolePortfolioSummary | string | null;
+  llm_shadow_summary?: LlmShadowSummary | null;
+  latest_llm_shadow_summary?: LlmShadowSummary | null;
+  llm_shadow_history_count?: number;
+  llm_shadow_recent_history?: LlmShadowSummary[];
+  llm_aux_signal_summary?: LlmAuxSignalSummary | null;
   next_action_hint: string | null;
   blocker_summary?: string | null;
 };
