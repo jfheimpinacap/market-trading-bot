@@ -181,6 +181,24 @@ Boundaries remain unchanged: backend-only observability, strict `REAL_READ_ONLY`
 
 Boundaries remain unchanged: backend-only, observability-first, strict `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` rewrite, no live-trading enablement.
 
+## Mission Control reason-code priority cleanup (Prompt 283)
+
+Execution-stage diagnostics now prioritize suppression semantics when an execution candidate never existed because it was suppressed before creation.
+
+- Priority rule:
+  - use `PAPER_EXECUTION_CANDIDATE_NOT_CREATED_DUE_TO_SUPPRESSION` (and `PAPER_EXECUTION_READINESS_WITHOUT_CANDIDATE`) as dominant explanation for suppression-before-creation.
+  - keep `PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH` only for true artifact/source mismatch scenarios.
+- Scope of change:
+  - semantic selection/order of reason codes in visibility/artifact summaries;
+  - no creation-gate logic change, no promotion-gate logic change, no runtime/frontend changes.
+- Expected export behavior:
+  - readiness exists,
+  - candidate not created due to suppression,
+  - candidate not visible because it never existed,
+  without mismatch noise in suppression-dominant runs.
+
+Boundaries remain unchanged: backend-only, observability-first, strict `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` rewrite, no live-trading enablement.
+
 ## Scan diagnostics + demo narrative fallback (new)
 
 `apps.research_agent.services.run.run_scan_agent` now writes explicit scan diagnostics under `SourceScanRun.metadata.scan_diagnostics`.

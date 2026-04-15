@@ -1459,6 +1459,8 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
                 'execution_candidate_creation_gate_reason_codes': [],
             },
             'creation_gate_examples': [],
+            'suppressed_readiness_ids': [],
+            'created_readiness_ids': [],
         }
     readiness_ids = [int(readiness.id) for readiness in readiness_rows]
     existing_by_readiness_id: dict[int, AutonomousExecutionIntakeCandidate] = {}
@@ -1484,6 +1486,8 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
                 'execution_candidate_creation_gate_reason_codes': [],
             },
             'creation_gate_examples': [],
+            'suppressed_readiness_ids': [],
+            'created_readiness_ids': [],
         }
 
     intake_run = AutonomousExecutionIntakeRun.objects.create(
@@ -1535,6 +1539,8 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
     creation_allowed_without_exposure = 0
     creation_gate_reason_codes: list[str] = []
     creation_gate_examples: list[dict[str, Any]] = []
+    suppressed_readiness_ids: list[int] = []
+    created_readiness_ids: list[int] = []
     for readiness in missing_readiness:
         approval = readiness.linked_approval_review
         status, reason_codes, approval_status = resolve_intake_status_from_readiness(readiness=readiness)
@@ -1544,6 +1550,7 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
         reduce_or_exit = _is_reduce_or_exit_readiness(readiness=readiness, intake_status=str(status or ''), intake_reason_codes=reason_codes)
         if not reduce_or_exit and (has_active_position or has_active_trade):
             creation_suppressed_before_creation += 1
+            suppressed_readiness_ids.append(int(readiness.id))
             if has_active_position:
                 creation_gate_reason_codes.append('EXECUTION_CANDIDATE_CREATION_SUPPRESSED_BY_ACTIVE_POSITION')
                 reason_code = 'EXECUTION_CANDIDATE_CREATION_SUPPRESSED_BY_ACTIVE_POSITION'
@@ -1592,6 +1599,7 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
             },
         )
         creation_candidates_created += 1
+        created_readiness_ids.append(int(readiness.id))
     return {
         'candidates_by_readiness_id': existing_by_readiness_id,
         'creation_gate_summary': {
@@ -1602,6 +1610,8 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
             'execution_candidate_creation_gate_reason_codes': list(dict.fromkeys(creation_gate_reason_codes)),
         },
         'creation_gate_examples': creation_gate_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
+        'suppressed_readiness_ids': list(dict.fromkeys(suppressed_readiness_ids)),
+        'created_readiness_ids': list(dict.fromkeys(created_readiness_ids)),
     }
 
 
@@ -1636,6 +1646,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     creation_allowed_without_exposure = 0
     creation_gate_reason_codes: list[str] = []
     creation_gate_examples: list[dict[str, Any]] = []
+    suppressed_before_creation_readiness_ids: set[int] = set()
+    created_by_bridge_readiness_ids: set[int] = set()
 
     decision_ids = [int(decision.id) for decision in risk_rows]
     if decision_ids:
@@ -1674,6 +1686,16 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                 creation_allowed_without_exposure += int(creation_gate.get('candidates_allowed_without_exposure') or 0)
                 creation_gate_reason_codes.extend(list(creation_gate.get('execution_candidate_creation_gate_reason_codes') or []))
                 creation_gate_examples.extend(list(bridge_result.get('creation_gate_examples') or []))
+                suppressed_before_creation_readiness_ids.update(
+                    int(readiness_id)
+                    for readiness_id in list(bridge_result.get('suppressed_readiness_ids') or [])
+                    if readiness_id is not None
+                )
+                created_by_bridge_readiness_ids.update(
+                    int(readiness_id)
+                    for readiness_id in list(bridge_result.get('created_readiness_ids') or [])
+                    if readiness_id is not None
+                )
                 for readiness_id, candidate in bridged_candidates.items():
                     if readiness_id not in latest_intake_by_readiness_id:
                         latest_intake_by_readiness_id[readiness_id] = candidate
@@ -1786,13 +1808,11 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             if intake_candidate is None:
                 source_model = 'AutonomousExecutionReadiness'
                 source_stage = 'risk_execution_readiness'
-                visibility_reason_code = 'PAPER_EXECUTION_CANDIDATE_NOT_CREATED_DUE_TO_SUPPRESSION'
-                if any(
-                    int(example.get('readiness_id') or 0) == int(readiness.id)
-                    and str(example.get('creation_outcome') or '') == 'suppressed_before_creation'
-                    for example in creation_gate_examples
-                ):
+                readiness_id = int(readiness.id)
+                if readiness_id in suppressed_before_creation_readiness_ids:
                     visibility_reason_code = 'PAPER_EXECUTION_CANDIDATE_NOT_CREATED_DUE_TO_SUPPRESSION'
+                elif readiness_id in created_by_bridge_readiness_ids:
+                    visibility_reason_code = 'PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH'
                 else:
                     visibility_reason_code = 'PAPER_EXECUTION_CANDIDATE_SOURCE_MODEL_MISMATCH'
                 visibility_missing_count += 1
