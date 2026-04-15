@@ -159,6 +159,31 @@ Backend Mission Control now applies a **small early pre-filter** in `_build_pape
 
 Scope remains backend-only, observability-first, and strict `REAL_READ_ONLY` + `PAPER_ONLY` (no live trading enablement).
 
+### Mission Control execution-candidate creation gate (Prompt 281)
+
+Backend Mission Control now adds a **pre-creation exposure gate** when bridging readiness artifacts into `AutonomousExecutionIntakeCandidate`.
+
+- What changed:
+  - additive candidates are now suppressed **before creation** when active exposure is already present for the same market/lineage.
+  - reduce/exit shapes remain allowed and are still created/promoted.
+- New compact observability block:
+  - `execution_candidate_creation_gate_summary`:
+    - `candidates_suppressed_before_creation`
+    - `candidates_created`
+    - `candidates_allowed_for_exit`
+    - `candidates_allowed_without_exposure`
+    - `execution_candidate_creation_gate_reason_codes`
+  - `execution_candidate_creation_gate_examples` (compact, max 3).
+- How to read both gates now:
+  - **creation gate** = suppression before `AutonomousExecutionIntakeCandidate` exists (visibility pressure reduction).
+  - **promotion gate** = suppression after candidate is visible, before decision/dispatch/final.
+- Expected effect:
+  - lower redundant `paper_execution_candidates`,
+  - lower downstream lineage/decision/dispatch pressure,
+  - `execution_promotion_gate_summary` semantics stay intact.
+
+Scope stays backend-only, observability-first, and strict `REAL_READ_ONLY` + `PAPER_ONLY` (no `/runtime` rewrite, no live trading enablement).
+
 ### Scan diagnostics + demo narrative fallback (backend, local V1 paper)
 
 `research_agent` scan runs now persist explicit diagnostics in `SourceScanRun.metadata.scan_diagnostics` so local V1 paper tests can explain zero-signal stalls instead of failing silently.

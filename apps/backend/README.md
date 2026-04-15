@@ -160,6 +160,27 @@ Design intent:
 
 Boundaries remain unchanged: backend-only observability, strict `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` rewrite, no live-trading enablement.
 
+## Mission Control suppress-before-creation gate (Prompt 281)
+
+`live_paper_autonomy_funnel` now adds a compact **execution-candidate creation gate** in the readiness→intake bridge (`_ensure_execution_candidates_for_readiness(...)`).
+
+- Goal: suppress redundant additive `AutonomousExecutionIntakeCandidate` creation when active exposure is already present for the same market/lineage.
+- Exit/reduce behavior:
+  - reduce/exit signals still pass and can create/promote candidates.
+- New observability fields (single pipeline, no parallel logging):
+  - `execution_candidate_creation_gate_summary`
+    - `candidates_suppressed_before_creation`
+    - `candidates_created`
+    - `candidates_allowed_for_exit`
+    - `candidates_allowed_without_exposure`
+    - `execution_candidate_creation_gate_reason_codes`
+  - `execution_candidate_creation_gate_examples` (max 3)
+- Semantic split:
+  - suppress-before-creation reduces candidate visibility pressure upstream;
+  - suppress-before-promotion (`execution_promotion_gate_summary`) remains intact for candidates that are still visible.
+
+Boundaries remain unchanged: backend-only, observability-first, strict `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` rewrite, no live-trading enablement.
+
 ## Scan diagnostics + demo narrative fallback (new)
 
 `apps.research_agent.services.run.run_scan_agent` now writes explicit scan diagnostics under `SourceScanRun.metadata.scan_diagnostics`.
