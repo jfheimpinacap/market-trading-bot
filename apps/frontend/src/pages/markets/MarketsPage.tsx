@@ -169,7 +169,6 @@ export function MarketsPage() {
       <PageHeader
         eyebrow="Exploración"
         title="Markets"
-        description="Explora oportunidades en modo simple: mercados demo y mercados reales en solo lectura, siempre separados claramente."
       />
 
       <DataStateWrapper

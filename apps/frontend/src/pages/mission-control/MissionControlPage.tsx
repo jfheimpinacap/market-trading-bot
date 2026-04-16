@@ -298,7 +298,6 @@ export function MissionControlPage() {
       <PageHeader
         eyebrow="Mission control"
         title="Autonomous Runner"
-        description="Local-first heartbeat runner that advances RUNNING autonomous sessions automatically when cadence is due, with cooldown/safety/runtime guardrails and paper-only execution boundaries."
         actions={<div className="button-row"><button type="button" className="primary-button" onClick={async () => { await startAutonomousRunner(); await load(); }}>Start runner</button><button type="button" className="secondary-button" onClick={async () => { await pauseAutonomousRunner(); await load(); }}>Pause runner</button><button type="button" className="secondary-button" onClick={async () => { await resumeAutonomousRunner(); await load(); }}>Resume runner</button><button type="button" className="secondary-button" onClick={async () => { await stopAutonomousRunner(); await load(); }}>Stop runner</button><button type="button" className="secondary-button" onClick={async () => { await runAutonomousHeartbeat(); await load(); }}>Run heartbeat now</button></div>}
       />
 
