@@ -1446,11 +1446,14 @@ Este launcher **no reimplementa lógica**: delega en `start.py` y ejecuta:
 Incluye un bloque de estado rápido para:
 
 - Docker
-- Ollama
+- Ollama service (API local viva)
+- Ollama backend (si quedó habilitado para el backend lanzado)
 - Backend
 - Frontend
 
-con estados `OK`, `STARTING` u `OFF`.
+con estados `OK`, `STARTING`, `OFF`, `ENABLED` o `DISABLED`.
+
+También incluye un toggle: **“Usar Ollama (shadow + señal auxiliar)”**, que hace que el launcher visual invoque `start.py` con `--ollama enabled` / `--ollama disabled` según corresponda.
 
 Instalación mínima (si falta la dependencia):
 
@@ -1480,6 +1483,9 @@ Examples:
 python start.py --lite
 python start.py setup --lite
 python start.py up --lite
+python start.py up --ollama enabled
+python start.py up --lite --ollama enabled
+python start.py up --ollama disabled
 ```
 
 `--lite` can be used from notebooks or machines without Docker. In lite mode the launcher forces `--skip-infra`, runs migrations against SQLite, and keeps the frontend flow unchanged.
