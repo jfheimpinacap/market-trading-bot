@@ -109,7 +109,7 @@ STATUS_FAILED = 'FAILED'
 STATUS_SKIPPED = 'SKIPPED'
 LAUNCHER_OLLAMA_ENV_DEFAULTS = {
     'OLLAMA_ENABLED': 'true',
-    'OLLAMA_BASE_URL': 'http://localhost:11434',
+    'OLLAMA_BASE_URL': 'http://127.0.0.1:11434',
     'OLLAMA_MODEL': 'llama3.2:3b',
     'OLLAMA_CHAT_MODEL': 'llama3.2:3b',
     'OLLAMA_EMBED_MODEL': 'nomic-embed-text',
@@ -513,6 +513,33 @@ def launcher_runtime_env(paths: ProjectPaths, mode: RuntimeMode) -> dict[str, st
     return combined_env
 
 
+def resolve_ollama_backend_enabled(args: argparse.Namespace, mode: RuntimeMode) -> bool:
+    selected = str(getattr(args, 'ollama', '') or '').strip().lower()
+    if selected == 'enabled':
+        return True
+    if selected == 'disabled':
+        return False
+    return mode is FULL_MODE
+
+
+def apply_ollama_backend_policy(runtime_env: dict[str, str], *, enabled: bool) -> dict[str, str]:
+    resolved = dict(runtime_env)
+    if enabled:
+        resolved['OLLAMA_ENABLED'] = 'true'
+        resolved['LLM_ENABLED'] = 'true'
+        resolved['LLM_PROVIDER'] = 'ollama'
+        resolved.setdefault('OLLAMA_BASE_URL', LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_BASE_URL'])
+        resolved.setdefault('OLLAMA_MODEL', LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_MODEL'])
+        resolved.setdefault('OLLAMA_CHAT_MODEL', resolved.get('OLLAMA_MODEL', LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_CHAT_MODEL']))
+        resolved.setdefault('OLLAMA_TIMEOUT_SECONDS', LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_TIMEOUT_SECONDS'])
+        return resolved
+
+    resolved['OLLAMA_ENABLED'] = 'false'
+    resolved['OLLAMA_AUX_SIGNAL_ENABLED'] = 'false'
+    resolved['LLM_ENABLED'] = 'false'
+    return resolved
+
+
 def get_backend_venv_python(paths: ProjectPaths) -> Path:
     if os.name == 'nt':
         return paths.backend / '.venv' / 'Scripts' / 'python.exe'
@@ -594,8 +621,13 @@ def ensure_frontend_deps(paths: ProjectPaths, *, skip_install: bool) -> None:
     ok('Frontend dependencies installed.')
 
 
-def backend_command_env(paths: ProjectPaths, mode: RuntimeMode) -> dict[str, str]:
-    runtime_env = launcher_runtime_env(paths, mode)
+def backend_command_env(
+    paths: ProjectPaths,
+    mode: RuntimeMode,
+    *,
+    runtime_env: dict[str, str] | None = None,
+) -> dict[str, str]:
+    runtime_env = runtime_env or launcher_runtime_env(paths, mode)
     runtime_env['DJANGO_SETTINGS_MODULE'] = os.environ.get(
         'DJANGO_SETTINGS_MODULE',
         runtime_env.get('DJANGO_SETTINGS_MODULE', mode.django_settings_module),
@@ -614,6 +646,7 @@ def run_backend_manage(
     *,
     capture_output: bool = False,
     check: bool = True,
+    runtime_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     venv_python = get_backend_venv_python(paths)
     if not venv_python.exists():
@@ -621,7 +654,7 @@ def run_backend_manage(
     return run_command(
         [str(venv_python), str(paths.backend_manage), *args],
         cwd=paths.backend,
-        env=backend_command_env(paths, mode),
+        env=backend_command_env(paths, mode, runtime_env=runtime_env),
         capture_output=capture_output,
         check=check,
     )
@@ -820,6 +853,8 @@ def print_launcher_summary(
     browser_opened: bool,
     root_env: dict[str, str] | None = None,
     startup_mode: str = DEFAULT_STARTUP_MODE,
+    ollama_backend_status: str = 'DISABLED',
+    ollama_runtime_env: dict[str, str] | None = None,
 ) -> None:
     if root_env is None:
         root_env = parse_env_file(PATHS.root_env)
@@ -832,6 +867,8 @@ def print_launcher_summary(
     print(f'Startup mode:    {startup_mode}')
     print(f'Docker:          {docker_status}')
     print(f'Ollama:          {ollama_status}')
+    print(f'Ollama service:  {ollama_status}')
+    print(f'Ollama backend:  {ollama_backend_status}')
     print(f'Backend:         {backend_status}')
     print(f'Frontend:        {frontend_status}')
     print(f"Browser opened:  {'yes' if browser_opened else 'no'}")
@@ -852,6 +889,14 @@ def print_launcher_summary(
 
     if not browser_opened and frontend_status == STATUS_OK:
         print(f'Browser target:  {browser_url}')
+    if ollama_runtime_env is not None:
+        print('Ollama backend config:')
+        print(f"  - enabled:      {ollama_runtime_env.get('OLLAMA_ENABLED', 'unset')}")
+        print(f"  - base URL:     {ollama_runtime_env.get('OLLAMA_BASE_URL', 'unset')}")
+        print(f"  - model:        {ollama_runtime_env.get('OLLAMA_MODEL', 'unset')}")
+        print(f"  - timeout sec:  {ollama_runtime_env.get('OLLAMA_TIMEOUT_SECONDS', 'unset')}")
+        print(f"  - aux signal:   {ollama_runtime_env.get('OLLAMA_AUX_SIGNAL_ENABLED', 'unset')}")
+        print(f"  - llm enabled:  {ollama_runtime_env.get('LLM_ENABLED', 'unset')}")
 
     print('')
     if mode.use_infra:
@@ -1239,6 +1284,7 @@ def build_dev_process_specs(
     include_backend: bool,
     include_frontend: bool,
     with_sim_loop: bool,
+    backend_runtime_env: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     process_specs: list[dict[str, Any]] = []
     if include_backend:
@@ -1248,7 +1294,7 @@ def build_dev_process_specs(
                 'title': 'market-trading-bot backend',
                 'command': backend_run_command(paths),
                 'cwd': paths.backend,
-                'env': backend_command_env(paths, mode),
+                'env': backend_command_env(paths, mode, runtime_env=backend_runtime_env),
             }
         )
     if include_frontend:
@@ -1268,7 +1314,7 @@ def build_dev_process_specs(
                 'title': 'market-trading-bot simulation loop',
                 'command': [str(get_backend_venv_python(paths)), str(paths.backend_manage), 'simulate_markets_loop'],
                 'cwd': paths.backend,
-                'env': backend_command_env(paths, mode),
+                'env': backend_command_env(paths, mode, runtime_env=backend_runtime_env),
             }
         )
     return process_specs
@@ -1378,6 +1424,11 @@ def command_up(args: argparse.Namespace) -> int:
     ensure_project_structure(paths)
     ensure_no_running_launcher_processes()
     mode = runtime_mode_from_args(args)
+    ollama_backend_enabled = resolve_ollama_backend_enabled(args, mode)
+    backend_runtime_env = apply_ollama_backend_policy(
+        launcher_runtime_env(paths, mode),
+        enabled=ollama_backend_enabled,
+    )
     if mode is LITE_MODE and not args.skip_infra:
         warn('Lite mode selected; forcing --skip-infra so Docker is not required.')
         args.skip_infra = True
@@ -1386,7 +1437,7 @@ def command_up(args: argparse.Namespace) -> int:
     ensure_env_files()
     launcher_managed_bootstrap: list[dict[str, Any]] = []
     docker_status = STATUS_SKIPPED if args.skip_infra else STATUS_STARTING
-    ollama_status = STATUS_SKIPPED if args.skip_ollama else STATUS_STARTING
+    ollama_status = STATUS_SKIPPED if (args.skip_ollama or not ollama_backend_enabled) else STATUS_STARTING
     backend_status = STATUS_SKIPPED if args.skip_backend else STATUS_STARTING
     frontend_status = STATUS_SKIPPED if args.skip_frontend else STATUS_STARTING
 
@@ -1400,7 +1451,7 @@ def command_up(args: argparse.Namespace) -> int:
         warn('Skipping infrastructure startup because --skip-infra was used.')
 
     try:
-        if not args.skip_ollama:
+        if ollama_backend_enabled and not args.skip_ollama:
             ollama_status, ollama_message = ensure_ollama_ready(
                 timeout=args.ollama_timeout,
                 managed_processes=launcher_managed_bootstrap,
@@ -1408,6 +1459,10 @@ def command_up(args: argparse.Namespace) -> int:
             info(f'Ollama check: {ollama_message}')
             if ollama_status != STATUS_OK:
                 fail(ollama_message)
+        elif ollama_backend_enabled and args.skip_ollama:
+            warn('Ollama backend enabled but --skip-ollama was used; readiness probe/startup skipped.')
+        else:
+            info('Ollama backend integration is disabled for this launch.')
 
         prepare_dev_environment(
             paths,
@@ -1428,6 +1483,7 @@ def command_up(args: argparse.Namespace) -> int:
             include_backend=include_backend,
             include_frontend=include_frontend,
             with_sim_loop=args.with_sim_loop and include_backend,
+            backend_runtime_env=backend_runtime_env,
         )
 
         startup_mode = 'separate-windows' if args.separate_windows else DEFAULT_STARTUP_MODE
@@ -1444,7 +1500,23 @@ def command_up(args: argparse.Namespace) -> int:
                     startup_mode='verbose-console',
                     browser_auto_open=not args.no_browser,
                     browser_url=browser_url,
-                    metadata={'verbose_logging': True},
+                    metadata={
+                        'verbose_logging': True,
+                        'ollama_service_status': ollama_status,
+                        'backend_ollama_enabled': ollama_backend_enabled,
+                        'backend_ollama_runtime_env': {
+                            key: backend_runtime_env.get(key, 'unset')
+                            for key in (
+                                'OLLAMA_ENABLED',
+                                'OLLAMA_BASE_URL',
+                                'OLLAMA_MODEL',
+                                'OLLAMA_TIMEOUT_SECONDS',
+                                'OLLAMA_AUX_SIGNAL_ENABLED',
+                                'LLM_PROVIDER',
+                                'LLM_ENABLED',
+                            )
+                        },
+                    },
                 )
                 info('Verbose logging enabled: backend logs are attached to this terminal.')
             else:
@@ -1465,6 +1537,22 @@ def command_up(args: argparse.Namespace) -> int:
                     startup_mode=startup_mode,
                     browser_auto_open=not args.no_browser,
                     browser_url=browser_url,
+                    metadata={
+                        'ollama_service_status': ollama_status,
+                        'backend_ollama_enabled': ollama_backend_enabled,
+                        'backend_ollama_runtime_env': {
+                            key: backend_runtime_env.get(key, 'unset')
+                            for key in (
+                                'OLLAMA_ENABLED',
+                                'OLLAMA_BASE_URL',
+                                'OLLAMA_MODEL',
+                                'OLLAMA_TIMEOUT_SECONDS',
+                                'OLLAMA_AUX_SIGNAL_ENABLED',
+                                'LLM_PROVIDER',
+                                'LLM_ENABLED',
+                            )
+                        },
+                    },
                 )
         elif started_processes:
             write_state_file(
@@ -1472,6 +1560,22 @@ def command_up(args: argparse.Namespace) -> int:
                 startup_mode=startup_mode,
                 browser_auto_open=not args.no_browser,
                 browser_url=browser_url,
+                metadata={
+                    'ollama_service_status': ollama_status,
+                    'backend_ollama_enabled': ollama_backend_enabled,
+                    'backend_ollama_runtime_env': {
+                        key: backend_runtime_env.get(key, 'unset')
+                        for key in (
+                            'OLLAMA_ENABLED',
+                            'OLLAMA_BASE_URL',
+                            'OLLAMA_MODEL',
+                            'OLLAMA_TIMEOUT_SECONDS',
+                            'OLLAMA_AUX_SIGNAL_ENABLED',
+                            'LLM_PROVIDER',
+                            'LLM_ENABLED',
+                        )
+                    },
+                },
             )
         else:
             warn('Both backend and frontend startup were skipped; nothing was started.')
@@ -1505,6 +1609,8 @@ def command_up(args: argparse.Namespace) -> int:
             browser_url=browser_url,
             browser_opened=browser_opened,
             startup_mode=startup_mode,
+            ollama_backend_status='ENABLED' if ollama_backend_enabled else 'DISABLED',
+            ollama_runtime_env=backend_runtime_env,
         )
         if started_processes:
             ok(
@@ -1537,15 +1643,17 @@ def command_up(args: argparse.Namespace) -> int:
 
 def command_full(args: argparse.Namespace) -> int:
     args.skip_infra = False
-    args.skip_ollama = False
     args.lite = False
+    if getattr(args, 'ollama', None) is None:
+        args.ollama = 'enabled'
     return command_up(args)
 
 
 def command_lite(args: argparse.Namespace) -> int:
     args.lite = True
     args.skip_infra = True
-    args.skip_ollama = True
+    if getattr(args, 'ollama', None) is None:
+        args.ollama = 'disabled'
     return command_up(args)
 
 
@@ -1583,11 +1691,14 @@ def command_status(args: argparse.Namespace) -> int:
     mode = runtime_mode_from_args(args)
     status = launcher_status_snapshot(paths)
     state = status['state']
+    metadata = state.get('metadata', {}) if isinstance(state, dict) else {}
     root_env_values = parse_env_file(paths.root_env)
     backend_venv_python = get_backend_venv_python(paths)
     docker_found = shutil.which('docker') is not None
     ollama_command = find_ollama_command()
     combined_env = launcher_runtime_env(paths, mode)
+    resolved_ollama_enabled = resolve_ollama_backend_enabled(args, mode)
+    backend_env_preview = apply_ollama_backend_policy(combined_env, enabled=resolved_ollama_enabled)
     docker_live = docker_daemon_ready()
     ollama_live = ollama_ready()
 
@@ -1622,6 +1733,7 @@ def command_status(args: argparse.Namespace) -> int:
     print(f"  Ollama command:        {ollama_command or 'not found'}")
     print(f"  Ollama API ready:      {'yes' if ollama_live else 'no'}")
     print(f'  Ollama endpoint:       {OLLAMA_HEALTH_URL}')
+    print(f"  Ollama in backend:     {'enabled' if env_truthy(backend_env_preview.get('OLLAMA_ENABLED')) else 'disabled'}")
     print('')
     print('Launcher runtime env (resolved defaults):')
     for key in (
@@ -1638,6 +1750,37 @@ def command_status(args: argparse.Namespace) -> int:
         'LLM_ENABLED',
     ):
         print(f'  {key}: {combined_env.get(key, "unset")}')
+    print('')
+    print('Backend env passed by launcher (effective):')
+    for key in (
+        'OLLAMA_ENABLED',
+        'OLLAMA_BASE_URL',
+        'OLLAMA_MODEL',
+        'OLLAMA_TIMEOUT_SECONDS',
+        'OLLAMA_AUX_SIGNAL_ENABLED',
+        'LLM_PROVIDER',
+        'LLM_ENABLED',
+    ):
+        print(f'  {key}: {backend_env_preview.get(key, "unset")}')
+    if metadata:
+        print('')
+        print('Last launch metadata:')
+        print(f"  Ollama service status: {metadata.get('ollama_service_status', 'unknown')}")
+        print(f"  Backend Ollama:        {'ENABLED' if metadata.get('backend_ollama_enabled') else 'DISABLED'}")
+        runtime_from_state = metadata.get('backend_ollama_runtime_env', {})
+        if isinstance(runtime_from_state, dict) and runtime_from_state:
+            print('  Backend Ollama runtime:')
+            for key in (
+                'OLLAMA_ENABLED',
+                'OLLAMA_BASE_URL',
+                'OLLAMA_MODEL',
+                'OLLAMA_TIMEOUT_SECONDS',
+                'OLLAMA_AUX_SIGNAL_ENABLED',
+                'LLM_PROVIDER',
+                'LLM_ENABLED',
+            ):
+                if key in runtime_from_state:
+                    print(f'    - {key}: {runtime_from_state[key]}')
     print('')
     print('Environment files:')
     print(f"  .env:                  {'present' if paths.root_env.exists() else 'missing'}")
@@ -1666,6 +1809,11 @@ def command_status(args: argparse.Namespace) -> int:
     print('')
     print('Quick service summary:')
     print(f"  Docker:                {STATUS_OK if docker_live else STATUS_FAILED}")
+    print(f"  Ollama service:        {STATUS_OK if ollama_live else STATUS_FAILED}")
+    print(
+        "  Ollama backend:        "
+        + ('ENABLED' if env_truthy(backend_env_preview.get('OLLAMA_ENABLED')) else 'DISABLED')
+    )
     print(f"  Ollama:                {STATUS_OK if ollama_live else STATUS_FAILED}")
     print(f"  Backend:               {STATUS_OK if status['backend_health_ready'] else STATUS_FAILED}")
     print(f"  Frontend:              {STATUS_OK if status['frontend_ready'] else STATUS_FAILED}")
@@ -1809,6 +1957,11 @@ def command_backend(args: argparse.Namespace) -> int:
     ensure_project_structure(paths)
     ensure_no_running_launcher_processes()
     mode = runtime_mode_from_args(args)
+    ollama_backend_enabled = resolve_ollama_backend_enabled(args, mode)
+    backend_runtime_env = apply_ollama_backend_policy(
+        launcher_runtime_env(paths, mode),
+        enabled=ollama_backend_enabled,
+    )
     if mode is LITE_MODE and not args.skip_infra:
         warn('Lite mode selected; forcing --skip-infra so Docker is not required.')
         args.skip_infra = True
@@ -1817,6 +1970,13 @@ def command_backend(args: argparse.Namespace) -> int:
     ensure_env_files()
     if not args.skip_infra:
         start_infrastructure(paths, prereqs['docker_compose'])
+    if ollama_backend_enabled and not args.skip_ollama:
+        ollama_status, ollama_message = ensure_ollama_ready(timeout=args.ollama_timeout, managed_processes=[])
+        info(f'Ollama check: {ollama_message}')
+        if ollama_status != STATUS_OK:
+            fail(ollama_message)
+    elif ollama_backend_enabled:
+        warn('Ollama backend enabled but --skip-ollama was used; readiness probe/startup skipped.')
     prepare_backend(paths, mode, skip_install=args.skip_install)
     if args.no_seed:
         warn('Skipping automatic seed for backend-only startup because --no-seed was used.')
@@ -1828,7 +1988,7 @@ def command_backend(args: argparse.Namespace) -> int:
             'title': 'market-trading-bot backend',
             'command': backend_run_command(paths),
             'cwd': paths.backend,
-            'env': backend_command_env(paths, mode),
+            'env': backend_command_env(paths, mode, runtime_env=backend_runtime_env),
         }
     ]
     startup_mode = 'separate-windows' if args.separate_windows else DEFAULT_STARTUP_MODE
@@ -1842,7 +2002,22 @@ def command_backend(args: argparse.Namespace) -> int:
                 startup_mode='verbose-console',
                 browser_auto_open=False,
                 browser_url=service_urls()['backend_health'],
-                metadata={'verbose_logging': True},
+                metadata={
+                    'verbose_logging': True,
+                    'backend_ollama_enabled': ollama_backend_enabled,
+                    'backend_ollama_runtime_env': {
+                        key: backend_runtime_env.get(key, 'unset')
+                        for key in (
+                            'OLLAMA_ENABLED',
+                            'OLLAMA_BASE_URL',
+                            'OLLAMA_MODEL',
+                            'OLLAMA_TIMEOUT_SECONDS',
+                            'OLLAMA_AUX_SIGNAL_ENABLED',
+                            'LLM_PROVIDER',
+                            'LLM_ENABLED',
+                        )
+                    },
+                },
             )
             info('Verbose logging enabled: backend logs are attached to this terminal.')
         else:
@@ -1851,11 +2026,32 @@ def command_backend(args: argparse.Namespace) -> int:
                     'Verbose logging is ignored with --separate-windows '
                     'because each service already has its own console.'
                 )
-            start_dev_servers(
+            started_processes = start_dev_servers(
                 process_specs,
                 startup_mode=startup_mode,
                 browser_auto_open=False,
                 browser_url=service_urls()['backend_health'],
+            )
+            write_state_file(
+                started_processes,
+                startup_mode=startup_mode,
+                browser_auto_open=False,
+                browser_url=service_urls()['backend_health'],
+                metadata={
+                    'backend_ollama_enabled': ollama_backend_enabled,
+                    'backend_ollama_runtime_env': {
+                        key: backend_runtime_env.get(key, 'unset')
+                        for key in (
+                            'OLLAMA_ENABLED',
+                            'OLLAMA_BASE_URL',
+                            'OLLAMA_MODEL',
+                            'OLLAMA_TIMEOUT_SECONDS',
+                            'OLLAMA_AUX_SIGNAL_ENABLED',
+                            'LLM_PROVIDER',
+                            'LLM_ENABLED',
+                        )
+                    },
+                },
             )
         wait_for_http(
             service_urls()['backend_health'],
@@ -1865,12 +2061,14 @@ def command_backend(args: argparse.Namespace) -> int:
         print_launcher_summary(
             mode=mode,
             docker_status=STATUS_SKIPPED if args.skip_infra else STATUS_OK,
-            ollama_status=STATUS_SKIPPED,
+            ollama_status=STATUS_OK if ollama_backend_enabled else STATUS_SKIPPED,
             backend_status=STATUS_OK,
             frontend_status=STATUS_SKIPPED,
             browser_url=service_urls()['backend_health'],
             browser_opened=False,
             startup_mode=startup_mode,
+            ollama_backend_status='ENABLED' if ollama_backend_enabled else 'DISABLED',
+            ollama_runtime_env=backend_runtime_env,
         )
         ok(
             'Backend launched successfully in '
@@ -1949,6 +2147,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--with-sim-loop', action='store_true', help='Start simulate_markets_loop alongside backend startup.')
     parser.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup for postgres/redis.')
     parser.add_argument('--skip-ollama', action='store_true', help='Skip Ollama local startup/probe.')
+    parser.add_argument('--ollama', choices=['enabled', 'disabled'], help='Control whether backend starts with Ollama env enabled.')
     parser.add_argument('--docker-timeout', type=float, default=DOCKER_DEFAULT_TIMEOUT_SECONDS, help='Max seconds to wait for Docker daemon readiness.')
     parser.add_argument('--ollama-timeout', type=float, default=OLLAMA_DEFAULT_TIMEOUT_SECONDS, help='Max seconds to wait for Ollama readiness.')
     parser.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed.')
@@ -1961,6 +2160,7 @@ def build_parser() -> argparse.ArgumentParser:
     common_setup.add_argument('--skip-frontend', action='store_true', help='Skip frontend preparation/startup.')
     common_setup.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup for postgres/redis.')
     common_setup.add_argument('--skip-ollama', action='store_true', help='Skip Ollama local startup/probe.')
+    common_setup.add_argument('--ollama', choices=['enabled', 'disabled'], help='Control whether backend starts with Ollama env enabled.')
     common_setup.add_argument('--docker-timeout', type=float, default=DOCKER_DEFAULT_TIMEOUT_SECONDS, help='Max seconds to wait for Docker daemon readiness.')
     common_setup.add_argument('--ollama-timeout', type=float, default=OLLAMA_DEFAULT_TIMEOUT_SECONDS, help='Max seconds to wait for Ollama readiness.')
     common_setup.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed.')
@@ -1974,6 +2174,8 @@ def build_parser() -> argparse.ArgumentParser:
     backend_only.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed before backend startup.')
     backend_only.add_argument('--lite', action='store_true', help='Run in lite mode (SQLite, no Docker-required infra).')
     backend_only.add_argument('--verbose', action='store_true', help='Attach backend logs to this terminal for paper-testing diagnostics.')
+    backend_only.add_argument('--skip-ollama', action='store_true', help='Skip Ollama local startup/probe.')
+    backend_only.add_argument('--ollama', choices=['enabled', 'disabled'], help='Control whether backend starts with Ollama env enabled.')
 
     frontend_only = argparse.ArgumentParser(add_help=False)
     frontend_only.add_argument('--skip-install', action='store_true', help='Skip npm install before running the command.')
@@ -2004,6 +2206,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     status_parser = subparsers.add_parser('status', help='Show a local environment summary for this repo.')
     status_parser.add_argument('--lite', action='store_true', help='Show status using lite-mode defaults.')
+    status_parser.add_argument('--ollama', choices=['enabled', 'disabled'], help='Show status with Ollama backend policy enabled or disabled.')
     status_parser.set_defaults(func=command_status)
 
     down_parser = subparsers.add_parser('down', help='Stop launcher-managed processes and Docker Compose services.')
@@ -2046,6 +2249,7 @@ def build_parser() -> argparse.ArgumentParser:
         skip_ollama=False,
         docker_timeout=DOCKER_DEFAULT_TIMEOUT_SECONDS,
         ollama_timeout=OLLAMA_DEFAULT_TIMEOUT_SECONDS,
+        ollama=None,
         lite=False,
         verbose=False,
     )

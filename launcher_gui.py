@@ -14,7 +14,7 @@ import customtkinter as ctk
 
 ROOT = Path(__file__).resolve().parent
 START_SCRIPT = ROOT / 'start.py'
-STATUS_KEYS = ('Docker', 'Ollama', 'Backend', 'Frontend')
+STATUS_KEYS = ('Docker', 'Ollama service', 'Ollama backend', 'Backend', 'Frontend')
 STATUS_DEFAULT = 'OFF'
 PREFERENCES_FILE = ROOT / '.tmp' / 'launcher-gui-preferences.json'
 DEFAULT_SYSTEM_URL = 'http://localhost:5173/system'
@@ -38,6 +38,7 @@ class LauncherGUI(ctk.CTk):
         self.last_status_check_var = ctk.StringVar(value='Última revisión: pendiente')
         self.main_url_var = ctk.StringVar(value='URL principal: no disponible')
         self.auto_open_browser_var = ctk.BooleanVar(value=bool(self.preferences.get('auto_open_browser', True)))
+        self.use_ollama_var = ctk.BooleanVar(value=bool(self.preferences.get('use_ollama', True)))
         self.dashboard_button: ctk.CTkButton | None = None
 
         self._build_ui()
@@ -100,6 +101,13 @@ class LauncherGUI(ctk.CTk):
             command=self._save_preferences,
             font=ctk.CTkFont(size=13),
         ).pack(anchor='w', padx=16, pady=(8, 4))
+        ctk.CTkCheckBox(
+            actions,
+            text='Usar Ollama (shadow + señal auxiliar)',
+            variable=self.use_ollama_var,
+            command=self._save_preferences,
+            font=ctk.CTkFont(size=13),
+        ).pack(anchor='w', padx=16, pady=(4, 4))
 
         ctk.CTkLabel(
             actions,
@@ -187,13 +195,30 @@ class LauncherGUI(ctk.CTk):
         }.get(action, f'Ejecutando {action}...')
 
         if action == 'full':
-            self._set_transitional_status({'Docker': 'STARTING', 'Ollama': 'STARTING', 'Backend': 'STARTING', 'Frontend': 'STARTING'})
+            self._set_transitional_status(
+                {
+                    'Docker': 'STARTING',
+                    'Ollama service': 'STARTING' if self.use_ollama_var.get() else 'OFF',
+                    'Ollama backend': 'ENABLED' if self.use_ollama_var.get() else 'DISABLED',
+                    'Backend': 'STARTING',
+                    'Frontend': 'STARTING',
+                }
+            )
         elif action == 'lite':
-            self._set_transitional_status({'Backend': 'STARTING', 'Frontend': 'STARTING'})
+            self._set_transitional_status(
+                {
+                    'Ollama service': 'STARTING' if self.use_ollama_var.get() else 'OFF',
+                    'Ollama backend': 'ENABLED' if self.use_ollama_var.get() else 'DISABLED',
+                    'Backend': 'STARTING',
+                    'Frontend': 'STARTING',
+                }
+            )
 
         command_args = [action]
         if action in {'full', 'lite'} and not self.auto_open_browser_var.get():
             command_args.append('--no-browser')
+        if action in {'full', 'lite'}:
+            command_args.extend(['--ollama', 'enabled' if self.use_ollama_var.get() else 'disabled'])
         if action in {'full', 'lite'}:
             self.preferences['last_mode'] = action
         self._save_preferences()
@@ -308,7 +333,7 @@ class LauncherGUI(ctk.CTk):
 
     @staticmethod
     def _normalize_status(status: str) -> str:
-        if status in {'OK', 'STARTING', 'FAILED', 'OFF'}:
+        if status in {'OK', 'STARTING', 'FAILED', 'OFF', 'ENABLED', 'DISABLED'}:
             return status
         return 'OFF'
 
@@ -319,6 +344,8 @@ class LauncherGUI(ctk.CTk):
             'STARTING': '#f5a524',
             'FAILED': '#d7263d',
             'OFF': '#e74c3c',
+            'ENABLED': '#27ae60',
+            'DISABLED': '#e74c3c',
         }
         label.configure(text=status, text_color=colors.get(status, '#e74c3c'))
 
@@ -354,20 +381,22 @@ class LauncherGUI(ctk.CTk):
 
     def _load_preferences(self) -> dict[str, object]:
         if not PREFERENCES_FILE.exists():
-            return {'last_mode': 'full', 'auto_open_browser': True}
+            return {'last_mode': 'full', 'auto_open_browser': True, 'use_ollama': True}
         try:
             loaded = json.loads(PREFERENCES_FILE.read_text(encoding='utf-8'))
         except (json.JSONDecodeError, OSError):
-            return {'last_mode': 'full', 'auto_open_browser': True}
+            return {'last_mode': 'full', 'auto_open_browser': True, 'use_ollama': True}
         if not isinstance(loaded, dict):
-            return {'last_mode': 'full', 'auto_open_browser': True}
+            return {'last_mode': 'full', 'auto_open_browser': True, 'use_ollama': True}
         loaded.setdefault('last_mode', 'full')
         loaded.setdefault('auto_open_browser', True)
+        loaded.setdefault('use_ollama', True)
         return loaded
 
     def _save_preferences(self) -> None:
         self.preferences['window_geometry'] = self.geometry()
         self.preferences['auto_open_browser'] = bool(self.auto_open_browser_var.get())
+        self.preferences['use_ollama'] = bool(self.use_ollama_var.get())
         PREFERENCES_FILE.parent.mkdir(parents=True, exist_ok=True)
         PREFERENCES_FILE.write_text(json.dumps(self.preferences, indent=2), encoding='utf-8')
 
