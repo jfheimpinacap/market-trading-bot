@@ -207,8 +207,7 @@ export function DashboardPage() {
     <div className="page-stack dashboard-page executive-dashboard-page">
       <PageHeader
         eyebrow="Vista principal"
-        title={`${PROJECT_NAME} · Executive Control Center`}
-        description="Resumen simple para validar estado operativo, capital paper y actividad reciente en una sola vista."
+        title={`${PROJECT_NAME} · Dashboard`}
         actions={(
           <div className="button-row">
             <button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Vista avanzada</button>

@@ -248,7 +248,6 @@ export function PortfolioPage() {
       <PageHeader
         eyebrow="Portafolio paper"
         title="Portfolio"
-        description="Vista principal del portafolio paper para revisar saldo, posiciones y actividad reciente sin entrar en detalle técnico."
         actions={
           <RevalueToolbar
             onRevalue={handleRevalue}
