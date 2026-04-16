@@ -255,16 +255,19 @@ button {
 }
 
 .page-header {
-  padding: 12px 14px;
+  padding: 10px 12px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
 .page-header__actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .section-label {
@@ -290,7 +293,7 @@ button {
 }
 
 .panel {
-  padding: 11px 12px;
+  padding: 10px 11px;
 }
 
 .status-card__header,
@@ -302,14 +305,23 @@ button {
   gap: 8px;
 }
 
+.section-card__header {
+  margin-bottom: 2px;
+}
+
+.section-card__header > div {
+  display: grid;
+  gap: 2px;
+}
+
 .status-badge,
 .pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 3px 7px;
+  padding: 2px 7px;
   border-radius: 999px;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: capitalize;
 }
@@ -401,10 +413,11 @@ button {
 
 .secondary-button {
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: 9px;
   background: var(--bg-panel-alt);
   color: var(--text-main);
-  padding: 7px 11px;
+  min-height: 30px;
+  padding: 5px 10px;
   cursor: pointer;
 }
 
@@ -420,10 +433,11 @@ button {
 
 .primary-button {
   border: 1px solid var(--brand);
-  border-radius: 10px;
+  border-radius: 9px;
   background: var(--brand);
   color: #ffffff;
-  padding: 7px 11px;
+  min-height: 30px;
+  padding: 5px 10px;
   cursor: pointer;
   box-shadow: 0 10px 24px rgba(40, 75, 206, 0.18);
 }
@@ -485,23 +499,23 @@ button {
 .markets-summary-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px;
+  gap: 10px;
 }
 
 .markets-summary-card {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .markets-summary-card__value {
-  font-size: 1.55rem;
+  font-size: 1.35rem;
   font-weight: 700;
   color: var(--text-main);
 }
 
 .markets-filters {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .markets-filters__header,
@@ -519,27 +533,27 @@ button {
 .markets-filters__grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .field-group {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   color: var(--text-main);
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
 }
 
 .text-input,
 .select-input {
   width: 100%;
-  min-height: 34px;
-  border-radius: 9px;
+  min-height: 30px;
+  border-radius: 8px;
   border: 1px solid var(--border-soft);
   background: #fff;
-  padding: 0 9px;
+  padding: 0 8px;
   color: var(--text-main);
-  font-size: 0.88rem;
+  font-size: 0.84rem;
 }
 
 .text-input:focus,
@@ -561,13 +575,14 @@ button {
 .markets-table th,
 .markets-table td {
   text-align: left;
-  padding: 7px 8px;
+  padding: 5px 7px;
   border-bottom: 1px solid var(--border-soft);
   vertical-align: middle;
+  line-height: 1.3;
 }
 
 .markets-table th {
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-soft);
@@ -578,7 +593,7 @@ button {
 }
 
 .markets-table--compact {
-  min-width: 720px;
+  min-width: 680px;
 }
 
 .markets-table__title-col {
@@ -591,7 +606,7 @@ button {
 }
 
 .markets-table__paper-col {
-  min-width: 180px;
+  min-width: 160px;
 }
 
 .markets-table__number-col {
@@ -599,9 +614,14 @@ button {
   text-align: right;
 }
 
+.markets-table td:last-child,
+.data-table td:last-child {
+  white-space: nowrap;
+}
+
 .market-link {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   text-decoration: none;
 }
 
@@ -611,12 +631,17 @@ button {
 
 .market-link span {
   color: var(--text-muted);
-  font-size: 0.92rem;
+  font-size: 0.84rem;
 }
 
 .table-inline-stack {
   display: grid;
-  gap: 4px;
+  gap: 2px;
+}
+
+.markets-table .button-row,
+.data-table .button-row {
+  row-gap: 0.22rem;
 }
 
 .market-badge {
@@ -624,8 +649,8 @@ button {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  padding: 4px 8px;
-  font-size: 0.7rem;
+  padding: 2px 7px;
+  font-size: 0.66rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -673,7 +698,7 @@ button {
 .market-probability-badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 7px;
+  padding: 2px 7px;
   border-radius: 999px;
   background: #eef2ff;
   color: #2640a7;
@@ -808,9 +833,9 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
+  padding: 2px 7px;
   border-radius: 999px;
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -839,9 +864,9 @@ button {
 
 .dashboard-key-value-list,
 .dashboard-recent-list__meta {
-  margin: 18px 0 0;
+  margin: 10px 0 0;
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .dashboard-key-value-list div,
@@ -849,7 +874,7 @@ button {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  padding-top: 12px;
+  padding-top: 8px;
   border-top: 1px solid var(--border-soft);
 }
 
@@ -869,7 +894,7 @@ button {
 .dashboard-stat-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
 .dashboard-stat-card,
@@ -882,12 +907,12 @@ button {
 
 .dashboard-stat-card {
   display: grid;
-  gap: 8px;
-  padding: 14px;
+  gap: 6px;
+  padding: 10px 11px;
 }
 
 .dashboard-stat-card__value {
-  font-size: 1.9rem;
+  font-size: 1.55rem;
   color: var(--text-main);
 }
 
@@ -903,7 +928,7 @@ button {
 .dashboard-module-list,
 .dashboard-recent-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .dashboard-module-list {
@@ -914,7 +939,7 @@ button {
 
 .dashboard-link-card,
 .dashboard-recent-list__item {
-  padding: 14px;
+  padding: 10px 11px;
   text-decoration: none;
   transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
@@ -932,7 +957,7 @@ button {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
 }
 
 .dashboard-link-card__header h3,
@@ -946,7 +971,7 @@ button {
 }
 
 .dashboard-module-list__item {
-  padding: 12px 14px;
+  padding: 9px 10px;
   border-radius: 16px;
   border: 1px solid var(--border-soft);
   background: var(--bg-panel-alt);
@@ -1159,7 +1184,7 @@ button {
 .paper-table__status-stack {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .paper-toolbar {
@@ -1174,8 +1199,8 @@ button {
 }
 
 .paper-inline-notice {
-  margin: 0 0 16px;
-  padding: 9px 10px;
+  margin: 0 0 10px;
+  padding: 7px 9px;
   border-radius: 10px;
   border: 1px solid var(--warning-soft);
   background: #fffaf0;
@@ -1185,13 +1210,13 @@ button {
 .paper-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 10px;
 }
 
 .paper-summary-card,
 .paper-account-card {
   display: grid;
-  gap: 10px;
+  gap: 6px;
   border: 1px solid var(--border-soft);
   background: var(--bg-panel-alt);
 }
@@ -1206,14 +1231,14 @@ button {
 }
 
 .paper-summary-card__value {
-  font-size: 1.75rem;
+  font-size: 1.4rem;
   color: var(--text-main);
 }
 
 .paper-account-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 10px;
 }
 
 .paper-account-card__header {
@@ -1228,9 +1253,9 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
+  padding: 2px 7px;
   border-radius: 999px;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -1269,7 +1294,7 @@ button {
 .paper-table__status-stack {
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
+  gap: 4px;
 }
 
 .market-trade-panel,
@@ -2469,7 +2494,7 @@ button {
 
 .table-link-stack {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 
@@ -2583,13 +2608,14 @@ button {
 
 .button-row {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.32rem;
   flex-wrap: wrap;
   align-items: center;
 }
 
 .ghost-button {
-  padding: 0.38rem 0.7rem;
+  min-height: 30px;
+  padding: 0.32rem 0.62rem;
   border-radius: 0.5rem;
   border: 1px solid var(--color-border, #334155);
   background: transparent;
@@ -2656,14 +2682,14 @@ button {
 
 .stack-md {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .simple-list {
   margin: 0;
   padding-left: 20px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .link-button {
@@ -2692,13 +2718,14 @@ button {
 .data-table th,
 .data-table td {
   text-align: left;
-  padding: 6px 8px;
+  padding: 5px 7px;
   border-bottom: 1px solid var(--border-soft);
   vertical-align: middle;
+  line-height: 1.3;
 }
 
 .data-table th {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-soft);
@@ -2774,8 +2801,8 @@ button {
 
 .subsection {
   display: grid;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 6px;
+  padding: 7px 9px;
   border-radius: 10px;
   border: 1px solid var(--border-soft);
   background: var(--bg-panel-alt);
@@ -2792,7 +2819,8 @@ button {
 .page-header__actions .button-row .secondary-button,
 .page-header__actions .button-row .primary-button,
 .page-header__actions .button-row .ghost-button {
-  padding: 5px 9px;
+  min-height: 28px;
+  padding: 4px 8px;
 }
 
 .data-table td .button-row {
@@ -2802,7 +2830,8 @@ button {
 .data-table td .button-row .secondary-button,
 .data-table td .button-row .primary-button,
 .data-table td .button-row .ghost-button {
-  padding: 5px 8px;
+  min-height: 26px;
+  padding: 3px 7px;
 }
 
 .cockpit-page {
@@ -2832,7 +2861,7 @@ button {
 }
 
 .mission-control-page .panel {
-  padding: 12px;
+  padding: 10px 11px;
 }
 
 .mission-control-page .system-metadata-grid {
@@ -2840,12 +2869,12 @@ button {
 }
 
 .mission-control-page ul {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   padding-left: 18px;
 }
 
 .mission-control-page li {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .dashboard-page {
@@ -2853,7 +2882,7 @@ button {
 }
 
 .dashboard-page .panel {
-  padding: 12px;
+  padding: 10px 11px;
 }
 
 .key-value-list li span {
@@ -2862,13 +2891,13 @@ button {
 
 .cockpit-attention-list {
   display: grid;
-  gap: 0.9rem;
+  gap: 0.65rem;
 }
 
 .cockpit-attention-item {
   border: 1px solid var(--border-soft);
   border-radius: 12px;
-  padding: 0.75rem;
+  padding: 0.58rem;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -2910,7 +2939,7 @@ button {
 }
 
 .compact-list li {
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.22rem;
 }
 
 .executive-chart {
