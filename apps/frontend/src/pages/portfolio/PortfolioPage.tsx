@@ -244,7 +244,7 @@ export function PortfolioPage() {
   ], []);
 
   return (
-    <div className="page-stack">
+    <div className="page-stack portfolio-page">
       <PageHeader
         eyebrow="Portafolio paper"
         title="Portfolio"
@@ -259,17 +259,21 @@ export function PortfolioPage() {
         }
       />
 
-      <WorkflowStatusPanel
-        title="Estado general del portafolio"
-        description="Revisa impacto, actividad y evolución del capital en una sola vista."
-        items={workflowItems}
-      />
-
-      <ContextLinksPanel
-        title="Siguientes pasos"
-        description="Accesos rápidos para continuar el flujo principal."
-        links={contextLinks}
-      />
+      <details className="portfolio-secondary-blocks">
+        <summary>Ver estado ampliado y accesos</summary>
+        <div className="portfolio-secondary-blocks__content">
+          <WorkflowStatusPanel
+            title="Estado general del portafolio"
+            description="Revisa impacto, actividad y evolución del capital en una sola vista."
+            items={workflowItems}
+          />
+          <ContextLinksPanel
+            title="Siguientes pasos"
+            description="Accesos rápidos para continuar el flujo principal."
+            links={contextLinks}
+          />
+        </div>
+      </details>
 
       {totalFailure ? (
         <EmptyState
@@ -285,9 +289,8 @@ export function PortfolioPage() {
       ) : null}
 
       <SectionCard
-        eyebrow="Demo account summary"
+        eyebrow="Resumen"
         title="Account metrics"
-        description="These cards combine GET /api/paper/account/, GET /api/paper/summary/, and GET /api/paper/trades/ so the demo portfolio reads like a usable operator view instead of a placeholder."
         aside={<StatusBadge tone={accountError ? 'offline' : accountLoading ? 'loading' : 'ready'}>{accountError ? 'Account unavailable' : accountLoading ? 'Loading account' : 'Account synced'}</StatusBadge>}
       >
         <DataStateWrapper
@@ -321,9 +324,8 @@ export function PortfolioPage() {
 
       <section className="content-grid content-grid--two-columns">
         <SectionCard
-          eyebrow="Account overview"
+          eyebrow="Cuenta"
           title="Paper account details"
-          description="Technical account metadata and summary diagnostics for the active demo portfolio."
         >
           <DataStateWrapper
             isLoading={accountLoading || summaryLoading}
@@ -383,9 +385,8 @@ export function PortfolioPage() {
       </section>
 
       <SectionCard
-        eyebrow="Portfolio history"
+        eyebrow="Evolución"
         title="Equity and balance history"
-        description="Snapshot-based chart from GET /api/paper/snapshots/ to visualize how equity, cash balance, and total PnL evolve after paper trades and manual revaluation."
         aside={<StatusBadge tone={snapshotsError ? 'offline' : snapshotsLoading ? 'loading' : 'ready'}>{snapshotsError ? 'History unavailable' : `${snapshots.length} snapshots loaded`}</StatusBadge>}
       >
         <PortfolioHistoryChart
@@ -397,9 +398,8 @@ export function PortfolioPage() {
       </SectionCard>
 
       <SectionCard
-        eyebrow="Open and closed positions"
+        eyebrow="Posiciones"
         title="Positions"
-        description="Desktop-first table of positions returned by GET /api/paper/positions/, including current marks, realized/unrealized PnL, and direct links back to Market detail."
         aside={<StatusBadge tone={positionsError ? 'offline' : positionsLoading ? 'loading' : 'ready'}>{positionsError ? 'Positions unavailable' : `${openPositions.length} open positions`}</StatusBadge>}
       >
         <DataStateWrapper
@@ -428,9 +428,8 @@ export function PortfolioPage() {
       </SectionCard>
 
       <SectionCard
-        eyebrow="Execution history"
+        eyebrow="Actividad"
         title="Trades"
-        description="Recent paper trade history from GET /api/paper/trades/, ordered by most recent execution so the demo account activity can be audited quickly. When reviews exist, the table also links each trade to /postmortem."
         aside={<StatusBadge tone={tradesError ? 'offline' : tradesLoading ? 'loading' : 'ready'}>{tradesError ? 'Trades unavailable' : `${trades.length} trades loaded`}</StatusBadge>}
       >
         <DataStateWrapper
@@ -454,31 +453,33 @@ export function PortfolioPage() {
         </DataStateWrapper>
       </SectionCard>
 
-      <SectionCard
-        eyebrow="Portfolio history"
-        title="Snapshots"
-        description="Compact portfolio history from GET /api/paper/snapshots/, useful for checking how cash, equity, and PnL changed after manual revaluations or trade execution."
-        aside={<StatusBadge tone={snapshotsError ? 'offline' : snapshotsLoading ? 'loading' : 'ready'}>{snapshotsError ? 'Snapshots unavailable' : `${snapshots.length} snapshots loaded`}</StatusBadge>}
-      >
-        <DataStateWrapper
-          isLoading={snapshotsLoading}
-          isError={Boolean(snapshotsError)}
-          errorMessage={snapshotsError ?? undefined}
-          isEmpty={!snapshotsLoading && !snapshotsError && snapshots.length === 0}
-          loadingTitle="Loading portfolio snapshots"
-          loadingDescription="Requesting portfolio snapshots captured by the paper trading backend."
-          errorTitle="Could not load portfolio snapshots"
-          emptyTitle="No snapshots captured yet"
-          emptyDescription="Run simulation or revalue the portfolio to create enough snapshots for the chart and technical history panels."
-          action={
-            <button className="secondary-button" type="button" onClick={() => void handleRevalue()}>
-              Revalue portfolio
-            </button>
-          }
+      <details className="portfolio-secondary-blocks">
+        <summary>Ver historial técnico (snapshots)</summary>
+        <SectionCard
+          eyebrow="Detalle técnico"
+          title="Snapshots"
+          aside={<StatusBadge tone={snapshotsError ? 'offline' : snapshotsLoading ? 'loading' : 'ready'}>{snapshotsError ? 'Snapshots unavailable' : `${snapshots.length} snapshots loaded`}</StatusBadge>}
         >
-          <PaperSnapshotsPanel snapshots={snapshots} currency={currency} />
-        </DataStateWrapper>
-      </SectionCard>
+          <DataStateWrapper
+            isLoading={snapshotsLoading}
+            isError={Boolean(snapshotsError)}
+            errorMessage={snapshotsError ?? undefined}
+            isEmpty={!snapshotsLoading && !snapshotsError && snapshots.length === 0}
+            loadingTitle="Loading portfolio snapshots"
+            loadingDescription="Requesting portfolio snapshots captured by the paper trading backend."
+            errorTitle="Could not load portfolio snapshots"
+            emptyTitle="No snapshots captured yet"
+            emptyDescription="Run simulation or revalue the portfolio to create enough snapshots for the chart and technical history panels."
+            action={
+              <button className="secondary-button" type="button" onClick={() => void handleRevalue()}>
+                Revalue portfolio
+              </button>
+            }
+          >
+            <PaperSnapshotsPanel snapshots={snapshots} currency={currency} />
+          </DataStateWrapper>
+        </SectionCard>
+      </details>
     </div>
   );
 }

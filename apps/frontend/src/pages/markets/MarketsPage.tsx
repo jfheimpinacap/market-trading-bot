@@ -165,7 +165,7 @@ export function MarketsPage() {
       : 'Puedes limpiar filtros o cambiar la fuente para ver más opciones.';
 
   return (
-    <div className="page-stack">
+    <div className="page-stack markets-page">
       <PageHeader
         eyebrow="Exploración"
         title="Markets"
@@ -184,10 +184,8 @@ export function MarketsPage() {
         <MarketsFilters filters={filters} providers={providers} events={events} onChange={setFilters} onReset={() => setFilters(defaultFilters)} />
 
         <SectionCard
-          eyebrow="Catalog"
           title="Lista de mercados"
-          description="Lista principal para revisar mercados y abrir el detalle cuando quieras profundizar."
-          aside={<span className="muted-text">{activeFilterCount} filtros activos · {demoMarketCount} demo · {realMarketCount} reales · {realPaperTradableCount} aptos para paper</span>}
+          aside={<span className="muted-text">{activeFilterCount} filtros · {demoMarketCount} demo · {realPaperTradableCount}/{realMarketCount} reales aptos</span>}
         >
           <DataStateWrapper
             isLoading={marketsLoading}
