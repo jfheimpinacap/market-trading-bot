@@ -536,6 +536,22 @@ button {
   gap: 6px;
 }
 
+.markets-filters__advanced {
+  border-top: 1px dashed var(--border-soft);
+  padding-top: 6px;
+}
+
+.markets-filters__advanced summary {
+  cursor: pointer;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.markets-filters__grid--advanced {
+  margin-top: 6px;
+}
+
 .field-group {
   display: grid;
   gap: 3px;
@@ -889,6 +905,23 @@ button {
 .dashboard-recent-list__meta dd {
   margin: 0;
   text-align: right;
+}
+
+.dashboard-secondary-details {
+  margin-top: 6px;
+}
+
+.dashboard-secondary-details summary,
+.portfolio-secondary-blocks summary {
+  cursor: pointer;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.dashboard-key-value-list--secondary {
+  margin-top: 6px;
+  opacity: 0.88;
 }
 
 .dashboard-stat-grid {
@@ -2414,6 +2447,17 @@ button {
   gap: 10px;
 }
 
+.portfolio-secondary-blocks {
+  display: grid;
+  gap: 8px;
+}
+
+.portfolio-secondary-blocks__content {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 .workflow-status-panel__header,
 .context-links-panel > div:first-child {
   display: grid;
@@ -2842,6 +2886,16 @@ button {
   padding: 12px;
 }
 
+.cockpit-page .section-label,
+.mission-control-page .section-label {
+  opacity: 0.7;
+}
+
+.cockpit-page .section-card__description,
+.mission-control-page .section-card__description {
+  color: var(--text-soft);
+}
+
 .cockpit-page .section-card__header {
   gap: 8px;
   margin-bottom: 2px;
@@ -2883,6 +2937,15 @@ button {
 
 .dashboard-page .panel {
   padding: 10px 11px;
+}
+
+.markets-page .markets-summary-card .section-label {
+  display: none;
+}
+
+.markets-page .section-card__description,
+.portfolio-page .section-card__description {
+  color: var(--text-soft);
 }
 
 .key-value-list li span {

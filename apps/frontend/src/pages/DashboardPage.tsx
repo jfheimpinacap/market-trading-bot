@@ -220,7 +220,6 @@ export function DashboardPage() {
         <SectionCard
           eyebrow="Estado general"
           title="Salud operativa del bot"
-          description="Lectura rápida del estado de ejecución autónoma en paper mode."
         >
           <DataStateWrapper
             isLoading={statusLoading}
@@ -235,9 +234,14 @@ export function DashboardPage() {
               <div><dt>Validación</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.validation_status)}>{testConsoleStatus?.validation_status ?? 'Sin dato'}</StatusBadge></dd></div>
               <div><dt>Permiso operativo</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.gate_status)}>{testConsoleStatus?.gate_status ?? 'Sin dato'}</StatusBadge></dd></div>
               <div><dt>Nivel de atención</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.attention_mode)}>{testConsoleStatus?.attention_mode ?? 'Sin dato'}</StatusBadge></dd></div>
-              <div><dt>Flujo operativo</dt><dd>{testConsoleStatus?.funnel_status ?? 'Sin dato'}</dd></div>
-              <div><dt>Última actualización</dt><dd>{formatTimestamp(testConsoleStatus?.updated_at ?? testConsoleStatus?.started_at)}</dd></div>
             </dl>
+            <details className="dashboard-secondary-details">
+              <summary>Ver detalle operativo</summary>
+              <dl className="dashboard-key-value-list dashboard-key-value-list--secondary">
+                <div><dt>Flujo operativo</dt><dd>{testConsoleStatus?.funnel_status ?? 'Sin dato'}</dd></div>
+                <div><dt>Última actualización</dt><dd>{formatTimestamp(testConsoleStatus?.updated_at ?? testConsoleStatus?.started_at)}</dd></div>
+              </dl>
+            </details>
           </DataStateWrapper>
         </SectionCard>
 
@@ -279,7 +283,7 @@ export function DashboardPage() {
       </SectionCard>
 
       <section className="content-grid content-grid--two-columns">
-        <SectionCard eyebrow="Tendencia" title="Capital reciente" description="Evolución compacta del capital paper.">
+        <SectionCard eyebrow="Tendencia" title="Capital reciente">
           <DataStateWrapper
             isLoading={paperLoading}
             isError={Boolean(paperError)}
@@ -292,7 +296,7 @@ export function DashboardPage() {
           </DataStateWrapper>
         </SectionCard>
 
-        <SectionCard eyebrow="Tendencia" title="Ganancia/Pérdida reciente" description="Lectura visual simple para detectar deriva positiva o negativa.">
+        <SectionCard eyebrow="Tendencia" title="Ganancia/Pérdida reciente">
           <DataStateWrapper
             isLoading={paperLoading}
             isError={Boolean(paperError)}
@@ -318,11 +322,16 @@ export function DashboardPage() {
           >
             <dl className="dashboard-key-value-list">
               <div><dt>Último evento operativo</dt><dd>{testConsoleStatus?.last_event ?? 'n/a'}</dd></div>
-              <div><dt>Último motivo</dt><dd>{testConsoleStatus?.last_reason_code ?? 'n/a'}</dd></div>
               <div><dt>Última acción de mercado</dt><dd>{latestTrade ? `${latestTrade.trade_type} ${latestTrade.side} · ${latestTrade.market__title}` : 'Sin trades recientes'}</dd></div>
               <div><dt>Hora último trade</dt><dd>{latestTrade ? formatTimestamp(latestTrade.executed_at) : 'n/a'}</dd></div>
               <div><dt>Resumen corto</dt><dd>{testConsoleStatus?.next_action_hint ?? 'Sin acciones sugeridas por ahora.'}</dd></div>
             </dl>
+            {testConsoleStatus?.last_reason_code ? (
+              <details className="dashboard-secondary-details">
+                <summary>Ver motivo técnico</summary>
+                <p className="muted-text">{testConsoleStatus.last_reason_code}</p>
+              </details>
+            ) : null}
           </DataStateWrapper>
         </SectionCard>
 
@@ -348,10 +357,12 @@ export function DashboardPage() {
                 </li>
               ))}
             </ul>
-            <div className="executive-llm-hint">
-              <strong>Hint auxiliar LLM:</strong>{' '}
-              {llmHint?.aux_signal_status ? `(${llmHint.aux_signal_status})` : '(sin señal)'} {getLlmHintText(llmHint)}
-            </div>
+            <details className="dashboard-secondary-details">
+              <summary>Hint auxiliar LLM</summary>
+              <div className="executive-llm-hint">
+                {llmHint?.aux_signal_status ? `(${llmHint.aux_signal_status})` : '(sin señal)'} {getLlmHintText(llmHint)}
+              </div>
+            </details>
           </DataStateWrapper>
         </SectionCard>
       </section>

@@ -23,6 +23,7 @@ const paperTradableOptions = [
 
 export function MarketsFilters({ filters, providers, events, onChange, onReset }: MarketsFiltersProps) {
   const categories = Array.from(new Set(events.map((event) => event.category))).sort((left, right) => left.localeCompare(right));
+  const hasAdvancedFilters = [filters.provider, filters.paper_tradable, filters.category, filters.is_active].some((value) => value.trim().length > 0);
 
   function handleFieldChange(event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = event.target;
@@ -33,12 +34,9 @@ export function MarketsFilters({ filters, providers, events, onChange, onReset }
     <section className="panel markets-filters">
       <div className="markets-filters__header">
         <div>
-          <p className="section-label">Filters</p>
           <h3>Filtrar mercados</h3>
-          <p>Usa pocos filtros para encontrar rápido lo que buscas. Si no ves resultados, prueba limpiar filtros.</p>
         </div>
         <div className="markets-filters__actions">
-          <span className="muted-text">{providers.length} proveedores disponibles</span>
           <button className="secondary-button" type="button" onClick={onReset}>
             Restablecer
           </button>
@@ -68,41 +66,6 @@ export function MarketsFilters({ filters, providers, events, onChange, onReset }
         </label>
 
         <label className="field-group">
-          <span>Proveedor</span>
-          <select className="select-input" name="provider" value={filters.provider} onChange={handleFieldChange}>
-            <option value="">Todos</option>
-            {providers.map((provider) => (
-              <option key={provider.id} value={provider.slug}>
-                {provider.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="field-group">
-          <span>Operable en paper</span>
-          <select className="select-input" name="paper_tradable" value={filters.paper_tradable} onChange={handleFieldChange}>
-            {paperTradableOptions.map((option) => (
-              <option key={option.label} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="field-group">
-          <span>Categoría</span>
-          <select className="select-input" name="category" value={filters.category} onChange={handleFieldChange}>
-            <option value="">Todas</option>
-            {categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="field-group">
           <span>Estado</span>
           <select className="select-input" name="status" value={filters.status} onChange={handleFieldChange}>
             {statusOptions.map((status) => (
@@ -113,17 +76,58 @@ export function MarketsFilters({ filters, providers, events, onChange, onReset }
           </select>
         </label>
 
-        <label className="field-group">
-          <span>Actividad</span>
-          <select className="select-input" name="is_active" value={filters.is_active} onChange={handleFieldChange}>
-            {activeOptions.map((option) => (
-              <option key={option.label} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
+
+      <details className="markets-filters__advanced" open={hasAdvancedFilters}>
+        <summary>Filtros avanzados {hasAdvancedFilters ? '(activos)' : ''}</summary>
+        <div className="markets-filters__grid markets-filters__grid--advanced">
+          <label className="field-group">
+            <span>Proveedor</span>
+            <select className="select-input" name="provider" value={filters.provider} onChange={handleFieldChange}>
+              <option value="">Todos</option>
+              {providers.map((provider) => (
+                <option key={provider.id} value={provider.slug}>
+                  {provider.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field-group">
+            <span>Operable en paper</span>
+            <select className="select-input" name="paper_tradable" value={filters.paper_tradable} onChange={handleFieldChange}>
+              {paperTradableOptions.map((option) => (
+                <option key={option.label} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field-group">
+            <span>Categoría</span>
+            <select className="select-input" name="category" value={filters.category} onChange={handleFieldChange}>
+              <option value="">Todas</option>
+              {categories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field-group">
+            <span>Actividad</span>
+            <select className="select-input" name="is_active" value={filters.is_active} onChange={handleFieldChange}>
+              {activeOptions.map((option) => (
+                <option key={option.label} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </details>
     </section>
   );
 }
