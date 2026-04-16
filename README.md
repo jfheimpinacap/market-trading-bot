@@ -1427,6 +1427,46 @@ python start.py backend
 python start.py frontend
 ```
 
+### Launcher visual para Windows (`launcher_gui.py`)
+
+Si prefieres un acceso visual (botones grandes) para uso local en Windows, puedes usar:
+
+```bash
+python launcher_gui.py
+```
+
+Este launcher **no reimplementa lógica**: delega en `start.py` y ejecuta:
+
+- `full` → **Iniciar sistema completo**
+- `lite` → **Inicio lite**
+- `status` → **Revisar estado de servicios**
+- `logs` → **Abrir logs**
+- `stop` → **Detener servicios**
+
+Incluye un bloque de estado rápido para:
+
+- Docker
+- Ollama
+- Backend
+- Frontend
+
+con estados `OK`, `STARTING` u `OFF`.
+
+Instalación mínima (si falta la dependencia):
+
+```bash
+pip install customtkinter
+```
+
+#### Acceso directo de escritorio (Windows)
+
+1. Crea un acceso directo nuevo en el escritorio.
+2. En **Destino**, usa tu `python.exe` seguido de la ruta absoluta al script:
+   - Ejemplo: `"C:\\Python312\\python.exe" "C:\\ruta\\market-trading-bot\\launcher_gui.py"`
+3. En **Iniciar en**, usa la carpeta del repo:
+   - Ejemplo: `C:\\ruta\\market-trading-bot`
+4. Opcional: cambia el icono del acceso directo para identificarlo como launcher local.
+
 ### Runtime modes: full vs lite
 
 The launcher now supports two explicit local modes:
