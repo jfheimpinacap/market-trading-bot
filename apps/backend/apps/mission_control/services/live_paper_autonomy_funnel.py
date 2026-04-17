@@ -32,6 +32,11 @@ from apps.autonomous_trader.services.execution_intake.decision import decide_int
 from apps.autonomous_trader.services.execution_intake.intake import resolve_intake_status_from_readiness
 from apps.autonomous_trader.services.execution_intake.run import run_execution_intake
 from apps.markets.models import Market
+from apps.mission_control.services.execution_exposure_diagnostics import (
+    empty_execution_exposure_provenance_summary,
+    empty_execution_exposure_release_audit_summary,
+    normalize_execution_exposure_diagnostics,
+)
 from apps.mission_control.services.live_paper_bootstrap import PRESET_NAME
 from apps.mission_control.services.live_paper_validation import build_live_paper_validation_digest
 from apps.mission_control.services.session_heartbeat import build_heartbeat_summary
@@ -1988,6 +1993,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     creation_allowed_without_exposure = 0
     creation_gate_reason_codes: list[str] = []
     creation_gate_examples: list[dict[str, Any]] = []
+    creation_exposure_provenance_examples: list[dict[str, Any]] = []
     suppressed_before_creation_readiness_ids: set[int] = set()
     created_by_bridge_readiness_ids: set[int] = set()
 
@@ -4885,6 +4891,12 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         f"risk_decisions={risk_count} paper_execution_candidates={paper_execution_count} "
         f"handoff_reason_codes={','.join(normalized_codes) or 'none'}"
     )
+    exposure_diagnostics = normalize_execution_exposure_diagnostics(
+        provenance_summary=paper_execution_summary.get('execution_exposure_provenance_summary'),
+        provenance_examples=paper_execution_summary.get('execution_exposure_provenance_examples'),
+        release_audit_summary=paper_execution_summary.get('execution_exposure_release_audit_summary'),
+        release_audit_examples=paper_execution_summary.get('execution_exposure_release_audit_examples'),
+    )
 
     return {
         'shortlisted_signals': int(shortlisted_count),
@@ -4973,10 +4985,10 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'paper_trade_examples': paper_execution_summary.get('paper_trade_examples', []),
         'execution_candidate_creation_gate_summary': paper_execution_summary.get('execution_candidate_creation_gate_summary', {}),
         'execution_candidate_creation_gate_examples': paper_execution_summary.get('execution_candidate_creation_gate_examples', []),
-        'execution_exposure_provenance_summary': paper_execution_summary.get('execution_exposure_provenance_summary', {}),
-        'execution_exposure_provenance_examples': paper_execution_summary.get('execution_exposure_provenance_examples', []),
-        'execution_exposure_release_audit_summary': paper_execution_summary.get('execution_exposure_release_audit_summary', {}),
-        'execution_exposure_release_audit_examples': paper_execution_summary.get('execution_exposure_release_audit_examples', []),
+        'execution_exposure_provenance_summary': exposure_diagnostics.get('execution_exposure_provenance_summary', empty_execution_exposure_provenance_summary()),
+        'execution_exposure_provenance_examples': exposure_diagnostics.get('execution_exposure_provenance_examples', []),
+        'execution_exposure_release_audit_summary': exposure_diagnostics.get('execution_exposure_release_audit_summary', empty_execution_exposure_release_audit_summary()),
+        'execution_exposure_release_audit_examples': exposure_diagnostics.get('execution_exposure_release_audit_examples', []),
         'execution_promotion_gate_summary': paper_execution_summary.get('execution_promotion_gate_summary', {}),
         'execution_promotion_gate_examples': paper_execution_summary.get('execution_promotion_gate_examples', []),
         'execution_lineage_summary': paper_execution_summary.get('execution_lineage_summary', {}),
@@ -5023,6 +5035,12 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
     stalled_stage = _infer_stalled_stage(counts=counts)
     risk_decision_count = counts.risk_approved_count + counts.risk_blocked_count
     handoff_diagnostics = _build_handoff_diagnostics(window_start=window_start, preset_name=target_preset)
+    exposure_diagnostics = normalize_execution_exposure_diagnostics(
+        provenance_summary=handoff_diagnostics.get('execution_exposure_provenance_summary'),
+        provenance_examples=handoff_diagnostics.get('execution_exposure_provenance_examples'),
+        release_audit_summary=handoff_diagnostics.get('execution_exposure_release_audit_summary'),
+        release_audit_examples=handoff_diagnostics.get('execution_exposure_release_audit_examples'),
+    )
     stalled_reason_code = _infer_stalled_reason_code(stalled_stage=stalled_stage, handoff_diagnostics=handoff_diagnostics)
     if not stalled_reason_code and stalled_stage:
         stage_reason_map = {
@@ -5178,10 +5196,10 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'execution_lineage_summary': handoff_diagnostics.get('execution_lineage_summary', {}),
         'execution_candidate_creation_gate_summary': handoff_diagnostics.get('execution_candidate_creation_gate_summary', {}),
         'execution_candidate_creation_gate_examples': handoff_diagnostics.get('execution_candidate_creation_gate_examples', []),
-        'execution_exposure_provenance_summary': handoff_diagnostics.get('execution_exposure_provenance_summary', {}),
-        'execution_exposure_provenance_examples': handoff_diagnostics.get('execution_exposure_provenance_examples', []),
-        'execution_exposure_release_audit_summary': handoff_diagnostics.get('execution_exposure_release_audit_summary', {}),
-        'execution_exposure_release_audit_examples': handoff_diagnostics.get('execution_exposure_release_audit_examples', []),
+        'execution_exposure_provenance_summary': exposure_diagnostics.get('execution_exposure_provenance_summary', empty_execution_exposure_provenance_summary()),
+        'execution_exposure_provenance_examples': exposure_diagnostics.get('execution_exposure_provenance_examples', []),
+        'execution_exposure_release_audit_summary': exposure_diagnostics.get('execution_exposure_release_audit_summary', empty_execution_exposure_release_audit_summary()),
+        'execution_exposure_release_audit_examples': exposure_diagnostics.get('execution_exposure_release_audit_examples', []),
         'execution_promotion_gate_summary': handoff_diagnostics.get('execution_promotion_gate_summary', {}),
         'execution_promotion_gate_examples': handoff_diagnostics.get('execution_promotion_gate_examples', []),
         'final_fanout_summary': handoff_diagnostics.get('final_fanout_summary', {}),

@@ -2740,6 +2740,31 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         self.assertEqual(payload.get('execution_exposure_release_audit_summary', {}).get('suppressions_audited'), 2)
         self.assertEqual(len(payload.get('execution_exposure_release_audit_examples') or []), 1)
 
+    @patch('apps.mission_control.views.build_execution_exposure_release_audit_snapshot')
+    def test_execution_exposure_release_audit_endpoint_preserves_unavailable_contract(self, mock_snapshot):
+        mock_snapshot.return_value = {
+            'window_minutes': 60,
+            'preset_name': 'live_read_only_paper_conservative',
+            'execution_exposure_provenance_summary': {
+                'diagnostic_status': 'UNAVAILABLE',
+                'diagnostic_unavailable': True,
+                'diagnostic_reason_codes': ['EXECUTION_EXPOSURE_PROVENANCE_UNAVAILABLE'],
+                'provenance_summary': 'UNAVAILABLE',
+            },
+            'execution_exposure_release_audit_summary': {
+                'diagnostic_status': 'UNAVAILABLE',
+                'diagnostic_unavailable': True,
+                'diagnostic_reason_codes': ['EXECUTION_EXPOSURE_RELEASE_AUDIT_UNAVAILABLE'],
+                'release_audit_summary': 'UNAVAILABLE',
+            },
+            'execution_exposure_release_audit_examples': [],
+        }
+        response = self.client.get(reverse('mission_control:execution-exposure-release-audit'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload.get('execution_exposure_release_audit_summary', {}).get('diagnostic_unavailable'), True)
+        self.assertEqual(payload.get('execution_exposure_provenance_summary', {}).get('diagnostic_unavailable'), True)
+
     def test_does_not_mark_shortlist_reason_without_real_shortlist(self):
         counts = self._funnel_counts(scan=7, research=0, prediction=0, risk_approved=0, risk_blocked=0, execution=0, recent_trades=0)
         with patch('apps.mission_control.services.live_paper_autonomy_funnel._collect_funnel_counts', return_value=counts), patch(
@@ -7012,6 +7037,93 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(summary.get('candidates_blocked_by_active_position'), 1)
         self.assertIn('POSITION_EXPOSURE_GATE_APPLIED', summary.get('position_exposure_reason_codes', []))
 
+    def test_test_console_status_serializer_preserves_execution_exposure_blocks(self):
+        from apps.mission_control.serializers import TestConsoleStatusSerializer
+
+        payload = self._status_payload()
+        payload['execution_exposure_provenance_summary'] = {'suppressions_total': 3, 'diagnostic_status': 'AVAILABLE'}
+        payload['execution_exposure_provenance_examples'] = [{'readiness_id': 7}]
+        payload['execution_exposure_release_audit_summary'] = {'suppressions_audited': 3, 'diagnostic_status': 'AVAILABLE'}
+        payload['execution_exposure_release_audit_examples'] = [{'market_id': 99}]
+
+        serializer = TestConsoleStatusSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data.get('execution_exposure_provenance_summary', {}).get('suppressions_total'), 3)
+        self.assertEqual(len(serializer.validated_data.get('execution_exposure_provenance_examples') or []), 1)
+        self.assertEqual(serializer.validated_data.get('execution_exposure_release_audit_summary', {}).get('suppressions_audited'), 3)
+        self.assertEqual(len(serializer.validated_data.get('execution_exposure_release_audit_examples') or []), 1)
+
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_export_log_degrades_safely_when_provenance_block_is_partial(self, mock_state_snapshot):
+        from apps.mission_control.services.test_console import export_test_console_log
+
+        payload = self._status_payload()
+        payload['text_export'] = ''
+        payload['execution_exposure_provenance_summary'] = None
+        payload['execution_exposure_provenance_examples'] = 'bad-shape'
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        json_payload = export_test_console_log(fmt='json')
+        provenance = json_payload.get('execution_exposure_provenance_summary') or {}
+        self.assertEqual(provenance.get('diagnostic_unavailable'), True)
+        self.assertIn('EXECUTION_EXPOSURE_PROVENANCE_UNAVAILABLE', provenance.get('diagnostic_reason_codes', []))
+        self.assertIn('TEST_CONSOLE_EXPORT_PARTIAL_DIAGNOSTIC_RECOVERED', json_payload.get('reason_codes', []))
+        text_payload = export_test_console_log(fmt='text')
+        self.assertIn('provenance_summary=UNAVAILABLE', text_payload)
+
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_export_log_degrades_safely_when_release_audit_block_is_partial(self, mock_state_snapshot):
+        from apps.mission_control.services.test_console import export_test_console_log
+
+        payload = self._status_payload()
+        payload['text_export'] = ''
+        payload['execution_exposure_release_audit_summary'] = None
+        payload['execution_exposure_release_audit_examples'] = {'bad': 'shape'}
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        json_payload = export_test_console_log(fmt='json')
+        release_audit = json_payload.get('execution_exposure_release_audit_summary') or {}
+        self.assertEqual(release_audit.get('diagnostic_unavailable'), True)
+        self.assertIn('EXECUTION_EXPOSURE_RELEASE_AUDIT_UNAVAILABLE', release_audit.get('diagnostic_reason_codes', []))
+        self.assertIn('TEST_CONSOLE_EXPORT_PARTIAL_DIAGNOSTIC_RECOVERED', json_payload.get('warnings', []))
+        text_payload = export_test_console_log(fmt='text')
+        self.assertIn('release_audit_summary=UNAVAILABLE', text_payload)
+
+    @patch('apps.mission_control.services.test_console.build_state_consistency_snapshot')
+    @patch('apps.mission_control.services.test_console.get_active_account')
+    @patch('apps.mission_control.services.test_console._build_scan_summary', return_value={'runs': 0})
+    @patch('apps.mission_control.services.test_console._build_portfolio_summary', return_value={'open_positions': 0, 'recent_trades_count': 0})
+    @patch('apps.mission_control.services.test_console.get_live_paper_attention_alert_status', return_value={'attention_mode': 'HEALTHY'})
+    @patch('apps.mission_control.services.test_console.get_extended_paper_run_status', return_value={'extended_run_active': False, 'gate_status': 'ALLOW'})
+    @patch('apps.mission_control.services.test_console.build_extended_paper_run_gate', return_value={'gate_status': 'ALLOW', 'next_action_hint': 'ok', 'reason_codes': []})
+    @patch('apps.mission_control.services.test_console.build_live_paper_trial_trend_digest', return_value={'trend_status': 'STABLE', 'readiness_status': 'READY_FOR_EXTENDED_RUN'})
+    @patch('apps.mission_control.services.test_console.build_live_paper_validation_digest', return_value={'validation_status': 'READY'})
+    @patch('apps.mission_control.services.test_console.get_live_paper_bootstrap_status', return_value={'session_active': True, 'heartbeat_active': True, 'current_session_status': 'RUNNING'})
+    @patch('apps.mission_control.services.test_console.build_live_paper_autonomy_funnel_snapshot', side_effect=NameError('creation_exposure_provenance_examples missing'))
+    def test_sync_operational_snapshot_recovers_from_nameerror_with_diagnostic_fallback(
+        self,
+        _mock_funnel,
+        _mock_bootstrap,
+        _mock_validation,
+        _mock_trend,
+        _mock_gate,
+        _mock_extended,
+        _mock_attention,
+        _mock_portfolio,
+        _mock_scan,
+        mock_get_active_account,
+        mock_consistency,
+    ):
+        from apps.mission_control.services.test_console import _sync_operational_snapshot
+
+        payload = self._status_payload()
+        mock_get_active_account.return_value = SimpleNamespace(slug='demo-paper-account')
+        mock_consistency.return_value = SimpleNamespace(summary={'state_consistency_reason_codes': ['STATE_ALIGNMENT_OK']}, examples=[])
+        _sync_operational_snapshot(payload=payload, preset_name='live_read_only_paper_conservative')
+        self.assertIn('TEST_CONSOLE_EXPOSURE_DIAGNOSTIC_FALLBACK_USED', payload.get('warnings', []))
+        self.assertEqual(payload.get('execution_exposure_provenance_summary', {}).get('diagnostic_unavailable'), True)
+        self.assertEqual(payload.get('execution_exposure_release_audit_summary', {}).get('diagnostic_unavailable'), True)
+
     @patch('apps.mission_control.services.test_console.build_state_consistency_snapshot')
     @patch('apps.mission_control.services.test_console.get_active_account')
     @patch('apps.mission_control.services.test_console._find_active_preset_session', return_value=None)
@@ -7725,3 +7837,28 @@ class ExecutionExposureReleaseAuditCommandTests(TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload.get('execution_exposure_release_audit_summary', {}).get('suppressions_audited'), 1)
         self.assertEqual(len(payload.get('execution_exposure_release_audit_examples') or []), 1)
+
+    @patch('apps.mission_control.management.commands.run_execution_exposure_release_audit.build_execution_exposure_release_audit_snapshot')
+    def test_release_audit_command_outputs_unavailable_contract(self, mock_snapshot):
+        mock_snapshot.return_value = {
+            'window_minutes': 60,
+            'preset_name': 'live_read_only_paper_conservative',
+            'execution_exposure_provenance_summary': {
+                'diagnostic_status': 'UNAVAILABLE',
+                'diagnostic_unavailable': True,
+                'diagnostic_reason_codes': ['EXECUTION_EXPOSURE_PROVENANCE_UNAVAILABLE'],
+                'provenance_summary': 'UNAVAILABLE',
+            },
+            'execution_exposure_release_audit_summary': {
+                'diagnostic_status': 'UNAVAILABLE',
+                'diagnostic_unavailable': True,
+                'diagnostic_reason_codes': ['EXECUTION_EXPOSURE_RELEASE_AUDIT_UNAVAILABLE'],
+                'release_audit_summary': 'UNAVAILABLE',
+            },
+            'execution_exposure_release_audit_examples': [],
+        }
+        stdout = StringIO()
+        call_command('run_execution_exposure_release_audit', '--json', stdout=stdout)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload.get('execution_exposure_provenance_summary', {}).get('diagnostic_unavailable'), True)
+        self.assertEqual(payload.get('execution_exposure_release_audit_summary', {}).get('diagnostic_unavailable'), True)
