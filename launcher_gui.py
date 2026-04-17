@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -18,6 +19,7 @@ STATUS_KEYS = ('Docker', 'Ollama service', 'Ollama backend', 'Backend', 'Fronten
 STATUS_DEFAULT = 'OFF'
 PREFERENCES_FILE = ROOT / '.tmp' / 'launcher-gui-preferences.json'
 DEFAULT_SYSTEM_URL = 'http://localhost:5173/system'
+OLLAMA_TIMEOUT_OPTIONS = ('30', '60', '90', '120')
 
 
 class LauncherGUI(ctk.CTk):
@@ -25,8 +27,8 @@ class LauncherGUI(ctk.CTk):
         super().__init__()
         self.preferences = self._load_preferences()
         self.title('Market Trading Bot — Launcher local')
-        self.geometry(str(self.preferences.get('window_geometry', '720x540')))
-        self.minsize(680, 500)
+        self.geometry(str(self.preferences.get('window_geometry', '760x640')))
+        self.minsize(720, 620)
         self.protocol('WM_DELETE_WINDOW', self._on_close)
 
         ctk.set_appearance_mode('dark')
@@ -39,6 +41,11 @@ class LauncherGUI(ctk.CTk):
         self.main_url_var = ctk.StringVar(value='URL principal: no disponible')
         self.auto_open_browser_var = ctk.BooleanVar(value=bool(self.preferences.get('auto_open_browser', True)))
         self.use_ollama_var = ctk.BooleanVar(value=bool(self.preferences.get('use_ollama', True)))
+        self.aux_signal_var = ctk.BooleanVar(value=bool(self.preferences.get('aux_signal_enabled', False)))
+        timeout_value = str(self.preferences.get('ollama_timeout_seconds', '90')).strip()
+        if timeout_value not in OLLAMA_TIMEOUT_OPTIONS:
+            timeout_value = '90'
+        self.ollama_timeout_var = ctk.StringVar(value=timeout_value)
         self.dashboard_button: ctk.CTkButton | None = None
 
         self._build_ui()
@@ -83,9 +90,8 @@ class LauncherGUI(ctk.CTk):
 
         self._add_action_button(actions, 'Iniciar sistema completo (full)', lambda: self.run_action('full'))
         self._add_action_button(actions, 'Iniciar modo liviano (lite)', lambda: self.run_action('lite'))
-        self._add_action_button(actions, 'Iniciar último modo usado', self.run_last_mode)
-        self._add_action_button(actions, 'Actualizar estado ahora', self.refresh_status)
-        self._add_action_button(actions, 'Abrir logs', self.open_logs)
+        self._add_action_button(actions, 'Repetir último arranque', self.run_last_mode)
+        self._add_action_button(actions, 'Revisar servicios', self.refresh_status)
         self._add_action_button(actions, 'Detener servicios', lambda: self.run_action('stop'))
         self.dashboard_button = self._add_action_button(
             actions,
@@ -93,6 +99,7 @@ class LauncherGUI(ctk.CTk):
             self.open_dashboard,
             state='disabled',
         )
+        self._add_action_button(actions, 'Ver logs (todos)', lambda: self.open_logs('all'))
 
         ctk.CTkCheckBox(
             actions,
@@ -103,11 +110,34 @@ class LauncherGUI(ctk.CTk):
         ).pack(anchor='w', padx=16, pady=(8, 4))
         ctk.CTkCheckBox(
             actions,
-            text='Usar Ollama (shadow + señal auxiliar)',
+            text='Usar Ollama (shadow)',
             variable=self.use_ollama_var,
             command=self._save_preferences,
             font=ctk.CTkFont(size=13),
         ).pack(anchor='w', padx=16, pady=(4, 4))
+        ctk.CTkCheckBox(
+            actions,
+            text='Activar señal auxiliar LLM',
+            variable=self.aux_signal_var,
+            command=self._save_preferences,
+            font=ctk.CTkFont(size=13),
+        ).pack(anchor='w', padx=16, pady=(4, 4))
+
+        timeout_row = ctk.CTkFrame(actions, fg_color='transparent')
+        timeout_row.pack(fill='x', padx=16, pady=(4, 6))
+        ctk.CTkLabel(
+            timeout_row,
+            text='Timeout Ollama (s):',
+            font=ctk.CTkFont(size=13),
+        ).pack(side='left')
+        timeout_selector = ctk.CTkOptionMenu(
+            timeout_row,
+            values=list(OLLAMA_TIMEOUT_OPTIONS),
+            variable=self.ollama_timeout_var,
+            width=100,
+            command=lambda _: self._save_preferences(),
+        )
+        timeout_selector.pack(side='left', padx=(8, 0))
 
         ctk.CTkLabel(
             actions,
@@ -151,6 +181,28 @@ class LauncherGUI(ctk.CTk):
             justify='left',
         ).grid(row=len(STATUS_KEYS) + 1, column=0, columnspan=2, padx=14, pady=(8, 14), sticky='w')
 
+        logs_box = ctk.CTkFrame(status_box, corner_radius=8, fg_color='transparent')
+        logs_box.grid(row=len(STATUS_KEYS) + 2, column=0, columnspan=2, padx=12, pady=(0, 14), sticky='ew')
+        logs_box.grid_columnconfigure((0, 1, 2), weight=1)
+        ctk.CTkButton(
+            logs_box,
+            text='Logs backend',
+            height=34,
+            command=lambda: self.open_logs('backend'),
+        ).grid(row=0, column=0, padx=4, pady=4, sticky='ew')
+        ctk.CTkButton(
+            logs_box,
+            text='Logs frontend',
+            height=34,
+            command=lambda: self.open_logs('frontend'),
+        ).grid(row=0, column=1, padx=4, pady=4, sticky='ew')
+        ctk.CTkButton(
+            logs_box,
+            text='Logs Ollama',
+            height=34,
+            command=lambda: self.open_logs('ollama'),
+        ).grid(row=0, column=2, padx=4, pady=4, sticky='ew')
+
         footer = ctk.CTkFrame(self, corner_radius=14)
         footer.grid(row=2, column=0, padx=20, pady=(12, 20), sticky='ew')
         footer.grid_columnconfigure(0, weight=1)
@@ -179,13 +231,15 @@ class LauncherGUI(ctk.CTk):
 
     def _run_start_command(self, *args: str) -> subprocess.CompletedProcess[str]:
         command = [sys.executable, str(START_SCRIPT), *args]
-        return subprocess.run(
-            command,
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+        run_kwargs: dict[str, object] = {
+            'cwd': ROOT,
+            'text': True,
+            'capture_output': True,
+            'check': False,
+        }
+        if os.name == 'nt':
+            run_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+        return subprocess.run(command, **run_kwargs)
 
     def run_action(self, action: str) -> None:
         feedback_text = {
@@ -219,6 +273,16 @@ class LauncherGUI(ctk.CTk):
             command_args.append('--no-browser')
         if action in {'full', 'lite'}:
             command_args.extend(['--ollama', 'enabled' if self.use_ollama_var.get() else 'disabled'])
+            command_args.extend(
+                [
+                    '--ollama-aux-signal',
+                    'enabled' if self.aux_signal_var.get() else 'disabled',
+                    '--ollama-env-timeout',
+                    str(self.ollama_timeout_var.get()),
+                    '--ollama-timeout',
+                    str(self.ollama_timeout_var.get()),
+                ]
+            )
         if action in {'full', 'lite'}:
             self.preferences['last_mode'] = action
         self._save_preferences()
@@ -227,17 +291,17 @@ class LauncherGUI(ctk.CTk):
     def refresh_status(self) -> None:
         self._run_background('status', 'Revisando estado de servicios...', 'status')
 
-    def open_logs(self) -> None:
+    def open_logs(self, service: str = 'all') -> None:
         self._set_busy(True)
-        self.feedback_var.set('Abriendo logs del launcher...')
+        self.feedback_var.set(f'Abriendo logs del launcher ({service})...')
 
         def worker() -> None:
-            result = self._run_start_command('logs')
-            self.after(0, lambda: self._on_logs_ready(result))
+            result = self._run_start_command('logs', '--service', service)
+            self.after(0, lambda: self._on_logs_ready(result, service))
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_logs_ready(self, result: subprocess.CompletedProcess[str]) -> None:
+    def _on_logs_ready(self, result: subprocess.CompletedProcess[str], service: str) -> None:
         self._set_busy(False)
         if result.returncode != 0:
             error_output = (result.stderr or result.stdout or 'Error desconocido').strip()
@@ -246,14 +310,14 @@ class LauncherGUI(ctk.CTk):
             return
 
         logs_window = ctk.CTkToplevel(self)
-        logs_window.title('Logs del launcher (start.py logs)')
+        logs_window.title(f'Logs del launcher ({service})')
         logs_window.geometry('900x560')
         logs_window.grid_columnconfigure(0, weight=1)
         logs_window.grid_rowconfigure(1, weight=1)
 
         ctk.CTkLabel(
             logs_window,
-            text='Salida de `start.py logs`',
+            text=f'Salida de `start.py logs --service {service}`',
             font=ctk.CTkFont(size=16, weight='bold'),
         ).grid(row=0, column=0, padx=16, pady=(14, 8), sticky='w')
 
@@ -391,12 +455,16 @@ class LauncherGUI(ctk.CTk):
         loaded.setdefault('last_mode', 'full')
         loaded.setdefault('auto_open_browser', True)
         loaded.setdefault('use_ollama', True)
+        loaded.setdefault('aux_signal_enabled', False)
+        loaded.setdefault('ollama_timeout_seconds', '90')
         return loaded
 
     def _save_preferences(self) -> None:
         self.preferences['window_geometry'] = self.geometry()
         self.preferences['auto_open_browser'] = bool(self.auto_open_browser_var.get())
         self.preferences['use_ollama'] = bool(self.use_ollama_var.get())
+        self.preferences['aux_signal_enabled'] = bool(self.aux_signal_var.get())
+        self.preferences['ollama_timeout_seconds'] = str(self.ollama_timeout_var.get())
         PREFERENCES_FILE.parent.mkdir(parents=True, exist_ok=True)
         PREFERENCES_FILE.write_text(json.dumps(self.preferences, indent=2), encoding='utf-8')
 
