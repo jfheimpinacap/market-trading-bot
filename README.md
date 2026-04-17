@@ -1435,6 +1435,8 @@ Si prefieres un acceso visual (botones grandes) para uso local en Windows, puede
 python launcher_gui.py
 ```
 
+> En Windows, aunque lo abras con `python launcher_gui.py`, el launcher se relanza automáticamente con `pythonw.exe` (cuando existe junto al intérprete actual) para evitar la consola negra y que la GUI no dependa de dejar abierta esa terminal.
+
 Este launcher **no reimplementa lógica**: delega en `start.py` y ejecuta:
 
 - `full` → **Iniciar sistema completo**
@@ -1459,11 +1461,13 @@ El panel ahora expone controles separados para LLM local:
 - **“Activar señal auxiliar LLM”** → mapea a `--ollama-aux-signal enabled|disabled` (`OLLAMA_AUX_SIGNAL_ENABLED`).
 - **“Timeout Ollama (s)”** (30/60/90/120) → mapea a `--ollama-env-timeout` (backend) y `--ollama-timeout` (probe de servicio).
 - **“Modelo Ollama”** y **“Base URL Ollama”** para reutilizar esos valores tanto en el arranque como en el smoke test.
-- **“Probar Ollama (smoke test)”** ejecuta `python manage.py run_llm_shadow_smoke --settings=config.settings.lite --model <modelo> --timeout <timeout> --json` (más `--aux-signal`/`--no-aux-signal` según toggle actual).
+- **“Probar Ollama (smoke test)”** ejecuta `apps/backend/.venv/Scripts/python.exe apps/backend/manage.py run_llm_shadow_smoke --settings=config.settings.lite --model <modelo> --timeout <timeout> --json` (más `--aux-signal`/`--no-aux-signal` según toggle actual).
 
 El timeout por defecto para backend queda elevado a **90 segundos** (`OLLAMA_TIMEOUT_SECONDS=90`) para modelos locales más lentos.
 
 Al correr el smoke test desde GUI, el launcher pasa explícitamente el entorno del proceso (`OLLAMA_ENABLED`, `LLM_ENABLED`, `OLLAMA_AUX_SIGNAL_ENABLED`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`) para no depender de variables de la terminal interactiva y muestra un resumen legible + JSON completo en una ventana de resultados.
+
+Si `apps/backend/.venv/Scripts/python.exe` no existe, el launcher muestra un error claro en GUI indicando que primero hay que preparar el backend (por ejemplo con `python start.py setup`).
 
 Instalación mínima (si falta la dependencia):
 
@@ -1476,6 +1480,8 @@ pip install customtkinter
 1. Crea un acceso directo nuevo en el escritorio.
 2. En **Destino**, usa tu `python.exe` seguido de la ruta absoluta al script:
    - Ejemplo: `"C:\\Python312\\python.exe" "C:\\ruta\\market-trading-bot\\launcher_gui.py"`
+   - Opción recomendada para cero consola visible: usar directamente `pythonw.exe` en lugar de `python.exe`.
+   - Ejemplo recomendado: `"C:\\Python312\\pythonw.exe" "C:\\ruta\\market-trading-bot\\launcher_gui.py"`
 3. En **Iniciar en**, usa la carpeta del repo:
    - Ejemplo: `C:\\ruta\\market-trading-bot`
 4. Opcional: cambia el icono del acceso directo para identificarlo como launcher local.

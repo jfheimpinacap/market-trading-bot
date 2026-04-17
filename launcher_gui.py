@@ -15,6 +15,10 @@ import customtkinter as ctk
 
 ROOT = Path(__file__).resolve().parent
 START_SCRIPT = ROOT / 'start.py'
+BACKEND_DIR = ROOT / 'apps' / 'backend'
+BACKEND_MANAGE_SCRIPT = BACKEND_DIR / 'manage.py'
+BACKEND_VENV_PYTHON_WINDOWS = BACKEND_DIR / '.venv' / 'Scripts' / 'python.exe'
+BACKEND_VENV_PYTHON_POSIX = BACKEND_DIR / '.venv' / 'bin' / 'python'
 STATUS_KEYS = ('Docker', 'Ollama service', 'Ollama backend', 'Backend', 'Frontend')
 STATUS_DEFAULT = 'OFF'
 PREFERENCES_FILE = ROOT / '.tmp' / 'launcher-gui-preferences.json'
@@ -344,12 +348,13 @@ class LauncherGUI(ctk.CTk):
         *args: str,
         env_overrides: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
-        command = [sys.executable, 'manage.py', *args]
+        backend_python = self._resolve_backend_python()
+        command = [str(backend_python), str(BACKEND_MANAGE_SCRIPT), *args]
         env = os.environ.copy()
         if env_overrides:
             env.update(env_overrides)
         run_kwargs: dict[str, object] = {
-            'cwd': ROOT / 'apps' / 'backend',
+            'cwd': BACKEND_DIR,
             'text': True,
             'capture_output': True,
             'check': False,
@@ -358,6 +363,22 @@ class LauncherGUI(ctk.CTk):
         if os.name == 'nt':
             run_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
         return subprocess.run(command, **run_kwargs)
+
+    @staticmethod
+    def _backend_python_path() -> Path:
+        if os.name == 'nt':
+            return BACKEND_VENV_PYTHON_WINDOWS
+        return BACKEND_VENV_PYTHON_POSIX
+
+    def _resolve_backend_python(self) -> Path:
+        backend_python = self._backend_python_path()
+        if backend_python.exists():
+            return backend_python
+        raise RuntimeError(
+            'No se encontró el Python del backend en '
+            f'{backend_python}. Prepara el entorno con `python start.py setup` '
+            'o creando `apps/backend/.venv` antes de usar comandos Django desde el launcher.'
+        )
 
     def run_action(self, action: str) -> None:
         feedback_text = {
@@ -562,6 +583,13 @@ class LauncherGUI(ctk.CTk):
         self.run_action(mode)
 
     def run_llm_shadow_smoke_test(self) -> None:
+        try:
+            self._resolve_backend_python()
+        except RuntimeError as exc:
+            self.feedback_var.set('Falta preparar entorno backend (.venv).')
+            messagebox.showerror('Backend .venv faltante', str(exc))
+            return
+
         model = self.ollama_model_var.get().strip() or DEFAULT_OLLAMA_MODEL
         timeout = self.ollama_timeout_var.get().strip() or '90'
         base_url = self.ollama_base_url_var.get().strip() or DEFAULT_OLLAMA_BASE_URL
@@ -628,6 +656,11 @@ class LauncherGUI(ctk.CTk):
     @staticmethod
     def _build_smoke_error_message(raw_error: str) -> str:
         lowered = raw_error.lower()
+        if "no module named 'celery'" in lowered or 'no module named "celery"' in lowered:
+            return (
+                'El comando se ejecutó sin dependencias del backend. '
+                'Verifica `apps/backend/.venv` y vuelve a correr `python start.py setup`.'
+            )
         if 'run migrations first' in lowered or 'could not access mission-control tables' in lowered:
             return 'Faltan migraciones en backend. Ejecuta: python apps/backend/manage.py migrate'
         if 'timed out' in lowered or 'timeout' in lowered:
@@ -752,7 +785,33 @@ class LauncherGUI(ctk.CTk):
         self.destroy()
 
 
+def maybe_relaunch_with_pythonw() -> None:
+    if os.name != 'nt':
+        return
+    if os.environ.get('MTB_LAUNCHER_RELAUNCHED') == '1':
+        return
+    current_python = Path(sys.executable or '')
+    if current_python.name.lower() == 'pythonw.exe':
+        return
+    pythonw_path = current_python.with_name('pythonw.exe')
+    if not pythonw_path.exists():
+        return
+    env = os.environ.copy()
+    env['MTB_LAUNCHER_RELAUNCHED'] = '1'
+    creationflags = getattr(subprocess, 'DETACHED_PROCESS', 0) | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+    subprocess.Popen(
+        [str(pythonw_path), str(Path(__file__).resolve())],
+        cwd=str(ROOT),
+        env=env,
+        close_fds=True,
+        creationflags=creationflags,
+    )
+    raise SystemExit(0)
+
+
 if __name__ == '__main__':
+    maybe_relaunch_with_pythonw()
+
     if not START_SCRIPT.exists():
         raise SystemExit('No se encontró start.py en la raíz del proyecto.')
 
