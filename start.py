@@ -113,7 +113,7 @@ LAUNCHER_OLLAMA_ENV_DEFAULTS = {
     'OLLAMA_MODEL': 'llama3.2:3b',
     'OLLAMA_CHAT_MODEL': 'llama3.2:3b',
     'OLLAMA_EMBED_MODEL': 'nomic-embed-text',
-    'OLLAMA_TIMEOUT_SECONDS': '30',
+    'OLLAMA_TIMEOUT_SECONDS': '90',
     'OLLAMA_AUX_SIGNAL_ENABLED': 'false',
     'LLM_PROVIDER': 'ollama',
     'LLM_ENABLED': 'true',
@@ -200,6 +200,12 @@ def subprocess_env(extra: dict[str, str] | None = None) -> dict[str, str]:
     return env
 
 
+def windows_no_window_kwargs() -> dict[str, Any]:
+    if os.name != 'nt':
+        return {}
+    return {'creationflags': subprocess.CREATE_NO_WINDOW}
+
+
 def run_command(
     command: Sequence[str],
     *,
@@ -217,6 +223,7 @@ def run_command(
             check=check,
             text=True,
             capture_output=capture_output,
+            **windows_no_window_kwargs(),
         )
     except FileNotFoundError:
         fail(
@@ -286,6 +293,7 @@ def command_version_candidates(candidates: Sequence[str]) -> str | None:
                 text=True,
                 capture_output=True,
                 env=subprocess_env(),
+                **windows_no_window_kwargs(),
             )
         except (FileNotFoundError, OSError):
             continue
@@ -522,7 +530,13 @@ def resolve_ollama_backend_enabled(args: argparse.Namespace, mode: RuntimeMode) 
     return mode is FULL_MODE
 
 
-def apply_ollama_backend_policy(runtime_env: dict[str, str], *, enabled: bool) -> dict[str, str]:
+def apply_ollama_backend_policy(
+    runtime_env: dict[str, str],
+    *,
+    enabled: bool,
+    timeout_seconds: float | None = None,
+    aux_signal_enabled: bool = False,
+) -> dict[str, str]:
     resolved = dict(runtime_env)
     if enabled:
         resolved['OLLAMA_ENABLED'] = 'true'
@@ -531,13 +545,27 @@ def apply_ollama_backend_policy(runtime_env: dict[str, str], *, enabled: bool) -
         resolved.setdefault('OLLAMA_BASE_URL', LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_BASE_URL'])
         resolved.setdefault('OLLAMA_MODEL', LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_MODEL'])
         resolved.setdefault('OLLAMA_CHAT_MODEL', resolved.get('OLLAMA_MODEL', LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_CHAT_MODEL']))
-        resolved.setdefault('OLLAMA_TIMEOUT_SECONDS', LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_TIMEOUT_SECONDS'])
+        if timeout_seconds is None:
+            resolved_timeout = resolved.get('OLLAMA_TIMEOUT_SECONDS', LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_TIMEOUT_SECONDS'])
+        else:
+            resolved_timeout = str(int(max(1.0, timeout_seconds)))
+        resolved['OLLAMA_TIMEOUT_SECONDS'] = resolved_timeout
+        resolved['OLLAMA_AUX_SIGNAL_ENABLED'] = 'true' if aux_signal_enabled else 'false'
         return resolved
 
     resolved['OLLAMA_ENABLED'] = 'false'
     resolved['OLLAMA_AUX_SIGNAL_ENABLED'] = 'false'
     resolved['LLM_ENABLED'] = 'false'
     return resolved
+
+
+def resolve_aux_signal_enabled(args: argparse.Namespace) -> bool:
+    selected = str(getattr(args, 'ollama_aux_signal', '') or '').strip().lower()
+    if selected == 'enabled':
+        return True
+    if selected == 'disabled':
+        return False
+    return False
 
 
 def get_backend_venv_python(paths: ProjectPaths) -> Path:
@@ -1425,9 +1453,12 @@ def command_up(args: argparse.Namespace) -> int:
     ensure_no_running_launcher_processes()
     mode = runtime_mode_from_args(args)
     ollama_backend_enabled = resolve_ollama_backend_enabled(args, mode)
+    ollama_aux_signal_enabled = resolve_aux_signal_enabled(args)
     backend_runtime_env = apply_ollama_backend_policy(
         launcher_runtime_env(paths, mode),
         enabled=ollama_backend_enabled,
+        timeout_seconds=args.ollama_env_timeout,
+        aux_signal_enabled=ollama_aux_signal_enabled,
     )
     if mode is LITE_MODE and not args.skip_infra:
         warn('Lite mode selected; forcing --skip-infra so Docker is not required.')
@@ -1698,7 +1729,12 @@ def command_status(args: argparse.Namespace) -> int:
     ollama_command = find_ollama_command()
     combined_env = launcher_runtime_env(paths, mode)
     resolved_ollama_enabled = resolve_ollama_backend_enabled(args, mode)
-    backend_env_preview = apply_ollama_backend_policy(combined_env, enabled=resolved_ollama_enabled)
+    backend_env_preview = apply_ollama_backend_policy(
+        combined_env,
+        enabled=resolved_ollama_enabled,
+        timeout_seconds=args.ollama_env_timeout,
+        aux_signal_enabled=resolve_aux_signal_enabled(args),
+    )
     docker_live = docker_daemon_ready()
     ollama_live = ollama_ready()
 
@@ -1958,9 +1994,12 @@ def command_backend(args: argparse.Namespace) -> int:
     ensure_no_running_launcher_processes()
     mode = runtime_mode_from_args(args)
     ollama_backend_enabled = resolve_ollama_backend_enabled(args, mode)
+    ollama_aux_signal_enabled = resolve_aux_signal_enabled(args)
     backend_runtime_env = apply_ollama_backend_policy(
         launcher_runtime_env(paths, mode),
         enabled=ollama_backend_enabled,
+        timeout_seconds=args.ollama_env_timeout,
+        aux_signal_enabled=ollama_aux_signal_enabled,
     )
     if mode is LITE_MODE and not args.skip_infra:
         warn('Lite mode selected; forcing --skip-infra so Docker is not required.')
@@ -2148,8 +2187,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup for postgres/redis.')
     parser.add_argument('--skip-ollama', action='store_true', help='Skip Ollama local startup/probe.')
     parser.add_argument('--ollama', choices=['enabled', 'disabled'], help='Control whether backend starts with Ollama env enabled.')
+    parser.add_argument('--ollama-aux-signal', choices=['enabled', 'disabled'], default='disabled', help='Control whether backend starts with auxiliary LLM signal enabled.')
     parser.add_argument('--docker-timeout', type=float, default=DOCKER_DEFAULT_TIMEOUT_SECONDS, help='Max seconds to wait for Docker daemon readiness.')
     parser.add_argument('--ollama-timeout', type=float, default=OLLAMA_DEFAULT_TIMEOUT_SECONDS, help='Max seconds to wait for Ollama readiness.')
+    parser.add_argument('--ollama-env-timeout', type=float, default=float(LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_TIMEOUT_SECONDS']), help='Timeout seconds exported to backend OLLAMA_TIMEOUT_SECONDS.')
     parser.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed.')
     parser.add_argument('--verbose', action='store_true', help='Attach backend logs to this terminal for paper-testing diagnostics.')
     subparsers = parser.add_subparsers(dest='command')
@@ -2161,8 +2202,10 @@ def build_parser() -> argparse.ArgumentParser:
     common_setup.add_argument('--skip-infra', action='store_true', help='Skip Docker Compose startup for postgres/redis.')
     common_setup.add_argument('--skip-ollama', action='store_true', help='Skip Ollama local startup/probe.')
     common_setup.add_argument('--ollama', choices=['enabled', 'disabled'], help='Control whether backend starts with Ollama env enabled.')
+    common_setup.add_argument('--ollama-aux-signal', choices=['enabled', 'disabled'], default='disabled', help='Control whether backend starts with auxiliary LLM signal enabled.')
     common_setup.add_argument('--docker-timeout', type=float, default=DOCKER_DEFAULT_TIMEOUT_SECONDS, help='Max seconds to wait for Docker daemon readiness.')
     common_setup.add_argument('--ollama-timeout', type=float, default=OLLAMA_DEFAULT_TIMEOUT_SECONDS, help='Max seconds to wait for Ollama readiness.')
+    common_setup.add_argument('--ollama-env-timeout', type=float, default=float(LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_TIMEOUT_SECONDS']), help='Timeout seconds exported to backend OLLAMA_TIMEOUT_SECONDS.')
     common_setup.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed.')
     common_setup.add_argument('--lite', action='store_true', help='Run in lite mode (SQLite, no Docker-required infra).')
     common_setup.add_argument('--verbose', action='store_true', help='Attach backend logs to this terminal for paper-testing diagnostics.')
@@ -2176,6 +2219,8 @@ def build_parser() -> argparse.ArgumentParser:
     backend_only.add_argument('--verbose', action='store_true', help='Attach backend logs to this terminal for paper-testing diagnostics.')
     backend_only.add_argument('--skip-ollama', action='store_true', help='Skip Ollama local startup/probe.')
     backend_only.add_argument('--ollama', choices=['enabled', 'disabled'], help='Control whether backend starts with Ollama env enabled.')
+    backend_only.add_argument('--ollama-aux-signal', choices=['enabled', 'disabled'], default='disabled', help='Control whether backend starts with auxiliary LLM signal enabled.')
+    backend_only.add_argument('--ollama-env-timeout', type=float, default=float(LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_TIMEOUT_SECONDS']), help='Timeout seconds exported to backend OLLAMA_TIMEOUT_SECONDS.')
 
     frontend_only = argparse.ArgumentParser(add_help=False)
     frontend_only.add_argument('--skip-install', action='store_true', help='Skip npm install before running the command.')
@@ -2207,6 +2252,8 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser = subparsers.add_parser('status', help='Show a local environment summary for this repo.')
     status_parser.add_argument('--lite', action='store_true', help='Show status using lite-mode defaults.')
     status_parser.add_argument('--ollama', choices=['enabled', 'disabled'], help='Show status with Ollama backend policy enabled or disabled.')
+    status_parser.add_argument('--ollama-aux-signal', choices=['enabled', 'disabled'], default='disabled', help='Show status with auxiliary LLM signal enabled or disabled in backend env preview.')
+    status_parser.add_argument('--ollama-env-timeout', type=float, default=float(LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_TIMEOUT_SECONDS']), help='Show status with a specific backend OLLAMA_TIMEOUT_SECONDS preview value.')
     status_parser.set_defaults(func=command_status)
 
     down_parser = subparsers.add_parser('down', help='Stop launcher-managed processes and Docker Compose services.')
@@ -2249,7 +2296,9 @@ def build_parser() -> argparse.ArgumentParser:
         skip_ollama=False,
         docker_timeout=DOCKER_DEFAULT_TIMEOUT_SECONDS,
         ollama_timeout=OLLAMA_DEFAULT_TIMEOUT_SECONDS,
+        ollama_env_timeout=float(LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_TIMEOUT_SECONDS']),
         ollama=None,
+        ollama_aux_signal='disabled',
         lite=False,
         verbose=False,
     )

@@ -1438,9 +1438,9 @@ python launcher_gui.py
 Este launcher **no reimplementa lógica**: delega en `start.py` y ejecuta:
 
 - `full` → **Iniciar sistema completo**
-- `lite` → **Inicio lite**
-- `status` → **Revisar estado de servicios**
-- `logs` → **Abrir logs**
+- `lite` → **Iniciar modo liviano**
+- `status` → **Revisar servicios**
+- `logs --service <...>` → **Ver logs (todos/backend/frontend/ollama)**
 - `stop` → **Detener servicios**
 
 Incluye un bloque de estado rápido para:
@@ -1453,7 +1453,13 @@ Incluye un bloque de estado rápido para:
 
 con estados `OK`, `STARTING`, `OFF`, `ENABLED` o `DISABLED`.
 
-También incluye un toggle: **“Usar Ollama (shadow + señal auxiliar)”**, que hace que el launcher visual invoque `start.py` con `--ollama enabled` / `--ollama disabled` según corresponda.
+El panel ahora expone controles separados para LLM local:
+
+- **“Usar Ollama (shadow)”** → mapea a `--ollama enabled|disabled`.
+- **“Activar señal auxiliar LLM”** → mapea a `--ollama-aux-signal enabled|disabled` (`OLLAMA_AUX_SIGNAL_ENABLED`).
+- **“Timeout Ollama (s)”** (30/60/90/120) → mapea a `--ollama-env-timeout` (backend) y `--ollama-timeout` (probe de servicio).
+
+El timeout por defecto para backend queda elevado a **90 segundos** (`OLLAMA_TIMEOUT_SECONDS=90`) para modelos locales más lentos.
 
 Instalación mínima (si falta la dependencia):
 
