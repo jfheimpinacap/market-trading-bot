@@ -10,6 +10,11 @@ from typing import Any
 from django.utils import timezone
 
 from apps.mission_control.models import AutonomousRuntimeSession, AutonomousRuntimeSessionStatus
+from apps.mission_control.services.execution_exposure_diagnostics import (
+    TEST_CONSOLE_EXPORT_PARTIAL_DIAGNOSTIC_RECOVERED,
+    TEST_CONSOLE_EXPOSURE_DIAGNOSTIC_FALLBACK_USED,
+    normalize_execution_exposure_diagnostics,
+)
 from apps.mission_control.services.extended_paper_run_gate import GATE_ALLOW, GATE_ALLOW_WITH_CAUTION, build_extended_paper_run_gate
 from apps.mission_control.services.extended_paper_run_launcher import get_extended_paper_run_status, launch_extended_paper_run
 from apps.mission_control.services.live_paper_attention_bridge import get_live_paper_attention_alert_status
@@ -457,7 +462,23 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
     gate = build_extended_paper_run_gate(preset_name=preset_name)
     extended = get_extended_paper_run_status(preset_name=preset_name)
     attention = get_live_paper_attention_alert_status()
-    funnel = build_live_paper_autonomy_funnel_snapshot(window_minutes=60, preset_name=preset_name)
+    funnel: dict[str, Any]
+    try:
+        funnel = build_live_paper_autonomy_funnel_snapshot(window_minutes=60, preset_name=preset_name)
+    except (NameError, KeyError, UnboundLocalError):
+        funnel = {}
+        payload.setdefault('warnings', []).append(TEST_CONSOLE_EXPOSURE_DIAGNOSTIC_FALLBACK_USED)
+        payload.setdefault('reason_codes', []).append(TEST_CONSOLE_EXPOSURE_DIAGNOSTIC_FALLBACK_USED)
+
+    exposure_diagnostics = normalize_execution_exposure_diagnostics(
+        provenance_summary=funnel.get('execution_exposure_provenance_summary'),
+        provenance_examples=funnel.get('execution_exposure_provenance_examples'),
+        release_audit_summary=funnel.get('execution_exposure_release_audit_summary'),
+        release_audit_examples=funnel.get('execution_exposure_release_audit_examples'),
+    )
+    if exposure_diagnostics.get('fallback_used'):
+        payload.setdefault('warnings', []).append(TEST_CONSOLE_EXPOSURE_DIAGNOSTIC_FALLBACK_USED)
+        payload.setdefault('reason_codes', []).append(TEST_CONSOLE_EXPOSURE_DIAGNOSTIC_FALLBACK_USED)
 
     payload.update(
         {
@@ -550,10 +571,10 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'paper_trade_final_examples': list(funnel.get('paper_trade_final_examples') or []),
             'execution_candidate_creation_gate_summary': dict(funnel.get('execution_candidate_creation_gate_summary') or {}),
             'execution_candidate_creation_gate_examples': list(funnel.get('execution_candidate_creation_gate_examples') or []),
-            'execution_exposure_provenance_summary': dict(funnel.get('execution_exposure_provenance_summary') or {}),
-            'execution_exposure_provenance_examples': list(funnel.get('execution_exposure_provenance_examples') or []),
-            'execution_exposure_release_audit_summary': dict(funnel.get('execution_exposure_release_audit_summary') or {}),
-            'execution_exposure_release_audit_examples': list(funnel.get('execution_exposure_release_audit_examples') or []),
+            'execution_exposure_provenance_summary': dict(exposure_diagnostics.get('execution_exposure_provenance_summary') or {}),
+            'execution_exposure_provenance_examples': list(exposure_diagnostics.get('execution_exposure_provenance_examples') or []),
+            'execution_exposure_release_audit_summary': dict(exposure_diagnostics.get('execution_exposure_release_audit_summary') or {}),
+            'execution_exposure_release_audit_examples': list(exposure_diagnostics.get('execution_exposure_release_audit_examples') or []),
             'execution_promotion_gate_summary': dict(funnel.get('execution_promotion_gate_summary') or {}),
             'execution_promotion_gate_examples': list(funnel.get('execution_promotion_gate_examples') or []),
             'execution_lineage_summary': dict(funnel.get('execution_lineage_summary') or {}),
@@ -606,7 +627,12 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'portfolio_summary': _build_portfolio_summary(),
             'scan_summary': _build_scan_summary(scan_run=scan_run),
             'next_action_hint': str(gate.get('next_action_hint') or validation.get('next_action_hint') or 'Review test console log'),
-            'reason_codes': list(dict.fromkeys(gate.get('reason_codes') or [])),
+            'reason_codes': list(
+                dict.fromkeys(
+                    list(gate.get('reason_codes') or [])
+                    + list(payload.get('reason_codes') or [])
+                )
+            ),
             'runtime_rejection_summary': str(funnel.get('runtime_rejection_summary') or ''),
             'runtime_rejection_reason_codes': list(funnel.get('runtime_rejection_reason_codes') or []),
         }
@@ -675,10 +701,16 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     paper_trade_final_examples = payload.get('paper_trade_final_examples') or []
     execution_creation_gate = payload.get('execution_candidate_creation_gate_summary') or {}
     execution_creation_gate_examples = payload.get('execution_candidate_creation_gate_examples') or []
-    execution_exposure_provenance = payload.get('execution_exposure_provenance_summary') or {}
-    execution_exposure_provenance_examples = payload.get('execution_exposure_provenance_examples') or []
-    execution_exposure_release_audit = payload.get('execution_exposure_release_audit_summary') or {}
-    execution_exposure_release_audit_examples = payload.get('execution_exposure_release_audit_examples') or []
+    exposure_diagnostics = normalize_execution_exposure_diagnostics(
+        provenance_summary=payload.get('execution_exposure_provenance_summary'),
+        provenance_examples=payload.get('execution_exposure_provenance_examples'),
+        release_audit_summary=payload.get('execution_exposure_release_audit_summary'),
+        release_audit_examples=payload.get('execution_exposure_release_audit_examples'),
+    )
+    execution_exposure_provenance = exposure_diagnostics.get('execution_exposure_provenance_summary') or {}
+    execution_exposure_provenance_examples = exposure_diagnostics.get('execution_exposure_provenance_examples') or []
+    execution_exposure_release_audit = exposure_diagnostics.get('execution_exposure_release_audit_summary') or {}
+    execution_exposure_release_audit_examples = exposure_diagnostics.get('execution_exposure_release_audit_examples') or []
     execution_promotion_gate = payload.get('execution_promotion_gate_summary') or {}
     execution_promotion_gate_examples = payload.get('execution_promotion_gate_examples') or []
     execution_lineage = payload.get('execution_lineage_summary') or {}
@@ -922,7 +954,12 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"  dominant_exposure_reason_codes="
             f"{','.join(execution_exposure_provenance.get('dominant_exposure_reason_codes') or []) or 'none'}"
         ),
-        f"  provenance_summary={execution_exposure_provenance.get('provenance_summary') or ''}",
+        f"  diagnostic_status={execution_exposure_provenance.get('diagnostic_status') or 'UNKNOWN'}",
+        (
+            "  provenance_summary=UNAVAILABLE"
+            if bool(execution_exposure_provenance.get('diagnostic_unavailable'))
+            else f"  provenance_summary={execution_exposure_provenance.get('provenance_summary') or ''}"
+        ),
         f"  execution_exposure_provenance_examples={execution_exposure_provenance_examples or []}",
         'execution_exposure_release_audit_summary:',
         (
@@ -944,7 +981,12 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"{','.join(execution_exposure_release_audit.get('validity_reason_codes') or []) or 'none'} "
             f"release_reason_codes={','.join(execution_exposure_release_audit.get('release_reason_codes') or []) or 'none'}"
         ),
-        f"  release_audit_summary={execution_exposure_release_audit.get('release_audit_summary') or ''}",
+        f"  diagnostic_status={execution_exposure_release_audit.get('diagnostic_status') or 'UNKNOWN'}",
+        (
+            "  release_audit_summary=UNAVAILABLE"
+            if bool(execution_exposure_release_audit.get('diagnostic_unavailable'))
+            else f"  release_audit_summary={execution_exposure_release_audit.get('release_audit_summary') or ''}"
+        ),
         f"  execution_exposure_release_audit_examples={execution_exposure_release_audit_examples or []}",
         'execution_promotion_gate_summary:',
         (
@@ -1550,6 +1592,19 @@ def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
     payload['llm_shadow_history_count'] = int(payload.get('llm_shadow_history_count') or payload['llm_shadow_summary'].get('llm_shadow_history_count') or 0)
     payload['llm_shadow_recent_history'] = list(payload.get('llm_shadow_recent_history') or payload['llm_shadow_summary'].get('llm_shadow_recent_history') or [])
     payload['llm_aux_signal_summary'] = build_llm_aux_signal_summary(payload=payload)
+    exposure_diagnostics = normalize_execution_exposure_diagnostics(
+        provenance_summary=payload.get('execution_exposure_provenance_summary'),
+        provenance_examples=payload.get('execution_exposure_provenance_examples'),
+        release_audit_summary=payload.get('execution_exposure_release_audit_summary'),
+        release_audit_examples=payload.get('execution_exposure_release_audit_examples'),
+    )
+    payload['execution_exposure_provenance_summary'] = dict(exposure_diagnostics.get('execution_exposure_provenance_summary') or {})
+    payload['execution_exposure_provenance_examples'] = list(exposure_diagnostics.get('execution_exposure_provenance_examples') or [])
+    payload['execution_exposure_release_audit_summary'] = dict(exposure_diagnostics.get('execution_exposure_release_audit_summary') or {})
+    payload['execution_exposure_release_audit_examples'] = list(exposure_diagnostics.get('execution_exposure_release_audit_examples') or [])
+    if exposure_diagnostics.get('fallback_used'):
+        payload['warnings'] = list(dict.fromkeys(list(payload.get('warnings') or []) + [TEST_CONSOLE_EXPORT_PARTIAL_DIAGNOSTIC_RECOVERED]))
+        payload['reason_codes'] = list(dict.fromkeys(list(payload.get('reason_codes') or []) + [TEST_CONSOLE_EXPORT_PARTIAL_DIAGNOSTIC_RECOVERED]))
     if fmt == 'json':
         return payload
     return str(payload.get('text_export') or _log_line_items(payload))
