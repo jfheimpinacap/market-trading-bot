@@ -25,6 +25,7 @@ Backend now exposes a compact `llm_shadow_summary` block in Mission Control Test
   - still `REAL_READ_ONLY` + `PAPER_ONLY`.
 - Safe degradation:
   - Ollama unavailable/timeout/parse failure yields `llm_shadow_reasoning_status=UNAVAILABLE|DEGRADED` and does not fail the run/export.
+  - Structured-but-imperfect responses are normalized to `OK` when they provide useful content (`summary` plus at least one populated supporting list: `key_risks` or `key_supporting_points`), so advisory aux-signal can be used without relaxing safety boundaries.
   - degraded/unavailable summaries can still be persisted as non-blocking artifacts for historical traceability.
 - Artifact association context (when available):
   - `market_id`, `handoff_id`, `prediction_candidate_id`, `risk_decision_id`, `shortlist_signal_id`,
