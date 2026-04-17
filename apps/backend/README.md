@@ -57,6 +57,28 @@ Backend now exposes a compact `llm_shadow_summary` block in Mission Control Test
    - `llm_shadow_history_count >= 1`
    - `latest_llm_shadow_summary.artifact_id` populated when persistence succeeds.
 
+
+
+## LLM shadow smoke test corto (Prompt 306)
+
+Se agregó un comando local rápido para validar solo la cadena LLM/Ollama sin correr la trial larga de Mission Control:
+
+- `python manage.py run_llm_shadow_smoke`
+
+Opciones:
+- `--model <modelo>`
+- `--timeout <segundos>`
+- `--aux-signal` o `--no-aux-signal`
+- `--json`
+
+Valida de forma acotada:
+1. llamada a Ollama local,
+2. `llm_shadow_summary` (incluyendo normalización de reasoning status),
+3. persistencia de artefacto shadow (si aplica),
+4. `llm_aux_signal_summary`,
+5. boundaries: advisory-only, non-blocking, paper-only, execution-neutral.
+
+No valida pipeline completo (shortlist/handoff/prediction/risk/execution) ni sustituye la prueba larga; úsalo para iterar ajustes LLM en segundos/minutos.
 ## Ollama auxiliary signal in Mission Control/Test Console (Prompt 290)
 
 Backend now exposes `llm_aux_signal_summary` as an explicit advisory layer derived from persisted shadow context (`latest_llm_shadow_summary` / associated `LlmShadowAnalysisArtifact`) for paper-only review prioritization.

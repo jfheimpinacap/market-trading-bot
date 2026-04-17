@@ -1,10 +1,12 @@
 from unittest.mock import Mock, patch
+from io import StringIO
 import json
 from datetime import timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
 from django.test import TestCase, override_settings
+from django.core.management import call_command
 from django.urls import reverse
 
 from django.utils import timezone
@@ -7544,3 +7546,44 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('llm_aux_signal_summary', payload)
         self.assertTrue(payload['llm_aux_signal_summary']['enabled'])
         self.assertFalse(bool(payload['llm_aux_signal_summary']['affects_execution']))
+
+
+class LlmShadowSmokeCommandTests(TestCase):
+    @override_settings(OLLAMA_ENABLED=True, LLM_PROVIDER='ollama', OLLAMA_MODEL='demo-shadow-model', OLLAMA_AUX_SIGNAL_ENABLED=True)
+    @patch('apps.mission_control.services.llm_shadow.OllamaChatClient.chat_json')
+    def test_smoke_command_runs_short_path_and_surfaces_shadow_and_aux(self, mock_chat_json):
+        mock_chat_json.return_value = {
+            'stance': 'bearish',
+            'confidence': 'high',
+            'summary': 'Smoke summary from Ollama.',
+            'key_risks': ['volatility spike'],
+            'key_supporting_points': ['liquidity thinning'],
+            'recommendation_mode': 'worth_review',
+            'llm_shadow_reasoning_status': 'OK',
+        }
+        stdout = StringIO()
+
+        call_command('run_llm_shadow_smoke', '--timeout', '15', stdout=stdout)
+
+        output = stdout.getvalue()
+        self.assertIn('ollama_responded=True', output)
+        self.assertIn('llm_shadow_reasoning_status=OK', output)
+        self.assertIn('artifact_persisted=True', output)
+        self.assertIn('llm_aux_signal_summary=', output)
+        self.assertIn('affects_execution=False', output)
+        self.assertIn('paper_only=True', output)
+
+    @override_settings(OLLAMA_ENABLED=True, LLM_PROVIDER='ollama', OLLAMA_MODEL='demo-shadow-model', OLLAMA_AUX_SIGNAL_ENABLED=True)
+    @patch('apps.mission_control.services.llm_shadow.OllamaChatClient.chat_json', side_effect=LlmUnavailableError('connection timeout'))
+    def test_smoke_command_reports_clear_non_blocking_error(self, _mock_chat_json):
+        stdout = StringIO()
+
+        call_command('run_llm_shadow_smoke', '--json', stdout=stdout)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertFalse(payload['ollama_responded'])
+        self.assertEqual(payload['llm_shadow_reasoning_status'], 'UNAVAILABLE')
+        self.assertIn('timeout', payload['llm_error'])
+        self.assertFalse(bool(payload['llm_aux_signal_summary']['affects_execution']))
+        self.assertTrue(bool(payload['boundaries']['advisory_only']))
+        self.assertTrue(bool(payload['boundaries']['paper_only']))
