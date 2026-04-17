@@ -4088,6 +4088,8 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
 
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
         creation_gate = diagnostics.get('execution_candidate_creation_gate_summary') or {}
+        provenance = diagnostics.get('execution_exposure_provenance_summary') or {}
+        provenance_examples = diagnostics.get('execution_exposure_provenance_examples') or []
         promotion_gate = diagnostics.get('execution_promotion_gate_summary') or {}
         self.assertEqual(AutonomousExecutionIntakeCandidate.objects.count(), 0)
         self.assertEqual(diagnostics.get('paper_execution_candidates'), 0)
@@ -4110,6 +4112,12 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
             'EXECUTION_CANDIDATE_CREATION_SUPPRESSED_BY_ACTIVE_POSITION',
             creation_gate.get('execution_candidate_creation_gate_reason_codes', []),
         )
+        self.assertEqual(provenance.get('suppressions_total'), 1)
+        self.assertEqual(provenance.get('additive_entries_suppressed'), 1)
+        self.assertEqual(len(provenance_examples), 1)
+        self.assertEqual(provenance_examples[0].get('suppression_source_type'), 'active_position')
+        self.assertEqual(provenance_examples[0].get('suppression_scope'), 'same_market')
+        self.assertFalse(provenance_examples[0].get('stale_exposure_suspected'))
         self.assertIn('execution_promotion_gate_summary', diagnostics)
         self.assertIn('cash_pressure_summary', diagnostics)
         self.assertIn('paper_trade_decision_summary', diagnostics)
@@ -6764,6 +6772,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('final_trade_reason_codes=', text_payload)
         self.assertIn('paper_trade_final_examples=', text_payload)
         self.assertIn('execution_promotion_gate_summary:', text_payload)
+        self.assertIn('execution_exposure_provenance_summary:', text_payload)
+        self.assertIn('suppressions_by_source_type=', text_payload)
         self.assertIn('candidates_promoted_to_decision=', text_payload)
         self.assertIn('execution_promotion_gate_reason_codes=', text_payload)
         self.assertIn('execution_lineage_summary:', text_payload)
@@ -6819,6 +6829,26 @@ class TestConsoleApiTests(TestCase):
 
         payload = self._status_payload()
         payload['text_export'] = ''
+        payload['execution_exposure_provenance_summary'] = {
+            'suppressions_total': 1,
+            'suppressions_by_source_type': {'active_position': 1},
+            'suppressions_by_scope': {'same_market': 1},
+            'exact_match_count': 1,
+            'weak_match_count': 0,
+            'stale_exposure_suspected_count': 0,
+            'additive_entries_suppressed': 1,
+            'reduce_or_exit_allowed': 0,
+            'dominant_exposure_reason_codes': ['EXECUTION_CANDIDATE_CREATION_SUPPRESSED_BY_ACTIVE_POSITION'],
+            'provenance_summary': 'suppressions_total=1 dominant_source=active_position dominant_scope=same_market',
+        }
+        payload['execution_exposure_provenance_examples'] = [
+            {
+                'readiness_id': 11,
+                'suppression_source_type': 'active_position',
+                'suppression_scope': 'same_market',
+                'suppression_confidence': 'exact_match',
+            }
+        ]
         payload['execution_promotion_gate_summary'] = {
             'candidates_visible': 3,
             'candidates_promoted_to_decision': 1,
@@ -6839,6 +6869,8 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(summary.get('candidates_visible'), 3)
         self.assertEqual(summary.get('candidates_promoted_to_decision'), 1)
         self.assertEqual(len(json_payload.get('execution_promotion_gate_examples') or []), 1)
+        self.assertEqual((json_payload.get('execution_exposure_provenance_summary') or {}).get('suppressions_total'), 1)
+        self.assertEqual(len(json_payload.get('execution_exposure_provenance_examples') or []), 1)
 
     @patch('apps.mission_control.services.test_console._get_state_snapshot')
     def test_export_log_preserves_position_exposure_summary_from_snapshot(self, mock_state_snapshot):

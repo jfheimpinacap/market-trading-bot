@@ -499,6 +499,9 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
                 'hidden': _int_field(funnel, 'paper_execution_hidden_count'),
                 'paper_execution_visibility_reason_codes': _list_field(funnel, 'paper_execution_visibility_reason_codes'),
                 'paper_execution_visibility_summary': _str_field(funnel, 'paper_execution_visibility_summary'),
+                'measurement_scope': 'execution_intake_candidate_visibility_window',
+                'source_of_truth': 'autonomous_execution_intake_candidate',
+                'explains_pre_creation_suppression': True,
             },
             'paper_execution_visibility_examples': list(funnel.get('paper_execution_visibility_examples') or []),
             'paper_trade_summary': {
@@ -547,6 +550,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'paper_trade_final_examples': list(funnel.get('paper_trade_final_examples') or []),
             'execution_candidate_creation_gate_summary': dict(funnel.get('execution_candidate_creation_gate_summary') or {}),
             'execution_candidate_creation_gate_examples': list(funnel.get('execution_candidate_creation_gate_examples') or []),
+            'execution_exposure_provenance_summary': dict(funnel.get('execution_exposure_provenance_summary') or {}),
+            'execution_exposure_provenance_examples': list(funnel.get('execution_exposure_provenance_examples') or []),
             'execution_promotion_gate_summary': dict(funnel.get('execution_promotion_gate_summary') or {}),
             'execution_promotion_gate_examples': list(funnel.get('execution_promotion_gate_examples') or []),
             'execution_lineage_summary': dict(funnel.get('execution_lineage_summary') or {}),
@@ -566,6 +571,9 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
                 'execution_artifact_blocked_count': int(funnel.get('execution_artifact_blocked_count') or 0),
                 'execution_artifact_reason_codes': list(funnel.get('execution_artifact_reason_codes') or []),
                 'execution_artifact_summary': str(funnel.get('execution_artifact_summary') or ''),
+                'measurement_scope': 'readiness_and_candidate_artifacts',
+                'source_of_truth': 'autonomous_execution_readiness_and_intake_candidate',
+                'explains_pre_creation_suppression': True,
             },
             'execution_artifact_examples': list(funnel.get('execution_artifact_examples') or []),
             'shortlist_handoff_summary': dict(funnel.get('shortlist_handoff_summary') or {}),
@@ -625,6 +633,16 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
     payload['state_mismatch_examples'] = consistency.examples
     overlay_summary, effective_funnel_status, overlay_text = _build_active_operational_overlay_summary(payload=payload)
     payload['active_operational_overlay_summary'] = overlay_summary
+    position_exposure = dict(payload.get('position_exposure_summary') or {})
+    creation_gate = dict(payload.get('execution_candidate_creation_gate_summary') or {})
+    position_exposure_codes = list(position_exposure.get('position_exposure_reason_codes') or [])
+    if bool(overlay_summary.get('active_runtime_context_detected')) and int(position_exposure.get('open_positions_detected') or 0) <= 0:
+        position_exposure_codes.append('ACTIVE_OVERLAY_FROM_PORTFOLIO_BUT_NO_FINAL_POSITION_GATE_BLOCK')
+    if int(creation_gate.get('candidates_suppressed_before_creation') or 0) > 0 and int(position_exposure.get('open_positions_detected') or 0) <= 0:
+        position_exposure_codes.append('POSITION_EXPOSURE_SCOPE_DIFFERS_FROM_CREATION_GATE')
+    if position_exposure_codes:
+        position_exposure['position_exposure_reason_codes'] = list(dict.fromkeys(position_exposure_codes))
+        payload['position_exposure_summary'] = position_exposure
     payload['funnel_status_window'] = str(funnel.get('funnel_status') or 'UNKNOWN')
     payload['funnel_status'] = effective_funnel_status
     payload['summary'] = (
@@ -655,6 +673,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     paper_trade_final_examples = payload.get('paper_trade_final_examples') or []
     execution_creation_gate = payload.get('execution_candidate_creation_gate_summary') or {}
     execution_creation_gate_examples = payload.get('execution_candidate_creation_gate_examples') or []
+    execution_exposure_provenance = payload.get('execution_exposure_provenance_summary') or {}
+    execution_exposure_provenance_examples = payload.get('execution_exposure_provenance_examples') or []
     execution_promotion_gate = payload.get('execution_promotion_gate_summary') or {}
     execution_promotion_gate_examples = payload.get('execution_promotion_gate_examples') or []
     execution_lineage = payload.get('execution_lineage_summary') or {}
@@ -807,6 +827,11 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"  paper_execution_visibility_reason_codes="
             f"{','.join(paper_execution_visibility.get('paper_execution_visibility_reason_codes') or []) or 'none'}"
         ),
+        (
+            f"  measurement_scope={paper_execution_visibility.get('measurement_scope') or 'execution_intake_candidate_visibility_window'} "
+            f"source_of_truth={paper_execution_visibility.get('source_of_truth') or 'autonomous_execution_intake_candidate'} "
+            f"explains_pre_creation_suppression={bool(paper_execution_visibility.get('explains_pre_creation_suppression', True))}"
+        ),
         f"  paper_execution_visibility_examples={paper_execution_visibility_examples or []}",
         'paper_trade_summary:',
         (
@@ -870,7 +895,31 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"  execution_candidate_creation_gate_reason_codes="
             f"{','.join(execution_creation_gate.get('execution_candidate_creation_gate_reason_codes') or []) or 'none'}"
         ),
+        (
+            f"  measurement_scope={execution_creation_gate.get('measurement_scope') or 'pre_creation_execution_candidate_gate'} "
+            f"source_of_truth={execution_creation_gate.get('source_of_truth') or 'execution_candidate_creation_bridge'} "
+            f"explains_pre_creation_suppression={bool(execution_creation_gate.get('explains_pre_creation_suppression', True))}"
+        ),
         f"  execution_candidate_creation_gate_examples={execution_creation_gate_examples or []}",
+        'execution_exposure_provenance_summary:',
+        (
+            f"  suppressions_total={execution_exposure_provenance.get('suppressions_total', 0)} "
+            f"exact_match_count={execution_exposure_provenance.get('exact_match_count', 0)} "
+            f"weak_match_count={execution_exposure_provenance.get('weak_match_count', 0)} "
+            f"stale_exposure_suspected_count={execution_exposure_provenance.get('stale_exposure_suspected_count', 0)} "
+            f"additive_entries_suppressed={execution_exposure_provenance.get('additive_entries_suppressed', 0)} "
+            f"reduce_or_exit_allowed={execution_exposure_provenance.get('reduce_or_exit_allowed', 0)}"
+        ),
+        (
+            f"  suppressions_by_source_type={execution_exposure_provenance.get('suppressions_by_source_type') or {}} "
+            f"suppressions_by_scope={execution_exposure_provenance.get('suppressions_by_scope') or {}}"
+        ),
+        (
+            f"  dominant_exposure_reason_codes="
+            f"{','.join(execution_exposure_provenance.get('dominant_exposure_reason_codes') or []) or 'none'}"
+        ),
+        f"  provenance_summary={execution_exposure_provenance.get('provenance_summary') or ''}",
+        f"  execution_exposure_provenance_examples={execution_exposure_provenance_examples or []}",
         'execution_promotion_gate_summary:',
         (
             f"  candidates_visible={execution_promotion_gate.get('candidates_visible', 0)} "
@@ -934,6 +983,11 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"  position_exposure_reason_codes="
             f"{','.join(position_exposure.get('position_exposure_reason_codes') or []) or 'none'}"
         ),
+        (
+            f"  measurement_scope={position_exposure.get('measurement_scope') or 'final_trade_position_gate'} "
+            f"source_of_truth={position_exposure.get('source_of_truth') or 'final_trade_position_gate_bridge_and_portfolio_context'} "
+            f"explains_pre_creation_suppression={bool(position_exposure.get('explains_pre_creation_suppression', False))}"
+        ),
         'execution_artifact_summary:',
         (
             f"  execution_readiness_available_count={execution_artifact.get('execution_readiness_available_count', 0)} "
@@ -948,6 +1002,11 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         (
             f"  execution_artifact_reason_codes="
             f"{','.join(execution_artifact.get('execution_artifact_reason_codes') or []) or 'none'}"
+        ),
+        (
+            f"  measurement_scope={execution_artifact.get('measurement_scope') or 'readiness_and_candidate_artifacts'} "
+            f"source_of_truth={execution_artifact.get('source_of_truth') or 'autonomous_execution_readiness_and_intake_candidate'} "
+            f"explains_pre_creation_suppression={bool(execution_artifact.get('explains_pre_creation_suppression', True))}"
         ),
         f"  execution_artifact_examples={execution_artifact_examples or []}",
         'shortlist_handoff_summary:',
