@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
+import hashlib
 import re
 from typing import Any
 
@@ -326,6 +327,76 @@ def _is_reduce_or_exit_readiness(*, readiness: AutonomousExecutionReadiness, int
     token_sources.append(str(getattr(readiness, 'readiness_summary', '') or ''))
     token_blob = ' '.join(token_sources).upper()
     return any(token in token_blob for token in {'EXIT', 'CLOSE', 'CLOSING', 'REDUCE', 'DE-RISK', 'DERISK', 'TRIM'})
+
+
+def _compact_lineage_key(*, lineage_key: tuple[Any, ...]) -> str:
+    encoded = repr(tuple(lineage_key)).encode('utf-8')
+    return hashlib.sha1(encoded).hexdigest()[:10]
+
+
+def _candidate_shape_label(*, reduce_or_exit: bool, readiness: AutonomousExecutionReadiness) -> str:
+    if not reduce_or_exit:
+        return 'additive_entry'
+    status_value = str(getattr(readiness, 'readiness_status', '') or '').upper()
+    summary_blob = str(getattr(readiness, 'readiness_summary', '') or '').upper()
+    if 'EXIT' in summary_blob or 'CLOSE' in summary_blob:
+        return 'exit'
+    if 'REDUCE' in summary_blob or 'DERISK' in summary_blob or 'DE-RISK' in summary_blob:
+        return 'reduce'
+    if 'REDUCED' in status_value:
+        return 'reduce'
+    return 'unknown'
+
+
+def _build_execution_exposure_provenance_summary(*, examples: list[dict[str, Any]]) -> dict[str, Any]:
+    suppressions_total = len(examples)
+    by_source: dict[str, int] = {}
+    by_scope: dict[str, int] = {}
+    by_reason_code: dict[str, int] = {}
+    exact_match_count = 0
+    weak_match_count = 0
+    stale_exposure_suspected_count = 0
+    additive_entries_suppressed = 0
+    reduce_or_exit_allowed = 0
+    for example in examples:
+        source = str(example.get('suppression_source_type') or 'unknown_exposure_source')
+        scope = str(example.get('suppression_scope') or 'broader_scope_match')
+        confidence = str(example.get('suppression_confidence') or 'weak_match')
+        candidate_shape = str(example.get('candidate_shape') or 'unknown')
+        reason_code = str(example.get('reason_code') or '')
+        by_source[source] = by_source.get(source, 0) + 1
+        by_scope[scope] = by_scope.get(scope, 0) + 1
+        if reason_code:
+            by_reason_code[reason_code] = by_reason_code.get(reason_code, 0) + 1
+        if confidence == 'exact_match':
+            exact_match_count += 1
+        if confidence == 'weak_match':
+            weak_match_count += 1
+        if bool(example.get('stale_exposure_suspected')):
+            stale_exposure_suspected_count += 1
+        if candidate_shape == 'additive_entry':
+            additive_entries_suppressed += 1
+        if candidate_shape in {'reduce', 'exit'}:
+            reduce_or_exit_allowed += 1
+    dominant_exposure_reason_codes = [code for code, _ in sorted(by_reason_code.items(), key=lambda item: (-item[1], item[0]))[:3]]
+    provenance_summary = (
+        f"suppressions_total={suppressions_total} "
+        f"dominant_source={(max(by_source.items(), key=lambda item: item[1])[0] if by_source else 'none')} "
+        f"dominant_scope={(max(by_scope.items(), key=lambda item: item[1])[0] if by_scope else 'none')} "
+        f"stale_exposure_suspected_count={stale_exposure_suspected_count}"
+    )
+    return {
+        'suppressions_total': int(suppressions_total),
+        'suppressions_by_source_type': by_source,
+        'suppressions_by_scope': by_scope,
+        'exact_match_count': int(exact_match_count),
+        'weak_match_count': int(weak_match_count),
+        'stale_exposure_suspected_count': int(stale_exposure_suspected_count),
+        'additive_entries_suppressed': int(additive_entries_suppressed),
+        'reduce_or_exit_allowed': int(reduce_or_exit_allowed),
+        'dominant_exposure_reason_codes': dominant_exposure_reason_codes,
+        'provenance_summary': provenance_summary,
+    }
 
 
 def _dispatch_mode_for_decision(*, decision: AutonomousExecutionDecision) -> str:
@@ -1088,6 +1159,9 @@ def _build_position_exposure_summary_from_final_trade_gate(
         'candidates_allowed_without_exposure': int(allowed_without_exposure),
         'position_exposure_reason_codes': _unique_codes(reason_codes),
         'dominant_blocking_gate': dominant_blocking_gate,
+        'measurement_scope': 'final_trade_position_gate',
+        'source_of_truth': 'final_trade_position_gate_bridge_and_portfolio_context',
+        'explains_pre_creation_suppression': False,
     }
 
 
@@ -1471,6 +1545,8 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
                 'execution_candidate_creation_gate_reason_codes': [],
             },
             'creation_gate_examples': [],
+            'creation_exposure_provenance_examples': [],
+            'creation_exposure_provenance_summary': _build_execution_exposure_provenance_summary(examples=[]),
             'suppressed_readiness_ids': [],
             'created_readiness_ids': [],
         }
@@ -1498,6 +1574,8 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
                 'execution_candidate_creation_gate_reason_codes': [],
             },
             'creation_gate_examples': [],
+            'creation_exposure_provenance_examples': [],
+            'creation_exposure_provenance_summary': _build_execution_exposure_provenance_summary(examples=[]),
             'suppressed_readiness_ids': [],
             'created_readiness_ids': [],
         }
@@ -1509,15 +1587,30 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
     )
     account = get_active_account()
     open_positions_by_market: set[int] = set()
-    open_position_values = account.positions.filter(status='OPEN', quantity__gt=0).values_list('market_id', flat=True)
+    open_positions_by_market_detail: dict[int, dict[str, Any]] = {}
+    positions_qs = account.positions.filter(status='OPEN', quantity__gt=0)
     try:
-        open_positions_by_market = {
-            int(market_id)
-            for market_id in open_position_values
-            if market_id is not None
-        }
-    except TypeError:
-        open_positions_by_market = set()
+        open_position_rows = list(positions_qs.values('id', 'market_id', 'status', 'side'))
+    except Exception:
+        open_position_rows = []
+    if open_position_rows:
+        for position_row in open_position_rows:
+            market_id = _safe_int(position_row.get('market_id'))
+            if market_id is None:
+                continue
+            open_positions_by_market.add(int(market_id))
+            if market_id not in open_positions_by_market_detail:
+                open_positions_by_market_detail[market_id] = {
+                    'id': _safe_int(position_row.get('id')),
+                    'status': str(position_row.get('status') or ''),
+                    'side': str(position_row.get('side') or ''),
+                }
+    else:
+        try:
+            open_position_values = positions_qs.values_list('market_id', flat=True)
+            open_positions_by_market = {int(market_id) for market_id in open_position_values if market_id is not None}
+        except Exception:
+            open_positions_by_market = set()
     candidate_market_ids = list(
         {
             _safe_int(getattr(readiness, 'linked_market_id', None))
@@ -1526,6 +1619,7 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
         }
     )
     active_dispatch_lineages: set[tuple[Any, ...]] = set()
+    active_dispatch_lineage_details: dict[tuple[Any, ...], dict[str, Any]] = {}
     if candidate_market_ids:
         active_dispatches = (
             AutonomousDispatchRecord.objects.filter(
@@ -1544,13 +1638,23 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
             linked_candidate = getattr(getattr(active_dispatch, 'linked_execution_decision', None), 'linked_intake_candidate', None)
             if linked_candidate is None:
                 continue
-            active_dispatch_lineages.add(_candidate_lineage_key(candidate=linked_candidate))
+            lineage_key = _candidate_lineage_key(candidate=linked_candidate)
+            active_dispatch_lineages.add(lineage_key)
+            if lineage_key not in active_dispatch_lineage_details:
+                linked_trade = getattr(active_dispatch, 'linked_paper_trade', None)
+                active_dispatch_lineage_details[lineage_key] = {
+                    'dispatch_id': _safe_int(getattr(active_dispatch, 'id', None)),
+                    'trade_id': _safe_int(getattr(linked_trade, 'id', None)),
+                    'trade_status': str(getattr(linked_trade, 'status', '') or ''),
+                    'market_id': _safe_int(getattr(linked_candidate, 'linked_market_id', None)),
+                }
     creation_suppressed_before_creation = 0
     creation_candidates_created = 0
     creation_allowed_for_exit = 0
     creation_allowed_without_exposure = 0
     creation_gate_reason_codes: list[str] = []
     creation_gate_examples: list[dict[str, Any]] = []
+    creation_exposure_provenance_examples: list[dict[str, Any]] = []
     suppressed_readiness_ids: list[int] = []
     created_readiness_ids: list[int] = []
     for readiness in missing_readiness:
@@ -1558,7 +1662,8 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
         status, reason_codes, approval_status = resolve_intake_status_from_readiness(readiness=readiness)
         market_id = _safe_int(getattr(readiness, 'linked_market_id', None))
         has_active_position = market_id in open_positions_by_market if market_id is not None else False
-        has_active_trade = _readiness_lineage_key(readiness=readiness) in active_dispatch_lineages
+        readiness_lineage_key = _readiness_lineage_key(readiness=readiness)
+        has_active_trade = readiness_lineage_key in active_dispatch_lineages
         reduce_or_exit = _is_reduce_or_exit_readiness(readiness=readiness, intake_status=str(status or ''), intake_reason_codes=reason_codes)
         if not reduce_or_exit and (has_active_position or has_active_trade):
             creation_suppressed_before_creation += 1
@@ -1580,6 +1685,45 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
                         'exposure_gate': 'active_position' if has_active_position else 'existing_open_trade',
                     }
                 )
+            source_type = 'active_position' if has_active_position else 'existing_open_trade'
+            confidence = 'exact_match'
+            scope = 'same_market' if has_active_position else 'same_lineage'
+            dispatch_detail = dict(active_dispatch_lineage_details.get(readiness_lineage_key) or {})
+            if has_active_position and has_active_trade:
+                scope = 'same_market_and_lineage'
+            elif not has_active_position and not has_active_trade:
+                source_type = 'unknown_exposure_source'
+                scope = 'broader_scope_match'
+                confidence = 'weak_match'
+            elif has_active_trade and dispatch_detail.get('market_id') not in {None, market_id}:
+                scope = 'broader_scope_match'
+                source_type = 'lineage_reuse'
+                confidence = 'inferred_match'
+            position_detail = dict(open_positions_by_market_detail.get(market_id or -1) or {})
+            stale_exposure_suspected = bool(
+                has_active_trade
+                and not has_active_position
+                and not dispatch_detail.get('trade_id')
+            )
+            creation_exposure_provenance_examples.append(
+                {
+                    'readiness_id': int(readiness.id),
+                    'reason_code': reason_code,
+                    'suppression_source_type': source_type,
+                    'suppression_scope': scope,
+                    'blocking_position_id': position_detail.get('id'),
+                    'blocking_trade_id': dispatch_detail.get('trade_id'),
+                    'blocking_market_id': market_id if market_id is not None else dispatch_detail.get('market_id'),
+                    'blocking_lineage_key': _compact_lineage_key(lineage_key=readiness_lineage_key),
+                    'blocking_position_status': position_detail.get('status'),
+                    'blocking_trade_status': dispatch_detail.get('trade_status') or None,
+                    'blocking_position_side': position_detail.get('side'),
+                    'exposure_direction': position_detail.get('side'),
+                    'candidate_shape': _candidate_shape_label(reduce_or_exit=reduce_or_exit, readiness=readiness),
+                    'suppression_confidence': confidence,
+                    'stale_exposure_suspected': stale_exposure_suspected,
+                }
+            )
             continue
         if reduce_or_exit:
             creation_allowed_for_exit += 1
@@ -1622,6 +1766,10 @@ def _ensure_execution_candidates_for_readiness(*, readiness_rows: list[Autonomou
             'execution_candidate_creation_gate_reason_codes': list(dict.fromkeys(creation_gate_reason_codes)),
         },
         'creation_gate_examples': creation_gate_examples[:_PAPER_TRADE_EXAMPLES_LIMIT],
+        'creation_exposure_provenance_examples': creation_exposure_provenance_examples,
+        'creation_exposure_provenance_summary': _build_execution_exposure_provenance_summary(
+            examples=creation_exposure_provenance_examples
+        ),
         'suppressed_readiness_ids': list(dict.fromkeys(suppressed_readiness_ids)),
         'created_readiness_ids': list(dict.fromkeys(created_readiness_ids)),
     }
@@ -1698,6 +1846,9 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                 creation_allowed_without_exposure += int(creation_gate.get('candidates_allowed_without_exposure') or 0)
                 creation_gate_reason_codes.extend(list(creation_gate.get('execution_candidate_creation_gate_reason_codes') or []))
                 creation_gate_examples.extend(list(bridge_result.get('creation_gate_examples') or []))
+                creation_exposure_provenance_examples.extend(
+                    list(bridge_result.get('creation_exposure_provenance_examples') or [])
+                )
                 suppressed_before_creation_readiness_ids.update(
                     int(readiness_id)
                     for readiness_id in list(bridge_result.get('suppressed_readiness_ids') or [])
@@ -2386,6 +2537,10 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     normalized_runtime_rejection_codes = _unique_codes(runtime_rejection_reason_codes)
     normalized_fanout_codes = _unique_codes(fanout_reason_codes)
     normalized_promotion_gate_codes = _unique_codes(promotion_gate_reason_codes)
+    execution_exposure_provenance_summary = _build_execution_exposure_provenance_summary(
+        examples=creation_exposure_provenance_examples
+    )
+    execution_exposure_provenance_examples = creation_exposure_provenance_examples[:_PAPER_TRADE_EXAMPLES_LIMIT]
     aligned_decision_created = int(paper_trade_decision_created)
     aligned_decision_reused = int(paper_trade_decision_reused)
     promotion_suppressed_total = int(promotion_suppressed_by_active_position + promotion_suppressed_by_existing_open_trade)
@@ -2411,6 +2566,9 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'candidates_allowed_for_exit': int(creation_allowed_for_exit),
         'candidates_allowed_without_exposure': int(creation_allowed_without_exposure),
         'execution_candidate_creation_gate_reason_codes': normalized_creation_gate_codes,
+        'measurement_scope': 'pre_creation_execution_candidate_gate',
+        'source_of_truth': 'execution_candidate_creation_bridge',
+        'explains_pre_creation_suppression': True,
     }
     final_fanout_summary = _build_final_fanout_diagnostics(
         executable_candidates=executable_candidates,
@@ -2451,6 +2609,18 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     final_trade_allowed_for_exit = int(position_exposure_summary.get('candidates_allowed_for_exit') or 0)
     final_trade_allowed_without_exposure = int(position_exposure_summary.get('candidates_allowed_without_exposure') or 0)
     position_exposure_reason_codes = list(position_exposure_summary.get('position_exposure_reason_codes') or [])
+    if creation_suppressed_before_creation > 0 and open_positions_detected <= 0:
+        position_exposure_reason_codes.append('POSITION_EXPOSURE_SCOPE_DIFFERS_FROM_CREATION_GATE')
+    creation_sources = set((execution_exposure_provenance_summary.get('suppressions_by_source_type') or {}).keys())
+    if 'active_position' in creation_sources:
+        position_exposure_reason_codes.append('PRE_CREATION_SUPPRESSION_EXPLAINED_BY_ACTIVE_POSITION_RECORD')
+    if 'existing_open_trade' in creation_sources:
+        position_exposure_reason_codes.append('PRE_CREATION_SUPPRESSION_EXPLAINED_BY_OPEN_TRADE_RECORD')
+    if 'lineage_reuse' in creation_sources:
+        position_exposure_reason_codes.append('PRE_CREATION_SUPPRESSION_EXPLAINED_BY_LINEAGE_MATCH')
+    if 'unknown_exposure_source' in creation_sources:
+        position_exposure_reason_codes.append('PRE_CREATION_SUPPRESSION_EXPOSURE_SOURCE_UNCLEAR')
+    position_exposure_summary['position_exposure_reason_codes'] = _unique_codes(position_exposure_reason_codes)
     execution_lineage_summary = {
         'visible_execution_candidates': int(paper_trade_route_expected),
         'executable_candidates': int(len(executable_candidate_ids)),
@@ -2530,6 +2700,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             "funnel visibility uses AutonomousExecutionIntakeCandidate in current window."
         ),
         'paper_execution_visibility_examples': visibility_examples,
+        'execution_exposure_provenance_summary': execution_exposure_provenance_summary,
+        'execution_exposure_provenance_examples': execution_exposure_provenance_examples,
         'execution_readiness_available_count': int(len(latest_readiness_by_decision_id)),
         'execution_readiness_created_count': int(execution_readiness_created),
         'execution_readiness_reused_count': int(execution_readiness_reused),

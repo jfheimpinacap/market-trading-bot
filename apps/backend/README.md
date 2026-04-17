@@ -280,6 +280,38 @@ Boundaries remain unchanged: backend-only observability, strict `REAL_READ_ONLY`
 
 Boundaries remain unchanged: backend-only, observability-first, strict `REAL_READ_ONLY` + `PAPER_ONLY`, no `/runtime` rewrite, no live-trading enablement.
 
+## Execution exposure provenance diagnostics (Prompt 309)
+
+Backend diagnostics now include explicit pre-creation exposure provenance without changing risk/policy decisions.
+
+- New snapshot/export block:
+  - `execution_exposure_provenance_summary`
+    - `suppressions_total`
+    - `suppressions_by_source_type`
+    - `suppressions_by_scope`
+    - `exact_match_count`
+    - `weak_match_count`
+    - `stale_exposure_suspected_count`
+    - `additive_entries_suppressed`
+    - `reduce_or_exit_allowed`
+    - `dominant_exposure_reason_codes`
+    - `provenance_summary`
+  - `execution_exposure_provenance_examples` (max 3)
+- Each suppress-before-creation example now carries compact provenance:
+  - source/scope/confidence (`suppression_source_type`, `suppression_scope`, `suppression_confidence`)
+  - blocking identifiers and state (`blocking_position_id`, `blocking_trade_id`, `blocking_market_id`, statuses/sides)
+  - lineage hash (`blocking_lineage_key`) and stale hint (`stale_exposure_suspected`)
+  - candidate intent (`candidate_shape`)
+- Semantic alignment fields added across execution/visibility/exposure summaries:
+  - `measurement_scope`
+  - `source_of_truth`
+  - `explains_pre_creation_suppression`
+- Explicit semantic-gap reason codes are emitted when scopes differ (for example:
+  `POSITION_EXPOSURE_SCOPE_DIFFERS_FROM_CREATION_GATE`,
+  `ACTIVE_OVERLAY_FROM_PORTFOLIO_BUT_NO_FINAL_POSITION_GATE_BLOCK`).
+
+Scope boundary unchanged: diagnostics only. No threshold changes, no new entries enabled, no guardrail relaxation.
+
 ## Mission Control reason-code priority cleanup (Prompt 283)
 
 Execution-stage diagnostics now prioritize suppression semantics when an execution candidate never existed because it was suppressed before creation.
