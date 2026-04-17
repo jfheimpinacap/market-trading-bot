@@ -20,6 +20,8 @@ STATUS_DEFAULT = 'OFF'
 PREFERENCES_FILE = ROOT / '.tmp' / 'launcher-gui-preferences.json'
 DEFAULT_SYSTEM_URL = 'http://localhost:5173/system'
 OLLAMA_TIMEOUT_OPTIONS = ('30', '60', '90', '120')
+DEFAULT_OLLAMA_BASE_URL = 'http://127.0.0.1:11434'
+DEFAULT_OLLAMA_MODEL = 'llama3.2:3b'
 DEFAULT_WINDOW_WIDTH = 980
 DEFAULT_WINDOW_HEIGHT = 760
 DEFAULT_MIN_WIDTH = 860
@@ -47,6 +49,8 @@ class LauncherGUI(ctk.CTk):
         self.auto_open_browser_var = ctk.BooleanVar(value=bool(self.preferences.get('auto_open_browser', True)))
         self.use_ollama_var = ctk.BooleanVar(value=bool(self.preferences.get('use_ollama', True)))
         self.aux_signal_var = ctk.BooleanVar(value=bool(self.preferences.get('aux_signal_enabled', False)))
+        self.ollama_base_url_var = ctk.StringVar(value=str(self.preferences.get('ollama_base_url', DEFAULT_OLLAMA_BASE_URL)))
+        self.ollama_model_var = ctk.StringVar(value=str(self.preferences.get('ollama_model', DEFAULT_OLLAMA_MODEL)))
         timeout_value = str(self.preferences.get('ollama_timeout_seconds', '90')).strip()
         if timeout_value not in OLLAMA_TIMEOUT_OPTIONS:
             timeout_value = '90'
@@ -209,6 +213,30 @@ class LauncherGUI(ctk.CTk):
         )
         timeout_selector.pack(side='left', padx=(8, 0))
 
+        model_row = ctk.CTkFrame(actions, fg_color='transparent')
+        model_row.pack(fill='x', padx=16, pady=(2, 4))
+        ctk.CTkLabel(
+            model_row,
+            text='Modelo Ollama:',
+            font=ctk.CTkFont(size=13),
+        ).pack(side='left')
+        model_entry = ctk.CTkEntry(model_row, textvariable=self.ollama_model_var)
+        model_entry.pack(side='left', padx=(8, 0), fill='x', expand=True)
+        model_entry.bind('<FocusOut>', lambda _: self._save_preferences())
+
+        base_url_row = ctk.CTkFrame(actions, fg_color='transparent')
+        base_url_row.pack(fill='x', padx=16, pady=(2, 8))
+        ctk.CTkLabel(
+            base_url_row,
+            text='Base URL Ollama:',
+            font=ctk.CTkFont(size=13),
+        ).pack(side='left')
+        base_url_entry = ctk.CTkEntry(base_url_row, textvariable=self.ollama_base_url_var)
+        base_url_entry.pack(side='left', padx=(8, 0), fill='x', expand=True)
+        base_url_entry.bind('<FocusOut>', lambda _: self._save_preferences())
+
+        self._add_action_button(actions, 'Probar Ollama (smoke test)', self.run_llm_shadow_smoke_test)
+
         ctk.CTkLabel(
             actions,
             textvariable=self.main_url_var,
@@ -306,6 +334,26 @@ class LauncherGUI(ctk.CTk):
             'text': True,
             'capture_output': True,
             'check': False,
+        }
+        if os.name == 'nt':
+            run_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+        return subprocess.run(command, **run_kwargs)
+
+    def _run_backend_manage_command(
+        self,
+        *args: str,
+        env_overrides: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        command = [sys.executable, 'manage.py', *args]
+        env = os.environ.copy()
+        if env_overrides:
+            env.update(env_overrides)
+        run_kwargs: dict[str, object] = {
+            'cwd': ROOT / 'apps' / 'backend',
+            'text': True,
+            'capture_output': True,
+            'check': False,
+            'env': env,
         }
         if os.name == 'nt':
             run_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
@@ -513,20 +561,179 @@ class LauncherGUI(ctk.CTk):
         mode = last_mode if last_mode in {'full', 'lite'} else 'full'
         self.run_action(mode)
 
+    def run_llm_shadow_smoke_test(self) -> None:
+        model = self.ollama_model_var.get().strip() or DEFAULT_OLLAMA_MODEL
+        timeout = self.ollama_timeout_var.get().strip() or '90'
+        base_url = self.ollama_base_url_var.get().strip() or DEFAULT_OLLAMA_BASE_URL
+        aux_signal_enabled = bool(self.aux_signal_var.get())
+
+        command_args = [
+            'run_llm_shadow_smoke',
+            '--settings=config.settings.lite',
+            '--model',
+            model,
+            '--timeout',
+            timeout,
+            '--json',
+        ]
+        command_args.append('--aux-signal' if aux_signal_enabled else '--no-aux-signal')
+        env_overrides = {
+            'OLLAMA_ENABLED': 'true',
+            'LLM_ENABLED': 'true',
+            'OLLAMA_AUX_SIGNAL_ENABLED': 'true' if aux_signal_enabled else 'false',
+            'OLLAMA_BASE_URL': base_url,
+            'OLLAMA_MODEL': model,
+            'OLLAMA_TIMEOUT_SECONDS': timeout,
+        }
+        self._save_preferences()
+        self._set_busy(True)
+        self.feedback_var.set('Ejecutando smoke test corto de Ollama...')
+
+        def worker() -> None:
+            result = self._run_backend_manage_command(*command_args, env_overrides=env_overrides)
+            self.after(0, lambda: self._on_smoke_test_done(result, model, timeout, base_url, aux_signal_enabled))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_smoke_test_done(
+        self,
+        result: subprocess.CompletedProcess[str],
+        model: str,
+        timeout: str,
+        base_url: str,
+        aux_signal_enabled: bool,
+    ) -> None:
+        self._set_busy(False)
+        if result.returncode != 0:
+            error_output = (result.stderr or result.stdout or 'Error desconocido').strip()
+            concise_error = self._build_smoke_error_message(error_output)
+            self.feedback_var.set('Smoke test de Ollama falló.')
+            messagebox.showerror('Smoke test Ollama', concise_error)
+            return
+
+        raw_output = (result.stdout or '').strip()
+        try:
+            payload = json.loads(raw_output)
+        except json.JSONDecodeError:
+            self.feedback_var.set('Smoke test completó con salida no parseable.')
+            messagebox.showerror(
+                'Smoke test Ollama',
+                'No se pudo parsear JSON de salida del smoke test. Revisa logs backend/Ollama.',
+            )
+            return
+
+        self.feedback_var.set('Smoke test corto de Ollama completado.')
+        self._show_smoke_result_window(payload, raw_output, model, timeout, base_url, aux_signal_enabled)
+
+    @staticmethod
+    def _build_smoke_error_message(raw_error: str) -> str:
+        lowered = raw_error.lower()
+        if 'run migrations first' in lowered or 'could not access mission-control tables' in lowered:
+            return 'Faltan migraciones en backend. Ejecuta: python apps/backend/manage.py migrate'
+        if 'timed out' in lowered or 'timeout' in lowered:
+            return 'El smoke test excedió el timeout de Ollama. Prueba con mayor timeout o revisa el servicio.'
+        if 'connection refused' in lowered or 'failed to establish a new connection' in lowered:
+            return 'No se pudo conectar a Ollama. Verifica que esté corriendo y la Base URL configurada.'
+        if 'commanderror' in lowered:
+            return f'Error del comando de smoke test: {raw_error.splitlines()[-1]}'
+        compact = raw_error.splitlines()[-1] if raw_error.splitlines() else raw_error
+        return compact or 'Error desconocido en smoke test de Ollama.'
+
+    def _show_smoke_result_window(
+        self,
+        payload: dict[str, object],
+        raw_json: str,
+        model: str,
+        timeout: str,
+        base_url: str,
+        aux_signal_enabled: bool,
+    ) -> None:
+        window = ctk.CTkToplevel(self)
+        window.title('Resultado smoke test Ollama')
+        window.geometry('940x660')
+        window.grid_columnconfigure(0, weight=1)
+        window.grid_rowconfigure(1, weight=1)
+        window.grid_rowconfigure(3, weight=1)
+
+        header = (
+            f'Modelo: {model} | Timeout: {timeout}s | Aux signal: {"ON" if aux_signal_enabled else "OFF"}\n'
+            f'Base URL: {base_url}'
+        )
+        ctk.CTkLabel(
+            window,
+            text=header,
+            font=ctk.CTkFont(size=13),
+            justify='left',
+            anchor='w',
+        ).grid(row=0, column=0, padx=16, pady=(16, 6), sticky='ew')
+
+        summary_box = ctk.CTkTextbox(window, corner_radius=10, height=240)
+        summary_box.grid(row=1, column=0, padx=16, pady=(0, 10), sticky='nsew')
+        summary_lines = [
+            f"ollama_responded: {payload.get('ollama_responded')}",
+            f"llm_shadow_reasoning_status: {payload.get('llm_shadow_reasoning_status')}",
+            f"summary: {payload.get('summary')}",
+            f"key_risks: {json.dumps(payload.get('key_risks', []), ensure_ascii=False)}",
+            f"key_supporting_points: {json.dumps(payload.get('key_supporting_points', []), ensure_ascii=False)}",
+            f"artifact_id: {payload.get('artifact_id')}",
+            f"llm_aux_signal_summary: {json.dumps(payload.get('llm_aux_signal_summary', {}), ensure_ascii=False, indent=2)}",
+            f"boundaries: {json.dumps(payload.get('boundaries', {}), ensure_ascii=False)}",
+        ]
+        summary_box.insert('1.0', '\n\n'.join(summary_lines))
+        summary_box.configure(state='disabled')
+
+        ctk.CTkLabel(
+            window,
+            text='JSON completo',
+            font=ctk.CTkFont(size=14, weight='bold'),
+        ).grid(row=2, column=0, padx=16, pady=(0, 6), sticky='w')
+
+        json_box = ctk.CTkTextbox(window, corner_radius=10)
+        json_box.grid(row=3, column=0, padx=16, pady=(0, 16), sticky='nsew')
+        pretty_json = json.dumps(payload, indent=2, ensure_ascii=False)
+        json_box.insert('1.0', pretty_json if pretty_json.strip() else raw_json)
+        json_box.configure(state='disabled')
+
     def _load_preferences(self) -> dict[str, object]:
         if not PREFERENCES_FILE.exists():
-            return {'last_mode': 'full', 'auto_open_browser': True, 'use_ollama': True}
+            return {
+                'last_mode': 'full',
+                'auto_open_browser': True,
+                'use_ollama': True,
+                'aux_signal_enabled': False,
+                'ollama_timeout_seconds': '90',
+                'ollama_base_url': DEFAULT_OLLAMA_BASE_URL,
+                'ollama_model': DEFAULT_OLLAMA_MODEL,
+            }
         try:
             loaded = json.loads(PREFERENCES_FILE.read_text(encoding='utf-8'))
         except (json.JSONDecodeError, OSError):
-            return {'last_mode': 'full', 'auto_open_browser': True, 'use_ollama': True}
+            return {
+                'last_mode': 'full',
+                'auto_open_browser': True,
+                'use_ollama': True,
+                'aux_signal_enabled': False,
+                'ollama_timeout_seconds': '90',
+                'ollama_base_url': DEFAULT_OLLAMA_BASE_URL,
+                'ollama_model': DEFAULT_OLLAMA_MODEL,
+            }
         if not isinstance(loaded, dict):
-            return {'last_mode': 'full', 'auto_open_browser': True, 'use_ollama': True}
+            return {
+                'last_mode': 'full',
+                'auto_open_browser': True,
+                'use_ollama': True,
+                'aux_signal_enabled': False,
+                'ollama_timeout_seconds': '90',
+                'ollama_base_url': DEFAULT_OLLAMA_BASE_URL,
+                'ollama_model': DEFAULT_OLLAMA_MODEL,
+            }
         loaded.setdefault('last_mode', 'full')
         loaded.setdefault('auto_open_browser', True)
         loaded.setdefault('use_ollama', True)
         loaded.setdefault('aux_signal_enabled', False)
         loaded.setdefault('ollama_timeout_seconds', '90')
+        loaded.setdefault('ollama_base_url', DEFAULT_OLLAMA_BASE_URL)
+        loaded.setdefault('ollama_model', DEFAULT_OLLAMA_MODEL)
         return loaded
 
     def _save_preferences(self) -> None:
@@ -535,6 +742,8 @@ class LauncherGUI(ctk.CTk):
         self.preferences['use_ollama'] = bool(self.use_ollama_var.get())
         self.preferences['aux_signal_enabled'] = bool(self.aux_signal_var.get())
         self.preferences['ollama_timeout_seconds'] = str(self.ollama_timeout_var.get())
+        self.preferences['ollama_base_url'] = self.ollama_base_url_var.get().strip() or DEFAULT_OLLAMA_BASE_URL
+        self.preferences['ollama_model'] = self.ollama_model_var.get().strip() or DEFAULT_OLLAMA_MODEL
         PREFERENCES_FILE.parent.mkdir(parents=True, exist_ok=True)
         PREFERENCES_FILE.write_text(json.dumps(self.preferences, indent=2), encoding='utf-8')
 
