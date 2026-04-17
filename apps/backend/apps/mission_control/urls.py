@@ -45,6 +45,7 @@ urlpatterns = [
     path('live-paper-trial-history/', views.LivePaperTrialRunHistoryView.as_view(), name='live-paper-trial-history'),
     path('live-paper-trial-trend/', views.LivePaperTrialTrendView.as_view(), name='live-paper-trial-trend'),
     path('live-paper-autonomy-funnel/', views.LivePaperAutonomyFunnelView.as_view(), name='live-paper-autonomy-funnel'),
+    path('execution-exposure-release-audit/', views.ExecutionExposureReleaseAuditView.as_view(), name='execution-exposure-release-audit'),
     path('extended-paper-run-gate/', views.ExtendedPaperRunGateView.as_view(), name='extended-paper-run-gate'),
     path('start-extended-paper-run/', views.StartExtendedPaperRunView.as_view(), name='start-extended-paper-run'),
     path('extended-paper-run-status/', views.ExtendedPaperRunStatusView.as_view(), name='extended-paper-run-status'),

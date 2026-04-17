@@ -552,6 +552,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'execution_candidate_creation_gate_examples': list(funnel.get('execution_candidate_creation_gate_examples') or []),
             'execution_exposure_provenance_summary': dict(funnel.get('execution_exposure_provenance_summary') or {}),
             'execution_exposure_provenance_examples': list(funnel.get('execution_exposure_provenance_examples') or []),
+            'execution_exposure_release_audit_summary': dict(funnel.get('execution_exposure_release_audit_summary') or {}),
+            'execution_exposure_release_audit_examples': list(funnel.get('execution_exposure_release_audit_examples') or []),
             'execution_promotion_gate_summary': dict(funnel.get('execution_promotion_gate_summary') or {}),
             'execution_promotion_gate_examples': list(funnel.get('execution_promotion_gate_examples') or []),
             'execution_lineage_summary': dict(funnel.get('execution_lineage_summary') or {}),
@@ -675,6 +677,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     execution_creation_gate_examples = payload.get('execution_candidate_creation_gate_examples') or []
     execution_exposure_provenance = payload.get('execution_exposure_provenance_summary') or {}
     execution_exposure_provenance_examples = payload.get('execution_exposure_provenance_examples') or []
+    execution_exposure_release_audit = payload.get('execution_exposure_release_audit_summary') or {}
+    execution_exposure_release_audit_examples = payload.get('execution_exposure_release_audit_examples') or []
     execution_promotion_gate = payload.get('execution_promotion_gate_summary') or {}
     execution_promotion_gate_examples = payload.get('execution_promotion_gate_examples') or []
     execution_lineage = payload.get('execution_lineage_summary') or {}
@@ -920,6 +924,28 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         ),
         f"  provenance_summary={execution_exposure_provenance.get('provenance_summary') or ''}",
         f"  execution_exposure_provenance_examples={execution_exposure_provenance_examples or []}",
+        'execution_exposure_release_audit_summary:',
+        (
+            f"  suppressions_audited={execution_exposure_release_audit.get('suppressions_audited', 0)} "
+            f"valid_blockers_count={execution_exposure_release_audit.get('valid_blockers_count', 0)} "
+            f"stale_suspected_count={execution_exposure_release_audit.get('stale_suspected_count', 0)} "
+            f"terminal_but_still_matching_count={execution_exposure_release_audit.get('terminal_but_still_matching_count', 0)} "
+            f"session_scope_mismatch_count={execution_exposure_release_audit.get('session_scope_mismatch_count', 0)} "
+            f"mirror_lag_suspected_count={execution_exposure_release_audit.get('mirror_lag_suspected_count', 0)}"
+        ),
+        (
+            f"  release_eligible_count={execution_exposure_release_audit.get('release_eligible_count', 0)} "
+            f"release_pending_confirmation_count={execution_exposure_release_audit.get('release_pending_confirmation_count', 0)} "
+            f"manual_review_required_count={execution_exposure_release_audit.get('manual_review_required_count', 0)} "
+            f"keep_blocked_count={execution_exposure_release_audit.get('keep_blocked_count', 0)}"
+        ),
+        (
+            f"  validity_reason_codes="
+            f"{','.join(execution_exposure_release_audit.get('validity_reason_codes') or []) or 'none'} "
+            f"release_reason_codes={','.join(execution_exposure_release_audit.get('release_reason_codes') or []) or 'none'}"
+        ),
+        f"  release_audit_summary={execution_exposure_release_audit.get('release_audit_summary') or ''}",
+        f"  execution_exposure_release_audit_examples={execution_exposure_release_audit_examples or []}",
         'execution_promotion_gate_summary:',
         (
             f"  candidates_visible={execution_promotion_gate.get('candidates_visible', 0)} "

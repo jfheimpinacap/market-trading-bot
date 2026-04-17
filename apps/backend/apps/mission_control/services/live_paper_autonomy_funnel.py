@@ -35,7 +35,7 @@ from apps.markets.models import Market
 from apps.mission_control.services.live_paper_bootstrap import PRESET_NAME
 from apps.mission_control.services.live_paper_validation import build_live_paper_validation_digest
 from apps.mission_control.services.session_heartbeat import build_heartbeat_summary
-from apps.paper_trading.models import PaperTrade, PaperTradeStatus, PaperTradeType
+from apps.paper_trading.models import PaperPosition, PaperTrade, PaperTradeStatus, PaperTradeType
 from apps.paper_trading.services.execution import PaperTradingValidationError, execute_paper_trade
 from apps.paper_trading.services.portfolio import build_account_summary, get_active_account
 from apps.paper_trading.services.valuation import PaperTradingRejectionError
@@ -87,6 +87,7 @@ _PREDICTION_STATUS_EXAMPLES_LIMIT = 3
 _PREDICTION_RISK_CAUTION_EXAMPLES_LIMIT = 3
 _PAPER_EXECUTION_VISIBILITY_EXAMPLES_LIMIT = 3
 _PAPER_TRADE_EXAMPLES_LIMIT = 3
+_EXPOSURE_RELEASE_AUDIT_EXAMPLES_LIMIT = 3
 _EXECUTABLE_INTAKE_STATUSES = {
     AutonomousExecutionIntakeStatus.READY_FOR_AUTONOMOUS_EXECUTION,
     AutonomousExecutionIntakeStatus.READY_REDUCED,
@@ -396,6 +397,187 @@ def _build_execution_exposure_provenance_summary(*, examples: list[dict[str, Any
         'reduce_or_exit_allowed': int(reduce_or_exit_allowed),
         'dominant_exposure_reason_codes': dominant_exposure_reason_codes,
         'provenance_summary': provenance_summary,
+    }
+
+
+def _iso_or_none(value: Any) -> str | None:
+    if not value:
+        return None
+    try:
+        return value.isoformat()
+    except Exception:
+        return None
+
+
+def _build_execution_exposure_release_audit(*, examples: list[dict[str, Any]], window_start) -> dict[str, Any]:
+    now = timezone.now()
+    open_positions = {
+        int(position.id): position
+        for position in PaperPosition.objects.select_related('market').filter(status='OPEN')
+    }
+    trades_by_id = {
+        int(trade.id): trade
+        for trade in PaperTrade.objects.select_related('market', 'position').all()[:500]
+    }
+    readiness_rows = {
+        int(row.id): row
+        for row in AutonomousExecutionReadiness.objects.filter(id__in=[_safe_int(item.get('readiness_id')) for item in examples if _safe_int(item.get('readiness_id')) is not None])
+    }
+    audited: list[dict[str, Any]] = []
+    validity_reason_counter: dict[str, int] = {}
+    release_reason_counter: dict[str, int] = {}
+
+    for item in examples:
+        source_type = str(item.get('suppression_source_type') or 'unknown_exposure_source')
+        suppression_scope = str(item.get('suppression_scope') or 'broader_scope_match')
+        readiness_id = _safe_int(item.get('readiness_id'))
+        market_id = _safe_int(item.get('blocking_market_id') or item.get('market_id'))
+        blocking_position_id = _safe_int(item.get('blocking_position_id'))
+        blocking_trade_id = _safe_int(item.get('blocking_trade_id'))
+        readiness = readiness_rows.get(readiness_id) if readiness_id is not None else None
+        position = open_positions.get(blocking_position_id) if blocking_position_id is not None else None
+        trade = trades_by_id.get(blocking_trade_id) if blocking_trade_id is not None else None
+        if position is None and market_id is not None:
+            position = next((row for row in open_positions.values() if _safe_int(getattr(row, 'market_id', None)) == market_id), None)
+        if trade is None and market_id is not None:
+            trade = next((row for row in trades_by_id.values() if _safe_int(getattr(row, 'market_id', None)) == market_id), None)
+
+        portfolio_position_present_now = bool(position is not None)
+        portfolio_trade_present_now = bool(trade is not None and str(getattr(trade, 'status', '') or '') == PaperTradeStatus.EXECUTED)
+        position_terminal = bool(position is not None and str(getattr(position, 'status', '') or '') == 'CLOSED')
+        trade_status_value = str(getattr(trade, 'status', '') or '')
+        trade_terminal = trade_status_value in {PaperTradeStatus.CANCELLED, PaperTradeStatus.REJECTED}
+        blocking_record_terminal = bool(position_terminal or trade_terminal or str(item.get('blocking_trade_status') or '') in {'CANCELLED', 'REJECTED'})
+        quantity_or_exposure_present = bool(
+            (position is not None and getattr(position, 'quantity', 0) and getattr(position, 'quantity', 0) > 0)
+            or portfolio_trade_present_now
+        )
+        runtime_session_alignment = 'ALIGNED' if suppression_scope in {'same_market', 'same_lineage', 'same_market_and_lineage'} else 'MISMATCH'
+        portfolio_session_alignment = 'ALIGNED' if suppression_scope in {'same_market', 'same_market_and_lineage'} else ('UNKNOWN' if suppression_scope == 'same_lineage' else 'MISMATCH')
+        reference_time = getattr(position, 'updated_at', None) or getattr(trade, 'executed_at', None) or getattr(readiness, 'created_at', None)
+        blocker_age_minutes = int(max(0, (now - reference_time).total_seconds() // 60)) if reference_time else None
+        funnel_window_alignment = 'IN_WINDOW' if reference_time and reference_time >= window_start else ('OUT_OF_WINDOW' if reference_time else 'UNKNOWN')
+        blocking_record_missing_but_match_persisted = bool((blocking_position_id is None and blocking_trade_id is None) and source_type != 'unknown_exposure_source')
+        stale_basis_flags: list[str] = []
+        validity_reason_codes: list[str] = []
+        release_reason_codes: list[str] = []
+
+        blocker_validity_status = 'UNKNOWN_VALIDITY'
+        release_readiness_status = 'REQUIRE_MANUAL_REVIEW'
+        release_confidence = 'low'
+
+        if runtime_session_alignment == 'MISMATCH' or portfolio_session_alignment == 'MISMATCH':
+            blocker_validity_status = 'SESSION_SCOPE_MISMATCH'
+            release_readiness_status = 'RELEASE_PENDING_CONFIRMATION'
+            release_confidence = 'medium'
+            validity_reason_codes.append('EXPOSURE_BLOCKER_SESSION_SCOPE_MISMATCH')
+            release_reason_codes.append('EXPOSURE_RELEASE_PENDING_CONFIRMATION')
+            stale_basis_flags.append('session_scope_mismatch')
+        elif blocking_record_terminal:
+            blocker_validity_status = 'TERMINAL_RECORD_STILL_MATCHING'
+            release_readiness_status = 'REQUIRE_MANUAL_REVIEW'
+            release_confidence = 'low'
+            validity_reason_codes.append('EXPOSURE_BLOCKER_TERMINAL_RECORD_STILL_MATCHING')
+            release_reason_codes.append('EXPOSURE_RELEASE_REQUIRES_MANUAL_REVIEW')
+            stale_basis_flags.append('terminal_record_matching')
+        elif portfolio_position_present_now and quantity_or_exposure_present and source_type == 'active_position':
+            blocker_validity_status = 'VALID_ACTIVE_POSITION'
+            release_readiness_status = 'KEEP_BLOCKED'
+            release_confidence = 'high'
+            validity_reason_codes.append('EXPOSURE_BLOCKER_VALID_ACTIVE_POSITION')
+            release_reason_codes.append('EXPOSURE_KEEP_BLOCKED_VALID_MATCH')
+        elif portfolio_trade_present_now and source_type in {'existing_open_trade', 'lineage_reuse'}:
+            blocker_validity_status = 'VALID_EXISTING_OPEN_TRADE' if source_type == 'existing_open_trade' else 'VALID_LINEAGE_REUSE'
+            release_readiness_status = 'KEEP_BLOCKED'
+            release_confidence = 'high' if source_type == 'existing_open_trade' else 'medium'
+            validity_reason_codes.append(
+                'EXPOSURE_BLOCKER_VALID_OPEN_TRADE' if source_type == 'existing_open_trade' else 'EXPOSURE_BLOCKER_VALID_LINEAGE_REUSE'
+            )
+            release_reason_codes.append('EXPOSURE_KEEP_BLOCKED_VALID_MATCH')
+        elif blocking_record_missing_but_match_persisted and blocker_age_minutes is not None and blocker_age_minutes <= 15:
+            blocker_validity_status = 'PORTFOLIO_RUNTIME_MIRROR_LAG_SUSPECTED'
+            release_readiness_status = 'RELEASE_PENDING_CONFIRMATION'
+            release_confidence = 'medium'
+            validity_reason_codes.append('EXPOSURE_BLOCKER_PORTFOLIO_RUNTIME_MIRROR_LAG_SUSPECTED')
+            release_reason_codes.append('EXPOSURE_RELEASE_PENDING_CONFIRMATION')
+            stale_basis_flags.append('mirror_lag_suspected')
+        elif not portfolio_position_present_now and source_type == 'active_position':
+            blocker_validity_status = 'STALE_POSITION_SUSPECTED'
+            release_readiness_status = 'RELEASE_ELIGIBLE'
+            release_confidence = 'high'
+            validity_reason_codes.append('EXPOSURE_BLOCKER_STALE_POSITION_SUSPECTED')
+            release_reason_codes.append('EXPOSURE_RELEASE_ELIGIBLE_BY_MISSING_LIVE_EXPOSURE')
+            stale_basis_flags.append('missing_live_position')
+        elif not portfolio_trade_present_now and source_type in {'existing_open_trade', 'lineage_reuse'}:
+            blocker_validity_status = 'STALE_OPEN_TRADE_SUSPECTED'
+            release_readiness_status = 'RELEASE_ELIGIBLE'
+            release_confidence = 'medium'
+            validity_reason_codes.append('EXPOSURE_BLOCKER_STALE_OPEN_TRADE_SUSPECTED')
+            release_reason_codes.append('EXPOSURE_RELEASE_ELIGIBLE_BY_MISSING_LIVE_EXPOSURE')
+            stale_basis_flags.append('missing_live_trade')
+        else:
+            validity_reason_codes.append('EXPOSURE_BLOCKER_SESSION_SCOPE_MISMATCH' if suppression_scope == 'broader_scope_match' else 'EXPOSURE_BLOCKER_PORTFOLIO_RUNTIME_MIRROR_LAG_SUSPECTED')
+            release_reason_codes.append('EXPOSURE_RELEASE_REQUIRES_MANUAL_REVIEW')
+            stale_basis_flags.append('unknown_validity')
+
+        for code in validity_reason_codes:
+            validity_reason_counter[code] = validity_reason_counter.get(code, 0) + 1
+        for code in release_reason_codes:
+            release_reason_counter[code] = release_reason_counter.get(code, 0) + 1
+
+        audited.append(
+            {
+                'market_id': market_id,
+                'risk_decision_id': _safe_int(getattr(getattr(readiness, 'linked_approval_review', None), 'id', None)),
+                'readiness_id': readiness_id,
+                'suppression_source_type': source_type,
+                'suppression_scope': suppression_scope,
+                'blocking_position_id': blocking_position_id,
+                'blocking_trade_id': blocking_trade_id,
+                'blocking_lineage_key': str(item.get('blocking_lineage_key') or ''),
+                'blocker_validity_status': blocker_validity_status,
+                'release_readiness_status': release_readiness_status,
+                'release_confidence': release_confidence,
+                'blocker_age_minutes': blocker_age_minutes,
+                'last_position_activity_at': _iso_or_none(getattr(position, 'updated_at', None)),
+                'last_trade_activity_at': _iso_or_none(getattr(trade, 'executed_at', None)),
+                'portfolio_position_present_now': portfolio_position_present_now,
+                'portfolio_trade_present_now': portfolio_trade_present_now,
+                'runtime_session_alignment': runtime_session_alignment,
+                'portfolio_session_alignment': portfolio_session_alignment,
+                'funnel_window_alignment': funnel_window_alignment,
+                'quantity_or_exposure_present': quantity_or_exposure_present,
+                'blocking_record_terminal': blocking_record_terminal,
+                'blocking_record_missing_but_match_persisted': blocking_record_missing_but_match_persisted,
+                'stale_basis_flags': stale_basis_flags,
+                'validity_reason_codes': validity_reason_codes,
+                'release_reason_codes': release_reason_codes,
+                'dominant_reason_code': validity_reason_codes[0] if validity_reason_codes else (release_reason_codes[0] if release_reason_codes else ''),
+            }
+        )
+
+    summary = {
+        'suppressions_audited': len(audited),
+        'valid_blockers_count': sum(1 for row in audited if str(row.get('blocker_validity_status') or '').startswith('VALID_')),
+        'stale_suspected_count': sum(1 for row in audited if 'STALE' in str(row.get('blocker_validity_status') or '')),
+        'terminal_but_still_matching_count': sum(1 for row in audited if row.get('blocker_validity_status') == 'TERMINAL_RECORD_STILL_MATCHING'),
+        'session_scope_mismatch_count': sum(1 for row in audited if row.get('blocker_validity_status') == 'SESSION_SCOPE_MISMATCH'),
+        'mirror_lag_suspected_count': sum(1 for row in audited if row.get('blocker_validity_status') == 'PORTFOLIO_RUNTIME_MIRROR_LAG_SUSPECTED'),
+        'release_eligible_count': sum(1 for row in audited if row.get('release_readiness_status') == 'RELEASE_ELIGIBLE'),
+        'release_pending_confirmation_count': sum(1 for row in audited if row.get('release_readiness_status') == 'RELEASE_PENDING_CONFIRMATION'),
+        'manual_review_required_count': sum(1 for row in audited if row.get('release_readiness_status') == 'REQUIRE_MANUAL_REVIEW'),
+        'keep_blocked_count': sum(1 for row in audited if row.get('release_readiness_status') == 'KEEP_BLOCKED'),
+        'validity_reason_codes': [code for code, _ in sorted(validity_reason_counter.items(), key=lambda item: (-item[1], item[0]))[:5]],
+        'release_reason_codes': [code for code, _ in sorted(release_reason_counter.items(), key=lambda item: (-item[1], item[0]))[:5]],
+    }
+    summary['release_audit_summary'] = (
+        f"suppressions_audited={summary['suppressions_audited']} valid={summary['valid_blockers_count']} "
+        f"stale={summary['stale_suspected_count']} release_eligible={summary['release_eligible_count']} "
+        f"pending_confirmation={summary['release_pending_confirmation_count']} keep_blocked={summary['keep_blocked_count']}"
+    )
+    return {
+        'execution_exposure_release_audit_summary': summary,
+        'execution_exposure_release_audit_examples': audited[:_EXPOSURE_RELEASE_AUDIT_EXAMPLES_LIMIT],
     }
 
 
@@ -2541,6 +2723,12 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         examples=creation_exposure_provenance_examples
     )
     execution_exposure_provenance_examples = creation_exposure_provenance_examples[:_PAPER_TRADE_EXAMPLES_LIMIT]
+    execution_exposure_release_audit = _build_execution_exposure_release_audit(
+        examples=creation_exposure_provenance_examples,
+        window_start=window_start,
+    )
+    execution_exposure_release_audit_summary = dict(execution_exposure_release_audit.get('execution_exposure_release_audit_summary') or {})
+    execution_exposure_release_audit_examples = list(execution_exposure_release_audit.get('execution_exposure_release_audit_examples') or [])
     aligned_decision_created = int(paper_trade_decision_created)
     aligned_decision_reused = int(paper_trade_decision_reused)
     promotion_suppressed_total = int(promotion_suppressed_by_active_position + promotion_suppressed_by_existing_open_trade)
@@ -2620,6 +2808,10 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         position_exposure_reason_codes.append('PRE_CREATION_SUPPRESSION_EXPLAINED_BY_LINEAGE_MATCH')
     if 'unknown_exposure_source' in creation_sources:
         position_exposure_reason_codes.append('PRE_CREATION_SUPPRESSION_EXPOSURE_SOURCE_UNCLEAR')
+    if int(execution_exposure_release_audit_summary.get('session_scope_mismatch_count') or 0) > 0:
+        position_exposure_reason_codes.append('PRE_CREATION_SUPPRESSION_SCOPE_MISMATCH_REQUIRES_CONFIRMATION')
+    if int(execution_exposure_release_audit_summary.get('mirror_lag_suspected_count') or 0) > 0:
+        position_exposure_reason_codes.append('PRE_CREATION_SUPPRESSION_MIRROR_LAG_SUSPECTED')
     position_exposure_summary['position_exposure_reason_codes'] = _unique_codes(position_exposure_reason_codes)
     execution_lineage_summary = {
         'visible_execution_candidates': int(paper_trade_route_expected),
@@ -2702,6 +2894,8 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'paper_execution_visibility_examples': visibility_examples,
         'execution_exposure_provenance_summary': execution_exposure_provenance_summary,
         'execution_exposure_provenance_examples': execution_exposure_provenance_examples,
+        'execution_exposure_release_audit_summary': execution_exposure_release_audit_summary,
+        'execution_exposure_release_audit_examples': execution_exposure_release_audit_examples,
         'execution_readiness_available_count': int(len(latest_readiness_by_decision_id)),
         'execution_readiness_created_count': int(execution_readiness_created),
         'execution_readiness_reused_count': int(execution_readiness_reused),
@@ -4779,6 +4973,10 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'paper_trade_examples': paper_execution_summary.get('paper_trade_examples', []),
         'execution_candidate_creation_gate_summary': paper_execution_summary.get('execution_candidate_creation_gate_summary', {}),
         'execution_candidate_creation_gate_examples': paper_execution_summary.get('execution_candidate_creation_gate_examples', []),
+        'execution_exposure_provenance_summary': paper_execution_summary.get('execution_exposure_provenance_summary', {}),
+        'execution_exposure_provenance_examples': paper_execution_summary.get('execution_exposure_provenance_examples', []),
+        'execution_exposure_release_audit_summary': paper_execution_summary.get('execution_exposure_release_audit_summary', {}),
+        'execution_exposure_release_audit_examples': paper_execution_summary.get('execution_exposure_release_audit_examples', []),
         'execution_promotion_gate_summary': paper_execution_summary.get('execution_promotion_gate_summary', {}),
         'execution_promotion_gate_examples': paper_execution_summary.get('execution_promotion_gate_examples', []),
         'execution_lineage_summary': paper_execution_summary.get('execution_lineage_summary', {}),
@@ -4980,6 +5178,10 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'execution_lineage_summary': handoff_diagnostics.get('execution_lineage_summary', {}),
         'execution_candidate_creation_gate_summary': handoff_diagnostics.get('execution_candidate_creation_gate_summary', {}),
         'execution_candidate_creation_gate_examples': handoff_diagnostics.get('execution_candidate_creation_gate_examples', []),
+        'execution_exposure_provenance_summary': handoff_diagnostics.get('execution_exposure_provenance_summary', {}),
+        'execution_exposure_provenance_examples': handoff_diagnostics.get('execution_exposure_provenance_examples', []),
+        'execution_exposure_release_audit_summary': handoff_diagnostics.get('execution_exposure_release_audit_summary', {}),
+        'execution_exposure_release_audit_examples': handoff_diagnostics.get('execution_exposure_release_audit_examples', []),
         'execution_promotion_gate_summary': handoff_diagnostics.get('execution_promotion_gate_summary', {}),
         'execution_promotion_gate_examples': handoff_diagnostics.get('execution_promotion_gate_examples', []),
         'final_fanout_summary': handoff_diagnostics.get('final_fanout_summary', {}),

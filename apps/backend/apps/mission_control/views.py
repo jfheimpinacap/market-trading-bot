@@ -228,6 +228,7 @@ from apps.mission_control.services.live_paper_trial_run import (
 from apps.mission_control.services.live_paper_trial_history import list_live_paper_trial_history
 from apps.mission_control.services.live_paper_trial_trend import build_live_paper_trial_trend_digest
 from apps.mission_control.services.live_paper_autonomy_funnel import build_live_paper_autonomy_funnel_snapshot
+from apps.mission_control.services.execution_exposure_release_audit import build_execution_exposure_release_audit_snapshot
 from apps.mission_control.services.extended_paper_run_gate import build_extended_paper_run_gate
 from apps.mission_control.services.extended_paper_run_launcher import (
     get_extended_paper_run_status,
@@ -577,6 +578,17 @@ class LivePaperAutonomyFunnelView(APIView):
         payload = build_live_paper_autonomy_funnel_snapshot(window_minutes=window_minutes, preset_name=preset_name)
         serializer = LivePaperAutonomyFunnelSerializer(payload)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ExecutionExposureReleaseAuditView(APIView):
+    def get(self, request, *args, **kwargs):
+        preset_name = request.query_params.get('preset') or 'live_read_only_paper_conservative'
+        try:
+            window_minutes = int(request.query_params.get('window_minutes') or 60)
+        except (TypeError, ValueError):
+            window_minutes = 60
+        payload = build_execution_exposure_release_audit_snapshot(window_minutes=window_minutes, preset_name=preset_name)
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class ExtendedPaperRunGateView(APIView):

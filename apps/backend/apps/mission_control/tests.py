@@ -2726,6 +2726,20 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload['next_action_hint'], 'Risk is blocking most candidates')
 
+    @patch('apps.mission_control.views.build_execution_exposure_release_audit_snapshot')
+    def test_execution_exposure_release_audit_endpoint_returns_compact_payload(self, mock_snapshot):
+        mock_snapshot.return_value = {
+            'window_minutes': 60,
+            'preset_name': 'live_read_only_paper_conservative',
+            'execution_exposure_release_audit_summary': {'suppressions_audited': 2, 'keep_blocked_count': 1},
+            'execution_exposure_release_audit_examples': [{'market_id': 123, 'blocker_validity_status': 'VALID_ACTIVE_POSITION'}],
+        }
+        response = self.client.get(reverse('mission_control:execution-exposure-release-audit'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload.get('execution_exposure_release_audit_summary', {}).get('suppressions_audited'), 2)
+        self.assertEqual(len(payload.get('execution_exposure_release_audit_examples') or []), 1)
+
     def test_does_not_mark_shortlist_reason_without_real_shortlist(self):
         counts = self._funnel_counts(scan=7, research=0, prediction=0, risk_approved=0, risk_blocked=0, execution=0, recent_trades=0)
         with patch('apps.mission_control.services.live_paper_autonomy_funnel._collect_funnel_counts', return_value=counts), patch(
@@ -4121,6 +4135,71 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertIn('execution_promotion_gate_summary', diagnostics)
         self.assertIn('cash_pressure_summary', diagnostics)
         self.assertIn('paper_trade_decision_summary', diagnostics)
+        release_audit = diagnostics.get('execution_exposure_release_audit_summary') or {}
+        self.assertEqual(release_audit.get('suppressions_audited'), 1)
+        self.assertEqual(release_audit.get('keep_blocked_count'), 1)
+        release_examples = diagnostics.get('execution_exposure_release_audit_examples') or []
+        self.assertEqual(len(release_examples), 1)
+        self.assertEqual(release_examples[0].get('blocker_validity_status'), 'VALID_ACTIVE_POSITION')
+        self.assertEqual(release_examples[0].get('release_readiness_status'), 'KEEP_BLOCKED')
+
+    def test_execution_exposure_release_audit_marks_missing_live_exposure_as_release_eligible(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_execution_exposure_release_audit
+
+        result = _build_execution_exposure_release_audit(
+            examples=[
+                {
+                    'readiness_id': 501,
+                    'suppression_source_type': 'existing_open_trade',
+                    'suppression_scope': 'same_lineage',
+                    'blocking_lineage_key': 'abc123def4',
+                }
+            ],
+            window_start=timezone.now() - timedelta(minutes=60),
+        )
+        summary = result.get('execution_exposure_release_audit_summary') or {}
+        examples = result.get('execution_exposure_release_audit_examples') or []
+        self.assertEqual(summary.get('release_eligible_count'), 1)
+        self.assertEqual(examples[0].get('blocker_validity_status'), 'STALE_OPEN_TRADE_SUSPECTED')
+        self.assertEqual(examples[0].get('release_readiness_status'), 'RELEASE_ELIGIBLE')
+        self.assertIn('EXPOSURE_RELEASE_ELIGIBLE_BY_MISSING_LIVE_EXPOSURE', examples[0].get('release_reason_codes', []))
+
+    def test_execution_exposure_release_audit_marks_terminal_records_for_manual_review(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_execution_exposure_release_audit
+
+        result = _build_execution_exposure_release_audit(
+            examples=[
+                {
+                    'readiness_id': 502,
+                    'suppression_source_type': 'existing_open_trade',
+                    'suppression_scope': 'same_lineage',
+                    'blocking_trade_status': 'CANCELLED',
+                    'blocking_lineage_key': 'term123abc9',
+                }
+            ],
+            window_start=timezone.now() - timedelta(minutes=60),
+        )
+        examples = result.get('execution_exposure_release_audit_examples') or []
+        self.assertEqual(examples[0].get('blocker_validity_status'), 'TERMINAL_RECORD_STILL_MATCHING')
+        self.assertEqual(examples[0].get('release_readiness_status'), 'REQUIRE_MANUAL_REVIEW')
+
+    def test_execution_exposure_release_audit_detects_session_scope_mismatch(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_execution_exposure_release_audit
+
+        result = _build_execution_exposure_release_audit(
+            examples=[
+                {
+                    'readiness_id': 503,
+                    'suppression_source_type': 'lineage_reuse',
+                    'suppression_scope': 'broader_scope_match',
+                    'blocking_lineage_key': 'mismatch12a',
+                }
+            ],
+            window_start=timezone.now() - timedelta(minutes=60),
+        )
+        examples = result.get('execution_exposure_release_audit_examples') or []
+        self.assertEqual(examples[0].get('blocker_validity_status'), 'SESSION_SCOPE_MISMATCH')
+        self.assertEqual(examples[0].get('release_readiness_status'), 'RELEASE_PENDING_CONFIRMATION')
 
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
@@ -6773,6 +6852,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('paper_trade_final_examples=', text_payload)
         self.assertIn('execution_promotion_gate_summary:', text_payload)
         self.assertIn('execution_exposure_provenance_summary:', text_payload)
+        self.assertIn('execution_exposure_release_audit_summary:', text_payload)
+        self.assertIn('release_audit_summary=', text_payload)
         self.assertIn('suppressions_by_source_type=', text_payload)
         self.assertIn('candidates_promoted_to_decision=', text_payload)
         self.assertIn('execution_promotion_gate_reason_codes=', text_payload)
@@ -6862,6 +6943,13 @@ class TestConsoleApiTests(TestCase):
             ],
         }
         payload['execution_promotion_gate_examples'] = [{'execution_candidate_id': 11, 'reason_code': 'EXECUTION_PROMOTION_SUPPRESSED_BY_ACTIVE_POSITION'}]
+        payload['execution_exposure_release_audit_summary'] = {
+            'suppressions_audited': 1,
+            'valid_blockers_count': 1,
+            'release_eligible_count': 0,
+            'release_audit_summary': 'suppressions_audited=1 valid=1',
+        }
+        payload['execution_exposure_release_audit_examples'] = [{'market_id': 91, 'release_readiness_status': 'KEEP_BLOCKED'}]
         mock_state_snapshot.return_value = (payload, payload, [])
 
         json_payload = export_test_console_log(fmt='json')
@@ -6871,6 +6959,8 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(len(json_payload.get('execution_promotion_gate_examples') or []), 1)
         self.assertEqual((json_payload.get('execution_exposure_provenance_summary') or {}).get('suppressions_total'), 1)
         self.assertEqual(len(json_payload.get('execution_exposure_provenance_examples') or []), 1)
+        self.assertEqual((json_payload.get('execution_exposure_release_audit_summary') or {}).get('suppressions_audited'), 1)
+        self.assertEqual(len(json_payload.get('execution_exposure_release_audit_examples') or []), 1)
 
     @patch('apps.mission_control.services.test_console._get_state_snapshot')
     def test_export_log_preserves_position_exposure_summary_from_snapshot(self, mock_state_snapshot):
@@ -7619,3 +7709,19 @@ class LlmShadowSmokeCommandTests(TestCase):
         self.assertFalse(bool(payload['llm_aux_signal_summary']['affects_execution']))
         self.assertTrue(bool(payload['boundaries']['advisory_only']))
         self.assertTrue(bool(payload['boundaries']['paper_only']))
+
+
+class ExecutionExposureReleaseAuditCommandTests(TestCase):
+    @patch('apps.mission_control.management.commands.run_execution_exposure_release_audit.build_execution_exposure_release_audit_snapshot')
+    def test_release_audit_command_outputs_json(self, mock_snapshot):
+        mock_snapshot.return_value = {
+            'window_minutes': 60,
+            'preset_name': 'live_read_only_paper_conservative',
+            'execution_exposure_release_audit_summary': {'suppressions_audited': 1, 'keep_blocked_count': 1},
+            'execution_exposure_release_audit_examples': [{'market_id': 1, 'blocker_validity_status': 'VALID_ACTIVE_POSITION'}],
+        }
+        stdout = StringIO()
+        call_command('run_execution_exposure_release_audit', '--json', stdout=stdout)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload.get('execution_exposure_release_audit_summary', {}).get('suppressions_audited'), 1)
+        self.assertEqual(len(payload.get('execution_exposure_release_audit_examples') or []), 1)
