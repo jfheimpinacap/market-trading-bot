@@ -1458,8 +1458,12 @@ El panel ahora expone controles separados para LLM local:
 - **“Usar Ollama (shadow)”** → mapea a `--ollama enabled|disabled`.
 - **“Activar señal auxiliar LLM”** → mapea a `--ollama-aux-signal enabled|disabled` (`OLLAMA_AUX_SIGNAL_ENABLED`).
 - **“Timeout Ollama (s)”** (30/60/90/120) → mapea a `--ollama-env-timeout` (backend) y `--ollama-timeout` (probe de servicio).
+- **“Modelo Ollama”** y **“Base URL Ollama”** para reutilizar esos valores tanto en el arranque como en el smoke test.
+- **“Probar Ollama (smoke test)”** ejecuta `python manage.py run_llm_shadow_smoke --settings=config.settings.lite --model <modelo> --timeout <timeout> --json` (más `--aux-signal`/`--no-aux-signal` según toggle actual).
 
 El timeout por defecto para backend queda elevado a **90 segundos** (`OLLAMA_TIMEOUT_SECONDS=90`) para modelos locales más lentos.
+
+Al correr el smoke test desde GUI, el launcher pasa explícitamente el entorno del proceso (`OLLAMA_ENABLED`, `LLM_ENABLED`, `OLLAMA_AUX_SIGNAL_ENABLED`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`) para no depender de variables de la terminal interactiva y muestra un resumen legible + JSON completo en una ventana de resultados.
 
 Instalación mínima (si falta la dependencia):
 
