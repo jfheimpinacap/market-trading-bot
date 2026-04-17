@@ -142,6 +142,21 @@ def _normalize_list(value: Any) -> list[str]:
     return normalized
 
 
+def _resolve_reasoning_status(
+    *,
+    model_status: str,
+    has_useful_summary: bool,
+    has_supporting_content: bool,
+) -> str:
+    if model_status == 'UNAVAILABLE':
+        return 'UNAVAILABLE'
+
+    has_minimum_useful_payload = has_useful_summary and has_supporting_content
+    if has_minimum_useful_payload:
+        return 'OK'
+    return 'DEGRADED'
+
+
 def _normalize_shadow_payload(*, model: str, provider: str, response: dict[str, Any]) -> dict[str, Any]:
     stance = str(response.get('stance') or 'unclear').strip().lower()
     confidence = str(response.get('confidence') or 'low').strip().lower()
@@ -158,6 +173,13 @@ def _normalize_shadow_payload(*, model: str, provider: str, response: dict[str, 
         reasoning_status = 'DEGRADED'
 
     summary = str(response.get('summary') or '').strip()[:600]
+    key_risks = _normalize_list(response.get('key_risks'))
+    key_supporting_points = _normalize_list(response.get('key_supporting_points'))
+    reasoning_status = _resolve_reasoning_status(
+        model_status=reasoning_status,
+        has_useful_summary=bool(summary),
+        has_supporting_content=bool(key_risks or key_supporting_points),
+    )
     if not summary:
         summary = 'No structured LLM summary was produced.'
 
@@ -171,8 +193,8 @@ def _normalize_shadow_payload(*, model: str, provider: str, response: dict[str, 
         'stance': stance,
         'confidence': confidence,
         'summary': summary,
-        'key_risks': _normalize_list(response.get('key_risks')),
-        'key_supporting_points': _normalize_list(response.get('key_supporting_points')),
+        'key_risks': key_risks,
+        'key_supporting_points': key_supporting_points,
         'recommendation_mode': recommendation_mode,
     }
 

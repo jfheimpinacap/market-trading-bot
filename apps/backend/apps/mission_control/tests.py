@@ -36,7 +36,7 @@ from apps.mission_control.models import (
     LlmShadowAnalysisArtifact,
 )
 from apps.runtime_governor.models import RuntimeMode
-from apps.llm_local.errors import LlmUnavailableError
+from apps.llm_local.errors import LlmResponseParseError, LlmUnavailableError
 from apps.mission_control.services.collect import collect_governance_review_candidates
 from apps.mission_control.services.live_paper_trial_history import (
     _clear_live_paper_trial_history_for_tests,
@@ -7192,6 +7192,43 @@ class TestConsoleApiTests(TestCase):
         self.assertGreaterEqual(int(result.get('llm_shadow_history_count') or 0), 1)
 
     @override_settings(OLLAMA_ENABLED=True, LLM_PROVIDER='ollama', OLLAMA_MODEL='demo-shadow-model')
+    @patch('apps.mission_control.services.llm_shadow.OllamaChatClient.chat_json')
+    def test_llm_shadow_summary_promotes_useful_degraded_payload_to_ok(self, mock_chat_json):
+        from apps.mission_control.services.llm_shadow import build_llm_shadow_summary
+
+        mock_chat_json.return_value = {
+            'stance': 'bullish',
+            'confidence': 'medium',
+            'summary': 'Useful advisory summary with concrete context.',
+            'key_risks': ['Volatility spike risk'],
+            'key_supporting_points': [],
+            'recommendation_mode': 'worth_review',
+            'llm_shadow_reasoning_status': 'DEGRADED',
+        }
+        result = build_llm_shadow_summary(payload=self._status_payload(), funnel={'funnel_status': 'ACTIVE'})
+        self.assertEqual(result.get('llm_shadow_reasoning_status'), 'OK')
+        self.assertTrue(bool(result.get('summary')))
+        self.assertGreaterEqual(len(result.get('key_risks') or []), 1)
+
+    @override_settings(OLLAMA_ENABLED=True, LLM_PROVIDER='ollama', OLLAMA_MODEL='demo-shadow-model')
+    @patch('apps.mission_control.services.llm_shadow.OllamaChatClient.chat_json')
+    def test_llm_shadow_summary_degrades_when_response_has_no_useful_content(self, mock_chat_json):
+        from apps.mission_control.services.llm_shadow import build_llm_shadow_summary
+
+        mock_chat_json.return_value = {
+            'stance': 'bullish',
+            'confidence': 'high',
+            'summary': '',
+            'key_risks': [],
+            'key_supporting_points': [],
+            'recommendation_mode': 'worth_review',
+            'llm_shadow_reasoning_status': 'OK',
+        }
+        result = build_llm_shadow_summary(payload=self._status_payload(), funnel={'funnel_status': 'ACTIVE'})
+        self.assertEqual(result.get('llm_shadow_reasoning_status'), 'DEGRADED')
+        self.assertEqual(result.get('summary'), 'No structured LLM summary was produced.')
+
+    @override_settings(OLLAMA_ENABLED=True, LLM_PROVIDER='ollama', OLLAMA_MODEL='demo-shadow-model')
     @patch('apps.mission_control.services.llm_shadow.OllamaChatClient.chat_json', side_effect=LlmUnavailableError('Ollama down'))
     def test_llm_shadow_summary_is_unavailable_without_breaking_pipeline(self, _mock_chat_json):
         from apps.mission_control.services.llm_shadow import build_llm_shadow_summary
@@ -7203,6 +7240,15 @@ class TestConsoleApiTests(TestCase):
         artifact = LlmShadowAnalysisArtifact.objects.order_by('-id').first()
         self.assertIsNotNone(artifact)
         self.assertEqual(artifact.llm_shadow_reasoning_status, 'UNAVAILABLE')
+
+    @override_settings(OLLAMA_ENABLED=True, LLM_PROVIDER='ollama', OLLAMA_MODEL='demo-shadow-model')
+    @patch('apps.mission_control.services.llm_shadow.OllamaChatClient.chat_json', side_effect=LlmResponseParseError('invalid json'))
+    def test_llm_shadow_summary_parse_error_remains_degraded(self, _mock_chat_json):
+        from apps.mission_control.services.llm_shadow import build_llm_shadow_summary
+
+        result = build_llm_shadow_summary(payload=self._status_payload(), funnel={'funnel_status': 'ACTIVE'})
+        self.assertEqual(result.get('llm_shadow_reasoning_status'), 'DEGRADED')
+        self.assertIn('invalid json', result.get('summary') or '')
 
     @patch('apps.mission_control.services.test_console.build_llm_shadow_summary')
     @patch('apps.mission_control.services.test_console.build_state_consistency_snapshot')
@@ -7406,6 +7452,35 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(result.get('aux_signal_status'), 'REVIEW_PRIORITIZED')
         self.assertEqual(result.get('aux_signal_recommendation'), 'prioritize_human_review')
         self.assertFalse(bool(result.get('affects_execution')))
+
+    @override_settings(OLLAMA_AUX_SIGNAL_ENABLED=True)
+    def test_llm_aux_signal_unblocked_by_useful_normalized_shadow_payload(self):
+        from apps.mission_control.services.llm_aux_signal import build_llm_aux_signal_summary
+        from apps.mission_control.services.llm_shadow import _normalize_shadow_payload
+
+        normalized_shadow = _normalize_shadow_payload(
+            model='demo-shadow-model',
+            provider='ollama',
+            response={
+                'llm_shadow_reasoning_status': 'DEGRADED',
+                'recommendation_mode': 'worth_review',
+                'confidence': 'high',
+                'stance': 'bearish',
+                'summary': 'Useful summary',
+                'key_risks': ['risk'],
+                'key_supporting_points': [],
+            },
+        )
+        payload = self._status_payload()
+        payload['latest_llm_shadow_summary'] = {
+            **normalized_shadow,
+            'artifact_id': 808,
+        }
+        result = build_llm_aux_signal_summary(payload=payload)
+        self.assertEqual(result.get('aux_signal_status'), 'REVIEW_PRIORITIZED')
+        self.assertEqual(result.get('aux_signal_recommendation'), 'prioritize_human_review')
+        self.assertFalse(bool(result.get('affects_execution')))
+        self.assertTrue(bool(result.get('paper_only')))
 
     @override_settings(OLLAMA_AUX_SIGNAL_ENABLED=True)
     @patch('apps.mission_control.services.test_console.build_llm_shadow_summary')
