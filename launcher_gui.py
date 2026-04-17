@@ -20,6 +20,12 @@ STATUS_DEFAULT = 'OFF'
 PREFERENCES_FILE = ROOT / '.tmp' / 'launcher-gui-preferences.json'
 DEFAULT_SYSTEM_URL = 'http://localhost:5173/system'
 OLLAMA_TIMEOUT_OPTIONS = ('30', '60', '90', '120')
+DEFAULT_WINDOW_WIDTH = 980
+DEFAULT_WINDOW_HEIGHT = 760
+DEFAULT_MIN_WIDTH = 860
+DEFAULT_MIN_HEIGHT = 680
+WINDOW_MARGIN_X = 80
+WINDOW_MARGIN_Y = 120
 
 
 class LauncherGUI(ctk.CTk):
@@ -27,8 +33,7 @@ class LauncherGUI(ctk.CTk):
         super().__init__()
         self.preferences = self._load_preferences()
         self.title('Market Trading Bot — Launcher local')
-        self.geometry(str(self.preferences.get('window_geometry', '760x640')))
-        self.minsize(720, 620)
+        self._configure_window_geometry()
         self.protocol('WM_DELETE_WINDOW', self._on_close)
 
         ctk.set_appearance_mode('dark')
@@ -51,6 +56,71 @@ class LauncherGUI(ctk.CTk):
         self._build_ui()
         self.after(600, self._save_preferences)
         self.refresh_status()
+
+    @staticmethod
+    def _clamp(value: int, minimum: int, maximum: int) -> int:
+        if minimum > maximum:
+            return minimum
+        return max(minimum, min(value, maximum))
+
+    @staticmethod
+    def _parse_geometry(geometry: str) -> tuple[int, int, int | None, int | None] | None:
+        value = (geometry or '').strip()
+        if not value:
+            return None
+        if 'x' not in value:
+            return None
+        size_part, _, position_part = value.partition('+')
+        width_str, _, height_str = size_part.partition('x')
+        if not width_str.isdigit() or not height_str.isdigit():
+            return None
+        width = int(width_str)
+        height = int(height_str)
+        if width <= 0 or height <= 0:
+            return None
+        x_value: int | None = None
+        y_value: int | None = None
+        if position_part:
+            x_str, _, y_str = position_part.partition('+')
+            if x_str.isdigit() and y_str.isdigit():
+                x_value = int(x_str)
+                y_value = int(y_str)
+        return width, height, x_value, y_value
+
+    def _configure_window_geometry(self) -> None:
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        usable_w = max(640, screen_w - WINDOW_MARGIN_X)
+        usable_h = max(560, screen_h - WINDOW_MARGIN_Y)
+
+        min_w = min(DEFAULT_MIN_WIDTH, usable_w)
+        min_h = min(DEFAULT_MIN_HEIGHT, usable_h)
+        self.minsize(min_w, min_h)
+
+        saved_geometry = str(self.preferences.get('window_geometry', '')).strip()
+        parsed_geometry = self._parse_geometry(saved_geometry)
+
+        if parsed_geometry is None:
+            width = self._clamp(DEFAULT_WINDOW_WIDTH, min_w, usable_w)
+            height = self._clamp(DEFAULT_WINDOW_HEIGHT, min_h, usable_h)
+            x = max(0, (screen_w - width) // 2)
+            y = max(0, (screen_h - height) // 2)
+            self.geometry(f'{width}x{height}+{x}+{y}')
+            return
+
+        raw_w, raw_h, raw_x, raw_y = parsed_geometry
+        width = self._clamp(raw_w, min_w, usable_w)
+        height = self._clamp(raw_h, min_h, usable_h)
+        max_x = max(0, screen_w - width)
+        max_y = max(0, screen_h - height)
+
+        if raw_x is None or raw_y is None:
+            x = max(0, (screen_w - width) // 2)
+            y = max(0, (screen_h - height) // 2)
+        else:
+            x = self._clamp(raw_x, 0, max_x)
+            y = self._clamp(raw_y, 0, max_y)
+        self.geometry(f'{width}x{height}+{x}+{y}')
 
     def _build_ui(self) -> None:
         self.grid_columnconfigure(0, weight=1)
