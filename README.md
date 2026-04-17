@@ -3734,3 +3734,27 @@ Boundary de seguridad:
 - Mantiene postura **REAL_READ_ONLY + PAPER_ONLY**.
 - No habilita live trading real.
 - No crea scheduler nuevo ni arquitectura pesada de auditoría.
+
+
+### Mission Control LLM smoke test corto (Prompt 306)
+
+Para iterar rápido sobre integración LLM local (Ollama + normalización shadow + persistencia + aux signal) sin correr la prueba larga de 40–60+ minutos, ahora existe un comando corto:
+
+- `python apps/backend/manage.py run_llm_shadow_smoke`
+
+Opciones útiles:
+- `--model <modelo>`: override de modelo solo para esta ejecución.
+- `--timeout <segundos>`: override de timeout solo para esta ejecución.
+- `--aux-signal` / `--no-aux-signal`: forzar toggle local de `OLLAMA_AUX_SIGNAL_ENABLED`.
+- `--json`: salida compacta en JSON para inspección rápida/scriptable.
+
+Qué valida:
+- llamada real a Ollama (si está disponible),
+- construcción y normalización de `llm_shadow_summary`,
+- persistencia de artefacto (`artifact_id` cuando aplica),
+- cálculo de `llm_aux_signal_summary`,
+- límites de seguridad (`advisory_only=true`, `affects_execution=false`, `paper_only=true`).
+
+Qué **no** valida:
+- shortlist/handoff/prediction/risk/execution end-to-end,
+- ni reemplaza la prueba completa de Mission Control; es un smoke test de capa LLM.
