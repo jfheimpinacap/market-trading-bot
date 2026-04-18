@@ -1,4 +1,5 @@
 import type { NavRoute } from '../types/system';
+import { SYSTEM_VERSION_LABEL } from '../lib/config';
 import { NavItem } from './NavItem';
 
 const sidebarFooterItems = ['Local-first', 'Personal use', 'Scaffold stage'];
@@ -51,7 +52,6 @@ export function Sidebar({ routes, currentPath }: SidebarProps) {
       <div className="sidebar__brand">
         <p className="section-label">Prediction Markets</p>
         <h2>market-trading-bot</h2>
-        <p>Executive-first navigation: start with dashboard, markets, portfolio, then use advanced controls only when needed.</p>
       </div>
 
       <div className="sidebar__section">
@@ -87,6 +87,10 @@ export function Sidebar({ routes, currentPath }: SidebarProps) {
             {item}
           </span>
         ))}
+        <div className="sidebar__version">
+          <p>Version</p>
+          <strong>{SYSTEM_VERSION_LABEL}</strong>
+        </div>
       </div>
     </aside>
   );

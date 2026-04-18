@@ -246,7 +246,6 @@ export function PortfolioPage() {
   return (
     <div className="page-stack portfolio-page">
       <PageHeader
-        eyebrow="Portafolio paper"
         title="Portfolio"
         actions={
           <RevalueToolbar

@@ -1141,7 +1141,6 @@ export function CockpitPage() {
   return (
     <div className="page-stack cockpit-page">
       <PageHeader
-        eyebrow="Advanced / Cockpit"
         title="Cockpit"
         actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => void loadCockpit()}>Actualizar cockpit</button><button className="ghost-button" type="button" onClick={() => navigate('/mission-control')}>Abrir Mission Control</button></div>}
       />

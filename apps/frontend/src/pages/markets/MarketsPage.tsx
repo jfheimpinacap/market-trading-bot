@@ -167,7 +167,6 @@ export function MarketsPage() {
   return (
     <div className="page-stack markets-page">
       <PageHeader
-        eyebrow="Exploración"
         title="Markets"
       />
 
