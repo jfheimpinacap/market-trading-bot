@@ -1517,9 +1517,14 @@ def command_up(args: argparse.Namespace) -> int:
             backend_runtime_env=backend_runtime_env,
         )
 
+        gui_silent = bool(getattr(args, 'gui_silent', False))
         startup_mode = 'separate-windows' if args.separate_windows else DEFAULT_STARTUP_MODE
+        if gui_silent:
+            startup_mode = DEFAULT_STARTUP_MODE
         browser_url = DEFAULT_BROWSER_URL
-        verbose_logs = verbose_logging_enabled(args)
+        verbose_logs = verbose_logging_enabled(args) and not gui_silent
+        if gui_silent and verbose_logging_enabled(args):
+            info('GUI silent mode active: forcing detached/no-window startup and ignoring verbose console env flags.')
         attached_backend: subprocess.Popen[str] | None = None
         started_processes: list[dict[str, Any]] = list(launcher_managed_bootstrap)
         if process_specs:
@@ -2193,6 +2198,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--ollama-env-timeout', type=float, default=float(LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_TIMEOUT_SECONDS']), help='Timeout seconds exported to backend OLLAMA_TIMEOUT_SECONDS.')
     parser.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed.')
     parser.add_argument('--verbose', action='store_true', help='Attach backend logs to this terminal for paper-testing diagnostics.')
+    parser.add_argument('--gui-silent', action='store_true', help='Force detached/no-window startup (used by launcher GUI operator mode).')
     subparsers = parser.add_subparsers(dest='command')
 
     common_setup = argparse.ArgumentParser(add_help=False)
