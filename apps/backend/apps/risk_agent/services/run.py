@@ -46,6 +46,22 @@ def _should_throttle_readiness_for_valid_active_exposure(
     return market_id in traced_markets
 
 
+def _should_throttle_redundant_risk_decision_for_valid_active_exposure(
+    *,
+    candidate,
+    traced_markets: set[int],
+    active_position_market_ids: set[int],
+) -> bool:
+    market_id = int(getattr(candidate, 'linked_market_id', 0) or 0)
+    if market_id <= 0:
+        return False
+    if market_id not in active_position_market_ids:
+        return False
+    if _is_reduce_or_exit_candidate(candidate=candidate, approval_status=''):
+        return False
+    return market_id in traced_markets
+
+
 def _record_canonical_readiness_throttle_signal(
     *,
     approval,
@@ -119,6 +135,13 @@ def run_risk_runtime_review(*, triggered_by: str = 'manual') -> RiskRuntimeRun:
     watch_required_count = 0
     execution_ready_count = 0
     traced_valid_active_exposure_markets: set[int] = set()
+    risk_throttled_markets: set[int] = set()
+    risk_throttle_reason_codes: list[str] = []
+    redundant_risk_decisions_throttled = 0
+    risk_decisions_created_normally = 0
+    risk_candidates_preserved_for_exit = 0
+    risk_candidates_preserved_without_valid_blocker = 0
+    risk_throttle_examples: list[dict[str, object]] = []
     first_readiness_by_market_id: dict[int, AutonomousExecutionReadiness] = {}
     active_position_market_ids: set[int] = {
         int(market_id)
@@ -127,10 +150,94 @@ def run_risk_runtime_review(*, triggered_by: str = 'manual') -> RiskRuntimeRun:
     }
 
     for candidate in build_result.candidates:
+        market_id = int(getattr(candidate, 'linked_market_id', 0) or 0)
+        is_reduce_or_exit = _is_reduce_or_exit_candidate(candidate=candidate, approval_status='')
+        has_valid_active_blocker = market_id > 0 and market_id in active_position_market_ids and not is_reduce_or_exit
+        same_market = market_id > 0 and market_id in traced_valid_active_exposure_markets
+        additive_entry = not is_reduce_or_exit
+        release_readiness_status = 'KEEP_BLOCKED' if has_valid_active_blocker else 'UNKNOWN'
+        blocker_validity_status = 'VALID_ACTIVE_POSITION' if has_valid_active_blocker else 'NO_VALID_ACTIVE_POSITION'
+        throttle_redundant_risk_decision = _should_throttle_redundant_risk_decision_for_valid_active_exposure(
+            candidate=candidate,
+            traced_markets=traced_valid_active_exposure_markets,
+            active_position_market_ids=active_position_market_ids,
+        )
+        if throttle_redundant_risk_decision:
+            redundant_risk_decisions_throttled += 1
+            risk_throttled_markets.add(market_id)
+            risk_throttle_reason_codes.extend(
+                [
+                    'ACTIVE_EXPOSURE_RISK_THROTTLE_APPLIED',
+                    'ACTIVE_EXPOSURE_RISK_THROTTLE_SKIPPED_REDUNDANT_DECISION',
+                ]
+            )
+            if len(risk_throttle_examples) < 3:
+                risk_throttle_examples.append(
+                    {
+                        'market_id': market_id,
+                        'candidate_shape': 'additive_entry',
+                        'blocker_validity_status': blocker_validity_status,
+                        'release_readiness_status': release_readiness_status,
+                        'throttle_action': 'skip_redundant_risk_decision',
+                        'risk_decision_creation_skipped': True,
+                        'preserved_for_exit': False,
+                        'dominant_reason_code': 'ACTIVE_EXPOSURE_RISK_THROTTLE_SKIPPED_REDUNDANT_DECISION',
+                    }
+                )
+            continue
+        if same_market and additive_entry and has_valid_active_blocker:
+            risk_throttle_reason_codes.append('ACTIVE_EXPOSURE_RISK_THROTTLE_APPLIED')
+        if has_valid_active_blocker:
+            risk_throttle_reason_codes.append('ACTIVE_EXPOSURE_RISK_THROTTLE_ALLOWED_INITIAL_TRACE')
+            if len(risk_throttle_examples) < 3:
+                risk_throttle_examples.append(
+                    {
+                        'market_id': market_id,
+                        'candidate_shape': 'additive_entry',
+                        'blocker_validity_status': blocker_validity_status,
+                        'release_readiness_status': release_readiness_status,
+                        'throttle_action': 'allow_initial_trace',
+                        'risk_decision_creation_skipped': False,
+                        'preserved_for_exit': False,
+                        'dominant_reason_code': 'ACTIVE_EXPOSURE_RISK_THROTTLE_ALLOWED_INITIAL_TRACE',
+                    }
+                )
+        elif is_reduce_or_exit:
+            risk_candidates_preserved_for_exit += 1
+            risk_throttle_reason_codes.append('ACTIVE_EXPOSURE_RISK_THROTTLE_BYPASSED_FOR_EXIT')
+            if len(risk_throttle_examples) < 3:
+                risk_throttle_examples.append(
+                    {
+                        'market_id': market_id,
+                        'candidate_shape': 'exit',
+                        'blocker_validity_status': blocker_validity_status,
+                        'release_readiness_status': release_readiness_status,
+                        'throttle_action': 'bypass_for_exit',
+                        'risk_decision_creation_skipped': False,
+                        'preserved_for_exit': True,
+                        'dominant_reason_code': 'ACTIVE_EXPOSURE_RISK_THROTTLE_BYPASSED_FOR_EXIT',
+                    }
+                )
+        else:
+            risk_candidates_preserved_without_valid_blocker += 1
+            risk_throttle_reason_codes.append('ACTIVE_EXPOSURE_RISK_THROTTLE_BYPASSED_WITHOUT_VALID_BLOCKER')
+            if len(risk_throttle_examples) < 3:
+                risk_throttle_examples.append(
+                    {
+                        'market_id': market_id,
+                        'candidate_shape': 'additive_entry',
+                        'blocker_validity_status': blocker_validity_status,
+                        'release_readiness_status': release_readiness_status,
+                        'throttle_action': 'bypass_without_valid_blocker',
+                        'risk_decision_creation_skipped': False,
+                        'preserved_for_exit': False,
+                        'dominant_reason_code': 'ACTIVE_EXPOSURE_RISK_THROTTLE_BYPASSED_WITHOUT_VALID_BLOCKER',
+                    }
+                )
         approval = build_approval_decision(candidate=candidate)
+        risk_decisions_created_normally += 1
         sizing = build_sizing_plan(candidate=candidate, approval_decision=approval)
         watch_plan = build_watch_plan(candidate=candidate, sizing_plan=sizing, approval_decision=approval)
-        market_id = int(getattr(candidate, 'linked_market_id', 0) or 0)
         throttle_readiness = _should_throttle_readiness_for_valid_active_exposure(
             candidate=candidate,
             approval_status=approval.approval_status,
@@ -195,6 +302,22 @@ def run_risk_runtime_review(*, triggered_by: str = 'manual') -> RiskRuntimeRun:
         'skipped_candidates': build_result.skipped_count,
         'portfolio_governor_context': {'risk_budget': 'conservative'},
         'position_manager_context': {'watch_board_enabled': True},
+        'active_exposure_risk_throttle_summary': {
+            'markets_throttled': int(len(risk_throttled_markets)),
+            'redundant_risk_decisions_throttled': int(redundant_risk_decisions_throttled),
+            'risk_decisions_created_normally': int(risk_decisions_created_normally),
+            'candidates_preserved_for_exit': int(risk_candidates_preserved_for_exit),
+            'candidates_preserved_without_valid_blocker': int(risk_candidates_preserved_without_valid_blocker),
+            'throttle_reason_codes': _unique_reason_codes(risk_throttle_reason_codes),
+            'throttle_summary': (
+                f"markets_throttled={len(risk_throttled_markets)} "
+                f"redundant_risk_decisions_throttled={redundant_risk_decisions_throttled} "
+                f"risk_decisions_created_normally={risk_decisions_created_normally} "
+                f"candidates_preserved_for_exit={risk_candidates_preserved_for_exit} "
+                f"candidates_preserved_without_valid_blocker={risk_candidates_preserved_without_valid_blocker}"
+            ),
+        },
+        'active_exposure_risk_throttle_examples': risk_throttle_examples[:3],
     }
     runtime_run.save(
         update_fields=[

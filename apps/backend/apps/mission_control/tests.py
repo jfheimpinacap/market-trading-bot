@@ -4394,6 +4394,8 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         )
 
         self.assertEqual(summary.get('markets_throttled'), 1)
+        self.assertEqual(summary.get('unique_markets_throttled'), 1)
+        self.assertEqual(summary.get('throttled_decision_events'), 1)
         self.assertEqual(summary.get('additive_entries_throttled_before_readiness'), 1)
         self.assertEqual(summary.get('readiness_created_normally'), 3)
         self.assertEqual(summary.get('candidates_preserved_for_exit'), 1)
@@ -4412,6 +4414,53 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertGreaterEqual(len(examples), 3)
         self.assertEqual(examples[0].get('throttle_action'), 'allow_initial_trace')
         self.assertTrue(any(row.get('readiness_creation_skipped') for row in examples))
+
+    def test_active_exposure_risk_throttle_summary_aggregates_runtime_run_metadata(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_active_exposure_risk_throttle_summary
+        from apps.risk_agent.models import RiskRuntimeRun
+
+        RiskRuntimeRun.objects.create(
+            started_at=timezone.now(),
+            metadata={
+                'active_exposure_risk_throttle_summary': {
+                    'markets_throttled': 1,
+                    'redundant_risk_decisions_throttled': 2,
+                    'risk_decisions_created_normally': 3,
+                    'candidates_preserved_for_exit': 1,
+                    'candidates_preserved_without_valid_blocker': 1,
+                    'throttle_reason_codes': [
+                        'ACTIVE_EXPOSURE_RISK_THROTTLE_APPLIED',
+                        'ACTIVE_EXPOSURE_RISK_THROTTLE_SKIPPED_REDUNDANT_DECISION',
+                    ],
+                },
+                'active_exposure_risk_throttle_examples': [
+                    {
+                        'market_id': 501,
+                        'candidate_shape': 'additive_entry',
+                        'blocker_validity_status': 'VALID_ACTIVE_POSITION',
+                        'release_readiness_status': 'KEEP_BLOCKED',
+                        'throttle_action': 'skip_redundant_risk_decision',
+                        'risk_decision_creation_skipped': True,
+                        'preserved_for_exit': False,
+                        'dominant_reason_code': 'ACTIVE_EXPOSURE_RISK_THROTTLE_SKIPPED_REDUNDANT_DECISION',
+                    }
+                ],
+            },
+        )
+
+        summary = _build_active_exposure_risk_throttle_summary(window_start=timezone.now() - timedelta(minutes=60))
+        self.assertEqual(summary.get('markets_throttled'), 1)
+        self.assertEqual(summary.get('redundant_risk_decisions_throttled'), 2)
+        self.assertEqual(summary.get('risk_decisions_created_normally'), 3)
+        self.assertEqual(summary.get('candidates_preserved_for_exit'), 1)
+        self.assertEqual(summary.get('candidates_preserved_without_valid_blocker'), 1)
+        self.assertIn('ACTIVE_EXPOSURE_RISK_THROTTLE_APPLIED', summary.get('throttle_reason_codes', []))
+        self.assertIn(
+            'ACTIVE_EXPOSURE_RISK_THROTTLE_SKIPPED_REDUNDANT_DECISION',
+            summary.get('throttle_reason_codes', []),
+        )
+        examples = summary.get('active_exposure_risk_throttle_examples') or []
+        self.assertEqual(examples[0].get('throttle_action'), 'skip_redundant_risk_decision')
 
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
@@ -7065,6 +7114,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('execution_promotion_gate_summary:', text_payload)
         self.assertIn('execution_exposure_provenance_summary:', text_payload)
         self.assertIn('execution_exposure_release_audit_summary:', text_payload)
+        self.assertIn('active_exposure_risk_throttle_summary:', text_payload)
+        self.assertIn('redundant_risk_decisions_throttled=', text_payload)
         self.assertIn('active_exposure_readiness_throttle_summary:', text_payload)
         self.assertIn('additive_entries_throttled_before_readiness=', text_payload)
         self.assertIn('release_audit_summary=', text_payload)
