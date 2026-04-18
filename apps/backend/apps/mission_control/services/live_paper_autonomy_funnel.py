@@ -535,6 +535,7 @@ def _build_execution_exposure_release_audit(*, examples: list[dict[str, Any]], w
                 'market_id': market_id,
                 'risk_decision_id': _safe_int(getattr(getattr(readiness, 'linked_approval_review', None), 'id', None)),
                 'readiness_id': readiness_id,
+                'candidate_shape': str(item.get('candidate_shape') or 'additive_entry'),
                 'suppression_source_type': source_type,
                 'suppression_scope': suppression_scope,
                 'blocking_position_id': blocking_position_id,
@@ -583,6 +584,112 @@ def _build_execution_exposure_release_audit(*, examples: list[dict[str, Any]], w
     return {
         'execution_exposure_release_audit_summary': summary,
         'execution_exposure_release_audit_examples': audited[:_EXPOSURE_RELEASE_AUDIT_EXAMPLES_LIMIT],
+    }
+
+
+def _build_active_exposure_readiness_throttle_summary(
+    *,
+    release_audit_examples: list[dict[str, Any]],
+    route_created: int,
+    creation_allowed_for_exit: int,
+    creation_allowed_without_exposure: int,
+) -> dict[str, Any]:
+    throttle_reason_codes: list[str] = []
+    throttled_market_ids: set[int] = set()
+    throttled_entries = 0
+    examples: list[dict[str, Any]] = []
+    throttled_markets_seen: set[int] = set()
+
+    for item in release_audit_examples:
+        market_id = _safe_int(item.get('market_id'))
+        candidate_shape = str(item.get('candidate_shape') or 'additive_entry')
+        blocker_validity_status = str(item.get('blocker_validity_status') or '')
+        release_readiness_status = str(item.get('release_readiness_status') or '')
+        suppression_scope = str(item.get('suppression_scope') or '')
+        dominant_reason_code = str(item.get('dominant_reason_code') or '')
+        is_throttle_shape = (
+            candidate_shape == 'additive_entry'
+            and blocker_validity_status == 'VALID_ACTIVE_POSITION'
+            and release_readiness_status == 'KEEP_BLOCKED'
+            and suppression_scope in {'same_market', 'same_market_and_lineage'}
+            and market_id is not None
+        )
+        if is_throttle_shape:
+            throttle_reason_codes.append('ACTIVE_EXPOSURE_READINESS_THROTTLE_APPLIED')
+            if market_id in throttled_markets_seen:
+                throttled_entries += 1
+                throttle_reason_codes.append('ACTIVE_EXPOSURE_READINESS_THROTTLE_SKIPPED_REDUNDANT_READINESS')
+                action = 'skip_redundant_readiness'
+                readiness_creation_skipped = True
+            else:
+                throttled_markets_seen.add(market_id)
+                throttled_market_ids.add(market_id)
+                throttle_reason_codes.append('ACTIVE_EXPOSURE_READINESS_THROTTLE_ALLOWED_INITIAL_TRACE')
+                action = 'allow_initial_trace'
+                readiness_creation_skipped = False
+            if len(examples) < 3:
+                examples.append(
+                    {
+                        'market_id': market_id,
+                        'candidate_shape': candidate_shape,
+                        'blocker_validity_status': blocker_validity_status,
+                        'release_readiness_status': release_readiness_status,
+                        'throttle_action': action,
+                        'readiness_creation_skipped': readiness_creation_skipped,
+                        'preserved_for_exit': False,
+                        'dominant_reason_code': dominant_reason_code,
+                    }
+                )
+            continue
+        if candidate_shape in {'reduce', 'exit'}:
+            throttle_reason_codes.append('ACTIVE_EXPOSURE_READINESS_THROTTLE_BYPASSED_FOR_EXIT')
+            if len(examples) < 3:
+                examples.append(
+                    {
+                        'market_id': market_id,
+                        'candidate_shape': candidate_shape,
+                        'blocker_validity_status': blocker_validity_status,
+                        'release_readiness_status': release_readiness_status,
+                        'throttle_action': 'bypass_for_exit',
+                        'readiness_creation_skipped': False,
+                        'preserved_for_exit': True,
+                        'dominant_reason_code': dominant_reason_code,
+                    }
+                )
+        else:
+            throttle_reason_codes.append('ACTIVE_EXPOSURE_READINESS_THROTTLE_BYPASSED_WITHOUT_VALID_BLOCKER')
+            if len(examples) < 3:
+                examples.append(
+                    {
+                        'market_id': market_id,
+                        'candidate_shape': candidate_shape,
+                        'blocker_validity_status': blocker_validity_status or 'UNKNOWN_VALIDITY',
+                        'release_readiness_status': release_readiness_status or 'UNKNOWN',
+                        'throttle_action': 'bypass_without_valid_blocker',
+                        'readiness_creation_skipped': False,
+                        'preserved_for_exit': False,
+                        'dominant_reason_code': dominant_reason_code,
+                    }
+                )
+
+    normalized_codes = _unique_codes(throttle_reason_codes)
+    summary_text = (
+        f"markets_throttled={len(throttled_market_ids)} "
+        f"additive_entries_throttled_before_readiness={throttled_entries} "
+        f"readiness_created_normally={route_created} "
+        f"candidates_preserved_for_exit={creation_allowed_for_exit} "
+        f"candidates_preserved_without_valid_blocker={creation_allowed_without_exposure} "
+        f"throttle_reason_codes={','.join(normalized_codes) or 'none'}"
+    )
+    return {
+        'markets_throttled': int(len(throttled_market_ids)),
+        'additive_entries_throttled_before_readiness': int(throttled_entries),
+        'readiness_created_normally': int(route_created),
+        'candidates_preserved_for_exit': int(creation_allowed_for_exit),
+        'candidates_preserved_without_valid_blocker': int(creation_allowed_without_exposure),
+        'throttle_reason_codes': normalized_codes,
+        'throttle_summary': summary_text,
+        'active_exposure_readiness_throttle_examples': examples[:3],
     }
 
 
@@ -2735,6 +2842,12 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     )
     execution_exposure_release_audit_summary = dict(execution_exposure_release_audit.get('execution_exposure_release_audit_summary') or {})
     execution_exposure_release_audit_examples = list(execution_exposure_release_audit.get('execution_exposure_release_audit_examples') or [])
+    active_exposure_readiness_throttle_summary = _build_active_exposure_readiness_throttle_summary(
+        release_audit_examples=execution_exposure_release_audit_examples,
+        route_created=route_created,
+        creation_allowed_for_exit=creation_allowed_for_exit,
+        creation_allowed_without_exposure=creation_allowed_without_exposure,
+    )
     aligned_decision_created = int(paper_trade_decision_created)
     aligned_decision_reused = int(paper_trade_decision_reused)
     promotion_suppressed_total = int(promotion_suppressed_by_active_position + promotion_suppressed_by_existing_open_trade)
@@ -2902,6 +3015,10 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         'execution_exposure_provenance_examples': execution_exposure_provenance_examples,
         'execution_exposure_release_audit_summary': execution_exposure_release_audit_summary,
         'execution_exposure_release_audit_examples': execution_exposure_release_audit_examples,
+        'active_exposure_readiness_throttle_summary': active_exposure_readiness_throttle_summary,
+        'active_exposure_readiness_throttle_examples': list(
+            active_exposure_readiness_throttle_summary.get('active_exposure_readiness_throttle_examples') or []
+        ),
         'execution_readiness_available_count': int(len(latest_readiness_by_decision_id)),
         'execution_readiness_created_count': int(execution_readiness_created),
         'execution_readiness_reused_count': int(execution_readiness_reused),
@@ -4989,6 +5106,8 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'execution_exposure_provenance_examples': exposure_diagnostics.get('execution_exposure_provenance_examples', []),
         'execution_exposure_release_audit_summary': exposure_diagnostics.get('execution_exposure_release_audit_summary', empty_execution_exposure_release_audit_summary()),
         'execution_exposure_release_audit_examples': exposure_diagnostics.get('execution_exposure_release_audit_examples', []),
+        'active_exposure_readiness_throttle_summary': paper_execution_summary.get('active_exposure_readiness_throttle_summary', {}),
+        'active_exposure_readiness_throttle_examples': paper_execution_summary.get('active_exposure_readiness_throttle_examples', []),
         'execution_promotion_gate_summary': paper_execution_summary.get('execution_promotion_gate_summary', {}),
         'execution_promotion_gate_examples': paper_execution_summary.get('execution_promotion_gate_examples', []),
         'execution_lineage_summary': paper_execution_summary.get('execution_lineage_summary', {}),
@@ -5200,6 +5319,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'execution_exposure_provenance_examples': exposure_diagnostics.get('execution_exposure_provenance_examples', []),
         'execution_exposure_release_audit_summary': exposure_diagnostics.get('execution_exposure_release_audit_summary', empty_execution_exposure_release_audit_summary()),
         'execution_exposure_release_audit_examples': exposure_diagnostics.get('execution_exposure_release_audit_examples', []),
+        'active_exposure_readiness_throttle_summary': handoff_diagnostics.get('active_exposure_readiness_throttle_summary', {}),
+        'active_exposure_readiness_throttle_examples': handoff_diagnostics.get('active_exposure_readiness_throttle_examples', []),
         'execution_promotion_gate_summary': handoff_diagnostics.get('execution_promotion_gate_summary', {}),
         'execution_promotion_gate_examples': handoff_diagnostics.get('execution_promotion_gate_examples', []),
         'final_fanout_summary': handoff_diagnostics.get('final_fanout_summary', {}),

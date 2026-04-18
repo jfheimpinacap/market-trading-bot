@@ -4879,6 +4879,11 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - expone `funnel_status_window` (estado crudo por rolling window) y ajusta `funnel_status` efectivo a `ACTIVE_WITHOUT_RECENT_FLOW` cuando corresponde, sin fabricar actividad reciente.
   - mantiene `REAL_READ_ONLY + PAPER_ONLY` y observabilidad-first (sin cambios en runtime core ni live trading real).
   - alcance intacto: observability-first, backend-only, **REAL_READ_ONLY + PAPER_ONLY**, sin frontend, sin `/runtime`, sin live trading real.
+- **Prompt 313 (throttle conservador de readiness redundante por active exposure válida):**
+  - agrega una compuerta temprana backend-only para contener creación redundante de `AutonomousExecutionReadiness` cuando el mismo market ya está bloqueado por exposición activa válida y la forma del candidate es `additive_entry`.
+  - permite una primera traza diagnóstica por market/ventana y salta ocurrencias redundantes posteriores antes de crear readiness, sin abrir nuevas entries ni tocar policy/guardrails/thresholds.
+  - preserva explícitamente rutas `reduce/exit` y casos sin blocker válido.
+  - añade bloque compacto `active_exposure_readiness_throttle_summary` (+ ejemplos) en status/export (`text/json`) para visibilidad operacional del throttle sin refactor amplio del export.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

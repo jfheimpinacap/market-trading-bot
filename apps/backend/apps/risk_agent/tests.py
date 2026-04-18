@@ -123,3 +123,49 @@ class RiskRuntimeHardeningTests(TestCase):
         summary = self.client.get(reverse('risk_agent:intake-summary'))
         self.assertEqual(summary.status_code, 200)
         self.assertIsNotNone(summary.json().get('latest_run'))
+
+    def test_readiness_throttle_helper_blocks_only_redundant_additive_with_active_position(self):
+        from apps.risk_agent.services.run import _should_throttle_readiness_for_valid_active_exposure
+
+        candidate = type(
+            'Candidate',
+            (),
+            {
+                'linked_market_id': 101,
+                'context_summary': 'normal additive entry',
+                'reason_codes': ['READY_FOR_RISK_RUNTIME'],
+            },
+        )()
+        self.assertFalse(
+            _should_throttle_readiness_for_valid_active_exposure(
+                candidate=candidate,
+                approval_status='APPROVED',
+                traced_markets=set(),
+                active_position_market_ids={101},
+            )
+        )
+        self.assertTrue(
+            _should_throttle_readiness_for_valid_active_exposure(
+                candidate=candidate,
+                approval_status='APPROVED',
+                traced_markets={101},
+                active_position_market_ids={101},
+            )
+        )
+        reduce_candidate = type(
+            'Candidate',
+            (),
+            {
+                'linked_market_id': 101,
+                'context_summary': 'reduce exposure on existing leg',
+                'reason_codes': ['REDUCE'],
+            },
+        )()
+        self.assertFalse(
+            _should_throttle_readiness_for_valid_active_exposure(
+                candidate=reduce_candidate,
+                approval_status='APPROVED_REDUCED',
+                traced_markets={101},
+                active_position_market_ids={101},
+            )
+        )

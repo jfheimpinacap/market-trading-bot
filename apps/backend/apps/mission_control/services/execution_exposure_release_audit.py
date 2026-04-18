@@ -31,6 +31,8 @@ def build_execution_exposure_release_audit_snapshot(*, window_minutes: int = 60,
         'paper_execution_visibility_summary': str(funnel.get('paper_execution_visibility_summary') or ''),
         'execution_artifact_summary': str(funnel.get('execution_artifact_summary') or ''),
         'position_exposure_summary': dict(funnel.get('position_exposure_summary') or {}),
+        'active_exposure_readiness_throttle_summary': dict(funnel.get('active_exposure_readiness_throttle_summary') or {}),
+        'active_exposure_readiness_throttle_examples': list(funnel.get('active_exposure_readiness_throttle_examples') or []),
         'execution_exposure_release_audit_summary': dict(
             exposure_diagnostics.get('execution_exposure_release_audit_summary')
             or empty_execution_exposure_release_audit_summary()
