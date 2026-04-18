@@ -960,6 +960,11 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         ),
         f"  diagnostic_status={execution_exposure_provenance.get('diagnostic_status') or 'UNKNOWN'}",
         (
+            f"  measurement_scope={execution_exposure_provenance.get('measurement_scope') or 'pre_creation_exposure_suppression_provenance'} "
+            f"source_of_truth={execution_exposure_provenance.get('source_of_truth') or 'execution_candidate_creation_bridge'} "
+            f"explains_upstream_readiness_throttle={bool(execution_exposure_provenance.get('explains_upstream_readiness_throttle', False))}"
+        ),
+        (
             "  provenance_summary=UNAVAILABLE"
             if bool(execution_exposure_provenance.get('diagnostic_unavailable'))
             else f"  provenance_summary={execution_exposure_provenance.get('provenance_summary') or ''}"
@@ -987,6 +992,11 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         ),
         f"  diagnostic_status={execution_exposure_release_audit.get('diagnostic_status') or 'UNKNOWN'}",
         (
+            f"  measurement_scope={execution_exposure_release_audit.get('measurement_scope') or 'pre_creation_exposure_suppression_release_audit'} "
+            f"source_of_truth={execution_exposure_release_audit.get('source_of_truth') or 'execution_exposure_release_audit'} "
+            f"explains_upstream_readiness_throttle={bool(execution_exposure_release_audit.get('explains_upstream_readiness_throttle', False))}"
+        ),
+        (
             "  release_audit_summary=UNAVAILABLE"
             if bool(execution_exposure_release_audit.get('diagnostic_unavailable'))
             else f"  release_audit_summary={execution_exposure_release_audit.get('release_audit_summary') or ''}"
@@ -1003,6 +1013,11 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         (
             f"  throttle_reason_codes="
             f"{','.join(active_exposure_readiness_throttle.get('throttle_reason_codes') or []) or 'none'}"
+        ),
+        (
+            f"  measurement_scope={active_exposure_readiness_throttle.get('measurement_scope') or 'pre_readiness_execution_intake_route'} "
+            f"source_of_truth={active_exposure_readiness_throttle.get('source_of_truth') or 'execution_exposure_release_audit_and_risk_decision_metadata'} "
+            f"explains_upstream_readiness_throttle={bool(active_exposure_readiness_throttle.get('explains_upstream_readiness_throttle', True))}"
         ),
         f"  throttle_summary={active_exposure_readiness_throttle.get('throttle_summary') or ''}",
         f"  active_exposure_readiness_throttle_examples={active_exposure_readiness_throttle_examples or []}",

@@ -4884,6 +4884,11 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - permite una primera traza diagnóstica por market/ventana y salta ocurrencias redundantes posteriores antes de crear readiness, sin abrir nuevas entries ni tocar policy/guardrails/thresholds.
   - preserva explícitamente rutas `reduce/exit` y casos sin blocker válido.
   - añade bloque compacto `active_exposure_readiness_throttle_summary` (+ ejemplos) en status/export (`text/json`) para visibilidad operacional del throttle sin refactor amplio del export.
+- **Prompt 318 (alineación semántica diagnóstica funnel/export tras throttle temprano):**
+  - **sin cambios de policy**: mantiene la compuerta temprana de Prompt 313 tal como está, sin mover gate ni abrir nuevas entradas.
+  - corrige únicamente semántica/diagnóstico backend en status/export/snapshot para distinguir `missing_readiness_artifact` real vs `readiness intentionally skipped/throttled by valid active exposure`.
+  - introduce reason codes explícitos de throttle temprano en `paper_execution_summary` y visibilidad de funnel (por ejemplo `PAPER_EXECUTION_ROUTE_THROTTLED_BY_VALID_ACTIVE_EXPOSURE`, `PAPER_EXECUTION_READINESS_SKIPPED_BY_VALID_ACTIVE_EXPOSURE`, `PAPER_EXECUTION_ROUTE_NOT_ATTEMPTED_DUE_TO_READINESS_THROTTLE`).
+  - hace que `active_exposure_readiness_throttle_summary` y bloques downstream (`execution_exposure_provenance_summary`, `execution_exposure_release_audit_summary`) expliquen cuando quedan en cero por contención upstream pre-readiness (no por silencio ambiguo del pipeline).
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

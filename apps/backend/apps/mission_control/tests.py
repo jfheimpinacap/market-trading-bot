@@ -3644,6 +3644,99 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(diagnostics.get('paper_execution_candidates'), 1)
         self.assertIn('PAPER_EXECUTION_VISIBLE_IN_FUNNEL', diagnostics.get('paper_execution_visibility_reason_codes', []))
 
+    def test_paper_execution_summary_marks_upstream_readiness_throttle_not_missing_artifact(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.risk_agent.models import RiskApprovalDecision, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-execution-upstream-throttle')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        RiskApprovalDecision.objects.filter(id=decision.id).update(
+            reason_codes=[
+                'READINESS_THROTTLED_BY_VALID_ACTIVE_EXPOSURE',
+                'READINESS_SKIPPED_BY_ACTIVE_POSITION',
+            ],
+            metadata={
+                'paper_demo_only': True,
+                'candidate_shape': 'additive_entry',
+                'blocker_validity_status': 'VALID_ACTIVE_POSITION',
+                'throttle_action': 'skip_redundant_readiness',
+                'readiness_creation_skipped': True,
+            },
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        summary = diagnostics.get('paper_execution_summary') or ''
+        route_codes = diagnostics.get('paper_execution_route_reason_codes') or []
+
+        self.assertIn('route_throttled_by_valid_active_exposure=1', summary)
+        self.assertIn('route_missing_unexpected_readiness=0', summary)
+        self.assertIn('PAPER_EXECUTION_ROUTE_THROTTLED_BY_VALID_ACTIVE_EXPOSURE', route_codes)
+        self.assertNotIn('PAPER_EXECUTION_ROUTE_MISSING', route_codes)
+        self.assertEqual(diagnostics.get('execution_readiness_available_count'), 0)
+
+    def test_active_exposure_throttle_summary_counts_upstream_throttle_without_release_audit_rows(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.risk_agent.models import RiskApprovalDecision, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('throttle-summary-upstream')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        RiskApprovalDecision.objects.filter(id=decision.id).update(
+            reason_codes=['READINESS_THROTTLED_BY_VALID_ACTIVE_EXPOSURE'],
+            metadata={
+                'paper_demo_only': True,
+                'candidate_shape': 'additive_entry',
+                'blocker_validity_status': 'VALID_ACTIVE_POSITION',
+                'readiness_creation_skipped': True,
+            },
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        throttle_summary = diagnostics.get('active_exposure_readiness_throttle_summary') or {}
+        throttle_examples = diagnostics.get('active_exposure_readiness_throttle_examples') or []
+
+        self.assertEqual(throttle_summary.get('markets_throttled'), 1)
+        self.assertEqual(throttle_summary.get('additive_entries_throttled_before_readiness'), 1)
+        self.assertTrue(throttle_summary.get('explains_upstream_readiness_throttle'))
+        self.assertIn('ACTIVE_EXPOSURE_READINESS_THROTTLE_VISIBLE_IN_FUNNEL', throttle_summary.get('throttle_reason_codes', []))
+        self.assertEqual(throttle_examples[0].get('expected_route'), 'execution_intake')
+        self.assertEqual(throttle_examples[0].get('risk_decision_id'), decision.id)
+
+    def test_missing_readiness_artifact_remains_when_no_upstream_throttle_signal(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.risk_agent.models import RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('paper-execution-genuine-missing-readiness')
+        self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        summary = diagnostics.get('paper_execution_summary') or ''
+        route_codes = diagnostics.get('paper_execution_route_reason_codes') or []
+
+        self.assertIn('route_throttled_by_valid_active_exposure=0', summary)
+        self.assertIn('route_missing_unexpected_readiness=1', summary)
+        self.assertIn('PAPER_EXECUTION_ROUTE_MISSING', route_codes)
+
+    def test_downstream_zero_diagnostics_explain_upstream_readiness_throttle(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.risk_agent.models import RiskApprovalDecision, RiskRuntimeApprovalStatus
+
+        market = self._provider_and_market('upstream-throttle-explains-downstream-zero')
+        decision = self._risk_decision(market=market, approval_status=RiskRuntimeApprovalStatus.APPROVED)
+        RiskApprovalDecision.objects.filter(id=decision.id).update(
+            reason_codes=['READINESS_THROTTLED_BY_VALID_ACTIVE_EXPOSURE'],
+            metadata={
+                'paper_demo_only': True,
+                'candidate_shape': 'additive_entry',
+                'blocker_validity_status': 'VALID_ACTIVE_POSITION',
+                'readiness_creation_skipped': True,
+            },
+        )
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        provenance = diagnostics.get('execution_exposure_provenance_summary') or {}
+        release_audit = diagnostics.get('execution_exposure_release_audit_summary') or {}
+
+        self.assertEqual(provenance.get('diagnostic_status'), 'UPSTREAM_READINESS_THROTTLE')
+        self.assertEqual(release_audit.get('diagnostic_status'), 'UPSTREAM_READINESS_THROTTLE')
+        self.assertTrue(provenance.get('explains_upstream_readiness_throttle'))
+        self.assertTrue(release_audit.get('explains_upstream_readiness_throttle'))
+
     def test_paper_execution_visibility_created_candidate_is_counted_in_funnel(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.autonomous_trader.models import AutonomousExecutionIntakeCandidate, AutonomousExecutionIntakeRun, AutonomousExecutionIntakeStatus
