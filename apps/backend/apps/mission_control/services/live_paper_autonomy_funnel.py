@@ -103,6 +103,57 @@ def _unique_codes(codes: list[str] | tuple[str, ...] | None) -> list[str]:
     return list(dict.fromkeys(str(code or '') for code in list(codes or []) if str(code or '').strip()))
 
 
+def _is_valid_active_exposure_readiness_throttle_reason_code(code: str) -> bool:
+    normalized = str(code or '').upper()
+    if not normalized:
+        return False
+    return (
+        ('THROTTLE' in normalized or 'SKIP' in normalized or 'SUPPRESS' in normalized)
+        and 'READINESS' in normalized
+        and ('ACTIVE_EXPOSURE' in normalized or 'ACTIVE_POSITION' in normalized)
+    )
+
+
+def _infer_upstream_readiness_throttle_from_decision(
+    *,
+    reason_codes: list[str],
+    decision_metadata: dict[str, Any],
+    market_id: int | None,
+    risk_decision_id: int,
+    expected_route: str | None,
+) -> dict[str, Any]:
+    merged_codes = _unique_codes(reason_codes + [str(code or '') for code in list(decision_metadata.get('reason_codes') or [])])
+    throttle_detected = any(_is_valid_active_exposure_readiness_throttle_reason_code(code) for code in merged_codes)
+    blocker_validity_status = str(decision_metadata.get('blocker_validity_status') or '')
+    candidate_shape = str(decision_metadata.get('candidate_shape') or 'additive_entry')
+    if not throttle_detected and blocker_validity_status == 'VALID_ACTIVE_POSITION':
+        throttle_detected = str(decision_metadata.get('readiness_creation_skipped') or '').lower() in {'true', '1', 'yes'}
+
+    if not throttle_detected:
+        return {'throttle_detected': False}
+
+    throttle_action = str(decision_metadata.get('throttle_action') or 'skip_redundant_readiness')
+    dominant_reason_code = (
+        'ACTIVE_EXPOSURE_READINESS_THROTTLE_VISIBLE_IN_FUNNEL'
+        if not merged_codes
+        else next(
+            (code for code in merged_codes if _is_valid_active_exposure_readiness_throttle_reason_code(code)),
+            'ACTIVE_EXPOSURE_READINESS_THROTTLE_VISIBLE_IN_FUNNEL',
+        )
+    )
+    return {
+        'throttle_detected': True,
+        'market_id': market_id,
+        'risk_decision_id': int(risk_decision_id),
+        'candidate_shape': candidate_shape or 'additive_entry',
+        'blocker_validity_status': blocker_validity_status or 'VALID_ACTIVE_POSITION',
+        'throttle_action': throttle_action,
+        'readiness_creation_skipped': True,
+        'expected_route': expected_route or _RISK_PAPER_EXECUTION_ROUTE_NAME,
+        'dominant_reason_code': dominant_reason_code,
+    }
+
+
 def _resolve_lineage_anchor(*, prediction_candidate_id: int | None, handoff_id: int | None, approval_review_id: Any) -> str:
     if prediction_candidate_id is not None or handoff_id is not None:
         return f'prediction:{prediction_candidate_id}|handoff:{handoff_id}'
@@ -590,6 +641,7 @@ def _build_execution_exposure_release_audit(*, examples: list[dict[str, Any]], w
 def _build_active_exposure_readiness_throttle_summary(
     *,
     release_audit_examples: list[dict[str, Any]],
+    upstream_throttle_examples: list[dict[str, Any]] | None = None,
     route_created: int,
     creation_allowed_for_exit: int,
     creation_allowed_without_exposure: int,
@@ -600,23 +652,32 @@ def _build_active_exposure_readiness_throttle_summary(
     examples: list[dict[str, Any]] = []
     throttled_markets_seen: set[int] = set()
 
-    for item in release_audit_examples:
+    for item in list(release_audit_examples) + list(upstream_throttle_examples or []):
         market_id = _safe_int(item.get('market_id'))
         candidate_shape = str(item.get('candidate_shape') or 'additive_entry')
+        risk_decision_id = _safe_int(item.get('risk_decision_id'))
         blocker_validity_status = str(item.get('blocker_validity_status') or '')
         release_readiness_status = str(item.get('release_readiness_status') or '')
         suppression_scope = str(item.get('suppression_scope') or '')
         dominant_reason_code = str(item.get('dominant_reason_code') or '')
+        expected_route = str(item.get('expected_route') or _RISK_PAPER_EXECUTION_ROUTE_NAME)
         is_throttle_shape = (
             candidate_shape == 'additive_entry'
             and blocker_validity_status == 'VALID_ACTIVE_POSITION'
-            and release_readiness_status == 'KEEP_BLOCKED'
-            and suppression_scope in {'same_market', 'same_market_and_lineage'}
+            and (
+                release_readiness_status in {'', 'KEEP_BLOCKED'}
+                or str(item.get('readiness_creation_skipped') or '').lower() in {'true', '1', 'yes'}
+            )
+            and (
+                suppression_scope in {'', 'same_market', 'same_market_and_lineage'}
+                or str(item.get('throttle_action') or '').startswith('skip')
+            )
             and market_id is not None
         )
         if is_throttle_shape:
             throttle_reason_codes.append('ACTIVE_EXPOSURE_READINESS_THROTTLE_APPLIED')
-            if market_id in throttled_markets_seen:
+            upstream_skip_flag = str(item.get('readiness_creation_skipped') or '').lower() in {'true', '1', 'yes'}
+            if market_id in throttled_markets_seen or upstream_skip_flag:
                 throttled_entries += 1
                 throttle_reason_codes.append('ACTIVE_EXPOSURE_READINESS_THROTTLE_SKIPPED_REDUNDANT_READINESS')
                 action = 'skip_redundant_readiness'
@@ -631,12 +692,14 @@ def _build_active_exposure_readiness_throttle_summary(
                 examples.append(
                     {
                         'market_id': market_id,
+                        'risk_decision_id': risk_decision_id,
                         'candidate_shape': candidate_shape,
                         'blocker_validity_status': blocker_validity_status,
                         'release_readiness_status': release_readiness_status,
                         'throttle_action': action,
                         'readiness_creation_skipped': readiness_creation_skipped,
                         'preserved_for_exit': False,
+                        'expected_route': expected_route,
                         'dominant_reason_code': dominant_reason_code,
                     }
                 )
@@ -647,12 +710,14 @@ def _build_active_exposure_readiness_throttle_summary(
                 examples.append(
                     {
                         'market_id': market_id,
+                        'risk_decision_id': risk_decision_id,
                         'candidate_shape': candidate_shape,
                         'blocker_validity_status': blocker_validity_status,
                         'release_readiness_status': release_readiness_status,
                         'throttle_action': 'bypass_for_exit',
                         'readiness_creation_skipped': False,
                         'preserved_for_exit': True,
+                        'expected_route': expected_route,
                         'dominant_reason_code': dominant_reason_code,
                     }
                 )
@@ -662,23 +727,30 @@ def _build_active_exposure_readiness_throttle_summary(
                 examples.append(
                     {
                         'market_id': market_id,
+                        'risk_decision_id': risk_decision_id,
                         'candidate_shape': candidate_shape,
                         'blocker_validity_status': blocker_validity_status or 'UNKNOWN_VALIDITY',
                         'release_readiness_status': release_readiness_status or 'UNKNOWN',
                         'throttle_action': 'bypass_without_valid_blocker',
                         'readiness_creation_skipped': False,
                         'preserved_for_exit': False,
+                        'expected_route': expected_route,
                         'dominant_reason_code': dominant_reason_code,
                     }
                 )
 
     normalized_codes = _unique_codes(throttle_reason_codes)
+    normalized_codes.append('ACTIVE_EXPOSURE_READINESS_THROTTLE_VISIBLE_IN_FUNNEL')
+    normalized_codes = _unique_codes(normalized_codes)
     summary_text = (
         f"markets_throttled={len(throttled_market_ids)} "
         f"additive_entries_throttled_before_readiness={throttled_entries} "
         f"readiness_created_normally={route_created} "
         f"candidates_preserved_for_exit={creation_allowed_for_exit} "
         f"candidates_preserved_without_valid_blocker={creation_allowed_without_exposure} "
+        "measurement_scope=pre_readiness_execution_intake_route "
+        "source_of_truth=execution_exposure_release_audit_and_risk_decision_metadata "
+        "explains_upstream_readiness_throttle=True "
         f"throttle_reason_codes={','.join(normalized_codes) or 'none'}"
     )
     return {
@@ -688,6 +760,9 @@ def _build_active_exposure_readiness_throttle_summary(
         'candidates_preserved_for_exit': int(creation_allowed_for_exit),
         'candidates_preserved_without_valid_blocker': int(creation_allowed_without_exposure),
         'throttle_reason_codes': normalized_codes,
+        'measurement_scope': 'pre_readiness_execution_intake_route',
+        'source_of_truth': 'execution_exposure_release_audit_and_risk_decision_metadata',
+        'explains_upstream_readiness_throttle': True,
         'throttle_summary': summary_text,
         'active_exposure_readiness_throttle_examples': examples[:3],
     }
@@ -2103,6 +2178,9 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     creation_exposure_provenance_examples: list[dict[str, Any]] = []
     suppressed_before_creation_readiness_ids: set[int] = set()
     created_by_bridge_readiness_ids: set[int] = set()
+    readiness_throttled_by_valid_active_exposure = 0
+    readiness_missing_unexpected = 0
+    upstream_readiness_throttle_examples: list[dict[str, Any]] = []
 
     decision_ids = [int(decision.id) for decision in risk_rows]
     if decision_ids:
@@ -2177,6 +2255,7 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         decision_reason_codes = [str(code or '') for code in list(decision.reason_codes or []) if str(code or '').strip()]
         metadata_reason_codes = [str(code or '') for code in list((decision.metadata or {}).get('reason_codes') or []) if str(code or '').strip()]
         merged_reason_codes = list(dict.fromkeys(decision_reason_codes + metadata_reason_codes))
+        decision_metadata = dict(decision.metadata or {})
         blocked_tags = {tag for tag in {'POLICY', 'SAFETY', 'RUNTIME'} if any(tag in code.upper() for code in merged_reason_codes)}
         expected_route = _RISK_PAPER_EXECUTION_ROUTE_NAME if approval_status in {RiskRuntimeApprovalStatus.APPROVED, RiskRuntimeApprovalStatus.APPROVED_REDUCED} else None
 
@@ -2187,6 +2266,10 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
         )
         observed_value: Any = approval_status
         threshold: Any = f'{RiskRuntimeApprovalStatus.APPROVED}|{RiskRuntimeApprovalStatus.APPROVED_REDUCED}'
+        candidate_shape = str(decision_metadata.get('candidate_shape') or '')
+        blocker_validity_status = str(decision_metadata.get('blocker_validity_status') or '')
+        throttle_action = ''
+        readiness_creation_skipped = False
 
         if expected_route is None:
             route_missing_status_count += 1
@@ -2224,11 +2307,40 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                 reason_codes.append(reason_code)
             else:
                 route_blocked += 1
-                reason_code = 'PAPER_EXECUTION_ROUTE_MISSING'
-                blocking_stage = 'paper_execution_readiness'
-                observed_value = 'missing_readiness_artifact'
-                threshold = 'AutonomousExecutionReadiness'
-                reason_codes.append(reason_code)
+                upstream_throttle = _infer_upstream_readiness_throttle_from_decision(
+                    reason_codes=merged_reason_codes,
+                    decision_metadata=decision_metadata,
+                    market_id=market_id,
+                    risk_decision_id=decision_id,
+                    expected_route=expected_route,
+                )
+                if upstream_throttle.get('throttle_detected'):
+                    reason_code = 'PAPER_EXECUTION_ROUTE_THROTTLED_BY_VALID_ACTIVE_EXPOSURE'
+                    blocking_stage = 'paper_execution_readiness_throttle'
+                    observed_value = 'readiness_intentionally_skipped_by_valid_active_exposure'
+                    threshold = 'readiness_throttle_guardrail'
+                    readiness_throttled_by_valid_active_exposure += 1
+                    reason_codes.extend(
+                        [
+                            reason_code,
+                            'PAPER_EXECUTION_READINESS_SKIPPED_BY_VALID_ACTIVE_EXPOSURE',
+                            'PAPER_EXECUTION_ROUTE_NOT_ATTEMPTED_DUE_TO_READINESS_THROTTLE',
+                            'ACTIVE_EXPOSURE_READINESS_THROTTLE_VISIBLE_IN_FUNNEL',
+                        ]
+                    )
+                    if len(upstream_readiness_throttle_examples) < 3:
+                        upstream_readiness_throttle_examples.append(dict(upstream_throttle))
+                    candidate_shape = str(upstream_throttle.get('candidate_shape') or candidate_shape)
+                    blocker_validity_status = str(upstream_throttle.get('blocker_validity_status') or blocker_validity_status)
+                    throttle_action = str(upstream_throttle.get('throttle_action') or 'skip_redundant_readiness')
+                    readiness_creation_skipped = bool(upstream_throttle.get('readiness_creation_skipped'))
+                else:
+                    reason_code = 'PAPER_EXECUTION_ROUTE_MISSING'
+                    blocking_stage = 'paper_execution_readiness'
+                    observed_value = 'missing_readiness_artifact'
+                    threshold = 'AutonomousExecutionReadiness'
+                    readiness_missing_unexpected += 1
+                    reason_codes.append(reason_code)
 
         if len(examples) < 3:
             examples.append(
@@ -2241,6 +2353,10 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
                     'blocking_stage': blocking_stage,
                     'observed_value': observed_value,
                     'threshold': threshold,
+                    'candidate_shape': candidate_shape or None,
+                    'blocker_validity_status': blocker_validity_status or None,
+                    'throttle_action': throttle_action or None,
+                    'readiness_creation_skipped': bool(readiness_creation_skipped),
                 }
             )
         if readiness is None:
@@ -2835,15 +2951,38 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
     execution_exposure_provenance_summary = _build_execution_exposure_provenance_summary(
         examples=creation_exposure_provenance_examples
     )
+    execution_exposure_provenance_summary['measurement_scope'] = 'pre_creation_exposure_suppression_provenance'
+    execution_exposure_provenance_summary['source_of_truth'] = 'execution_candidate_creation_bridge'
+    execution_exposure_provenance_summary['explains_upstream_readiness_throttle'] = bool(
+        readiness_throttled_by_valid_active_exposure > 0
+    )
+    if readiness_throttled_by_valid_active_exposure > 0 and int(execution_exposure_provenance_summary.get('suppressions_total') or 0) == 0:
+        execution_exposure_provenance_summary['diagnostic_status'] = 'UPSTREAM_READINESS_THROTTLE'
+        execution_exposure_provenance_summary['provenance_summary'] = (
+            'upstream_readiness_throttle_detected_before_readiness_creation; '
+            'no candidate_creation_suppressions_to_audit_in_current_window'
+        )
     execution_exposure_provenance_examples = creation_exposure_provenance_examples[:_PAPER_TRADE_EXAMPLES_LIMIT]
     execution_exposure_release_audit = _build_execution_exposure_release_audit(
         examples=creation_exposure_provenance_examples,
         window_start=window_start,
     )
     execution_exposure_release_audit_summary = dict(execution_exposure_release_audit.get('execution_exposure_release_audit_summary') or {})
+    execution_exposure_release_audit_summary['measurement_scope'] = 'pre_creation_exposure_suppression_release_audit'
+    execution_exposure_release_audit_summary['source_of_truth'] = 'execution_exposure_release_audit'
+    execution_exposure_release_audit_summary['explains_upstream_readiness_throttle'] = bool(
+        readiness_throttled_by_valid_active_exposure > 0
+    )
+    if readiness_throttled_by_valid_active_exposure > 0 and int(execution_exposure_release_audit_summary.get('suppressions_audited') or 0) == 0:
+        execution_exposure_release_audit_summary['diagnostic_status'] = 'UPSTREAM_READINESS_THROTTLE'
+        execution_exposure_release_audit_summary['release_audit_summary'] = (
+            'upstream_readiness_throttle_detected_before_readiness_creation; '
+            'no release_audit_rows_expected_for_current_window'
+        )
     execution_exposure_release_audit_examples = list(execution_exposure_release_audit.get('execution_exposure_release_audit_examples') or [])
     active_exposure_readiness_throttle_summary = _build_active_exposure_readiness_throttle_summary(
         release_audit_examples=execution_exposure_release_audit_examples,
+        upstream_throttle_examples=upstream_readiness_throttle_examples,
         route_created=route_created,
         creation_allowed_for_exit=creation_allowed_for_exit,
         creation_allowed_without_exposure=creation_allowed_without_exposure,
@@ -2986,6 +3125,11 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"route_expected={route_expected} route_available={route_available} route_attempted={route_attempted} "
             f"route_created={route_created} route_reused={route_reused} route_blocked={route_blocked} "
             f"route_missing_status_count={route_missing_status_count} "
+            f"route_throttled_by_valid_active_exposure={readiness_throttled_by_valid_active_exposure} "
+            f"route_missing_unexpected_readiness={readiness_missing_unexpected} "
+            "measurement_scope=risk_decision_to_execution_readiness_route "
+            "source_of_truth=risk_approval_decision_plus_execution_readiness_artifacts "
+            "explains_upstream_readiness_throttle=True "
             f"paper_execution_route_reason_codes={','.join(normalized_codes) or 'none'} "
             f"candidates_visible={paper_trade_route_expected} "
             f"promoted_to_decision={promoted_to_decision} "
@@ -3034,6 +3178,10 @@ def _build_paper_execution_diagnostics(*, risk_rows: list[RiskApprovalDecision],
             f"candidate_created={execution_candidate_created} candidate_reused={execution_candidate_reused} "
             f"candidate_visible={visibility_visible_count} candidate_hidden={visibility_hidden_count} "
             f"candidate_missing={visibility_missing_count} "
+            f"readiness_throttled_upstream={readiness_throttled_by_valid_active_exposure} "
+            "measurement_scope=execution_artifact_lifecycle "
+            "source_of_truth=readiness_and_execution_intake_artifacts "
+            "explains_upstream_readiness_throttle=True "
             f"execution_artifact_blocked_count={execution_artifact_blocked_count} "
             f"execution_artifact_reason_codes={','.join(normalized_visibility_codes) or 'none'}"
         ),
