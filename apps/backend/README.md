@@ -4895,6 +4895,12 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - Mission Control/Funnel/Test Console consumen primero esa señal canónica como source-of-truth, priorizándola sobre inferencia posterior frágil.
   - `paper_execution_summary` distingue explícitamente `route skipped by canonical readiness throttle` vs `route missing unexpected readiness`.
   - `active_exposure_readiness_throttle_summary` y diagnósticos downstream en cero (`execution_exposure_provenance_summary`, `execution_exposure_release_audit_summary`) se explican con reason codes canónicos de throttle upstream.
+- **Prompt 320 (contención temprana de fanout redundante en risk decisions):**
+  - backend-only y conservador: agrega una compuerta mínima antes de readiness para evitar fabricar `RiskApprovalDecision` redundantes en `same_market + additive_entry + VALID_ACTIVE_POSITION + KEEP_BLOCKED`.
+  - preserva primera traza diagnóstica por mercado/ventana, y mantiene bypass explícito para `reduce/exit` y para casos sin blocker válido.
+  - no hay cambios de policy, no se abren nuevas entradas, no se relajan guardrails ni límites de runtime/safety/policy.
+  - añade `active_exposure_risk_throttle_summary` (+ ejemplos compactos) y alinea su lectura en Mission Control/Test Console junto al throttle ya existente de readiness.
+  - explicita unidades en el throttle de readiness (`unique_markets_throttled` y `throttled_decision_events`) para evitar inconsistencias de conteo.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

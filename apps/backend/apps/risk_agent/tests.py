@@ -194,3 +194,77 @@ class RiskRuntimeHardeningTests(TestCase):
         self.assertEqual(signal.get('expected_route'), 'execution_intake')
         self.assertTrue(signal.get('readiness_creation_skipped'))
         self.assertIn('READINESS_THROTTLE_CANONICAL_SIGNAL_RECORDED', approval.reason_codes)
+
+    @patch('apps.risk_agent.services.run.build_runtime_recommendations')
+    @patch('apps.risk_agent.services.run.build_execution_readiness')
+    @patch('apps.risk_agent.services.run.build_watch_plan')
+    @patch('apps.risk_agent.services.run.build_sizing_plan')
+    @patch('apps.risk_agent.services.run.build_approval_decision')
+    @patch('apps.risk_agent.services.run.build_runtime_candidates')
+    @patch('apps.risk_agent.services.run.PaperPosition.objects.filter')
+    def test_risk_runtime_review_throttles_redundant_same_market_additive_before_readiness(
+        self,
+        mock_positions_filter,
+        mock_build_candidates,
+        mock_build_approval,
+        mock_build_sizing,
+        mock_build_watch,
+        mock_build_readiness,
+        _mock_recommendations,
+    ):
+        from types import SimpleNamespace
+
+        from apps.risk_agent.services.intake import IntakeBuildResult
+
+        candidate_initial = SimpleNamespace(linked_market_id=101, context_summary='additive entry', reason_codes=['ENTRY'])
+        candidate_redundant = SimpleNamespace(linked_market_id=101, context_summary='additive entry retry', reason_codes=['ENTRY'])
+        candidate_exit = SimpleNamespace(linked_market_id=101, context_summary='reduce and exit leg', reason_codes=['EXIT'])
+        candidate_without_blocker = SimpleNamespace(linked_market_id=202, context_summary='new additive candidate', reason_codes=['ENTRY'])
+
+        mock_build_candidates.return_value = IntakeBuildResult(
+            candidates=[candidate_initial, candidate_redundant, candidate_exit, candidate_without_blocker],
+            considered_count=4,
+            skipped_count=0,
+        )
+        mock_positions_filter.return_value.values_list.return_value = [101]
+
+        approval_counter = {'value': 0}
+
+        def _approval_side_effect(*, candidate):
+            approval_counter['value'] += 1
+            return SimpleNamespace(
+                id=approval_counter['value'],
+                approval_status='APPROVED_REDUCED' if 'EXIT' in str(candidate.context_summary).upper() else 'APPROVED',
+                reason_codes=[],
+                metadata={},
+                watch_required=False,
+                save=lambda **kwargs: None,
+            )
+
+        mock_build_approval.side_effect = _approval_side_effect
+        mock_build_sizing.return_value = SimpleNamespace()
+        mock_build_watch.return_value = SimpleNamespace()
+        mock_build_readiness.side_effect = [
+            SimpleNamespace(id=1, readiness_status='READY', created_at=None),
+            SimpleNamespace(id=2, readiness_status='READY_REDUCED', created_at=None),
+            SimpleNamespace(id=3, readiness_status='READY', created_at=None),
+        ]
+
+        run = run_risk_runtime_review(triggered_by='test-risk-throttle')
+        summary = dict((run.metadata or {}).get('active_exposure_risk_throttle_summary') or {})
+        examples = list((run.metadata or {}).get('active_exposure_risk_throttle_examples') or [])
+
+        self.assertEqual(mock_build_approval.call_count, 3)
+        self.assertEqual(summary.get('markets_throttled'), 1)
+        self.assertEqual(summary.get('redundant_risk_decisions_throttled'), 1)
+        self.assertEqual(summary.get('risk_decisions_created_normally'), 3)
+        self.assertEqual(summary.get('candidates_preserved_for_exit'), 1)
+        self.assertEqual(summary.get('candidates_preserved_without_valid_blocker'), 1)
+        self.assertIn('ACTIVE_EXPOSURE_RISK_THROTTLE_SKIPPED_REDUNDANT_DECISION', summary.get('throttle_reason_codes', []))
+        self.assertIn('ACTIVE_EXPOSURE_RISK_THROTTLE_ALLOWED_INITIAL_TRACE', summary.get('throttle_reason_codes', []))
+        self.assertIn('ACTIVE_EXPOSURE_RISK_THROTTLE_BYPASSED_FOR_EXIT', summary.get('throttle_reason_codes', []))
+        self.assertIn(
+            'ACTIVE_EXPOSURE_RISK_THROTTLE_BYPASSED_WITHOUT_VALID_BLOCKER',
+            summary.get('throttle_reason_codes', []),
+        )
+        self.assertTrue(any(example.get('risk_decision_creation_skipped') for example in examples))

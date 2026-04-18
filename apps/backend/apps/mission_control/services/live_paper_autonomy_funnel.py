@@ -52,7 +52,7 @@ from apps.prediction_agent.services.run import run_prediction_intake_review
 from apps.research_agent.models import NarrativeConsensusRecord
 from apps.research_agent.models import MarketUniverseScanRun, NarrativeSignal, NarrativeSignalStatus, PredictionHandoffCandidate
 from apps.research_agent.models import PredictionHandoffStatus, ResearchHandoffPriority, ResearchHandoffStatus, ResearchPursuitRun, ResearchStructuralAssessment
-from apps.risk_agent.models import AutonomousExecutionReadiness, RiskApprovalDecision, RiskRuntimeApprovalStatus
+from apps.risk_agent.models import AutonomousExecutionReadiness, RiskApprovalDecision, RiskRuntimeApprovalStatus, RiskRuntimeRun
 from apps.risk_agent.services.run import run_risk_runtime_review
 
 FUNNEL_ACTIVE = 'ACTIVE'
@@ -678,7 +678,7 @@ def _build_active_exposure_readiness_throttle_summary(
 ) -> dict[str, Any]:
     throttle_reason_codes: list[str] = []
     throttled_market_ids: set[int] = set()
-    throttled_entries = 0
+    throttled_decision_events = 0
     examples: list[dict[str, Any]] = []
     throttled_markets_seen: set[int] = set()
 
@@ -711,7 +711,9 @@ def _build_active_exposure_readiness_throttle_summary(
                 throttle_reason_codes.append('READINESS_THROTTLE_CANONICAL_SIGNAL_RECORDED')
             upstream_skip_flag = str(item.get('readiness_creation_skipped') or '').lower() in {'true', '1', 'yes'}
             if market_id in throttled_markets_seen or upstream_skip_flag:
-                throttled_entries += 1
+                throttled_decision_events += 1
+                if market_id is not None:
+                    throttled_market_ids.add(market_id)
                 throttle_reason_codes.append('ACTIVE_EXPOSURE_READINESS_THROTTLE_SKIPPED_REDUNDANT_READINESS')
                 action = 'skip_redundant_readiness'
                 readiness_creation_skipped = True
@@ -780,7 +782,9 @@ def _build_active_exposure_readiness_throttle_summary(
     normalized_codes = _unique_codes(normalized_codes)
     summary_text = (
         f"markets_throttled={len(throttled_market_ids)} "
-        f"additive_entries_throttled_before_readiness={throttled_entries} "
+        f"unique_markets_throttled={len(throttled_market_ids)} "
+        f"throttled_decision_events={throttled_decision_events} "
+        f"additive_entries_throttled_before_readiness={throttled_decision_events} "
         f"readiness_created_normally={route_created} "
         f"candidates_preserved_for_exit={creation_allowed_for_exit} "
         f"candidates_preserved_without_valid_blocker={creation_allowed_without_exposure} "
@@ -791,7 +795,9 @@ def _build_active_exposure_readiness_throttle_summary(
     )
     return {
         'markets_throttled': int(len(throttled_market_ids)),
-        'additive_entries_throttled_before_readiness': int(throttled_entries),
+        'unique_markets_throttled': int(len(throttled_market_ids)),
+        'throttled_decision_events': int(throttled_decision_events),
+        'additive_entries_throttled_before_readiness': int(throttled_decision_events),
         'readiness_created_normally': int(route_created),
         'candidates_preserved_for_exit': int(creation_allowed_for_exit),
         'candidates_preserved_without_valid_blocker': int(creation_allowed_without_exposure),
@@ -801,6 +807,66 @@ def _build_active_exposure_readiness_throttle_summary(
         'explains_upstream_readiness_throttle': True,
         'throttle_summary': summary_text,
         'active_exposure_readiness_throttle_examples': examples[:3],
+    }
+
+
+def _build_active_exposure_risk_throttle_summary(*, window_start) -> dict[str, Any]:
+    runtime_runs = list(
+        RiskRuntimeRun.objects.filter(created_at__gte=window_start)
+        .order_by('-created_at', '-id')[:20]
+    )
+    if not runtime_runs:
+        return {
+            'markets_throttled': 0,
+            'redundant_risk_decisions_throttled': 0,
+            'risk_decisions_created_normally': 0,
+            'candidates_preserved_for_exit': 0,
+            'candidates_preserved_without_valid_blocker': 0,
+            'throttle_reason_codes': [],
+            'throttle_summary': 'markets_throttled=0 redundant_risk_decisions_throttled=0 risk_decisions_created_normally=0',
+        }
+
+    markets_throttled: set[int] = set()
+    throttle_reason_codes: list[str] = []
+    redundant_risk_decisions_throttled = 0
+    risk_decisions_created_normally = 0
+    candidates_preserved_for_exit = 0
+    candidates_preserved_without_valid_blocker = 0
+    examples: list[dict[str, Any]] = []
+
+    for run in runtime_runs:
+        run_metadata = dict(run.metadata or {})
+        summary = dict(run_metadata.get('active_exposure_risk_throttle_summary') or {})
+        redundant_risk_decisions_throttled += int(summary.get('redundant_risk_decisions_throttled') or 0)
+        risk_decisions_created_normally += int(summary.get('risk_decisions_created_normally') or 0)
+        candidates_preserved_for_exit += int(summary.get('candidates_preserved_for_exit') or 0)
+        candidates_preserved_without_valid_blocker += int(summary.get('candidates_preserved_without_valid_blocker') or 0)
+        throttle_reason_codes.extend(list(summary.get('throttle_reason_codes') or []))
+        for row in list(run_metadata.get('active_exposure_risk_throttle_examples') or []):
+            market_id = _safe_int(row.get('market_id'))
+            if market_id is not None and bool(row.get('risk_decision_creation_skipped')):
+                markets_throttled.add(market_id)
+            if len(examples) < 3:
+                examples.append(dict(row))
+
+    normalized_codes = _unique_codes(throttle_reason_codes)
+    summary_text = (
+        f"markets_throttled={len(markets_throttled)} "
+        f"redundant_risk_decisions_throttled={redundant_risk_decisions_throttled} "
+        f"risk_decisions_created_normally={risk_decisions_created_normally} "
+        f"candidates_preserved_for_exit={candidates_preserved_for_exit} "
+        f"candidates_preserved_without_valid_blocker={candidates_preserved_without_valid_blocker} "
+        f"throttle_reason_codes={','.join(normalized_codes) or 'none'}"
+    )
+    return {
+        'markets_throttled': int(len(markets_throttled)),
+        'redundant_risk_decisions_throttled': int(redundant_risk_decisions_throttled),
+        'risk_decisions_created_normally': int(risk_decisions_created_normally),
+        'candidates_preserved_for_exit': int(candidates_preserved_for_exit),
+        'candidates_preserved_without_valid_blocker': int(candidates_preserved_without_valid_blocker),
+        'throttle_reason_codes': normalized_codes,
+        'throttle_summary': summary_text,
+        'active_exposure_risk_throttle_examples': examples[:3],
     }
 
 
@@ -4053,6 +4119,7 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         .order_by('-created_at', '-id')[:40]
     )
     paper_execution_summary = _build_paper_execution_diagnostics(risk_rows=risk_rows, window_start=window_start)
+    active_exposure_risk_throttle_summary = _build_active_exposure_risk_throttle_summary(window_start=window_start)
     paper_execution_count = int(paper_execution_summary.get('paper_execution_visible_count') or 0)
 
     shortlist_market_ids = {
@@ -5304,6 +5371,8 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'execution_exposure_provenance_examples': exposure_diagnostics.get('execution_exposure_provenance_examples', []),
         'execution_exposure_release_audit_summary': exposure_diagnostics.get('execution_exposure_release_audit_summary', empty_execution_exposure_release_audit_summary()),
         'execution_exposure_release_audit_examples': exposure_diagnostics.get('execution_exposure_release_audit_examples', []),
+        'active_exposure_risk_throttle_summary': active_exposure_risk_throttle_summary,
+        'active_exposure_risk_throttle_examples': active_exposure_risk_throttle_summary.get('active_exposure_risk_throttle_examples', []),
         'active_exposure_readiness_throttle_summary': paper_execution_summary.get('active_exposure_readiness_throttle_summary', {}),
         'active_exposure_readiness_throttle_examples': paper_execution_summary.get('active_exposure_readiness_throttle_examples', []),
         'execution_promotion_gate_summary': paper_execution_summary.get('execution_promotion_gate_summary', {}),
@@ -5517,6 +5586,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'execution_exposure_provenance_examples': exposure_diagnostics.get('execution_exposure_provenance_examples', []),
         'execution_exposure_release_audit_summary': exposure_diagnostics.get('execution_exposure_release_audit_summary', empty_execution_exposure_release_audit_summary()),
         'execution_exposure_release_audit_examples': exposure_diagnostics.get('execution_exposure_release_audit_examples', []),
+        'active_exposure_risk_throttle_summary': handoff_diagnostics.get('active_exposure_risk_throttle_summary', {}),
+        'active_exposure_risk_throttle_examples': handoff_diagnostics.get('active_exposure_risk_throttle_examples', []),
         'active_exposure_readiness_throttle_summary': handoff_diagnostics.get('active_exposure_readiness_throttle_summary', {}),
         'active_exposure_readiness_throttle_examples': handoff_diagnostics.get('active_exposure_readiness_throttle_examples', []),
         'execution_promotion_gate_summary': handoff_diagnostics.get('execution_promotion_gate_summary', {}),
