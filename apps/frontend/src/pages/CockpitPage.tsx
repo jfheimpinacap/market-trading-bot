@@ -6,6 +6,7 @@ import { SectionCard } from '../components/SectionCard';
 import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
+import { isSettledRejected, resolveExpectedStatusError } from '../lib/missionControlStatus';
 import { getCockpitAttention, getCockpitQuickLinks, getCockpitSummary, runCockpitAction } from '../services/cockpit';
 import {
   bootstrapLivePaperSession,
@@ -534,12 +535,12 @@ export function CockpitPage() {
       return payload;
     } catch (smokeStatusError) {
       setLivePaperSmokeStatus(null);
-      const message = getErrorMessage(smokeStatusError, 'Live paper smoke test unavailable');
-      if (message.toLowerCase().includes('no smoke test has been executed yet')) {
-        setLivePaperSmokeStatusError('No smoke test result yet');
-      } else {
-        setLivePaperSmokeStatusError('Live paper smoke test unavailable');
-      }
+      const statusState = resolveExpectedStatusError(smokeStatusError, {
+        expected404Message: 'No smoke test result yet',
+        fallbackMessage: 'Live paper smoke test unavailable',
+        knownExpectedPhrases: ['no smoke test has been executed yet'],
+      });
+      setLivePaperSmokeStatusError(statusState.message);
       return null;
     } finally {
       setLivePaperSmokeStatusLoading(false);
@@ -688,14 +689,20 @@ export function CockpitPage() {
       setLivePaperTrialNotFound(false);
       return payload;
     } catch (statusError) {
-      const message = getErrorMessage(statusError, 'Could not load live paper trial status.');
-      if (message.toLowerCase().includes('no live paper trial run has been executed yet')) {
+      const statusState = resolveExpectedStatusError(statusError, {
+        expected404Message: 'No trial run yet',
+        fallbackMessage: 'Could not load live paper trial status.',
+        knownExpectedPhrases: ['no live paper trial run has been executed yet'],
+      });
+      if (statusState.kind === 'empty') {
         setLivePaperTrialNotFound(true);
         setLivePaperTrialStatus('IDLE');
         setLivePaperTrialStatusSnapshot(null);
         setLivePaperTrialError(null);
       } else {
-        setLivePaperTrialError(message);
+        setLivePaperTrialNotFound(false);
+        setLivePaperTrialStatusSnapshot(null);
+        setLivePaperTrialError(statusState.message);
       }
       return null;
     } finally {
@@ -833,56 +840,72 @@ export function CockpitPage() {
     setError(null);
     setTuningPanelError(null);
     setReviewQueueError(null);
-    try {
-      const [response, scenarioSummary, scanSummaryResponse, tuningPanelResponse, reviewQueueResponse, reviewAgingResponse, reviewEscalationResponse, reviewActivityResponse, autotriageResponse, autotriageAlertStatusResponse] = await Promise.all([
-        getCockpitSummary(),
-        getAutonomyScenarioSummary(),
-        getScanSummary(),
-        getRuntimeTuningCockpitPanel({ attention_only: attentionOnly, limit: 5 }),
-        getRuntimeTuningReviewQueue({
-          unresolved_only: reviewQueueUnresolvedOnly,
-          effective_review_status: reviewQueueStatusFilter === 'ALL' ? undefined : reviewQueueStatusFilter,
-          limit: 8,
-        }),
-        getRuntimeTuningReviewAging({
-          unresolved_only: reviewQueueUnresolvedOnly,
-          age_bucket: reviewQueueAgeBucketFilter === 'ALL' ? undefined : reviewQueueAgeBucketFilter,
-          limit: 8,
-        }),
-        getRuntimeTuningReviewEscalation({
-          escalated_only: reviewEscalatedOnly,
-          escalation_level: reviewEscalationLevelFilter === 'ALL' ? undefined : reviewEscalationLevelFilter,
-          limit: 6,
-        }),
-        getRuntimeTuningReviewActivity({
-          action_type: reviewActivityActionTypeFilter === 'ALL' ? undefined : reviewActivityActionTypeFilter,
-          limit: reviewActivityLimit,
-        }),
-        getRuntimeTuningAutotriage({ top_n: 3, include_monitor: false }),
-        getRuntimeTuningAutotriageAlertStatus(),
-      ]);
-      setSnapshot(response);
-      setAutonomyScenarioSummary(scenarioSummary);
-      setScanSummary(scanSummaryResponse);
-      setTuningPanel(tuningPanelResponse);
-      setReviewQueue(reviewQueueResponse);
-      setReviewAging(reviewAgingResponse);
-      setReviewEscalation(reviewEscalationResponse);
-      setReviewActivity(reviewActivityResponse);
-      setAutotriageDigest(autotriageResponse);
-      setAutotriageAlertStatus(autotriageAlertStatusResponse);
-      setReviewStateCache({});
-      setReviewStateErrorCache({});
-    } catch (loadError) {
-      setError(getErrorMessage(loadError, 'Could not load cockpit data.'));
+    const [snapshotResult, scenarioSummaryResult, scanSummaryResult, tuningPanelResult, reviewQueueResult, reviewAgingResult, reviewEscalationResult, reviewActivityResult, autotriageResult, autotriageAlertStatusResult] = await Promise.allSettled([
+      getCockpitSummary(),
+      getAutonomyScenarioSummary(),
+      getScanSummary(),
+      getRuntimeTuningCockpitPanel({ attention_only: attentionOnly, limit: 5 }),
+      getRuntimeTuningReviewQueue({
+        unresolved_only: reviewQueueUnresolvedOnly,
+        effective_review_status: reviewQueueStatusFilter === 'ALL' ? undefined : reviewQueueStatusFilter,
+        limit: 8,
+      }),
+      getRuntimeTuningReviewAging({
+        unresolved_only: reviewQueueUnresolvedOnly,
+        age_bucket: reviewQueueAgeBucketFilter === 'ALL' ? undefined : reviewQueueAgeBucketFilter,
+        limit: 8,
+      }),
+      getRuntimeTuningReviewEscalation({
+        escalated_only: reviewEscalatedOnly,
+        escalation_level: reviewEscalationLevelFilter === 'ALL' ? undefined : reviewEscalationLevelFilter,
+        limit: 6,
+      }),
+      getRuntimeTuningReviewActivity({
+        action_type: reviewActivityActionTypeFilter === 'ALL' ? undefined : reviewActivityActionTypeFilter,
+        limit: reviewActivityLimit,
+      }),
+      getRuntimeTuningAutotriage({ top_n: 3, include_monitor: false }),
+      getRuntimeTuningAutotriageAlertStatus(),
+    ]);
+
+    if (snapshotResult.status === 'fulfilled') {
+      setSnapshot(snapshotResult.value);
+    } else {
       setSnapshot(null);
-      setTuningPanelError(getErrorMessage(loadError, 'Could not load runtime tuning attention panel.'));
-      setReviewQueueError(getErrorMessage(loadError, 'Could not load runtime tuning review queue.'));
+      setError(getErrorMessage(snapshotResult.reason, 'Could not load cockpit data.'));
+    }
+
+    setAutonomyScenarioSummary(scenarioSummaryResult.status === 'fulfilled' ? scenarioSummaryResult.value : null);
+    setScanSummary(scanSummaryResult.status === 'fulfilled' ? scanSummaryResult.value : null);
+
+    if (tuningPanelResult.status === 'fulfilled') {
+      setTuningPanel(tuningPanelResult.value);
+    } else {
+      setTuningPanel(null);
+      setTuningPanelError(getErrorMessage(tuningPanelResult.reason, 'Could not load runtime tuning attention panel.'));
+    }
+
+    if (reviewQueueResult.status === 'fulfilled') {
+      setReviewQueue(reviewQueueResult.value);
+    } else {
+      setReviewQueue(null);
+      setReviewQueueError(getErrorMessage(reviewQueueResult.reason, 'Could not load runtime tuning review queue.'));
+    }
+
+    setReviewAging(reviewAgingResult.status === 'fulfilled' ? reviewAgingResult.value : null);
+    setReviewEscalation(reviewEscalationResult.status === 'fulfilled' ? reviewEscalationResult.value : null);
+    setReviewActivity(reviewActivityResult.status === 'fulfilled' ? reviewActivityResult.value : null);
+    setAutotriageDigest(autotriageResult.status === 'fulfilled' ? autotriageResult.value : null);
+    setAutotriageAlertStatus(autotriageAlertStatusResult.status === 'fulfilled' ? autotriageAlertStatusResult.value : null);
+
+    if (isSettledRejected(autotriageResult) || isSettledRejected(autotriageAlertStatusResult)) {
       setAutotriageDigest(null);
       setAutotriageAlertStatus(null);
-    } finally {
-      setLoading(false);
     }
+
+    setReviewStateCache({});
+    setReviewStateErrorCache({});
+    setLoading(false);
   }, [
     attentionOnly,
     reviewActivityActionTypeFilter,
