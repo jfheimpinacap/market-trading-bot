@@ -32,6 +32,7 @@ DEFAULT_MIN_WIDTH = 860
 DEFAULT_MIN_HEIGHT = 680
 WINDOW_MARGIN_X = 80
 WINDOW_MARGIN_Y = 120
+RESIZE_LAYOUT_DEBOUNCE_MS = 120
 
 
 class LauncherGUI(ctk.CTk):
@@ -51,6 +52,7 @@ class LauncherGUI(ctk.CTk):
         self.last_status_check_var = ctk.StringVar(value='Última revisión: pendiente')
         self.main_url_var = ctk.StringVar(value='URL principal: no disponible')
         self.auto_open_browser_var = ctk.BooleanVar(value=bool(self.preferences.get('auto_open_browser', True)))
+        self.debug_visible_processes_var = ctk.BooleanVar(value=bool(self.preferences.get('debug_visible_processes', False)))
         self.use_ollama_var = ctk.BooleanVar(value=bool(self.preferences.get('use_ollama', True)))
         self.aux_signal_var = ctk.BooleanVar(value=bool(self.preferences.get('aux_signal_enabled', False)))
         self.ollama_base_url_var = ctk.StringVar(value=str(self.preferences.get('ollama_base_url', DEFAULT_OLLAMA_BASE_URL)))
@@ -60,8 +62,13 @@ class LauncherGUI(ctk.CTk):
             timeout_value = '90'
         self.ollama_timeout_var = ctk.StringVar(value=timeout_value)
         self.dashboard_button: ctk.CTkButton | None = None
+        self.main_url_label: ctk.CTkLabel | None = None
+        self.footer_feedback_label: ctk.CTkLabel | None = None
+        self._resize_layout_job: str | None = None
 
         self._build_ui()
+        self.bind('<Configure>', self._on_window_configure)
+        self.after(250, self._apply_responsive_layout)
         self.after(600, self._save_preferences)
         self.refresh_status()
 
@@ -188,6 +195,13 @@ class LauncherGUI(ctk.CTk):
         ).pack(anchor='w', padx=16, pady=(8, 4))
         ctk.CTkCheckBox(
             actions,
+            text='Modo debug (mostrar consolas de procesos)',
+            variable=self.debug_visible_processes_var,
+            command=self._save_preferences,
+            font=ctk.CTkFont(size=13),
+        ).pack(anchor='w', padx=16, pady=(4, 4))
+        ctk.CTkCheckBox(
+            actions,
             text='Usar Ollama (shadow)',
             variable=self.use_ollama_var,
             command=self._save_preferences,
@@ -241,14 +255,15 @@ class LauncherGUI(ctk.CTk):
 
         self._add_action_button(actions, 'Probar Ollama (smoke test)', self.run_llm_shadow_smoke_test)
 
-        ctk.CTkLabel(
+        self.main_url_label = ctk.CTkLabel(
             actions,
             textvariable=self.main_url_var,
             font=ctk.CTkFont(size=12),
             text_color='gray80',
             wraplength=390,
             justify='left',
-        ).pack(anchor='w', padx=16, pady=(4, 10))
+        )
+        self.main_url_label.pack(anchor='w', padx=16, pady=(4, 10))
 
         self._add_action_button(actions, 'Salir', self.destroy, fg_color='#3c3c3c', hover_color='#4a4a4a')
 
@@ -308,14 +323,33 @@ class LauncherGUI(ctk.CTk):
         footer = ctk.CTkFrame(self, corner_radius=14)
         footer.grid(row=2, column=0, padx=20, pady=(12, 20), sticky='ew')
         footer.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(
+        self.footer_feedback_label = ctk.CTkLabel(
             footer,
             textvariable=self.feedback_var,
             wraplength=660,
             justify='left',
             anchor='w',
             font=ctk.CTkFont(size=13),
-        ).grid(row=0, column=0, padx=14, pady=12, sticky='ew')
+        )
+        self.footer_feedback_label.grid(row=0, column=0, padx=14, pady=12, sticky='ew')
+
+    def _on_window_configure(self, event) -> None:
+        if event.widget is not self:
+            return
+        if self._resize_layout_job is not None:
+            self.after_cancel(self._resize_layout_job)
+        self._resize_layout_job = self.after(RESIZE_LAYOUT_DEBOUNCE_MS, self._apply_responsive_layout)
+
+    def _apply_responsive_layout(self) -> None:
+        self._resize_layout_job = None
+        width = max(self.winfo_width(), DEFAULT_MIN_WIDTH)
+        # Nota técnica: este ajuste desacoplado de layout mantiene la lógica de UI concentrada
+        # y facilita una futura migración gradual a otro toolkit (por ejemplo PySide6) sin
+        # mezclar lógica de procesos/startup con el framework gráfico.
+        if self.main_url_label is not None:
+            self.main_url_label.configure(wraplength=max(320, width - 620))
+        if self.footer_feedback_label is not None:
+            self.footer_feedback_label.configure(wraplength=max(500, width - 300))
 
     def _add_action_button(self, parent: ctk.CTkFrame, text: str, command, **kwargs: object) -> ctk.CTkButton:
         button = ctk.CTkButton(
@@ -412,6 +446,10 @@ class LauncherGUI(ctk.CTk):
             command_args.append('--no-browser')
         if action in {'full', 'lite'}:
             command_args.extend(['--ollama', 'enabled' if self.use_ollama_var.get() else 'disabled'])
+            if self.debug_visible_processes_var.get():
+                command_args.extend(['--separate-windows', '--verbose'])
+            else:
+                command_args.append('--gui-silent')
             command_args.extend(
                 [
                     '--ollama-aux-signal',
@@ -737,6 +775,7 @@ class LauncherGUI(ctk.CTk):
                 'ollama_timeout_seconds': '90',
                 'ollama_base_url': DEFAULT_OLLAMA_BASE_URL,
                 'ollama_model': DEFAULT_OLLAMA_MODEL,
+                'debug_visible_processes': False,
             }
         try:
             loaded = json.loads(PREFERENCES_FILE.read_text(encoding='utf-8'))
@@ -749,6 +788,7 @@ class LauncherGUI(ctk.CTk):
                 'ollama_timeout_seconds': '90',
                 'ollama_base_url': DEFAULT_OLLAMA_BASE_URL,
                 'ollama_model': DEFAULT_OLLAMA_MODEL,
+                'debug_visible_processes': False,
             }
         if not isinstance(loaded, dict):
             return {
@@ -759,6 +799,7 @@ class LauncherGUI(ctk.CTk):
                 'ollama_timeout_seconds': '90',
                 'ollama_base_url': DEFAULT_OLLAMA_BASE_URL,
                 'ollama_model': DEFAULT_OLLAMA_MODEL,
+                'debug_visible_processes': False,
             }
         loaded.setdefault('last_mode', 'full')
         loaded.setdefault('auto_open_browser', True)
@@ -767,11 +808,13 @@ class LauncherGUI(ctk.CTk):
         loaded.setdefault('ollama_timeout_seconds', '90')
         loaded.setdefault('ollama_base_url', DEFAULT_OLLAMA_BASE_URL)
         loaded.setdefault('ollama_model', DEFAULT_OLLAMA_MODEL)
+        loaded.setdefault('debug_visible_processes', False)
         return loaded
 
     def _save_preferences(self) -> None:
         self.preferences['window_geometry'] = self.geometry()
         self.preferences['auto_open_browser'] = bool(self.auto_open_browser_var.get())
+        self.preferences['debug_visible_processes'] = bool(self.debug_visible_processes_var.get())
         self.preferences['use_ollama'] = bool(self.use_ollama_var.get())
         self.preferences['aux_signal_enabled'] = bool(self.aux_signal_var.get())
         self.preferences['ollama_timeout_seconds'] = str(self.ollama_timeout_var.get())
