@@ -169,3 +169,28 @@ class RiskRuntimeHardeningTests(TestCase):
                 active_position_market_ids={101},
             )
         )
+
+    def test_canonical_readiness_throttle_signal_is_persisted_on_approval_decision(self):
+        from apps.risk_agent.services.run import _record_canonical_readiness_throttle_signal
+
+        run = run_risk_runtime_review(triggered_by='test-canonical-throttle-signal')
+        approval = RiskApprovalDecision.objects.filter(linked_candidate__runtime_run=run).order_by('id').first()
+        self.assertIsNotNone(approval)
+
+        _record_canonical_readiness_throttle_signal(
+            approval=approval,
+            market_id=int(approval.linked_candidate.linked_market_id),
+        )
+        approval.refresh_from_db()
+        signal = dict((approval.metadata or {}).get('readiness_throttle_signal') or {})
+
+        self.assertEqual(signal.get('market_id'), approval.linked_candidate.linked_market_id)
+        self.assertEqual(signal.get('risk_decision_id'), approval.id)
+        self.assertEqual(signal.get('candidate_shape'), 'additive_entry')
+        self.assertEqual(signal.get('throttle_action'), 'skip_redundant_readiness')
+        self.assertEqual(signal.get('blocker_validity_status'), 'VALID_ACTIVE_POSITION')
+        self.assertEqual(signal.get('release_readiness_status'), 'KEEP_BLOCKED')
+        self.assertEqual(signal.get('source_stage'), 'risk_runtime_review')
+        self.assertEqual(signal.get('expected_route'), 'execution_intake')
+        self.assertTrue(signal.get('readiness_creation_skipped'))
+        self.assertIn('READINESS_THROTTLE_CANONICAL_SIGNAL_RECORDED', approval.reason_codes)

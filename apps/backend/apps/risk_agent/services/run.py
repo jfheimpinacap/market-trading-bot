@@ -46,6 +46,60 @@ def _should_throttle_readiness_for_valid_active_exposure(
     return market_id in traced_markets
 
 
+def _record_canonical_readiness_throttle_signal(
+    *,
+    approval,
+    market_id: int,
+) -> None:
+    decision_metadata = dict(getattr(approval, 'metadata', {}) or {})
+    existing_signal = dict(decision_metadata.get('readiness_throttle_signal') or {})
+    canonical_signal = {
+        'market_id': int(market_id),
+        'risk_decision_id': int(getattr(approval, 'id', 0) or 0),
+        'candidate_shape': str(existing_signal.get('candidate_shape') or decision_metadata.get('candidate_shape') or 'additive_entry'),
+        'throttle_action': str(existing_signal.get('throttle_action') or decision_metadata.get('throttle_action') or 'skip_redundant_readiness'),
+        'readiness_creation_skipped': True,
+        'blocker_validity_status': str(
+            existing_signal.get('blocker_validity_status') or decision_metadata.get('blocker_validity_status') or 'VALID_ACTIVE_POSITION'
+        ),
+        'release_readiness_status': str(existing_signal.get('release_readiness_status') or 'KEEP_BLOCKED'),
+        'dominant_reason_code': str(existing_signal.get('dominant_reason_code') or 'READINESS_THROTTLE_CANONICAL_SIGNAL_RECORDED'),
+        'source_stage': str(existing_signal.get('source_stage') or 'risk_runtime_review'),
+        'expected_route': 'execution_intake',
+        'suppression_scope': str(existing_signal.get('suppression_scope') or 'same_market'),
+    }
+    reason_codes = _unique_reason_codes(
+        list(getattr(approval, 'reason_codes', []) or [])
+        + list(decision_metadata.get('reason_codes') or [])
+        + [
+            'READINESS_THROTTLE_CANONICAL_SIGNAL_RECORDED',
+            'READINESS_THROTTLED_BY_VALID_ACTIVE_EXPOSURE',
+        ]
+    )
+    decision_metadata.update(
+        {
+            'candidate_shape': canonical_signal['candidate_shape'],
+            'throttle_action': canonical_signal['throttle_action'],
+            'readiness_creation_skipped': True,
+            'blocker_validity_status': canonical_signal['blocker_validity_status'],
+            'release_readiness_status': canonical_signal['release_readiness_status'],
+            'source_stage': canonical_signal['source_stage'],
+            'expected_route': canonical_signal['expected_route'],
+            'suppression_scope': canonical_signal['suppression_scope'],
+            'dominant_reason_code': canonical_signal['dominant_reason_code'],
+            'readiness_throttle_signal': canonical_signal,
+            'reason_codes': reason_codes,
+        }
+    )
+    approval.reason_codes = reason_codes
+    approval.metadata = decision_metadata
+    approval.save(update_fields=['reason_codes', 'metadata', 'updated_at'])
+
+
+def _unique_reason_codes(codes: list[str]) -> list[str]:
+    return list(dict.fromkeys(str(code or '') for code in list(codes or []) if str(code or '').strip()))
+
+
 def run_risk_runtime_review(*, triggered_by: str = 'manual') -> RiskRuntimeRun:
     runtime_run = RiskRuntimeRun.objects.create(
         started_at=timezone.now(),
@@ -85,6 +139,10 @@ def run_risk_runtime_review(*, triggered_by: str = 'manual') -> RiskRuntimeRun:
         )
         if throttle_readiness and market_id in first_readiness_by_market_id:
             readiness = first_readiness_by_market_id[market_id]
+            _record_canonical_readiness_throttle_signal(
+                approval=approval,
+                market_id=market_id,
+            )
         else:
             readiness = build_execution_readiness(approval_decision=approval, sizing_plan=sizing, watch_plan=watch_plan)
             if market_id in active_position_market_ids and not _is_reduce_or_exit_candidate(
