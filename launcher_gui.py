@@ -441,7 +441,15 @@ class LauncherGUI(ctk.CTk):
                 }
             )
 
-        command_args = [action]
+        command_args = self._build_start_args(action)
+        if action in {'full', 'lite'}:
+            self.preferences['last_mode'] = action
+        self._save_preferences()
+        self._run_background(action, feedback_text, *command_args)
+
+    def _build_start_args(self, action: str) -> list[str]:
+        global_args: list[str] = []
+        command_args: list[str] = [action]
         if action in {'full', 'lite'} and not self.auto_open_browser_var.get():
             command_args.append('--no-browser')
         if action in {'full', 'lite'}:
@@ -449,7 +457,9 @@ class LauncherGUI(ctk.CTk):
             if self.debug_visible_processes_var.get():
                 command_args.extend(['--separate-windows', '--verbose'])
             else:
-                command_args.append('--gui-silent')
+                # Importante: --gui-silent es una bandera global en start.py.
+                # Debe ir antes del subcomando para ser compatible con argparse.
+                global_args.append('--gui-silent')
             command_args.extend(
                 [
                     '--ollama-aux-signal',
@@ -460,10 +470,7 @@ class LauncherGUI(ctk.CTk):
                     str(self.ollama_timeout_var.get()),
                 ]
             )
-        if action in {'full', 'lite'}:
-            self.preferences['last_mode'] = action
-        self._save_preferences()
-        self._run_background(action, feedback_text, *command_args)
+        return [*global_args, *command_args]
 
     def refresh_status(self) -> None:
         self._run_background('status', 'Revisando estado de servicios...', 'status')
