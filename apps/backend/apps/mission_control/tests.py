@@ -4226,6 +4226,69 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(examples[0].get('blocker_validity_status'), 'SESSION_SCOPE_MISMATCH')
         self.assertEqual(examples[0].get('release_readiness_status'), 'RELEASE_PENDING_CONFIRMATION')
 
+    def test_active_exposure_readiness_throttle_summary_counts_redundant_additive_entries(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_active_exposure_readiness_throttle_summary
+
+        summary = _build_active_exposure_readiness_throttle_summary(
+            release_audit_examples=[
+                {
+                    'market_id': 77,
+                    'candidate_shape': 'additive_entry',
+                    'suppression_scope': 'same_market',
+                    'blocker_validity_status': 'VALID_ACTIVE_POSITION',
+                    'release_readiness_status': 'KEEP_BLOCKED',
+                    'dominant_reason_code': 'EXPOSURE_BLOCKER_VALID_ACTIVE_POSITION',
+                },
+                {
+                    'market_id': 77,
+                    'candidate_shape': 'additive_entry',
+                    'suppression_scope': 'same_market',
+                    'blocker_validity_status': 'VALID_ACTIVE_POSITION',
+                    'release_readiness_status': 'KEEP_BLOCKED',
+                    'dominant_reason_code': 'EXPOSURE_BLOCKER_VALID_ACTIVE_POSITION',
+                },
+                {
+                    'market_id': 78,
+                    'candidate_shape': 'exit',
+                    'suppression_scope': 'same_market',
+                    'blocker_validity_status': 'VALID_ACTIVE_POSITION',
+                    'release_readiness_status': 'KEEP_BLOCKED',
+                    'dominant_reason_code': 'EXPOSURE_KEEP_BLOCKED_VALID_MATCH',
+                },
+                {
+                    'market_id': 79,
+                    'candidate_shape': 'additive_entry',
+                    'suppression_scope': 'same_market',
+                    'blocker_validity_status': 'STALE_POSITION_SUSPECTED',
+                    'release_readiness_status': 'RELEASE_ELIGIBLE',
+                    'dominant_reason_code': 'EXPOSURE_BLOCKER_STALE_POSITION_SUSPECTED',
+                },
+            ],
+            route_created=3,
+            creation_allowed_for_exit=1,
+            creation_allowed_without_exposure=2,
+        )
+
+        self.assertEqual(summary.get('markets_throttled'), 1)
+        self.assertEqual(summary.get('additive_entries_throttled_before_readiness'), 1)
+        self.assertEqual(summary.get('readiness_created_normally'), 3)
+        self.assertEqual(summary.get('candidates_preserved_for_exit'), 1)
+        self.assertEqual(summary.get('candidates_preserved_without_valid_blocker'), 2)
+        self.assertIn('ACTIVE_EXPOSURE_READINESS_THROTTLE_APPLIED', summary.get('throttle_reason_codes', []))
+        self.assertIn(
+            'ACTIVE_EXPOSURE_READINESS_THROTTLE_SKIPPED_REDUNDANT_READINESS',
+            summary.get('throttle_reason_codes', []),
+        )
+        self.assertIn('ACTIVE_EXPOSURE_READINESS_THROTTLE_BYPASSED_FOR_EXIT', summary.get('throttle_reason_codes', []))
+        self.assertIn(
+            'ACTIVE_EXPOSURE_READINESS_THROTTLE_BYPASSED_WITHOUT_VALID_BLOCKER',
+            summary.get('throttle_reason_codes', []),
+        )
+        examples = summary.get('active_exposure_readiness_throttle_examples') or []
+        self.assertGreaterEqual(len(examples), 3)
+        self.assertEqual(examples[0].get('throttle_action'), 'allow_initial_trace')
+        self.assertTrue(any(row.get('readiness_creation_skipped') for row in examples))
+
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
     def test_execution_visibility_prefers_suppression_reason_over_model_mismatch(self, mock_get_active_account, _mock_summary):
@@ -6878,6 +6941,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('execution_promotion_gate_summary:', text_payload)
         self.assertIn('execution_exposure_provenance_summary:', text_payload)
         self.assertIn('execution_exposure_release_audit_summary:', text_payload)
+        self.assertIn('active_exposure_readiness_throttle_summary:', text_payload)
+        self.assertIn('additive_entries_throttled_before_readiness=', text_payload)
         self.assertIn('release_audit_summary=', text_payload)
         self.assertIn('suppressions_by_source_type=', text_payload)
         self.assertIn('candidates_promoted_to_decision=', text_payload)

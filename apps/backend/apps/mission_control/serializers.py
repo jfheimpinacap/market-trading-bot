@@ -476,6 +476,8 @@ class LivePaperAutonomyFunnelSerializer(serializers.Serializer):
     execution_exposure_provenance_examples = serializers.ListField(child=serializers.DictField(), required=False)
     execution_exposure_release_audit_summary = serializers.DictField(required=False)
     execution_exposure_release_audit_examples = serializers.ListField(child=serializers.DictField(), required=False)
+    active_exposure_readiness_throttle_summary = serializers.DictField(required=False)
+    active_exposure_readiness_throttle_examples = serializers.ListField(child=serializers.DictField(), required=False)
     execution_promotion_gate_summary = serializers.DictField(required=False)
     execution_promotion_gate_examples = serializers.ListField(child=serializers.DictField(), required=False)
     execution_lineage_summary = serializers.DictField(required=False)

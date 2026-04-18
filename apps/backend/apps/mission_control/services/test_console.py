@@ -575,6 +575,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'execution_exposure_provenance_examples': list(exposure_diagnostics.get('execution_exposure_provenance_examples') or []),
             'execution_exposure_release_audit_summary': dict(exposure_diagnostics.get('execution_exposure_release_audit_summary') or {}),
             'execution_exposure_release_audit_examples': list(exposure_diagnostics.get('execution_exposure_release_audit_examples') or []),
+            'active_exposure_readiness_throttle_summary': dict(funnel.get('active_exposure_readiness_throttle_summary') or {}),
+            'active_exposure_readiness_throttle_examples': list(funnel.get('active_exposure_readiness_throttle_examples') or []),
             'execution_promotion_gate_summary': dict(funnel.get('execution_promotion_gate_summary') or {}),
             'execution_promotion_gate_examples': list(funnel.get('execution_promotion_gate_examples') or []),
             'execution_lineage_summary': dict(funnel.get('execution_lineage_summary') or {}),
@@ -711,6 +713,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     execution_exposure_provenance_examples = exposure_diagnostics.get('execution_exposure_provenance_examples') or []
     execution_exposure_release_audit = exposure_diagnostics.get('execution_exposure_release_audit_summary') or {}
     execution_exposure_release_audit_examples = exposure_diagnostics.get('execution_exposure_release_audit_examples') or []
+    active_exposure_readiness_throttle = payload.get('active_exposure_readiness_throttle_summary') or {}
+    active_exposure_readiness_throttle_examples = payload.get('active_exposure_readiness_throttle_examples') or []
     execution_promotion_gate = payload.get('execution_promotion_gate_summary') or {}
     execution_promotion_gate_examples = payload.get('execution_promotion_gate_examples') or []
     execution_lineage = payload.get('execution_lineage_summary') or {}
@@ -988,6 +992,20 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             else f"  release_audit_summary={execution_exposure_release_audit.get('release_audit_summary') or ''}"
         ),
         f"  execution_exposure_release_audit_examples={execution_exposure_release_audit_examples or []}",
+        'active_exposure_readiness_throttle_summary:',
+        (
+            f"  markets_throttled={active_exposure_readiness_throttle.get('markets_throttled', 0)} "
+            f"additive_entries_throttled_before_readiness={active_exposure_readiness_throttle.get('additive_entries_throttled_before_readiness', 0)} "
+            f"readiness_created_normally={active_exposure_readiness_throttle.get('readiness_created_normally', 0)} "
+            f"candidates_preserved_for_exit={active_exposure_readiness_throttle.get('candidates_preserved_for_exit', 0)} "
+            f"candidates_preserved_without_valid_blocker={active_exposure_readiness_throttle.get('candidates_preserved_without_valid_blocker', 0)}"
+        ),
+        (
+            f"  throttle_reason_codes="
+            f"{','.join(active_exposure_readiness_throttle.get('throttle_reason_codes') or []) or 'none'}"
+        ),
+        f"  throttle_summary={active_exposure_readiness_throttle.get('throttle_summary') or ''}",
+        f"  active_exposure_readiness_throttle_examples={active_exposure_readiness_throttle_examples or []}",
         'execution_promotion_gate_summary:',
         (
             f"  candidates_visible={execution_promotion_gate.get('candidates_visible', 0)} "

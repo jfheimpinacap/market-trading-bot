@@ -4,6 +4,7 @@ from collections import Counter
 
 from django.utils import timezone
 
+from apps.paper_trading.models import PaperPosition
 from apps.risk_agent.models import (
     AutonomousExecutionReadiness,
     RiskIntakeRecommendation,
@@ -16,6 +17,33 @@ from apps.risk_agent.services.intake import build_runtime_candidates
 from apps.risk_agent.services.recommendation import build_runtime_recommendations
 from apps.risk_agent.services.sizing_runtime import build_sizing_plan
 from apps.risk_agent.services.watch_plan import build_watch_plan
+
+
+def _is_reduce_or_exit_candidate(*, candidate, approval_status: str) -> bool:
+    if approval_status == RiskRuntimeApprovalStatus.APPROVED_REDUCED:
+        return True
+    token_blob = ' '.join(
+        [str(getattr(candidate, 'context_summary', '') or '')]
+        + [str(code or '') for code in list(getattr(candidate, 'reason_codes', []) or [])]
+    ).upper()
+    return any(token in token_blob for token in {'EXIT', 'CLOSE', 'CLOSING', 'REDUCE', 'DE-RISK', 'DERISK', 'TRIM'})
+
+
+def _should_throttle_readiness_for_valid_active_exposure(
+    *,
+    candidate,
+    approval_status: str,
+    traced_markets: set[int],
+    active_position_market_ids: set[int],
+) -> bool:
+    market_id = int(getattr(candidate, 'linked_market_id', 0) or 0)
+    if market_id <= 0:
+        return False
+    if market_id not in active_position_market_ids:
+        return False
+    if _is_reduce_or_exit_candidate(candidate=candidate, approval_status=approval_status):
+        return False
+    return market_id in traced_markets
 
 
 def run_risk_runtime_review(*, triggered_by: str = 'manual') -> RiskRuntimeRun:
@@ -36,12 +64,35 @@ def run_risk_runtime_review(*, triggered_by: str = 'manual') -> RiskRuntimeRun:
     needs_review_count = 0
     watch_required_count = 0
     execution_ready_count = 0
+    traced_valid_active_exposure_markets: set[int] = set()
+    first_readiness_by_market_id: dict[int, AutonomousExecutionReadiness] = {}
+    active_position_market_ids: set[int] = {
+        int(market_id)
+        for market_id in PaperPosition.objects.filter(status='OPEN', quantity__gt=0).values_list('market_id', flat=True)
+        if market_id is not None
+    }
 
     for candidate in build_result.candidates:
         approval = build_approval_decision(candidate=candidate)
         sizing = build_sizing_plan(candidate=candidate, approval_decision=approval)
         watch_plan = build_watch_plan(candidate=candidate, sizing_plan=sizing, approval_decision=approval)
-        readiness = build_execution_readiness(approval_decision=approval, sizing_plan=sizing, watch_plan=watch_plan)
+        market_id = int(getattr(candidate, 'linked_market_id', 0) or 0)
+        throttle_readiness = _should_throttle_readiness_for_valid_active_exposure(
+            candidate=candidate,
+            approval_status=approval.approval_status,
+            traced_markets=traced_valid_active_exposure_markets,
+            active_position_market_ids=active_position_market_ids,
+        )
+        if throttle_readiness and market_id in first_readiness_by_market_id:
+            readiness = first_readiness_by_market_id[market_id]
+        else:
+            readiness = build_execution_readiness(approval_decision=approval, sizing_plan=sizing, watch_plan=watch_plan)
+            if market_id in active_position_market_ids and not _is_reduce_or_exit_candidate(
+                candidate=candidate,
+                approval_status=approval.approval_status,
+            ):
+                traced_valid_active_exposure_markets.add(market_id)
+                first_readiness_by_market_id.setdefault(market_id, readiness)
         recommendations = build_runtime_recommendations(
             runtime_run=runtime_run,
             candidate=candidate,
