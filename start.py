@@ -2215,6 +2215,7 @@ def build_parser() -> argparse.ArgumentParser:
     common_setup.add_argument('--skip-seed', '--no-seed', dest='no_seed', action='store_true', help='Do not auto-run the demo seed.')
     common_setup.add_argument('--lite', action='store_true', help='Run in lite mode (SQLite, no Docker-required infra).')
     common_setup.add_argument('--verbose', action='store_true', help='Attach backend logs to this terminal for paper-testing diagnostics.')
+    common_setup.add_argument('--gui-silent', action='store_true', default=argparse.SUPPRESS, help='Force detached/no-window startup (used by launcher GUI operator mode).')
 
     backend_only = argparse.ArgumentParser(add_help=False)
     backend_only.add_argument('--skip-install', action='store_true', help='Skip pip install before running the command.')
@@ -2227,12 +2228,14 @@ def build_parser() -> argparse.ArgumentParser:
     backend_only.add_argument('--ollama', choices=['enabled', 'disabled'], help='Control whether backend starts with Ollama env enabled.')
     backend_only.add_argument('--ollama-aux-signal', choices=['enabled', 'disabled'], default='disabled', help='Control whether backend starts with auxiliary LLM signal enabled.')
     backend_only.add_argument('--ollama-env-timeout', type=float, default=float(LAUNCHER_OLLAMA_ENV_DEFAULTS['OLLAMA_TIMEOUT_SECONDS']), help='Timeout seconds exported to backend OLLAMA_TIMEOUT_SECONDS.')
+    backend_only.add_argument('--gui-silent', action='store_true', default=argparse.SUPPRESS, help='Force detached/no-window startup (used by launcher GUI operator mode).')
 
     frontend_only = argparse.ArgumentParser(add_help=False)
     frontend_only.add_argument('--skip-install', action='store_true', help='Skip npm install before running the command.')
     frontend_only.add_argument('--no-browser', action='store_true', help='Do not open the browser automatically after startup.')
     frontend_only.add_argument('--separate-windows', action='store_true', help='Open the frontend in a separate console window instead of detached mode.')
     frontend_only.add_argument('--lite', action='store_true', help='Run in lite mode (frontend still unchanged).')
+    frontend_only.add_argument('--gui-silent', action='store_true', default=argparse.SUPPRESS, help='Force detached/no-window startup (used by launcher GUI operator mode).')
 
     up_parser = subparsers.add_parser('up', parents=[common_setup], help='Prepare the project and start backend + frontend.')
     up_parser.add_argument('--with-sim-loop', action='store_true', help='Start simulate_markets_loop alongside the backend.')
@@ -2307,6 +2310,7 @@ def build_parser() -> argparse.ArgumentParser:
         ollama_aux_signal='disabled',
         lite=False,
         verbose=False,
+        gui_silent=False,
     )
     return parser
 
