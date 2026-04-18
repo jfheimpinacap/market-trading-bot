@@ -4889,6 +4889,12 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - corrige únicamente semántica/diagnóstico backend en status/export/snapshot para distinguir `missing_readiness_artifact` real vs `readiness intentionally skipped/throttled by valid active exposure`.
   - introduce reason codes explícitos de throttle temprano en `paper_execution_summary` y visibilidad de funnel (por ejemplo `PAPER_EXECUTION_ROUTE_THROTTLED_BY_VALID_ACTIVE_EXPOSURE`, `PAPER_EXECUTION_READINESS_SKIPPED_BY_VALID_ACTIVE_EXPOSURE`, `PAPER_EXECUTION_ROUTE_NOT_ATTEMPTED_DUE_TO_READINESS_THROTTLE`).
   - hace que `active_exposure_readiness_throttle_summary` y bloques downstream (`execution_exposure_provenance_summary`, `execution_exposure_release_audit_summary`) expliquen cuando quedan en cero por contención upstream pre-readiness (no por silencio ambiguo del pipeline).
+- **Prompt 319 (wiring canónico persistido para throttle temprano de readiness):**
+  - **sin cambios de policy** y **sin mover compuertas**: mantiene intacta la lógica de Prompt 313; el cambio es únicamente de wiring backend-only/observabilidad.
+  - persiste una señal canónica en `RiskApprovalDecision.metadata.readiness_throttle_signal` cuando readiness se omite intencionalmente por active exposure válida (`additive_entry` + `VALID_ACTIVE_POSITION` + `KEEP_BLOCKED` + `same_market`).
+  - Mission Control/Funnel/Test Console consumen primero esa señal canónica como source-of-truth, priorizándola sobre inferencia posterior frágil.
+  - `paper_execution_summary` distingue explícitamente `route skipped by canonical readiness throttle` vs `route missing unexpected readiness`.
+  - `active_exposure_readiness_throttle_summary` y diagnósticos downstream en cero (`execution_exposure_provenance_summary`, `execution_exposure_release_audit_summary`) se explican con reason codes canónicos de throttle upstream.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

@@ -3657,10 +3657,19 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
             ],
             metadata={
                 'paper_demo_only': True,
-                'candidate_shape': 'additive_entry',
-                'blocker_validity_status': 'VALID_ACTIVE_POSITION',
-                'throttle_action': 'skip_redundant_readiness',
-                'readiness_creation_skipped': True,
+                'readiness_throttle_signal': {
+                    'market_id': market.id,
+                    'risk_decision_id': decision.id,
+                    'candidate_shape': 'additive_entry',
+                    'throttle_action': 'skip_redundant_readiness',
+                    'readiness_creation_skipped': True,
+                    'blocker_validity_status': 'VALID_ACTIVE_POSITION',
+                    'release_readiness_status': 'KEEP_BLOCKED',
+                    'dominant_reason_code': 'READINESS_THROTTLE_CANONICAL_SIGNAL_RECORDED',
+                    'source_stage': 'risk_runtime_review',
+                    'expected_route': 'execution_intake',
+                    'suppression_scope': 'same_market',
+                },
             },
         )
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
@@ -3669,7 +3678,7 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
 
         self.assertIn('route_throttled_by_valid_active_exposure=1', summary)
         self.assertIn('route_missing_unexpected_readiness=0', summary)
-        self.assertIn('PAPER_EXECUTION_ROUTE_THROTTLED_BY_VALID_ACTIVE_EXPOSURE', route_codes)
+        self.assertIn('PAPER_EXECUTION_ROUTE_SKIPPED_BY_CANONICAL_READINESS_THROTTLE', route_codes)
         self.assertNotIn('PAPER_EXECUTION_ROUTE_MISSING', route_codes)
         self.assertEqual(diagnostics.get('execution_readiness_available_count'), 0)
 
@@ -3683,9 +3692,19 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
             reason_codes=['READINESS_THROTTLED_BY_VALID_ACTIVE_EXPOSURE'],
             metadata={
                 'paper_demo_only': True,
-                'candidate_shape': 'additive_entry',
-                'blocker_validity_status': 'VALID_ACTIVE_POSITION',
-                'readiness_creation_skipped': True,
+                'readiness_throttle_signal': {
+                    'market_id': market.id,
+                    'risk_decision_id': decision.id,
+                    'candidate_shape': 'additive_entry',
+                    'throttle_action': 'skip_redundant_readiness',
+                    'readiness_creation_skipped': True,
+                    'blocker_validity_status': 'VALID_ACTIVE_POSITION',
+                    'release_readiness_status': 'KEEP_BLOCKED',
+                    'dominant_reason_code': 'READINESS_THROTTLE_CANONICAL_SIGNAL_RECORDED',
+                    'source_stage': 'risk_runtime_review',
+                    'expected_route': 'execution_intake',
+                    'suppression_scope': 'same_market',
+                },
             },
         )
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
@@ -3711,7 +3730,7 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
 
         self.assertIn('route_throttled_by_valid_active_exposure=0', summary)
         self.assertIn('route_missing_unexpected_readiness=1', summary)
-        self.assertIn('PAPER_EXECUTION_ROUTE_MISSING', route_codes)
+        self.assertIn('PAPER_EXECUTION_ROUTE_MISSING_UNEXPECTED_READINESS', route_codes)
 
     def test_downstream_zero_diagnostics_explain_upstream_readiness_throttle(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
@@ -3723,9 +3742,19 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
             reason_codes=['READINESS_THROTTLED_BY_VALID_ACTIVE_EXPOSURE'],
             metadata={
                 'paper_demo_only': True,
-                'candidate_shape': 'additive_entry',
-                'blocker_validity_status': 'VALID_ACTIVE_POSITION',
-                'readiness_creation_skipped': True,
+                'readiness_throttle_signal': {
+                    'market_id': market.id,
+                    'risk_decision_id': decision.id,
+                    'candidate_shape': 'additive_entry',
+                    'throttle_action': 'skip_redundant_readiness',
+                    'readiness_creation_skipped': True,
+                    'blocker_validity_status': 'VALID_ACTIVE_POSITION',
+                    'release_readiness_status': 'KEEP_BLOCKED',
+                    'dominant_reason_code': 'READINESS_THROTTLE_CANONICAL_SIGNAL_RECORDED',
+                    'source_stage': 'risk_runtime_review',
+                    'expected_route': 'execution_intake',
+                    'suppression_scope': 'same_market',
+                },
             },
         )
         diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
@@ -3736,6 +3765,8 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(release_audit.get('diagnostic_status'), 'UPSTREAM_READINESS_THROTTLE')
         self.assertTrue(provenance.get('explains_upstream_readiness_throttle'))
         self.assertTrue(release_audit.get('explains_upstream_readiness_throttle'))
+        self.assertIn('DOWNSTREAM_ZERO_EXPLAINED_BY_CANONICAL_UPSTREAM_THROTTLE', provenance.get('dominant_exposure_reason_codes', []))
+        self.assertIn('DOWNSTREAM_ZERO_EXPLAINED_BY_CANONICAL_UPSTREAM_THROTTLE', release_audit.get('release_reason_codes', []))
 
     def test_paper_execution_visibility_created_candidate_is_counted_in_funnel(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
