@@ -67,6 +67,7 @@ button {
   flex-direction: column;
   gap: 10px;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
+  overflow-y: auto;
 }
 
 .sidebar__brand h2,
@@ -125,6 +126,8 @@ button {
   background: rgba(13, 23, 40, 0.45);
   display: grid;
   gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .sidebar__advanced summary {
@@ -153,6 +156,12 @@ button {
   font-size: 0.78rem;
 }
 
+.sidebar__advanced .sidebar__nav {
+  overflow-y: auto;
+  max-height: min(44vh, 420px);
+  padding-right: 2px;
+}
+
 .nav-item {
   display: flex;
   align-items: center;
@@ -178,8 +187,7 @@ button {
 
 .sidebar__footer {
   margin-top: auto;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 6px;
 }
 
@@ -193,8 +201,34 @@ button {
   font-size: 0.82rem;
 }
 
+.sidebar__version {
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  margin-top: 4px;
+  padding-top: 8px;
+  display: grid;
+  gap: 2px;
+}
+
+.sidebar__version p,
+.sidebar__version strong {
+  margin: 0;
+}
+
+.sidebar__version p {
+  color: rgba(243, 247, 255, 0.7);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sidebar__version strong {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
 .app-shell__main {
-  padding: 16px;
+  padding: 12px 16px 16px;
 }
 
 .topbar,
@@ -251,11 +285,11 @@ button {
 .app-shell__content,
 .page-stack {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .page-header {
-  padding: 10px 12px;
+  padding: 8px 10px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;

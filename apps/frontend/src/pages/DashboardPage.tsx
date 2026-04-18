@@ -206,7 +206,6 @@ export function DashboardPage() {
   return (
     <div className="page-stack dashboard-page executive-dashboard-page">
       <PageHeader
-        eyebrow="Vista principal"
         title={`${PROJECT_NAME} · Dashboard`}
         actions={(
           <div className="button-row">
