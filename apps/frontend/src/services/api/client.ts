@@ -1,5 +1,15 @@
 import { API_BASE_URL } from '../../lib/config';
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 function extractErrorMessage(value: unknown): string | null {
   if (typeof value === 'string') {
     return value.trim() || null;
@@ -62,7 +72,7 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
   });
 
   if (!response.ok) {
-    throw new Error(await getResponseErrorMessage(response));
+    throw new ApiError(response.status, await getResponseErrorMessage(response));
   }
 
   return (await response.json()) as T;
