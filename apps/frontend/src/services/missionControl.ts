@@ -181,9 +181,26 @@ export function runLivePaperSmokeTest(payload: LivePaperSmokeTestRequest = {}) {
   });
 }
 
-async function requestOptionalStatusJson<T>(path: string): Promise<T | null> {
+type OptionalStatusContract = {
+  exists?: boolean;
+  status?: string | null;
+};
+
+function isEmptyOptionalStatusPayload(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') {
+    return false;
+  }
+  const optionalPayload = payload as OptionalStatusContract;
+  return optionalPayload.exists === false || String(optionalPayload.status ?? '').toUpperCase() === 'NO_RUN_YET';
+}
+
+async function requestOptionalStatusJson<T extends OptionalStatusContract>(path: string): Promise<T | null> {
   try {
-    return await requestJson<T>(path);
+    const payload = await requestJson<T>(path);
+    if (isEmptyOptionalStatusPayload(payload)) {
+      return null;
+    }
+    return payload;
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       return null;

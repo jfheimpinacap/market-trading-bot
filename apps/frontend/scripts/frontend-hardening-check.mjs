@@ -4,18 +4,29 @@ import process from 'node:process';
 async function main() {
   const cockpit = await readFile(new URL('../src/pages/CockpitPage.tsx', import.meta.url), 'utf8');
   const helper = await readFile(new URL('../src/lib/missionControlStatus.ts', import.meta.url), 'utf8');
+  const service = await readFile(new URL('../src/services/missionControl.ts', import.meta.url), 'utf8');
   const css = await readFile(new URL('../src/styles/global.css', import.meta.url), 'utf8');
 
   const checks = [
     {
-      id: 'trial-404-empty-state',
-      ok: cockpit.includes("expected404Message: 'No trial run yet'"),
-      fail: 'Missing 404->"No trial run yet" mapping for live-paper-trial-status.',
+      id: 'optional-status-200-empty-state-contract',
+      ok: service.includes("NO_RUN_YET") && service.includes('isEmptyOptionalStatusPayload'),
+      fail: 'Missing 200/empty-state contract handler for optional status consumers.',
     },
     {
-      id: 'smoke-404-empty-state',
-      ok: cockpit.includes("expected404Message: 'No smoke test result yet'"),
-      fail: 'Missing 404->"No smoke test result yet" mapping for live-paper-smoke-test-status.',
+      id: 'cockpit-trial-empty-state-copy',
+      ok: cockpit.includes('No trial run yet'),
+      fail: 'Missing cockpit trial empty-state copy.',
+    },
+    {
+      id: 'cockpit-smoke-empty-state-copy',
+      ok: cockpit.includes('No smoke test result yet'),
+      fail: 'Missing cockpit smoke empty-state copy.',
+    },
+    {
+      id: 'cockpit-extended-empty-state-copy',
+      ok: cockpit.includes('No extended run yet'),
+      fail: 'Missing cockpit extended-run empty-state copy.',
     },
     {
       id: '500-network-unavailable-state',

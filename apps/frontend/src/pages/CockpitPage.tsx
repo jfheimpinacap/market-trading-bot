@@ -359,6 +359,7 @@ export function CockpitPage() {
   const [extendedRunGate, setExtendedRunGate] = useState<LivePaperExtendedRunGateResponse | null>(null);
   const [extendedPaperRunStatusLoading, setExtendedPaperRunStatusLoading] = useState(true);
   const [extendedPaperRunStatusError, setExtendedPaperRunStatusError] = useState<string | null>(null);
+  const [extendedPaperRunNotFound, setExtendedPaperRunNotFound] = useState(false);
   const [extendedPaperRunStatus, setExtendedPaperRunStatus] = useState<ExtendedPaperRunStatusResponse | null>(null);
   const [extendedPaperRunStartLoading, setExtendedPaperRunStartLoading] = useState(false);
   const [extendedPaperRunStartError, setExtendedPaperRunStartError] = useState<string | null>(null);
@@ -406,8 +407,12 @@ export function CockpitPage() {
   const extendedPaperRunPrimaryTone = extendedPaperRunLaunch?.launch_status
     ? toneFromExtendedRunLaunchStatus(extendedPaperRunLaunch.launch_status)
     : toneFromExtendedGateStatus(extendedPaperRunStatus?.gate_status ?? extendedRunGate?.gate_status);
-  const extendedPaperRunSummary = extendedPaperRunLaunch?.launch_summary ?? extendedPaperRunStatus?.status_summary ?? 'No extended run launch yet.';
-  const extendedPaperRunHint = extendedPaperRunLaunch?.next_action_hint ?? extendedPaperRunStatus?.next_action_hint ?? 'Refresh status to get latest hint.';
+  const extendedPaperRunSummary = extendedPaperRunLaunch?.launch_summary
+    ?? extendedPaperRunStatus?.status_summary
+    ?? (extendedPaperRunNotFound ? 'No extended run yet.' : 'No extended run launch yet.');
+  const extendedPaperRunHint = extendedPaperRunLaunch?.next_action_hint
+    ?? extendedPaperRunStatus?.next_action_hint
+    ?? (extendedPaperRunNotFound ? 'Start extended run to generate status.' : 'Refresh status to get latest hint.');
   const testConsoleScanSummary = typeof testConsoleStatus?.scan_summary === 'string'
     ? testConsoleStatus.scan_summary
     : testConsoleStatus?.scan_summary?.summary ?? 'n/a';
@@ -807,12 +812,15 @@ export function CockpitPage() {
     try {
       const payload = await getExtendedPaperRunStatus({ preset: 'live_read_only_paper_conservative' });
       if (!payload) {
+        setExtendedPaperRunNotFound(true);
         setExtendedPaperRunStatus(null);
         return null;
       }
+      setExtendedPaperRunNotFound(false);
       setExtendedPaperRunStatus(payload);
       return payload;
     } catch (statusError) {
+      setExtendedPaperRunNotFound(false);
       setExtendedPaperRunStatus(null);
       setExtendedPaperRunStatusError(getErrorMessage(statusError, 'Extended paper run status unavailable.'));
       return null;
@@ -826,6 +834,7 @@ export function CockpitPage() {
     setExtendedPaperRunStartError(null);
     try {
       const payload = await startExtendedPaperRun({ preset: 'live_read_only_paper_conservative' });
+      setExtendedPaperRunNotFound(false);
       setExtendedPaperRunLaunch(payload);
       await Promise.all([
         loadExtendedPaperRunStatus(),
@@ -1726,6 +1735,7 @@ export function CockpitPage() {
                     </StatusBadge>
                   </div>
                   {extendedPaperRunStatusLoading ? <p>Loading extended paper run status…</p> : null}
+                  {!extendedPaperRunStatusLoading && extendedPaperRunNotFound ? <p className="muted-text">No extended run yet.</p> : null}
                   {!extendedPaperRunStatusLoading && extendedPaperRunStatusError ? <p className="warning-text">{extendedPaperRunStatusError}</p> : null}
                   <ul className="key-value-list">
                     <li><span>Launch summary</span><strong>{extendedPaperRunSummary}</strong></li>

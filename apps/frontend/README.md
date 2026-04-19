@@ -10,8 +10,8 @@ Se cerró el hardening global para endpoints opcionales de status compartido en 
 - `GET /api/mission-control/live-paper-smoke-test-status/`
 - `GET /api/mission-control/extended-paper-run-status/`
 
-Regla aplicada de forma uniforme en el cliente: **404 esperado = empty-state no fatal**.  
-Esto evita contaminar loaders/estado compartido cuando no hay corrida previa y mantiene estables vistas como Dashboard, Markets y Portfolio aunque esos status opcionales no existan todavía.
+Regla aplicada de forma uniforme en el cliente: **200 con `exists=false` / `status=NO_RUN_YET` = empty-state no fatal** (con compatibilidad legacy para 404 esperado).  
+Esto evita contaminar loaders/estado compartido cuando no hay corrida previa y mantiene estables vistas como Dashboard, Markets, Portfolio y Cockpit aunque esos status opcionales no existan todavía.
 
 ## Cockpit Live Paper Trial Run UX (new)
 
@@ -25,7 +25,7 @@ La vista `/cockpit` ahora incluye una card compacta **Live Paper Trial Run** par
   - `GET /api/mission-control/live-paper-trial-status/`
 - comportamiento:
   - al abrir cockpit hace `GET` de status
-  - si backend responde 404 (sin corrida previa), muestra `No trial run yet`
+  - si backend responde empty-state opcional (sin corrida previa), muestra `No trial run yet`
   - `Run trial` usa directamente el payload del `POST` como resultado fuente de verdad
   - `Refresh trial status` hace solo `GET` status (sin encadenar bootstrap/smoke/validation desde UI)
 - salida compacta de card:
@@ -135,6 +135,7 @@ Esta card complementa cards existentes (no las reemplaza) y mantiene alcance est
   - auto-carga de status al abrir cockpit
   - botón `Start extended run` para lanzar/reusar
   - botón `Refresh extended status` para reconsultar estado
+  - empty-state opcional (`exists=false` / `status=NO_RUN_YET`): muestra `No extended run yet` sin marcar error
   - refresh automático de status/gate tras lanzar
 - salida compacta:
   - badge principal con `launch_status` o fallback a `gate_status`
