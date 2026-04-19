@@ -48,24 +48,24 @@ const formatTimestamp = (value: string | null | undefined) => {
 
 const statusTone = (status: string | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
   const normalized = (status ?? '').toUpperCase();
-  if (['ACTIVE', 'READY', 'RUNNING', 'PASS', 'ALLOW', 'NORMAL', 'NO_ACTION'].includes(normalized)) return 'ready';
-  if (['PAUSED', 'WARNING', 'WARN', 'ALLOW_WITH_CAUTION', 'REVIEW_SOON', 'MONITOR_ONLY', 'CAUTION'].includes(normalized)) return 'pending';
+  if (['ACTIVE', 'READY', 'RUNNING', 'PASS', 'ALLOW', 'NORMAL', 'NO_ACTION', 'HEALTHY'].includes(normalized)) return 'ready';
+  if (['PAUSED', 'WARNING', 'WARN', 'ALLOW_WITH_CAUTION', 'REVIEW_SOON', 'MONITOR_ONLY', 'CAUTION', 'DEGRADED'].includes(normalized)) return 'pending';
   if (['STOPPED', 'BLOCKED', 'FAIL', 'BLOCK', 'REVIEW_NOW'].includes(normalized)) return 'offline';
   return 'neutral';
 };
 
 const getExecutivePhrase = (status: TestConsoleStatusResponse | null) => {
-  if (!status) return 'Sin datos operativos recientes. Revisar consola avanzada.';
+  if (!status) return 'Sin snapshot operativo reciente';
   if (status.gate_status === 'BLOCK' || status.validation_status === 'BLOCKED') {
-    return 'En revisión: hay bloqueos que requieren atención antes de continuar.';
+    return 'Bloqueado: requiere revisión';
   }
   if (status.attention_mode === 'REVIEW_NOW' || status.attention_mode === 'REVIEW_SOON') {
-    return 'Operando con cautela: se recomienda revisión manual.';
+    return 'Cautela: revisión sugerida';
   }
   if (status.test_status?.toUpperCase() === 'RUNNING') {
-    return 'Funcionando normal: monitoreo activo en curso.';
+    return 'Operativo: monitoreo activo';
   }
-  return 'Funcionando estable en modo paper con supervisión.';
+  return 'Operativo estable';
 };
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -83,7 +83,7 @@ function MiniTrendChart({
 }) {
   const usable = points.filter((point): point is { xLabel: string; value: number } => point.value !== null);
   if (usable.length < 2) {
-    return <p className="muted-text">Sin historial suficiente para ver la tendencia de {label.toLowerCase()} todavía.</p>;
+    return <p className="muted-text">Sin historial para {label.toLowerCase()}.</p>;
   }
 
   const min = Math.min(...usable.map((point) => point.value));
@@ -160,7 +160,7 @@ export function DashboardPage() {
         try {
           const snapshot = await getCockpitSummary();
           const response = getCockpitAttention(snapshot);
-          setAttentionItems(response.slice(0, 4));
+          setAttentionItems(response.slice(0, 3));
         } catch (error) {
           setAttentionItems([]);
           setAttentionError(getErrorMessage(error, 'No se pudieron cargar alertas priorizadas.'));
@@ -178,14 +178,26 @@ export function DashboardPage() {
   const executiveTone = statusTone(testConsoleStatus?.validation_status ?? health.backendStatus);
   const llmHint = testConsoleStatus?.llm_aux_signal_summary ?? null;
 
+  const quickState = useMemo(
+    () => [
+      { label: 'Bot', value: testConsoleStatus?.test_status ?? 'Sin dato', tone: statusTone(testConsoleStatus?.test_status) },
+      { label: 'Funnel', value: testConsoleStatus?.funnel_status ?? 'Sin dato', tone: statusTone(testConsoleStatus?.funnel_status) },
+      { label: 'Validation', value: testConsoleStatus?.validation_status ?? 'Sin dato', tone: statusTone(testConsoleStatus?.validation_status) },
+      { label: 'Gate', value: testConsoleStatus?.gate_status ?? 'Sin dato', tone: statusTone(testConsoleStatus?.gate_status) },
+      { label: 'Trial', value: testConsoleStatus?.trial_status ?? 'Sin dato', tone: statusTone(testConsoleStatus?.trial_status) },
+      { label: 'Attention', value: testConsoleStatus?.attention_mode ?? 'Sin dato', tone: statusTone(testConsoleStatus?.attention_mode) },
+    ],
+    [testConsoleStatus],
+  );
+
   const kpis = useMemo(
     () => [
-      { label: 'Capital total', value: formatMoney(paperSummary?.account.equity) },
-      { label: 'Saldo disponible', value: formatMoney(paperSummary?.account.cash_balance) },
-      { label: 'Resultado no realizado', value: formatSignedMoney(paperSummary?.account.unrealized_pnl) },
-      { label: 'Resultado realizado', value: formatSignedMoney(paperSummary?.account.realized_pnl) },
-      { label: 'Posiciones abiertas', value: String(paperSummary?.open_positions_count ?? 0) },
-      { label: 'Operaciones recientes', value: String(paperSummary?.recent_trades.length ?? 0) },
+      { label: 'Capital', value: formatMoney(paperSummary?.account.equity) },
+      { label: 'Cash', value: formatMoney(paperSummary?.account.cash_balance) },
+      { label: 'PnL U', value: formatSignedMoney(paperSummary?.account.unrealized_pnl) },
+      { label: 'PnL R', value: formatSignedMoney(paperSummary?.account.realized_pnl) },
+      { label: 'Posiciones', value: String(paperSummary?.open_positions_count ?? 0) },
+      { label: 'Trades', value: String(paperSummary?.recent_trades.length ?? 0) },
     ],
     [paperSummary],
   );
@@ -202,6 +214,7 @@ export function DashboardPage() {
 
   const latestTrade = paperSummary?.recent_trades[0] ?? null;
   const hasCriticalAttention = attentionItems.some((item) => item.severity === 'CRITICAL' || item.severity === 'HIGH');
+  const exposureBlock = testConsoleStatus?.blocker_summary ?? (testConsoleStatus?.gate_status === 'BLOCK' ? 'Gate bloqueado' : 'Sin bloqueo dominante');
 
   return (
     <div className="page-stack dashboard-page executive-dashboard-page">
@@ -215,53 +228,73 @@ export function DashboardPage() {
         )}
       />
 
+      <section className="dashboard-quick-strip" aria-label="Estado rápido">
+        {quickState.map((item) => (
+          <article key={item.label} className="dashboard-quick-pill" title={`${item.label}: ${item.value}`}>
+            <span>{item.label}</span>
+            <StatusBadge tone={item.tone}>{item.value}</StatusBadge>
+          </article>
+        ))}
+      </section>
+
       <section className="content-grid content-grid--two-columns">
-        <SectionCard
-          eyebrow="Estado general"
-          title="Salud operativa del bot"
-        >
+        <SectionCard eyebrow="Operator-first" title="Resumen de operación actual" aside={<StatusBadge tone={hasCriticalAttention ? 'offline' : 'ready'}>{hasCriticalAttention ? 'Review requerida' : 'Sin crítico'}</StatusBadge>}>
           <DataStateWrapper
             isLoading={statusLoading}
             isError={Boolean(statusError)}
             errorMessage={statusError ?? undefined}
             loadingTitle="Cargando estado operativo"
-            loadingDescription="Consultando estado consolidado del test console."
+            loadingDescription="Consolidando status del test console."
             errorTitle="No se pudo cargar el estado operativo"
           >
-            <dl className="dashboard-key-value-list">
-              <div><dt>Estado del bot</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.test_status)}>{testConsoleStatus?.test_status ?? 'Sin dato'}</StatusBadge></dd></div>
-              <div><dt>Validación</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.validation_status)}>{testConsoleStatus?.validation_status ?? 'Sin dato'}</StatusBadge></dd></div>
-              <div><dt>Permiso operativo</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.gate_status)}>{testConsoleStatus?.gate_status ?? 'Sin dato'}</StatusBadge></dd></div>
-              <div><dt>Nivel de atención</dt><dd><StatusBadge tone={statusTone(testConsoleStatus?.attention_mode)}>{testConsoleStatus?.attention_mode ?? 'Sin dato'}</StatusBadge></dd></div>
+            <dl className="dashboard-key-value-list dashboard-key-value-list--compact">
+              <div><dt>Última señal útil</dt><dd>{getLlmHintText(llmHint)}</dd></div>
+              <div><dt>Último evento</dt><dd>{testConsoleStatus?.last_event ?? 'n/a'}</dd></div>
+              <div><dt>Exposición activa</dt><dd>{paperSummary?.open_positions_count ?? 0} abiertas</dd></div>
+              <div><dt>Bloqueo relevante</dt><dd>{exposureBlock}</dd></div>
+              <div><dt>Último trade</dt><dd>{latestTrade ? `${latestTrade.side} ${latestTrade.market__title}` : 'Sin trades'}</dd></div>
+              <div><dt>Hora último trade</dt><dd>{latestTrade ? formatTimestamp(latestTrade.executed_at) : 'n/a'}</dd></div>
             </dl>
             <details className="dashboard-secondary-details">
-              <summary>Ver detalle operativo</summary>
-              <dl className="dashboard-key-value-list dashboard-key-value-list--secondary">
-                <div><dt>Flujo operativo</dt><dd>{testConsoleStatus?.funnel_status ?? 'Sin dato'}</dd></div>
-                <div><dt>Última actualización</dt><dd>{formatTimestamp(testConsoleStatus?.updated_at ?? testConsoleStatus?.started_at)}</dd></div>
-              </dl>
+              <summary>Contexto adicional</summary>
+              <p className="muted-text">{testConsoleStatus?.next_action_hint ?? 'Sin recomendaciones inmediatas.'}</p>
+              {testConsoleStatus?.last_reason_code ? <p className="muted-text">Código: {testConsoleStatus.last_reason_code}</p> : null}
             </details>
           </DataStateWrapper>
         </SectionCard>
 
         <SectionCard
-          eyebrow="Navegación"
-          title="Detalle técnico"
-          description="La complejidad diagnóstica permanece en la vista avanzada."
-          aside={<StatusBadge tone="neutral">Modo operador</StatusBadge>}
+          eyebrow="Attention"
+          title="Warnings y foco de revisión"
+          aside={<StatusBadge tone={statusTone(testConsoleStatus?.attention_mode)}>{testConsoleStatus?.attention_mode ?? 'Sin dato'}</StatusBadge>}
         >
-          <ul className="bullet-list compact-list">
-            <li>Cockpit (advanced): funnel, bloques técnicos, diagnósticos LLM y export detallado.</li>
-            <li>Mission Control: trial, gate y controles operativos.</li>
-            <li>Runtime / Trace: investigación profunda y auditoría de decisiones.</li>
-          </ul>
-          <div className="button-row">
-            <button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Ir a vista avanzada</button>
-          </div>
+          <DataStateWrapper
+            isLoading={attentionLoading}
+            isError={Boolean(attentionError)}
+            errorMessage={attentionError ?? undefined}
+            loadingTitle="Cargando alertas"
+            loadingDescription="Consultando prioridades actuales."
+            errorTitle="No se pudieron cargar alertas"
+          >
+            <ul className="bullet-list compact-list">
+              {attentionItems.length === 0 ? <li>Sin items prioritarios.</li> : null}
+              {attentionItems.map((item) => (
+                <li key={item.id}>
+                  <strong>{item.severity}:</strong> {item.title}
+                </li>
+              ))}
+            </ul>
+            <details className="dashboard-secondary-details">
+              <summary>Resumen auxiliar</summary>
+              <div className="executive-llm-hint">
+                {llmHint?.aux_signal_status ? `(${llmHint.aux_signal_status})` : '(sin señal)'} {getLlmHintText(llmHint)}
+              </div>
+            </details>
+          </DataStateWrapper>
         </SectionCard>
       </section>
 
-      <SectionCard eyebrow="Resumen financiero" title="Capital y resultado" description="Métricas clave para saber si el bot gana, pierde o se mantiene estable.">
+      <SectionCard eyebrow="KPIs" title="Fila compacta de capital" description="Visión rápida; detalle técnico plegado.">
         <DataStateWrapper
           isLoading={paperLoading}
           isError={Boolean(paperError)}
@@ -270,108 +303,42 @@ export function DashboardPage() {
           loadingDescription="Consultando summary de portafolio paper."
           errorTitle="No se pudieron cargar los KPIs"
         >
-          <div className="dashboard-stat-grid">
+          <div className="dashboard-stat-grid dashboard-stat-grid--compact">
             {kpis.map((kpi) => (
-              <article key={kpi.label} className="dashboard-stat-card">
+              <article key={kpi.label} className="dashboard-stat-card dashboard-stat-card--tight" title={kpi.label}>
                 <span>{kpi.label}</span>
                 <strong>{kpi.value}</strong>
               </article>
             ))}
           </div>
+          <details className="dashboard-secondary-details">
+            <summary>Ver detalle financiero</summary>
+            <div className="content-grid content-grid--two-columns dashboard-trend-grid">
+              <MiniTrendChart points={equityPoints} label="Equity" color="#5e9dff" />
+              <MiniTrendChart points={pnlPoints} label="Total PnL" color="#35c58a" />
+            </div>
+          </details>
         </DataStateWrapper>
       </SectionCard>
 
-      <section className="content-grid content-grid--two-columns">
-        <SectionCard eyebrow="Tendencia" title="Capital reciente">
-          <DataStateWrapper
-            isLoading={paperLoading}
-            isError={Boolean(paperError)}
-            errorMessage={paperError ?? undefined}
-            loadingTitle="Cargando tendencia"
-            loadingDescription="Preparando serie de snapshots de equity."
-            errorTitle="No se pudo mostrar la tendencia"
-          >
-            <MiniTrendChart points={equityPoints} label="Equity" color="#5e9dff" />
-          </DataStateWrapper>
-        </SectionCard>
-
-        <SectionCard eyebrow="Tendencia" title="Ganancia/Pérdida reciente">
-          <DataStateWrapper
-            isLoading={paperLoading}
-            isError={Boolean(paperError)}
-            errorMessage={paperError ?? undefined}
-            loadingTitle="Cargando tendencia"
-            loadingDescription="Preparando serie de snapshots de PnL."
-            errorTitle="No se pudo mostrar la tendencia"
-          >
-            <MiniTrendChart points={pnlPoints} label="Total PnL" color="#35c58a" />
-          </DataStateWrapper>
-        </SectionCard>
-      </section>
-
-      <section className="content-grid content-grid--two-columns">
-        <SectionCard eyebrow="Actividad reciente" title="Qué hizo el bot" description="Última acción relevante y último trade ejecutado.">
-          <DataStateWrapper
-            isLoading={paperLoading || statusLoading}
-            isError={Boolean(paperError) || Boolean(statusError)}
-            errorMessage={paperError ?? statusError ?? undefined}
-            loadingTitle="Cargando actividad"
-            loadingDescription="Unificando últimos eventos operativos y trades recientes."
-            errorTitle="No se pudo cargar actividad reciente"
-          >
-            <dl className="dashboard-key-value-list">
-              <div><dt>Último evento operativo</dt><dd>{testConsoleStatus?.last_event ?? 'n/a'}</dd></div>
-              <div><dt>Última acción de mercado</dt><dd>{latestTrade ? `${latestTrade.trade_type} ${latestTrade.side} · ${latestTrade.market__title}` : 'Sin trades recientes'}</dd></div>
-              <div><dt>Hora último trade</dt><dd>{latestTrade ? formatTimestamp(latestTrade.executed_at) : 'n/a'}</dd></div>
-              <div><dt>Resumen corto</dt><dd>{testConsoleStatus?.next_action_hint ?? 'Sin acciones sugeridas por ahora.'}</dd></div>
-            </dl>
-            {testConsoleStatus?.last_reason_code ? (
-              <details className="dashboard-secondary-details">
-                <summary>Ver motivo técnico</summary>
-                <p className="muted-text">{testConsoleStatus.last_reason_code}</p>
-              </details>
-            ) : null}
-          </DataStateWrapper>
-        </SectionCard>
-
-        <SectionCard
-          eyebrow="Alertas y revisión"
-          title="Atención prioritaria"
-          description="Solo señales de revisión importantes y un hint auxiliar LLM resumido."
-          aside={<StatusBadge tone={hasCriticalAttention ? 'offline' : 'ready'}>{hasCriticalAttention ? 'Revisión requerida' : 'Sin alertas críticas'}</StatusBadge>}
-        >
-          <DataStateWrapper
-            isLoading={attentionLoading}
-            isError={Boolean(attentionError)}
-            errorMessage={attentionError ?? undefined}
-            loadingTitle="Cargando alertas"
-            loadingDescription="Consultando elementos de atención priorizada del cockpit."
-            errorTitle="No se pudieron cargar alertas"
-          >
-            <ul className="bullet-list compact-list">
-              {attentionItems.length === 0 ? <li>Sin items prioritarios en este momento.</li> : null}
-              {attentionItems.map((item) => (
-                <li key={item.id}>
-                  <strong>{item.severity}:</strong> {item.title} — {item.summary}
-                </li>
-              ))}
-            </ul>
-            <details className="dashboard-secondary-details">
-              <summary>Hint auxiliar LLM</summary>
-              <div className="executive-llm-hint">
-                {llmHint?.aux_signal_status ? `(${llmHint.aux_signal_status})` : '(sin señal)'} {getLlmHintText(llmHint)}
-              </div>
-            </details>
-          </DataStateWrapper>
-        </SectionCard>
-      </section>
+      <details className="dashboard-secondary-details dashboard-routing-details">
+        <summary>Ir a detalle técnico (avanzado)</summary>
+        <ul className="bullet-list compact-list">
+          <li>Cockpit: funnel, bloqueos técnicos, diagnósticos y trazas.</li>
+          <li>Mission Control: trial/gate y controles operativos.</li>
+          <li>Runtime/Trace: investigación profunda y auditoría.</li>
+        </ul>
+        <div className="button-row">
+          <button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Abrir vista avanzada</button>
+        </div>
+      </details>
     </div>
   );
 }
 
 function getLlmHintText(summary: LlmAuxSignalSummary | null) {
-  if (!summary?.enabled) return 'sin alerta auxiliar.';
-  if (summary.aux_signal_recommendation) return summary.aux_signal_recommendation.toLowerCase();
+  if (!summary?.enabled) return 'Sin alerta auxiliar';
+  if (summary.aux_signal_recommendation) return summary.aux_signal_recommendation;
   if (summary.summary) return summary.summary;
-  return 'señal auxiliar disponible en vista avanzada.';
+  return 'Señal auxiliar disponible en vista avanzada';
 }
