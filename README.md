@@ -3774,3 +3774,9 @@ Qué **no** valida:
 - Se corrigió el fanout operativo de Mission Control para que `risk_decisions` y rutas de execution cuenten solo artefactos elegibles del **current window + current lineage**.
 - **No hay cambios de policy**.
 - **No se elimina historial de auditoría**: los artefactos históricos/out-of-scope siguen visibles en diagnóstico, pero dejan de inflar fanout operativo actual.
+
+## Test Console backend-only test profiles
+
+`apps/backend` now supports backend-only Test Console profiles to run targeted diagnostics faster without policy or trading-logic changes. Use `profile_id` on `POST /api/mission-control/test-console/start/`; default remains `full_e2e`.
+
+Export/status include `test_profile`, `modules_included`, `modules_omitted`, and `run_scope` (`fresh_full_run` vs `targeted_diagnostic_run`).

@@ -531,6 +531,17 @@ class ExtendedPaperRunGateSerializer(serializers.Serializer):
 
 class TestConsoleStartRequestSerializer(serializers.Serializer):
     preset = serializers.CharField(required=False, allow_blank=True, default='live_read_only_paper_conservative')
+    profile_id = serializers.ChoiceField(
+        required=False,
+        choices=[
+            'full_e2e',
+            'scope_throttle_diagnostics',
+            'prediction_risk_path',
+            'exposure_diagnostics',
+            'export_snapshot_integrity',
+        ],
+        default='full_e2e',
+    )
 
 
 class TestConsoleStopRequestSerializer(serializers.Serializer):
@@ -539,6 +550,11 @@ class TestConsoleStopRequestSerializer(serializers.Serializer):
 
 class TestConsoleStatusSerializer(serializers.Serializer):
     test_status = serializers.ChoiceField(choices=['IDLE', 'RUNNING', 'STOPPED', 'COMPLETED', 'COMPLETED_WITH_WARNINGS', 'BLOCKED', 'FAILED'])
+    test_profile = serializers.CharField(required=False)
+    available_test_profiles = serializers.DictField(required=False)
+    modules_included = serializers.ListField(child=serializers.CharField(), required=False)
+    modules_omitted = serializers.ListField(child=serializers.CharField(), required=False)
+    run_scope = serializers.CharField(required=False)
     current_phase = serializers.CharField(required=False, allow_null=True)
     started_at = serializers.DateTimeField(required=False, allow_null=True)
     ended_at = serializers.DateTimeField(required=False, allow_null=True)

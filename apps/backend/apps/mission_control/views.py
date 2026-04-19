@@ -618,7 +618,10 @@ class StartTestConsoleView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = TestConsoleStartRequestSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        payload = start_test_console(preset_name=serializer.validated_data.get('preset'))
+        payload = start_test_console(
+            preset_name=serializer.validated_data.get('preset'),
+            profile_id=serializer.validated_data.get('profile_id'),
+        )
         return Response(TestConsoleStatusSerializer(payload).data, status=status.HTTP_200_OK)
 
 
