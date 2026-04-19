@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 import webbrowser
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Sequence
 
 
@@ -216,7 +216,15 @@ def subprocess_env(extra: dict[str, str] | None = None) -> dict[str, str]:
 def windows_no_window_kwargs() -> dict[str, Any]:
     if os.name != 'nt':
         return {}
-    return {'creationflags': subprocess.CREATE_NO_WINDOW}
+    kwargs: dict[str, Any] = {'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0)}
+    startupinfo_factory = getattr(subprocess, 'STARTUPINFO', None)
+    startf_use_showwindow = getattr(subprocess, 'STARTF_USESHOWWINDOW', 0)
+    if startupinfo_factory is not None:
+        startupinfo = startupinfo_factory()
+        startupinfo.dwFlags |= startf_use_showwindow
+        startupinfo.wShowWindow = 0
+        kwargs['startupinfo'] = startupinfo
+    return kwargs
 
 
 def run_command(
@@ -1152,13 +1160,33 @@ def detached_process_kwargs(log_file: Path) -> dict[str, Any]:
     }
     if os.name == 'nt':
         kwargs['creationflags'] = (
-            subprocess.CREATE_NEW_PROCESS_GROUP
-            | subprocess.DETACHED_PROCESS
-            | subprocess.CREATE_NO_WINDOW
+            getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+            | getattr(subprocess, 'DETACHED_PROCESS', 0)
+            | getattr(subprocess, 'CREATE_NO_WINDOW', 0)
         )
+        startupinfo_factory = getattr(subprocess, 'STARTUPINFO', None)
+        startf_use_showwindow = getattr(subprocess, 'STARTF_USESHOWWINDOW', 0)
+        if startupinfo_factory is not None:
+            startupinfo = startupinfo_factory()
+            startupinfo.dwFlags |= startf_use_showwindow
+            startupinfo.wShowWindow = 0
+            kwargs['startupinfo'] = startupinfo
     else:
         kwargs['start_new_session'] = True
     return kwargs
+
+
+def resolve_windows_npm_cli(npm_command: str | None = None) -> str | None:
+    if os.name != 'nt':
+        return None
+    resolved_npm = npm_command or npm_exec()
+    npm_path = PureWindowsPath(resolved_npm)
+    if npm_path.suffix.lower() != '.cmd':
+        return None
+    npm_cli = str(npm_path.parent / 'node_modules' / 'npm' / 'bin' / 'npm-cli.js')
+    if os.path.exists(npm_cli):
+        return npm_cli
+    return None
 
 
 def spawn_process(label: str, command: Sequence[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.Popen[str]:
@@ -1315,7 +1343,11 @@ def backend_run_command(paths: ProjectPaths) -> list[str]:
 
 
 def frontend_run_command() -> list[str]:
-    return [npm_exec(), 'run', 'dev', '--', '--host', '0.0.0.0', '--port', str(DEFAULT_PORTS['frontend'])]
+    frontend_args = ['run', 'dev', '--', '--host', '0.0.0.0', '--port', str(DEFAULT_PORTS['frontend'])]
+    npm_cli = resolve_windows_npm_cli()
+    if npm_cli is not None:
+        return [node_exec(), npm_cli, *frontend_args]
+    return [npm_exec(), *frontend_args]
 
 
 def build_dev_process_specs(
