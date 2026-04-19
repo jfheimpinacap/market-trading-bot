@@ -194,15 +194,19 @@ class ExtendedPaperRunLaunchSerializer(serializers.Serializer):
 
 
 class ExtendedPaperRunStatusSerializer(serializers.Serializer):
+    exists = serializers.BooleanField(required=False)
+    status = serializers.CharField(required=False)
+    summary = serializers.CharField(required=False)
+    reason_code = serializers.CharField(required=False)
     preset_name = serializers.CharField()
-    extended_run_active = serializers.BooleanField()
-    gate_status = serializers.ChoiceField(choices=['ALLOW', 'ALLOW_WITH_CAUTION', 'BLOCK'])
-    session_active = serializers.BooleanField()
-    heartbeat_active = serializers.BooleanField()
-    current_session_status = serializers.CharField()
+    extended_run_active = serializers.BooleanField(required=False)
+    gate_status = serializers.ChoiceField(choices=['ALLOW', 'ALLOW_WITH_CAUTION', 'BLOCK'], required=False)
+    session_active = serializers.BooleanField(required=False)
+    heartbeat_active = serializers.BooleanField(required=False)
+    current_session_status = serializers.CharField(required=False)
     caution_mode = serializers.BooleanField(required=False, allow_null=True)
-    status_summary = serializers.CharField()
-    next_action_hint = serializers.CharField()
+    status_summary = serializers.CharField(required=False)
+    next_action_hint = serializers.CharField(required=False)
 
 
 class LivePaperAttentionAlertSyncSerializer(serializers.Serializer):
@@ -277,13 +281,17 @@ class LivePaperSmokeTestResultSerializer(serializers.Serializer):
 
 
 class LivePaperSmokeTestStatusSerializer(serializers.Serializer):
-    preset_name = serializers.CharField()
-    smoke_test_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])
-    executed_at = serializers.DateTimeField()
-    validation_status_after = serializers.ChoiceField(choices=['READY', 'WARNING', 'BLOCKED'])
-    heartbeat_passes_completed = serializers.IntegerField()
-    smoke_test_summary = serializers.CharField()
-    next_action_hint = serializers.CharField()
+    exists = serializers.BooleanField(required=False)
+    status = serializers.CharField(required=False)
+    summary = serializers.CharField(required=False)
+    reason_code = serializers.CharField(required=False)
+    preset_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    smoke_test_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'], required=False, allow_null=True)
+    executed_at = serializers.DateTimeField(required=False, allow_null=True)
+    validation_status_after = serializers.ChoiceField(choices=['READY', 'WARNING', 'BLOCKED'], required=False, allow_null=True)
+    heartbeat_passes_completed = serializers.IntegerField(required=False, allow_null=True)
+    smoke_test_summary = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    next_action_hint = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 class LivePaperValidationCheckSerializer(serializers.Serializer):
     check_name = serializers.CharField()
@@ -339,14 +347,18 @@ class LivePaperTrialRunResultSerializer(serializers.Serializer):
 
 
 class LivePaperTrialRunStatusSerializer(serializers.Serializer):
-    preset_name = serializers.CharField()
-    trial_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])
-    executed_at = serializers.DateTimeField()
-    smoke_test_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'])
-    validation_status_after = serializers.ChoiceField(choices=['READY', 'WARNING', 'BLOCKED'])
-    heartbeat_passes_completed = serializers.IntegerField()
-    trial_summary = serializers.CharField()
-    next_action_hint = serializers.CharField()
+    exists = serializers.BooleanField(required=False)
+    status = serializers.CharField(required=False)
+    summary = serializers.CharField(required=False)
+    reason_code = serializers.CharField(required=False)
+    preset_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    trial_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'], required=False, allow_null=True)
+    executed_at = serializers.DateTimeField(required=False, allow_null=True)
+    smoke_test_status = serializers.ChoiceField(choices=['PASS', 'WARN', 'FAIL'], required=False, allow_null=True)
+    validation_status_after = serializers.ChoiceField(choices=['READY', 'WARNING', 'BLOCKED'], required=False, allow_null=True)
+    heartbeat_passes_completed = serializers.IntegerField(required=False, allow_null=True)
+    trial_summary = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    next_action_hint = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
 class LivePaperTrialRunHistoryQuerySerializer(serializers.Serializer):

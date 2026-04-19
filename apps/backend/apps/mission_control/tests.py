@@ -2119,10 +2119,23 @@ class LivePaperSmokeTestApiTests(TestCase):
         self.assertEqual(status_response.status_code, 200)
         payload = status_response.json()
         required_keys = {
+            'exists', 'status', 'summary', 'reason_code',
             'preset_name', 'smoke_test_status', 'executed_at', 'validation_status_after',
             'heartbeat_passes_completed', 'smoke_test_summary', 'next_action_hint',
         }
         self.assertTrue(required_keys.issubset(payload.keys()))
+        self.assertTrue(payload['exists'])
+        self.assertEqual(payload['status'], 'AVAILABLE')
+
+    @patch('apps.mission_control.views.get_last_live_paper_smoke_test_result', return_value=None)
+    def test_get_status_without_data_returns_empty_state_contract(self, _mock_get_latest):
+        response = self.client.get(reverse('mission_control:live-paper-smoke-test-status'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload['exists'])
+        self.assertEqual(payload['status'], 'NO_RUN_YET')
+        self.assertEqual(payload['reason_code'], 'SMOKE_TEST_NOT_RUN')
+        self.assertIsNone(payload['smoke_test_status'])
 
     @patch('apps.mission_control.services.live_paper_smoke_test.build_heartbeat_summary', return_value={'latest_run': 666})
     @patch('apps.mission_control.services.live_paper_smoke_test.run_heartbeat_pass')
@@ -2333,10 +2346,30 @@ class LivePaperTrialRunApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         required = {
+            'exists', 'status', 'summary', 'reason_code',
             'preset_name', 'trial_status', 'executed_at', 'smoke_test_status',
             'validation_status_after', 'heartbeat_passes_completed', 'trial_summary', 'next_action_hint',
         }
         self.assertTrue(required.issubset(payload.keys()))
+        self.assertTrue(payload['exists'])
+        self.assertEqual(payload['status'], 'AVAILABLE')
+
+    @patch('apps.mission_control.views.get_last_live_paper_trial_run_result', return_value=None)
+    def test_get_status_without_data_returns_empty_state_contract(self, _mock_get_latest):
+        response = self.client.get(reverse('mission_control:live-paper-trial-status'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload['exists'])
+        self.assertEqual(payload['status'], 'NO_RUN_YET')
+        self.assertEqual(payload['reason_code'], 'TRIAL_RUN_NOT_RUN')
+        self.assertIsNone(payload['trial_status'])
+
+    @override_settings(DEBUG=False)
+    @patch('apps.mission_control.views.get_last_live_paper_trial_run_result', side_effect=RuntimeError('boom'))
+    def test_get_status_propagates_real_errors(self, _mock_get_latest):
+        self.client.raise_request_exception = False
+        response = self.client.get(reverse('mission_control:live-paper-trial-status'))
+        self.assertEqual(response.status_code, 500)
 
     def test_existing_mission_control_summary_flow_still_works(self):
         response = self.client.get(reverse('mission_control:autonomous-session-summary'))
@@ -7148,6 +7181,10 @@ class ExtendedPaperRunLauncherApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         expected = {
+            'exists',
+            'status',
+            'summary',
+            'reason_code',
             'preset_name',
             'extended_run_active',
             'gate_status',
@@ -7160,6 +7197,22 @@ class ExtendedPaperRunLauncherApiTests(TestCase):
         }
         self.assertTrue(expected.issubset(payload.keys()))
         self.assertTrue(payload['extended_run_active'])
+        self.assertTrue(payload['exists'])
+        self.assertEqual(payload['status'], 'AVAILABLE')
+
+    @patch('apps.mission_control.services.extended_paper_run_launcher._get_last_launch', return_value=None)
+    @patch('apps.mission_control.services.extended_paper_run_launcher.get_live_paper_bootstrap_status')
+    @patch('apps.mission_control.services.extended_paper_run_launcher.build_extended_paper_run_gate')
+    def test_status_without_launch_returns_empty_state_contract(self, mock_gate, mock_bootstrap_status, _mock_last_launch):
+        mock_gate.return_value = self._gate('ALLOW')
+        mock_bootstrap_status.return_value = self._bootstrap_status()
+
+        response = self.client.get(reverse('mission_control:extended-paper-run-status'))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload['exists'])
+        self.assertEqual(payload['status'], 'NO_RUN_YET')
+        self.assertEqual(payload['reason_code'], 'EXTENDED_RUN_NOT_STARTED')
 
     @patch('apps.mission_control.services.extended_paper_run_launcher.get_live_paper_bootstrap_status')
     @patch('apps.mission_control.services.extended_paper_run_launcher.bootstrap_live_read_only_paper_session')

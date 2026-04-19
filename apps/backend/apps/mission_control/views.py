@@ -253,6 +253,18 @@ class PlainTextRenderer(BaseRenderer):
         return str(data).encode(self.charset)
 
 
+def _build_optional_status_empty_payload(*, summary: str, reason_code: str, preset_name: str | None = None) -> dict:
+    payload = {
+        'exists': False,
+        'status': 'NO_RUN_YET',
+        'summary': summary,
+        'reason_code': reason_code,
+    }
+    if preset_name is not None:
+        payload['preset_name'] = preset_name
+    return payload
+
+
 class MissionControlStatusView(APIView):
     def get(self, request, *args, **kwargs):
         return Response(status_snapshot(), status=status.HTTP_200_OK)
@@ -499,9 +511,28 @@ class LivePaperSmokeTestStatusView(APIView):
     def get(self, request, *args, **kwargs):
         latest = get_last_live_paper_smoke_test_result()
         if not latest:
-            return Response({'detail': 'No smoke test has been executed yet.'}, status=status.HTTP_404_NOT_FOUND)
+            payload = _build_optional_status_empty_payload(
+                summary='No smoke test has been executed yet.',
+                reason_code='SMOKE_TEST_NOT_RUN',
+            )
+            payload.update(
+                {
+                    'preset_name': None,
+                    'smoke_test_status': None,
+                    'executed_at': None,
+                    'validation_status_after': None,
+                    'heartbeat_passes_completed': None,
+                    'smoke_test_summary': payload['summary'],
+                    'next_action_hint': 'Run /api/mission-control/run-live-paper-smoke-test/ to generate status.',
+                }
+            )
+            return Response(LivePaperSmokeTestStatusSerializer(payload).data, status=status.HTTP_200_OK)
 
         payload = {
+            'exists': True,
+            'status': 'AVAILABLE',
+            'summary': latest.get('smoke_test_summary'),
+            'reason_code': 'SMOKE_TEST_AVAILABLE',
             'preset_name': latest.get('preset_name'),
             'smoke_test_status': latest.get('smoke_test_status'),
             'executed_at': latest.get('executed_at'),
@@ -529,9 +560,29 @@ class LivePaperTrialRunStatusView(APIView):
     def get(self, request, *args, **kwargs):
         latest = get_last_live_paper_trial_run_result()
         if not latest:
-            return Response({'detail': 'No live paper trial run has been executed yet.'}, status=status.HTTP_404_NOT_FOUND)
+            payload = _build_optional_status_empty_payload(
+                summary='No live paper trial run has been executed yet.',
+                reason_code='TRIAL_RUN_NOT_RUN',
+            )
+            payload.update(
+                {
+                    'preset_name': None,
+                    'trial_status': None,
+                    'executed_at': None,
+                    'smoke_test_status': None,
+                    'validation_status_after': None,
+                    'heartbeat_passes_completed': None,
+                    'trial_summary': payload['summary'],
+                    'next_action_hint': 'Run /api/mission-control/run-live-paper-trial/ to generate status.',
+                }
+            )
+            return Response(LivePaperTrialRunStatusSerializer(payload).data, status=status.HTTP_200_OK)
 
         payload = {
+            'exists': True,
+            'status': 'AVAILABLE',
+            'summary': latest.get('trial_summary'),
+            'reason_code': 'TRIAL_RUN_AVAILABLE',
             'preset_name': latest.get('preset_name'),
             'trial_status': latest.get('trial_status'),
             'executed_at': latest.get('executed_at'),
