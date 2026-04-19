@@ -465,6 +465,7 @@ export type LivePaperAttentionAlertSyncResponse = {
 export type TestConsoleRunRequest = {
   preset?: string;
   heartbeat_passes?: 1 | 2;
+  profile_id?: 'full_e2e' | 'scope_throttle_diagnostics' | 'prediction_risk_path' | 'exposure_diagnostics' | 'export_snapshot_integrity';
 };
 
 export type TestConsoleScanSummary = {
@@ -513,6 +514,11 @@ export type LlmAuxSignalSummary = {
 
 export type TestConsoleStatusResponse = {
   test_status: string;
+  test_profile?: string;
+  available_test_profiles?: Record<string, Record<string, boolean>>;
+  modules_included?: string[];
+  modules_omitted?: string[];
+  run_scope?: 'fresh_full_run' | 'targeted_diagnostic_run' | string;
   current_phase: string | null;
   current_step?: number | null;
   current_step_label?: string | null;

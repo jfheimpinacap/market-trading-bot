@@ -27,3 +27,18 @@ Scope:
   - **unavailable** diagnostics (`diagnostic_status=UNAVAILABLE`, summary text `UNAVAILABLE`),
   - **fallback/degraded** recovery (`diagnostic_unavailable=true` plus explicit reason codes).
 - No policy changes, no threshold changes, no guardrail relaxation, no exposure matching changes, no new entry paths.
+
+## Prompt 327B (Cockpit Test Console profile selector UI)
+
+- Cockpit/Test Console now exposes a compact **test profile selector** before starting runs.
+- Available profiles:
+  - `full_e2e`
+  - `scope_throttle_diagnostics`
+  - `prediction_risk_path`
+  - `exposure_diagnostics`
+  - `export_snapshot_integrity`
+- UI keeps one clear action button (`Run selected profile`) and shows:
+  - modules included for the selected profile,
+  - executed profile + run scope (`fresh_full_run` vs `targeted_diagnostic_run`),
+  - export header metadata (`profile` and `scope`).
+- Optional advanced panel (collapsed by default) shows module checklist visibility for diagnostics without changing trading logic.
