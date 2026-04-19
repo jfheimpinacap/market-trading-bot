@@ -298,7 +298,20 @@ export function MissionControlPage() {
       <PageHeader
         eyebrow="Mission control"
         title="Autonomous Runner"
-        actions={<div className="button-row"><button type="button" className="primary-button" onClick={async () => { await startAutonomousRunner(); await load(); }}>Start runner</button><button type="button" className="secondary-button" onClick={async () => { await pauseAutonomousRunner(); await load(); }}>Pause runner</button><button type="button" className="secondary-button" onClick={async () => { await resumeAutonomousRunner(); await load(); }}>Resume runner</button><button type="button" className="secondary-button" onClick={async () => { await stopAutonomousRunner(); await load(); }}>Stop runner</button><button type="button" className="secondary-button" onClick={async () => { await runAutonomousHeartbeat(); await load(); }}>Run heartbeat now</button></div>}
+        actions={(
+          <div className="button-row mission-control-primary-actions">
+            <button type="button" className="primary-button" onClick={async () => { await startAutonomousRunner(); await load(); }}>Start runner</button>
+            <button type="button" className="secondary-button" onClick={async () => { await stopAutonomousRunner(); await load(); }}>Stop runner</button>
+            <details className="mission-control-more-actions">
+              <summary>Más</summary>
+              <div className="button-row">
+                <button type="button" className="secondary-button" onClick={async () => { await pauseAutonomousRunner(); await load(); }}>Pause runner</button>
+                <button type="button" className="secondary-button" onClick={async () => { await resumeAutonomousRunner(); await load(); }}>Resume runner</button>
+                <button type="button" className="secondary-button" onClick={async () => { await runAutonomousHeartbeat(); await load(); }}>Run heartbeat now</button>
+              </div>
+            </details>
+          </div>
+        )}
       />
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
@@ -344,6 +357,8 @@ export function MissionControlPage() {
           </div>
         </SectionCard>
 
+        <details className="mission-control-deep-details">
+          <summary>Ver telemetría técnica completa</summary>
         <SectionCard eyebrow="Adaptive session profiles" title="Context reviews" description="Per-session context posture used to decide whether to hold or switch profile.">
           <ul>{contextReviews.slice(0, 10).map((review) => <li key={review.id}><strong>session={review.linked_session}</strong> profile={review.linked_current_profile ?? 'n/a'} portfolio={review.portfolio_pressure_state} runtime={review.runtime_posture} safety={review.safety_posture} signal={review.signal_pressure_state} activity={review.activity_state} status={review.context_status} summary={review.context_summary}</li>)}</ul>
         </SectionCard>
@@ -589,6 +604,7 @@ export function MissionControlPage() {
           </div>
           <ul>{sessions.slice(0, 8).map((session) => <li key={session.id}><StatusBadge tone="pending">{session.session_status}</StatusBadge> session={session.id} mode={session.runtime_mode || 'unknown'} profile={session.profile_slug || 'default'} ticks={session.tick_count}</li>)}</ul>
         </SectionCard>
+        </details>
       </DataStateWrapper>
     </div>
   );

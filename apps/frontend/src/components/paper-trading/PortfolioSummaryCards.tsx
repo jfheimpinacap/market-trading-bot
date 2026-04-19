@@ -70,7 +70,10 @@ export function PortfolioSummaryCards({ account, summary, totalTrades }: Portfol
             {metric.emphasis === 'pnl' ? <PnlBadge value={metric.rawValue}>{metric.value}</PnlBadge> : null}
           </div>
           <strong className="paper-summary-card__value">{metric.value}</strong>
-          <p>{metric.helperText}</p>
+          <details className="paper-summary-card__details">
+            <summary>Detalle</summary>
+            <p>{metric.helperText}</p>
+          </details>
         </article>
       ))}
     </section>

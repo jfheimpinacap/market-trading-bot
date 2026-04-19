@@ -213,6 +213,8 @@ export function DashboardPage() {
   );
 
   const latestTrade = paperSummary?.recent_trades[0] ?? null;
+  const priorityAttentionItems = attentionItems.slice(0, 2);
+  const remainingAttentionItems = attentionItems.slice(2);
   const hasCriticalAttention = attentionItems.some((item) => item.severity === 'CRITICAL' || item.severity === 'HIGH');
   const exposureBlock = testConsoleStatus?.blocker_summary ?? (testConsoleStatus?.gate_status === 'BLOCK' ? 'Gate bloqueado' : 'Sin bloqueo dominante');
 
@@ -222,8 +224,13 @@ export function DashboardPage() {
         title={`${PROJECT_NAME} · Dashboard`}
         actions={(
           <div className="button-row">
-            <button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Vista avanzada</button>
             <StatusBadge tone={executiveTone}>{getExecutivePhrase(testConsoleStatus)}</StatusBadge>
+            <details className="dashboard-inline-actions">
+              <summary>Más</summary>
+              <div className="button-row">
+                <button type="button" className="secondary-button" onClick={() => navigate('/cockpit')}>Vista avanzada</button>
+              </div>
+            </details>
           </div>
         )}
       />
@@ -249,14 +256,14 @@ export function DashboardPage() {
           >
             <dl className="dashboard-key-value-list dashboard-key-value-list--compact">
               <div><dt>Última señal útil</dt><dd>{getLlmHintText(llmHint)}</dd></div>
-              <div><dt>Último evento</dt><dd>{testConsoleStatus?.last_event ?? 'n/a'}</dd></div>
               <div><dt>Exposición activa</dt><dd>{paperSummary?.open_positions_count ?? 0} abiertas</dd></div>
               <div><dt>Bloqueo relevante</dt><dd>{exposureBlock}</dd></div>
               <div><dt>Último trade</dt><dd>{latestTrade ? `${latestTrade.side} ${latestTrade.market__title}` : 'Sin trades'}</dd></div>
-              <div><dt>Hora último trade</dt><dd>{latestTrade ? formatTimestamp(latestTrade.executed_at) : 'n/a'}</dd></div>
             </dl>
             <details className="dashboard-secondary-details">
               <summary>Contexto adicional</summary>
+              <p className="muted-text">Último evento: {testConsoleStatus?.last_event ?? 'n/a'}</p>
+              <p className="muted-text">Hora último trade: {latestTrade ? formatTimestamp(latestTrade.executed_at) : 'n/a'}</p>
               <p className="muted-text">{testConsoleStatus?.next_action_hint ?? 'Sin recomendaciones inmediatas.'}</p>
               {testConsoleStatus?.last_reason_code ? <p className="muted-text">Código: {testConsoleStatus.last_reason_code}</p> : null}
             </details>
@@ -278,7 +285,7 @@ export function DashboardPage() {
           >
             <ul className="bullet-list compact-list">
               {attentionItems.length === 0 ? <li>Sin items prioritarios.</li> : null}
-              {attentionItems.map((item) => (
+              {priorityAttentionItems.map((item) => (
                 <li key={item.id}>
                   <strong>{item.severity}:</strong> {item.title}
                 </li>
@@ -286,6 +293,15 @@ export function DashboardPage() {
             </ul>
             <details className="dashboard-secondary-details">
               <summary>Resumen auxiliar</summary>
+              {remainingAttentionItems.length > 0 ? (
+                <ul className="bullet-list compact-list">
+                  {remainingAttentionItems.map((item) => (
+                    <li key={item.id}>
+                      <strong>{item.severity}:</strong> {item.title}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               <div className="executive-llm-hint">
                 {llmHint?.aux_signal_status ? `(${llmHint.aux_signal_status})` : '(sin señal)'} {getLlmHintText(llmHint)}
               </div>
