@@ -190,6 +190,141 @@ def _resolve_lineage_anchor(*, prediction_candidate_id: int | None, handoff_id: 
     return f"approval:{_safe_int(approval_review_id)}"
 
 
+def _runtime_context_matches_current_window(*, decision: RiskApprovalDecision, preset_name: str) -> bool:
+    runtime_run = getattr(getattr(decision, 'linked_candidate', None), 'runtime_run', None)
+    if runtime_run is None:
+        return True
+    metadata = dict(getattr(runtime_run, 'metadata', {}) or {})
+    runtime_preset = str(metadata.get('preset_name') or metadata.get('preset') or '').strip()
+    if not runtime_preset:
+        return True
+    return runtime_preset == preset_name
+
+
+def _summarize_scope_alignment_for_fanout(
+    *,
+    risk_rows: list[RiskApprovalDecision],
+    window_start,
+    preset_name: str,
+    current_prediction_candidate_ids: set[int],
+    current_handoff_ids: set[int],
+) -> tuple[list[RiskApprovalDecision], dict[str, Any]]:
+    eligible_rows: list[RiskApprovalDecision] = []
+    reason_codes: list[str] = []
+    examples: list[dict[str, Any]] = []
+    excluded_out_of_scope = 0
+    historical_reuse_detected_count = 0
+    lineage_anchor_mismatch_count = 0
+    window_scope_mismatch_count = 0
+    execution_routes_excluded_out_of_scope = 0
+
+    for decision in risk_rows:
+        linked_candidate = getattr(decision, 'linked_candidate', None)
+        prediction_candidate_id = _safe_int(getattr(linked_candidate, 'linked_prediction_intake_candidate_id', None))
+        handoff_id = _safe_int(getattr(linked_candidate, 'linked_risk_ready_prediction_handoff_id', None))
+        market_id = _safe_int(getattr(linked_candidate, 'linked_market_id', None))
+        lineage_anchor = _resolve_lineage_anchor(
+            prediction_candidate_id=prediction_candidate_id,
+            handoff_id=handoff_id,
+            approval_review_id=getattr(decision, 'id', None),
+        )
+        decision_metadata = dict(getattr(decision, 'metadata', {}) or {})
+        source_stage = str(
+            decision_metadata.get('source_stage')
+            or decision_metadata.get('handler')
+            or 'risk_runtime_review'
+        )
+        stage_in_scope = source_stage.startswith('risk') or source_stage.startswith('prediction')
+        window_match = bool(prediction_candidate_id in current_prediction_candidate_ids or handoff_id in current_handoff_ids)
+        runtime_match = _runtime_context_matches_current_window(decision=decision, preset_name=preset_name)
+        lineage_anchor_present = prediction_candidate_id is not None or handoff_id is not None
+        lineage_match = bool(window_match and runtime_match and stage_in_scope and lineage_anchor_present)
+
+        historical_reuse_detected = False
+        if prediction_candidate_id is not None:
+            prediction_row = getattr(linked_candidate, 'linked_prediction_intake_candidate', None)
+            historical_reuse_detected = bool(prediction_row and prediction_row.created_at < window_start)
+        if handoff_id is not None and not historical_reuse_detected:
+            handoff_row = getattr(linked_candidate, 'linked_risk_ready_prediction_handoff', None)
+            historical_reuse_detected = bool(handoff_row and handoff_row.created_at < window_start)
+        if historical_reuse_detected:
+            historical_reuse_detected_count += 1
+            reason_codes.append('HISTORICAL_REUSE_DETECTED_OUT_OF_SCOPE')
+
+        exclusion_reason = ''
+        dominant_reason_code = 'CURRENT_WINDOW_FANOUT_ELIGIBLE'
+        current_window_eligible = lineage_match
+
+        if not runtime_match:
+            exclusion_reason = 'runtime_preset_mismatch'
+            dominant_reason_code = 'RISK_DECISION_EXCLUDED_OUTSIDE_CURRENT_WINDOW'
+            window_scope_mismatch_count += 1
+        elif not window_match:
+            exclusion_reason = 'outside_current_window'
+            dominant_reason_code = 'RISK_DECISION_EXCLUDED_OUTSIDE_CURRENT_WINDOW'
+            window_scope_mismatch_count += 1
+        elif not stage_in_scope:
+            exclusion_reason = 'source_stage_out_of_scope'
+            dominant_reason_code = 'RISK_DECISION_EXCLUDED_OUTSIDE_CURRENT_WINDOW'
+            window_scope_mismatch_count += 1
+        elif not lineage_anchor_present:
+            exclusion_reason = 'lineage_anchor_mismatch'
+            dominant_reason_code = 'RISK_DECISION_EXCLUDED_BY_LINEAGE_ANCHOR_MISMATCH'
+            lineage_anchor_mismatch_count += 1
+
+        if current_window_eligible:
+            eligible_rows.append(decision)
+            reason_codes.append('CURRENT_WINDOW_FANOUT_ELIGIBLE')
+        else:
+            excluded_out_of_scope += 1
+            execution_routes_excluded_out_of_scope += 1
+            reason_codes.append(dominant_reason_code)
+            if dominant_reason_code == 'RISK_DECISION_EXCLUDED_BY_LINEAGE_ANCHOR_MISMATCH':
+                reason_codes.append('EXECUTION_ROUTE_EXCLUDED_BY_LINEAGE_ANCHOR_MISMATCH')
+            else:
+                reason_codes.append('EXECUTION_ROUTE_EXCLUDED_OUTSIDE_CURRENT_WINDOW')
+        if len(examples) < 3:
+            examples.append(
+                {
+                    'risk_decision_id': int(decision.id),
+                    'market_id': market_id,
+                    'lineage_anchor': lineage_anchor,
+                    'current_window_eligible': bool(current_window_eligible),
+                    'exclusion_reason': exclusion_reason or None,
+                    'source_stage': source_stage,
+                    'historical_reuse_detected': bool(historical_reuse_detected),
+                    'dominant_reason_code': dominant_reason_code,
+                }
+            )
+
+    if excluded_out_of_scope > 0:
+        reason_codes.append('FUNNEL_SCOPE_ALIGNMENT_CORRECTED')
+
+    scope_codes = list(dict.fromkeys(reason_codes))
+    summary = {
+        'risk_decisions_current_window': int(len(eligible_rows)),
+        'risk_decisions_excluded_out_of_scope': int(excluded_out_of_scope),
+        'execution_routes_current_window': int(len(eligible_rows)),
+        'execution_routes_excluded_out_of_scope': int(execution_routes_excluded_out_of_scope),
+        'historical_reuse_detected_count': int(historical_reuse_detected_count),
+        'lineage_anchor_mismatch_count': int(lineage_anchor_mismatch_count),
+        'window_scope_mismatch_count': int(window_scope_mismatch_count),
+        'scope_alignment_reason_codes': scope_codes,
+        'scope_alignment_examples': examples,
+    }
+    summary['scope_alignment_summary'] = (
+        f"risk_decisions_current_window={summary['risk_decisions_current_window']} "
+        f"risk_decisions_excluded_out_of_scope={summary['risk_decisions_excluded_out_of_scope']} "
+        f"execution_routes_current_window={summary['execution_routes_current_window']} "
+        f"execution_routes_excluded_out_of_scope={summary['execution_routes_excluded_out_of_scope']} "
+        f"historical_reuse_detected_count={summary['historical_reuse_detected_count']} "
+        f"lineage_anchor_mismatch_count={summary['lineage_anchor_mismatch_count']} "
+        f"window_scope_mismatch_count={summary['window_scope_mismatch_count']} "
+        f"scope_alignment_reason_codes={','.join(scope_codes) or 'none'}"
+    )
+    return eligible_rows, summary
+
+
 def _quantized(value: Decimal) -> str:
     return str(value.quantize(Decimal('0.0001')))
 
@@ -4113,14 +4248,14 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
     prediction_count = prediction_qs.count()
     intake_run_count = intake_run_qs.count()
     intake_candidate_count = intake_candidate_qs.count()
-    risk_count = risk_qs.count()
     risk_rows = list(
-        risk_qs.select_related('linked_candidate')
-        .order_by('-created_at', '-id')[:40]
+        risk_qs.select_related(
+            'linked_candidate',
+            'linked_candidate__runtime_run',
+            'linked_candidate__linked_prediction_intake_candidate',
+            'linked_candidate__linked_risk_ready_prediction_handoff',
+        ).order_by('-created_at', '-id')[:80]
     )
-    paper_execution_summary = _build_paper_execution_diagnostics(risk_rows=risk_rows, window_start=window_start)
-    active_exposure_risk_throttle_summary = _build_active_exposure_risk_throttle_summary(window_start=window_start)
-    paper_execution_count = int(paper_execution_summary.get('paper_execution_visible_count') or 0)
 
     shortlist_market_ids = {
         market_id
@@ -4142,11 +4277,7 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         for market_id in prediction_qs.values_list('linked_intake_candidate__linked_market_id', flat=True)
         if market_id is not None
     }
-    risk_market_ids = {
-        market_id
-        for market_id in risk_qs.values_list('linked_candidate__linked_market_id', flat=True)
-        if market_id is not None
-    }
+    risk_market_ids: set[int] = set()
 
     handoff_reason_codes: list[str] = []
     stage_source_mismatch: dict[str, Any] = {}
@@ -4185,6 +4316,35 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         ).values_list('id', flat=True)
     )
     eligible_handoff_ids = {int(handoff_id) for handoff_id in eligible_handoff_rows}
+    current_prediction_candidate_ids = {
+        int(candidate_id)
+        for candidate_id in intake_candidate_qs.values_list('id', flat=True)
+        if candidate_id is not None
+    }
+    current_risk_handoff_ids = {
+        int(handoff_id)
+        for handoff_id in RiskReadyPredictionHandoff.objects.filter(created_at__gte=window_start).values_list('id', flat=True)
+        if handoff_id is not None
+    }
+    risk_rows_current_window, risk_execution_scope_alignment_summary = _summarize_scope_alignment_for_fanout(
+        risk_rows=risk_rows,
+        window_start=window_start,
+        preset_name=preset_name,
+        current_prediction_candidate_ids=current_prediction_candidate_ids,
+        current_handoff_ids=current_risk_handoff_ids,
+    )
+    risk_market_ids = {
+        market_id
+        for market_id in [
+            _safe_int(getattr(getattr(row, 'linked_candidate', None), 'linked_market_id', None))
+            for row in risk_rows_current_window
+        ]
+        if market_id is not None
+    }
+    risk_count = len(risk_rows_current_window)
+    paper_execution_summary = _build_paper_execution_diagnostics(risk_rows=risk_rows_current_window, window_start=window_start)
+    active_exposure_risk_throttle_summary = _build_active_exposure_risk_throttle_summary(window_start=window_start)
+    paper_execution_count = int(paper_execution_summary.get('paper_execution_visible_count') or 0)
     borderline_diagnostics_by_handoff: dict[int, dict[str, Any]] = {}
     bridge_attempted = False
     bridge_created_handoff_ids: set[int] = set()
@@ -5265,6 +5425,11 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         handoff_reason_codes.append('RISK_STAGE_EMPTY')
     if shortlisted_count > 0 and operational_prediction_count == 0 and risk_count == 0 and paper_execution_count == 0:
         handoff_reason_codes.append('DOWNSTREAM_EVIDENCE_INSUFFICIENT')
+    if (
+        operational_prediction_count <= 1
+        and (int(risk_execution_scope_alignment_summary.get('risk_decisions_excluded_out_of_scope') or 0) > 0)
+    ):
+        handoff_reason_codes.append('FUNNEL_SCOPE_ALIGNMENT_CORRECTED')
 
     normalized_codes = list(dict.fromkeys(handoff_reason_codes))
     handoff_summary = (
@@ -5373,6 +5538,10 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
         'execution_exposure_release_audit_examples': exposure_diagnostics.get('execution_exposure_release_audit_examples', []),
         'active_exposure_risk_throttle_summary': active_exposure_risk_throttle_summary,
         'active_exposure_risk_throttle_examples': active_exposure_risk_throttle_summary.get('active_exposure_risk_throttle_examples', []),
+        'risk_execution_scope_alignment_summary': risk_execution_scope_alignment_summary,
+        'risk_execution_scope_alignment_examples': list(
+            risk_execution_scope_alignment_summary.get('scope_alignment_examples') or []
+        )[:3],
         'active_exposure_readiness_throttle_summary': paper_execution_summary.get('active_exposure_readiness_throttle_summary', {}),
         'active_exposure_readiness_throttle_examples': paper_execution_summary.get('active_exposure_readiness_throttle_examples', []),
         'execution_promotion_gate_summary': paper_execution_summary.get('execution_promotion_gate_summary', {}),

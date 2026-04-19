@@ -6303,6 +6303,212 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(prediction_risk.get('risk_route_attempted', 0), 0)
         self.assertIn('PREDICTION_RISK_REUSED_EXISTING_DECISION', prediction_risk.get('risk_route_reason_codes', []))
 
+    def test_scope_alignment_excludes_out_of_window_risk_fanout_but_keeps_diagnostics(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.prediction_agent.models import (
+            PredictionConvictionReview,
+            PredictionConvictionReviewStatus,
+            PredictionIntakeCandidate,
+            PredictionIntakeRun,
+            PredictionIntakeStatus,
+            RiskReadyPredictionHandoff,
+            RiskReadyPredictionHandoffStatus,
+        )
+        from apps.risk_agent.models import RiskApprovalDecision, RiskRuntimeApprovalStatus, RiskRuntimeCandidate, RiskRuntimeRun
+
+        now = timezone.now()
+        window_start = now - timedelta(minutes=60)
+        market = self._provider_and_market('scope-alignment-out-of-window')
+        market.current_market_probability = Decimal('0.5000')
+        market.save(update_fields=['current_market_probability'])
+
+        intake_run = PredictionIntakeRun.objects.create(started_at=now - timedelta(hours=3), completed_at=now - timedelta(hours=3))
+        intake_candidate = PredictionIntakeCandidate.objects.create(
+            intake_run=intake_run,
+            linked_market=market,
+            intake_status=PredictionIntakeStatus.READY_FOR_RUNTIME,
+            narrative_priority=Decimal('0.7000'),
+            structural_priority=Decimal('0.7000'),
+            handoff_confidence=Decimal('0.7500'),
+            context_summary='historical candidate',
+            reason_codes=['TEST_SCOPE_ALIGNMENT'],
+            metadata={},
+        )
+        historical_ts = now - timedelta(hours=2)
+        PredictionIntakeCandidate.objects.filter(id=intake_candidate.id).update(created_at=historical_ts)
+        intake_candidate.refresh_from_db()
+        review = PredictionConvictionReview.objects.create(
+            linked_intake_candidate=intake_candidate,
+            system_probability=Decimal('0.6200'),
+            market_probability=Decimal('0.5000'),
+            calibrated_probability=Decimal('0.6200'),
+            raw_edge=Decimal('0.1200'),
+            adjusted_edge=Decimal('0.1200'),
+            confidence=Decimal('0.7800'),
+            uncertainty=Decimal('0.2200'),
+            conviction_bucket='MEDIUM',
+            review_status=PredictionConvictionReviewStatus.READY_FOR_RISK,
+            review_summary='historical review',
+            reason_codes=['TEST_SCOPE_ALIGNMENT'],
+            metadata={},
+        )
+        PredictionConvictionReview.objects.filter(id=review.id).update(created_at=historical_ts)
+        review.refresh_from_db()
+        handoff = RiskReadyPredictionHandoff.objects.create(
+            linked_market=market,
+            linked_conviction_review=review,
+            handoff_status=RiskReadyPredictionHandoffStatus.READY,
+            handoff_confidence=Decimal('0.7400'),
+            handoff_summary='historical handoff',
+            handoff_reason_codes=['TEST_SCOPE_ALIGNMENT'],
+            metadata={},
+        )
+        RiskReadyPredictionHandoff.objects.filter(id=handoff.id).update(created_at=historical_ts)
+        handoff.refresh_from_db()
+        runtime_run = RiskRuntimeRun.objects.create(
+            started_at=now - timedelta(minutes=15),
+            completed_at=now - timedelta(minutes=10),
+            metadata={'preset_name': 'live_read_only_paper_conservative'},
+        )
+        runtime_candidate = RiskRuntimeCandidate.objects.create(
+            runtime_run=runtime_run,
+            linked_risk_ready_prediction_handoff=handoff,
+            linked_prediction_conviction_review=review,
+            linked_prediction_intake_candidate=intake_candidate,
+            linked_market=market,
+            market_provider=market.provider.slug,
+            category=market.category or '',
+            calibrated_probability=Decimal('0.6200'),
+            market_probability=Decimal('0.5000'),
+            adjusted_edge=Decimal('0.1200'),
+            intake_status='READY_FOR_RISK_RUNTIME',
+            confidence_score=Decimal('0.8000'),
+            uncertainty_score=Decimal('0.2000'),
+            conviction_bucket='MEDIUM',
+            portfolio_pressure_state='LOW',
+            context_summary='out-of-window candidate',
+            reason_codes=['TEST_SCOPE_ALIGNMENT'],
+            evidence_quality_score=Decimal('0.7000'),
+            precedent_caution_score=Decimal('0.3000'),
+            linked_portfolio_context={},
+            linked_feedback_context={},
+            market_liquidity_context={},
+            predicted_status='READY',
+            metadata={'source_stage': 'risk_runtime_review'},
+        )
+        RiskApprovalDecision.objects.create(
+            linked_candidate=runtime_candidate,
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+            approval_confidence=Decimal('0.7000'),
+            approval_summary='out-of-window risk decision',
+            approval_rationale='out-of-window risk decision',
+            reason_codes=['TEST_SCOPE_ALIGNMENT'],
+            blockers=[],
+            risk_score=Decimal('0.3000'),
+            max_allowed_exposure=Decimal('100.00'),
+            watch_required=False,
+            metadata={'source_stage': 'risk_runtime_review'},
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=window_start)
+        scope_summary = diagnostics.get('risk_execution_scope_alignment_summary') or {}
+        self.assertEqual(diagnostics.get('risk_decisions'), 0)
+        self.assertEqual(diagnostics.get('paper_execution_route_expected'), 0)
+        self.assertGreaterEqual(scope_summary.get('risk_decisions_excluded_out_of_scope', 0), 1)
+        self.assertIn('RISK_DECISION_EXCLUDED_OUTSIDE_CURRENT_WINDOW', scope_summary.get('scope_alignment_reason_codes', []))
+        self.assertIn('HISTORICAL_REUSE_DETECTED_OUT_OF_SCOPE', scope_summary.get('scope_alignment_reason_codes', []))
+
+    def test_scope_alignment_keeps_current_window_lineage_operational(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
+        from apps.prediction_agent.models import PredictionConvictionReview, PredictionConvictionReviewStatus, RiskReadyPredictionHandoff
+        from apps.prediction_agent.services.run import run_prediction_intake_review
+        from apps.research_agent.models import (
+            PredictionHandoffCandidate,
+            PredictionHandoffStatus,
+            ResearchPursuitRun,
+            ResearchPursuitScore,
+            ResearchPursuitScoreStatus,
+            ResearchStructuralAssessment,
+            ResearchStructuralStatus,
+        )
+        from apps.risk_agent.models import RiskApprovalDecision, RiskRuntimeApprovalStatus, RiskRuntimeCandidate, RiskRuntimeRun
+
+        market = self._provider_and_market('scope-alignment-current-window')
+        market.current_market_probability = Decimal('0.5200')
+        market.save(update_fields=['current_market_probability'])
+        run = ResearchPursuitRun.objects.create(started_at=timezone.now(), completed_at=timezone.now())
+        assessment = ResearchStructuralAssessment.objects.create(
+            pursuit_run=run, linked_market=market, structural_status=ResearchStructuralStatus.PREDICTION_READY
+        )
+        score = ResearchPursuitScore.objects.create(
+            pursuit_run=run, linked_assessment=assessment, linked_market=market, score_status=ResearchPursuitScoreStatus.READY_FOR_PREDICTION
+        )
+        PredictionHandoffCandidate.objects.create(
+            pursuit_run=run,
+            linked_market=market,
+            linked_pursuit_score=score,
+            linked_assessment=assessment,
+            handoff_status=PredictionHandoffStatus.READY,
+            handoff_confidence=Decimal('0.8100'),
+        )
+        run_prediction_intake_review(triggered_by='mission-control-scope-alignment-current-window')
+        review = PredictionConvictionReview.objects.order_by('-id').first()
+        review.review_status = PredictionConvictionReviewStatus.READY_FOR_RISK
+        review.save(update_fields=['review_status', 'updated_at'])
+        intake_candidate = review.linked_intake_candidate
+        risk_handoff = RiskReadyPredictionHandoff.objects.filter(linked_conviction_review=review).order_by('-id').first()
+        runtime_run = RiskRuntimeRun.objects.create(
+            started_at=timezone.now(),
+            completed_at=timezone.now(),
+            metadata={'preset_name': 'live_read_only_paper_conservative'},
+        )
+        runtime_candidate = RiskRuntimeCandidate.objects.create(
+            runtime_run=runtime_run,
+            linked_risk_ready_prediction_handoff=risk_handoff,
+            linked_prediction_conviction_review=review,
+            linked_prediction_intake_candidate=intake_candidate,
+            linked_market=market,
+            market_provider=market.provider.slug,
+            category=market.category or '',
+            calibrated_probability=Decimal('0.6400'),
+            market_probability=Decimal('0.5200'),
+            adjusted_edge=Decimal('0.1200'),
+            intake_status='READY_FOR_RISK_RUNTIME',
+            confidence_score=Decimal('0.8200'),
+            uncertainty_score=Decimal('0.1800'),
+            conviction_bucket='MEDIUM',
+            portfolio_pressure_state='LOW',
+            context_summary='current-window lineage',
+            reason_codes=['TEST_SCOPE_ALIGNMENT_CURRENT'],
+            evidence_quality_score=Decimal('0.7200'),
+            precedent_caution_score=Decimal('0.2800'),
+            linked_portfolio_context={},
+            linked_feedback_context={},
+            market_liquidity_context={},
+            predicted_status='READY',
+            metadata={'source_stage': 'risk_runtime_review'},
+        )
+        RiskApprovalDecision.objects.create(
+            linked_candidate=runtime_candidate,
+            approval_status=RiskRuntimeApprovalStatus.APPROVED,
+            approval_confidence=Decimal('0.7200'),
+            approval_summary='current-window decision',
+            approval_rationale='current-window decision',
+            reason_codes=['TEST_SCOPE_ALIGNMENT_CURRENT'],
+            blockers=[],
+            risk_score=Decimal('0.2800'),
+            max_allowed_exposure=Decimal('100.00'),
+            watch_required=False,
+            metadata={'source_stage': 'risk_runtime_review'},
+        )
+
+        diagnostics = _build_handoff_diagnostics(window_start=timezone.now() - timedelta(minutes=60))
+        scope_summary = diagnostics.get('risk_execution_scope_alignment_summary') or {}
+        self.assertGreaterEqual(diagnostics.get('risk_decisions', 0), 1)
+        self.assertGreaterEqual(diagnostics.get('paper_execution_route_expected', 0), 1)
+        self.assertGreaterEqual(scope_summary.get('risk_decisions_current_window', 0), 1)
+        self.assertIn('CURRENT_WINDOW_FANOUT_ELIGIBLE', scope_summary.get('scope_alignment_reason_codes', []))
+
     def test_prediction_intake_reason_code_semantics_keep_guardrail_and_filter_separate(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _build_handoff_diagnostics
         from apps.research_agent.models import (

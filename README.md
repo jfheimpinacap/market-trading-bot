@@ -3768,3 +3768,9 @@ Qué valida:
 Qué **no** valida:
 - shortlist/handoff/prediction/risk/execution end-to-end,
 - ni reemplaza la prueba completa de Mission Control; es un smoke test de capa LLM.
+
+### Prompt 321 — scope/window/lineage alignment (backend-only)
+
+- Se corrigió el fanout operativo de Mission Control para que `risk_decisions` y rutas de execution cuenten solo artefactos elegibles del **current window + current lineage**.
+- **No hay cambios de policy**.
+- **No se elimina historial de auditoría**: los artefactos históricos/out-of-scope siguen visibles en diagnóstico, pero dejan de inflar fanout operativo actual.

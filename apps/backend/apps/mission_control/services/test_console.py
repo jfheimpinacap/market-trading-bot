@@ -577,6 +577,8 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
             'execution_exposure_release_audit_examples': list(exposure_diagnostics.get('execution_exposure_release_audit_examples') or []),
             'active_exposure_risk_throttle_summary': dict(funnel.get('active_exposure_risk_throttle_summary') or {}),
             'active_exposure_risk_throttle_examples': list(funnel.get('active_exposure_risk_throttle_examples') or []),
+            'risk_execution_scope_alignment_summary': dict(funnel.get('risk_execution_scope_alignment_summary') or {}),
+            'risk_execution_scope_alignment_examples': list(funnel.get('risk_execution_scope_alignment_examples') or []),
             'active_exposure_readiness_throttle_summary': dict(funnel.get('active_exposure_readiness_throttle_summary') or {}),
             'active_exposure_readiness_throttle_examples': list(funnel.get('active_exposure_readiness_throttle_examples') or []),
             'execution_promotion_gate_summary': dict(funnel.get('execution_promotion_gate_summary') or {}),
@@ -717,6 +719,8 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     execution_exposure_release_audit_examples = exposure_diagnostics.get('execution_exposure_release_audit_examples') or []
     active_exposure_risk_throttle = payload.get('active_exposure_risk_throttle_summary') or {}
     active_exposure_risk_throttle_examples = payload.get('active_exposure_risk_throttle_examples') or []
+    risk_execution_scope_alignment = payload.get('risk_execution_scope_alignment_summary') or {}
+    risk_execution_scope_alignment_examples = payload.get('risk_execution_scope_alignment_examples') or []
     active_exposure_readiness_throttle = payload.get('active_exposure_readiness_throttle_summary') or {}
     active_exposure_readiness_throttle_examples = payload.get('active_exposure_readiness_throttle_examples') or []
     execution_promotion_gate = payload.get('execution_promotion_gate_summary') or {}
@@ -1020,6 +1024,24 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         ),
         f"  throttle_summary={active_exposure_risk_throttle.get('throttle_summary') or ''}",
         f"  active_exposure_risk_throttle_examples={active_exposure_risk_throttle_examples or []}",
+        'risk_execution_scope_alignment_summary:',
+        (
+            f"  risk_decisions_current_window={risk_execution_scope_alignment.get('risk_decisions_current_window', 0)} "
+            f"risk_decisions_excluded_out_of_scope={risk_execution_scope_alignment.get('risk_decisions_excluded_out_of_scope', 0)} "
+            f"execution_routes_current_window={risk_execution_scope_alignment.get('execution_routes_current_window', 0)} "
+            f"execution_routes_excluded_out_of_scope={risk_execution_scope_alignment.get('execution_routes_excluded_out_of_scope', 0)}"
+        ),
+        (
+            f"  historical_reuse_detected_count={risk_execution_scope_alignment.get('historical_reuse_detected_count', 0)} "
+            f"lineage_anchor_mismatch_count={risk_execution_scope_alignment.get('lineage_anchor_mismatch_count', 0)} "
+            f"window_scope_mismatch_count={risk_execution_scope_alignment.get('window_scope_mismatch_count', 0)}"
+        ),
+        (
+            f"  scope_alignment_reason_codes="
+            f"{','.join(risk_execution_scope_alignment.get('scope_alignment_reason_codes') or []) or 'none'}"
+        ),
+        f"  scope_alignment_summary={risk_execution_scope_alignment.get('scope_alignment_summary') or ''}",
+        f"  risk_execution_scope_alignment_examples={risk_execution_scope_alignment_examples or []}",
         'active_exposure_readiness_throttle_summary:',
         (
             f"  markets_throttled={active_exposure_readiness_throttle.get('markets_throttled', 0)} "
