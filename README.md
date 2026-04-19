@@ -21,6 +21,18 @@ The main dashboard was compacted for operator-first scanning with less vertical 
 - Moved technical/verbose context into collapsible detail sections while preserving navigation to advanced cockpit views.
 - Reduced card padding/height and tightened KPI presentation to lower scroll and improve responsive stacking behavior.
 
+### Secondary views transversal visual cleanup (Prompt 330)
+
+Secondary views now follow the same compact operator-first visual hierarchy used by dashboard improvements:
+
+- **Markets** now keeps summary metrics on top and moves filter tooling into a compact collapsible block (auto-open when filters are active).
+- **Portfolio** now prioritizes account metrics + equity + positions + trades in the default flow, with account internals/review bridge kept in collapsible technical detail sections.
+- **Advanced/Cockpit** now prioritizes primary mission controls and moves secondary manual actions into an expandable section.
+- Shared compact UI adjustments were applied across equivalent secondary layouts (`markets`, `portfolio`, `cockpit`, `mission-control` patterns):
+  - tighter panel/action spacing,
+  - reduced default descriptive text noise,
+  - denser buttons/tables/cards for lower scroll and cleaner responsive base.
+
 
 ### Mission Control Ollama shadow analyst (Prompt 289)
 

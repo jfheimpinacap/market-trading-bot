@@ -1207,15 +1207,20 @@ export function CockpitPage() {
         actions={<div className="button-row"><button className="secondary-button" type="button" onClick={() => void loadCockpit()}>Actualizar cockpit</button><button className="ghost-button" type="button" onClick={() => navigate('/mission-control')}>Abrir Mission Control</button></div>}
       />
 
-      <SectionCard eyebrow="Acciones rápidas" title="Controles manuales principales" description="Atajos de operación frecuentes. Las opciones más técnicas están en módulos específicos.">
+      <SectionCard eyebrow="Acciones rápidas" title="Controles manuales principales">
         <div className="button-row">
           <button className="primary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('MISSION_CONTROL_START')}>Iniciar misión</button>
           <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('MISSION_CONTROL_PAUSE')}>Pausar misión</button>
-          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('MISSION_CONTROL_RESUME')}>Reanudar misión</button>
-          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('INCIDENT_DETECTION')}>Detectar incidentes</button>
-          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('CERTIFICATION_REVIEW')}>Revisar certificación</button>
-          <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('PORTFOLIO_GOVERNANCE')}>Revisar gobernanza de portfolio</button>
         </div>
+        <details className="cockpit-secondary-actions">
+          <summary>Más acciones operativas</summary>
+          <div className="button-row">
+            <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('MISSION_CONTROL_RESUME')}>Reanudar misión</button>
+            <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('INCIDENT_DETECTION')}>Detectar incidentes</button>
+            <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('CERTIFICATION_REVIEW')}>Revisar certificación</button>
+            <button className="secondary-button" type="button" disabled={runningAction !== null} onClick={() => void runAction('PORTFOLIO_GOVERNANCE')}>Revisar gobernanza de portfolio</button>
+          </div>
+        </details>
         {actionMessage ? <p className="success-text">{actionMessage}</p> : null}
         {actionError ? <p className="error-text">{actionError}</p> : null}
       </SectionCard>

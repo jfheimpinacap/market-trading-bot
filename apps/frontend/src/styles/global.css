@@ -961,6 +961,14 @@ button {
   font-weight: 600;
 }
 
+.markets-secondary-blocks summary,
+.cockpit-secondary-actions summary {
+  cursor: pointer;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 .dashboard-key-value-list--secondary {
   margin-top: 6px;
   opacity: 0.88;
@@ -2500,6 +2508,19 @@ button {
   margin-top: 6px;
 }
 
+.markets-secondary-blocks {
+  display: grid;
+  gap: 6px;
+}
+
+.cockpit-secondary-actions {
+  margin-top: 6px;
+}
+
+.cockpit-secondary-actions > .button-row {
+  margin-top: 6px;
+}
+
 .workflow-status-panel__header,
 .context-links-panel > div:first-child {
   display: grid;
@@ -2938,6 +2959,13 @@ button {
   color: var(--text-soft);
 }
 
+.markets-page .page-header__description,
+.portfolio-page .page-header__description,
+.cockpit-page .page-header__description,
+.mission-control-page .page-header__description {
+  display: none;
+}
+
 .cockpit-page .section-card__header {
   gap: 8px;
   margin-bottom: 2px;
@@ -2988,6 +3016,37 @@ button {
 .markets-page .section-card__description,
 .portfolio-page .section-card__description {
   color: var(--text-soft);
+  display: none;
+}
+
+.markets-page .panel,
+.portfolio-page .panel,
+.cockpit-page .panel,
+.mission-control-page .panel {
+  padding: 9px 10px;
+}
+
+.markets-page .button-row,
+.portfolio-page .button-row,
+.cockpit-page .button-row,
+.mission-control-page .button-row {
+  gap: 0.25rem;
+}
+
+.markets-page .secondary-button,
+.markets-page .primary-button,
+.markets-page .ghost-button,
+.portfolio-page .secondary-button,
+.portfolio-page .primary-button,
+.portfolio-page .ghost-button,
+.cockpit-page .secondary-button,
+.cockpit-page .primary-button,
+.cockpit-page .ghost-button,
+.mission-control-page .secondary-button,
+.mission-control-page .primary-button,
+.mission-control-page .ghost-button {
+  min-height: 27px;
+  padding: 4px 8px;
 }
 
 .key-value-list li span {

@@ -180,11 +180,16 @@ export function MarketsPage() {
       >
         {summary ? <MarketsSummaryCards summary={summary} /> : null}
 
-        <MarketsFilters filters={filters} providers={providers} events={events} onChange={setFilters} onReset={() => setFilters(defaultFilters)} />
+        <details className="markets-secondary-blocks" open={activeFilterCount > 0}>
+          <summary>
+            Filtros y búsqueda {activeFilterCount > 0 ? `(${activeFilterCount} activos)` : '(rápido)'}
+          </summary>
+          <MarketsFilters filters={filters} providers={providers} events={events} onChange={setFilters} onReset={() => setFilters(defaultFilters)} />
+        </details>
 
         <SectionCard
-          title="Lista de mercados"
-          aside={<span className="muted-text">{activeFilterCount} filtros · {demoMarketCount} demo · {realPaperTradableCount}/{realMarketCount} reales aptos</span>}
+          title="Mercados"
+          aside={<span className="muted-text">{demoMarketCount} demo · {realPaperTradableCount}/{realMarketCount} reales aptos</span>}
         >
           <DataStateWrapper
             isLoading={marketsLoading}
