@@ -3216,3 +3216,75 @@ button {
   font-size: 0.92rem;
   color: var(--text-muted);
 }
+
+.dashboard-inline-actions {
+  position: relative;
+}
+
+.dashboard-inline-actions > summary,
+.mission-control-more-actions > summary,
+.markets-compact-aside details > summary,
+.paper-summary-card__details > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.dashboard-inline-actions > summary::-webkit-details-marker,
+.mission-control-more-actions > summary::-webkit-details-marker,
+.markets-compact-aside details > summary::-webkit-details-marker,
+.paper-summary-card__details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dashboard-inline-actions[open] > .button-row {
+  margin-top: 0.25rem;
+}
+
+.markets-compact-aside {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.markets-compact-aside details[open] > button {
+  margin-top: 0.25rem;
+}
+
+.paper-summary-card__details {
+  margin-top: 0.12rem;
+}
+
+.paper-summary-card__details p {
+  margin: 0.35rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.mission-control-primary-actions {
+  align-items: flex-start;
+}
+
+.mission-control-more-actions .button-row {
+  margin-top: 0.25rem;
+}
+
+.mission-control-deep-details {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--bg-panel-alt);
+  padding: 0.35rem 0.5rem;
+}
+
+.mission-control-deep-details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.mission-control-deep-details[open] {
+  display: grid;
+  gap: 0.5rem;
+}

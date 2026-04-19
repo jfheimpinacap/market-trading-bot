@@ -182,14 +182,26 @@ export function MarketsPage() {
 
         <details className="markets-secondary-blocks" open={activeFilterCount > 0}>
           <summary>
-            Filtros y búsqueda {activeFilterCount > 0 ? `(${activeFilterCount} activos)` : '(rápido)'}
+            Filtros {activeFilterCount > 0 ? `(${activeFilterCount})` : '(rápido)'}
           </summary>
           <MarketsFilters filters={filters} providers={providers} events={events} onChange={setFilters} onReset={() => setFilters(defaultFilters)} />
         </details>
 
         <SectionCard
           title="Mercados"
-          aside={<span className="muted-text">{demoMarketCount} demo · {realPaperTradableCount}/{realMarketCount} reales aptos</span>}
+          aside={(
+            <div className="markets-compact-aside">
+              <span className="muted-text">{demoMarketCount} demo · {realPaperTradableCount}/{realMarketCount} reales aptos</span>
+              {activeFilterCount > 0 ? (
+                <details>
+                  <summary>Más</summary>
+                  <button className="secondary-button" type="button" onClick={() => setFilters(defaultFilters)}>
+                    Limpiar filtros
+                  </button>
+                </details>
+              ) : null}
+            </div>
+          )}
         >
           <DataStateWrapper
             isLoading={marketsLoading}
@@ -201,13 +213,6 @@ export function MarketsPage() {
             errorTitle="No se pudo cargar la lista"
             emptyTitle={emptyTitle}
             emptyDescription={emptyDescription}
-            action={
-              activeFilterCount > 0 ? (
-                <button className="secondary-button" type="button" onClick={() => setFilters(defaultFilters)}>
-                  Limpiar filtros
-                </button>
-              ) : undefined
-            }
           >
             <MarketsTable markets={markets} />
           </DataStateWrapper>
