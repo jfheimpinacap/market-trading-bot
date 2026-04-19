@@ -1220,6 +1220,13 @@ def resolve_windows_npm_cli(npm_command: str | None = None) -> str | None:
     return None
 
 
+def resolve_vite_cli(paths: ProjectPaths) -> Path | None:
+    vite_cli = paths.frontend / 'node_modules' / 'vite' / 'bin' / 'vite.js'
+    if vite_cli.exists():
+        return vite_cli
+    return None
+
+
 def spawn_process(label: str, command: Sequence[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.Popen[str]:
     info(f"Starting {label}: {' '.join(str(part) for part in command)}")
     return subprocess.Popen(
@@ -1379,7 +1386,11 @@ def backend_run_command(paths: ProjectPaths, *, no_reload: bool = False) -> list
     return command
 
 
-def frontend_run_command() -> list[str]:
+def frontend_run_command(paths: ProjectPaths) -> list[str]:
+    vite_cli = resolve_vite_cli(paths)
+    if vite_cli is not None:
+        return [node_exec(), str(vite_cli), '--host', '0.0.0.0', '--port', str(DEFAULT_PORTS['frontend'])]
+
     frontend_args = ['run', 'dev', '--', '--host', '0.0.0.0', '--port', str(DEFAULT_PORTS['frontend'])]
     npm_cli = resolve_windows_npm_cli()
     if npm_cli is not None:
@@ -1413,7 +1424,7 @@ def build_dev_process_specs(
             {
                 'label': 'frontend',
                 'title': 'market-trading-bot frontend',
-                'command': frontend_run_command(),
+                'command': frontend_run_command(paths),
                 'cwd': paths.frontend,
                 'env': frontend_command_env(),
             }
@@ -2225,7 +2236,7 @@ def command_frontend(args: argparse.Namespace) -> int:
         {
             'label': 'frontend',
             'title': 'market-trading-bot frontend',
-            'command': frontend_run_command(),
+            'command': frontend_run_command(paths),
             'cwd': paths.frontend,
             'env': frontend_command_env(),
         }

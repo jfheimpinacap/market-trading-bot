@@ -1491,8 +1491,9 @@ Flujo operador vs debug en GUI:
 
 - **Modo operador (default):** `launcher_gui.py` envía `--gui-silent`, por lo que backend/frontend arrancan en detached/no-window (sin abrir consolas separadas), y mantiene apertura normal de navegador según toggle.
   - En Windows, el arranque silencioso usa un único camino de spawn sin ventana (`shell=False`, `DETACHED_PROCESS + CREATE_NO_WINDOW + STARTF_USESHOWWINDOW`) tanto para `full`/`lite` como para `backend`/`frontend`.
-  - El frontend prioriza `node .../npm-cli.js` para evitar wrappers visibles de `cmd.exe`.
+  - El frontend prioriza ejecutar Vite directo (`node apps/frontend/node_modules/vite/bin/vite.js ...`) y, como fallback, `node .../npm-cli.js`, para evitar wrappers visibles de `cmd.exe`.
   - El backend en modo operador agrega `runserver --noreload` para evitar el proceso hijo del autoreloader que podía reabrir `python.exe` con ventana.
+  - El launcher guarda en `.tmp/start-state.json` los procesos **reales launcher-managed** (backend/frontend/ollama/sim-loop) con `pid`, `mode` y `log_file`, y el panel interno de logs consume ese mismo estado para `Logs backend` / `Logs frontend`.
 - **Modo debug (checkbox):** habilita `--separate-windows` (y `--verbose` para comandos que lo soportan), dejando consolas visibles para diagnóstico.
 - Esto aplica a arranques `full`, `lite`, `backend` y `frontend` desde la GUI.
 

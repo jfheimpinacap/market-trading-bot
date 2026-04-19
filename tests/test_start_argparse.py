@@ -59,15 +59,27 @@ class StartWindowsSilentSpawnTests(unittest.TestCase):
         npm_cmd = r'C:\Program Files\nodejs\npm'
         expected_cli = str(PureWindowsPath(r'C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js'))
         with (
+            mock.patch('start.resolve_vite_cli', return_value=None),
             mock.patch('start.npm_exec', return_value=npm_cmd),
             mock.patch('start.node_exec', return_value=r'C:\Program Files\nodejs\node.exe'),
             mock.patch('start.shutil.which', return_value=None),
             mock.patch('start.os.path.exists', return_value=True),
         ):
-            command = start.frontend_run_command()
+            command = start.frontend_run_command(start.build_paths())
         self.assertEqual(command[0], r'C:\Program Files\nodejs\node.exe')
         self.assertEqual(command[1], str(expected_cli))
         self.assertEqual(command[2:5], ['run', 'dev', '--'])
+
+    def test_frontend_command_prefers_direct_vite_cli_when_available(self) -> None:
+        paths = start.build_paths()
+        with (
+            mock.patch('start.resolve_vite_cli', return_value=paths.frontend / 'node_modules' / 'vite' / 'bin' / 'vite.js'),
+            mock.patch('start.node_exec', return_value='node'),
+        ):
+            command = start.frontend_run_command(paths)
+        self.assertEqual(command[:2], ['node', str(paths.frontend / 'node_modules' / 'vite' / 'bin' / 'vite.js')])
+        self.assertIn('--host', command)
+        self.assertIn('--port', command)
 
     def test_backend_command_adds_noreload_for_gui_silent_mode(self) -> None:
         paths = start.build_paths()
@@ -86,6 +98,21 @@ class StartWindowsSilentSpawnTests(unittest.TestCase):
         )
         backend_spec = specs[0]
         self.assertIn('--noreload', backend_spec['command'])
+
+
+class StartLogsStateTests(unittest.TestCase):
+    def test_command_logs_reads_launcher_managed_backend_entry(self) -> None:
+        args = SimpleNamespace(service='backend', lines=50)
+        with (
+            mock.patch('start.cleanup_state_file', return_value={'processes': [{'label': 'backend', 'log_file': '/tmp/backend.log', 'mode': 'detached-process'}]}),
+            mock.patch('start.tail_file', return_value='backend-line'),
+            mock.patch('builtins.print') as print_mock,
+        ):
+            rc = start.command_logs(args)
+        self.assertEqual(rc, 0)
+        printed = '\n'.join(' '.join(str(part) for part in call.args) for call in print_mock.call_args_list)
+        self.assertIn('backend logs', printed.lower())
+        self.assertIn('backend-line', printed)
 
 
 if __name__ == '__main__':
