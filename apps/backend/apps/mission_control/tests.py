@@ -2925,6 +2925,49 @@ class LivePaperAutonomyFunnelApiTests(TestCase):
         self.assertIn('POSITION_EXPOSURE_GATE_APPLIED', summary.get('position_exposure_reason_codes', []))
 
     @patch(
+        'apps.mission_control.services.live_paper_autonomy_funnel._build_handoff_diagnostics',
+        return_value={
+            'risk_execution_scope_alignment_summary': {
+                'risk_decisions_current_window': 1,
+                'risk_decisions_excluded_out_of_scope': 0,
+                'execution_routes_current_window': 1,
+                'execution_routes_excluded_out_of_scope': 0,
+                'diagnostic_only_historical_count': 0,
+                'historical_reuse_detected_count': 0,
+                'scope_alignment_reason_codes': [
+                    'SCOPE_ALIGNMENT_SUMMARY_CONSUMED_SERIALIZED_THROTTLE_SPLIT',
+                    'CURRENT_WINDOW_SCOPE_ALIGNMENT_PROJECTED_FROM_RISK_THROTTLE',
+                    'CURRENT_WINDOW_EXECUTION_SCOPE_ALIGNMENT_PROJECTED',
+                    'CURRENT_WINDOW_AND_THROTTLE_SUMMARIES_ALIGNED',
+                ],
+            },
+            'risk_execution_scope_alignment_examples': [
+                {
+                    'risk_decision_id': 101,
+                    'market_id': 33,
+                    'current_window_eligible': True,
+                    'diagnostic_only_historical': False,
+                    'exclusion_reason': None,
+                    'dominant_reason_code': 'CURRENT_WINDOW_SCOPE_ALIGNMENT_PROJECTED_FROM_RISK_THROTTLE',
+                }
+            ],
+        },
+    )
+    def test_funnel_snapshot_propagates_scope_alignment_projection_without_reset(self, _mock_handoff):
+        from apps.mission_control.services.live_paper_autonomy_funnel import build_live_paper_autonomy_funnel_snapshot
+
+        payload = build_live_paper_autonomy_funnel_snapshot(window_minutes=60, preset_name='live_read_only_paper_conservative')
+        summary = payload.get('risk_execution_scope_alignment_summary') or {}
+        examples = payload.get('risk_execution_scope_alignment_examples') or []
+        self.assertEqual(summary.get('risk_decisions_current_window'), 1)
+        self.assertEqual(summary.get('execution_routes_current_window'), 1)
+        self.assertEqual(summary.get('risk_decisions_excluded_out_of_scope'), 0)
+        self.assertEqual(summary.get('execution_routes_excluded_out_of_scope'), 0)
+        self.assertIn('SCOPE_ALIGNMENT_SUMMARY_CONSUMED_SERIALIZED_THROTTLE_SPLIT', summary.get('scope_alignment_reason_codes', []))
+        self.assertEqual(len(examples), 1)
+        self.assertEqual(examples[0].get('risk_decision_id'), 101)
+
+    @patch(
         'apps.mission_control.services.live_paper_autonomy_funnel._build_paper_execution_diagnostics',
         return_value={
             'paper_execution_visible_count': 0,
