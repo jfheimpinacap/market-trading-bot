@@ -4548,7 +4548,79 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(risk.get('redundant_risk_decisions_throttled_out_of_scope'), 0)
         self.assertEqual(readiness.get('additive_entries_throttled_before_readiness_current_window'), 1)
         self.assertEqual(readiness.get('additive_entries_throttled_before_readiness_out_of_scope'), 0)
+        self.assertEqual(scope.get('risk_decisions_current_window'), 5)
+        self.assertEqual(scope.get('execution_routes_current_window'), 4)
         self.assertEqual(scope.get('risk_decisions_excluded_out_of_scope'), 0)
+        self.assertIn(
+            'SCOPE_ALIGNMENT_SUMMARY_CONSUMED_SERIALIZED_THROTTLE_SPLIT',
+            scope.get('scope_alignment_reason_codes', []),
+        )
+        self.assertIn(
+            'CURRENT_WINDOW_AND_THROTTLE_SUMMARIES_ALIGNED',
+            scope.get('scope_alignment_reason_codes', []),
+        )
+
+    def test_scope_split_projects_current_window_counts_from_serialized_throttle_split(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _apply_scope_split_to_throttle_diagnostics
+
+        scope, risk, readiness = _apply_scope_split_to_throttle_diagnostics(
+            scope_summary={
+                'risk_decisions_current_window': 0,
+                'risk_decisions_excluded_out_of_scope': 0,
+                'execution_routes_current_window': 0,
+                'execution_routes_excluded_out_of_scope': 0,
+                'historical_reuse_detected_count': 0,
+                'lineage_anchor_mismatch_count': 0,
+                'window_scope_mismatch_count': 0,
+                'scope_alignment_reason_codes': [],
+                'scope_alignment_examples': [],
+            },
+            risk_throttle_summary={
+                'redundant_risk_decisions_throttled': 70,
+                'redundant_risk_decisions_throttled_current_window': 70,
+                'redundant_risk_decisions_throttled_out_of_scope': 0,
+                'risk_decisions_created_normally': 1,
+                'risk_decisions_created_normally_current_window': 1,
+                'risk_decisions_created_normally_out_of_scope': 0,
+                'throttle_reason_codes': ['ACTIVE_EXPOSURE_RISK_THROTTLE_APPLIED'],
+                'active_exposure_risk_throttle_examples': [{'market_id': 12, 'current_window_eligible': True}],
+            },
+            readiness_throttle_summary={
+                'throttled_decision_events': 0,
+                'readiness_created_normally': 1,
+                'readiness_created_normally_current_window': 1,
+                'readiness_created_normally_out_of_scope': 0,
+                'throttle_reason_codes': ['ACTIVE_EXPOSURE_READINESS_THROTTLE_APPLIED'],
+                'active_exposure_readiness_throttle_examples': [{'market_id': 12, 'current_window_eligible': True}],
+            },
+        )
+
+        self.assertEqual(scope.get('risk_decisions_current_window'), 1)
+        self.assertEqual(scope.get('execution_routes_current_window'), 1)
+        self.assertEqual(scope.get('risk_decisions_excluded_out_of_scope'), 0)
+        self.assertEqual(scope.get('execution_routes_excluded_out_of_scope'), 0)
+        self.assertEqual(scope.get('diagnostic_only_historical_count'), 0)
+        self.assertEqual(scope.get('historical_reuse_detected_count'), 0)
+        self.assertIn(
+            'CURRENT_WINDOW_SCOPE_ALIGNMENT_PROJECTED_FROM_RISK_THROTTLE',
+            scope.get('scope_alignment_reason_codes', []),
+        )
+        self.assertIn(
+            'CURRENT_WINDOW_EXECUTION_SCOPE_ALIGNMENT_PROJECTED',
+            scope.get('scope_alignment_reason_codes', []),
+        )
+        self.assertIn(
+            'SCOPE_ALIGNMENT_SUMMARY_CONSUMED_SERIALIZED_THROTTLE_SPLIT',
+            scope.get('scope_alignment_reason_codes', []),
+        )
+        first_scope_example = (scope.get('scope_alignment_examples') or [{}])[0]
+        self.assertTrue(first_scope_example.get('current_window_eligible'))
+        self.assertFalse(first_scope_example.get('diagnostic_only_historical'))
+        self.assertIn('risk_decision_id', first_scope_example)
+        self.assertIn('market_id', first_scope_example)
+        self.assertIn('dominant_reason_code', first_scope_example)
+        self.assertEqual(risk.get('risk_decisions_created_normally_current_window'), 1)
+        self.assertEqual(readiness.get('readiness_created_normally_current_window'), 1)
 
     def test_scope_split_consumes_pre_split_risk_throttle_diagnostics(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _apply_scope_split_to_throttle_diagnostics
@@ -7579,6 +7651,59 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(len(json_payload.get('execution_exposure_provenance_examples') or []), 1)
         self.assertEqual((json_payload.get('execution_exposure_release_audit_summary') or {}).get('suppressions_audited'), 1)
         self.assertEqual(len(json_payload.get('execution_exposure_release_audit_examples') or []), 1)
+
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_export_log_scope_alignment_stays_consistent_with_throttle_split(self, mock_state_snapshot):
+        from apps.mission_control.services.test_console import export_test_console_log
+
+        payload = self._status_payload()
+        payload['text_export'] = ''
+        payload['active_exposure_risk_throttle_summary'] = {
+            'redundant_risk_decisions_throttled': 70,
+            'redundant_risk_decisions_throttled_current_window': 70,
+            'redundant_risk_decisions_throttled_out_of_scope': 0,
+            'risk_decisions_created_normally': 1,
+            'risk_decisions_created_normally_current_window': 1,
+            'risk_decisions_created_normally_out_of_scope': 0,
+        }
+        payload['active_exposure_readiness_throttle_summary'] = {
+            'additive_entries_throttled_before_readiness': 0,
+            'additive_entries_throttled_before_readiness_current_window': 0,
+            'additive_entries_throttled_before_readiness_out_of_scope': 0,
+            'readiness_created_normally': 1,
+            'readiness_created_normally_current_window': 1,
+            'readiness_created_normally_out_of_scope': 0,
+        }
+        payload['risk_execution_scope_alignment_summary'] = {
+            'risk_decisions_current_window': 1,
+            'risk_decisions_excluded_out_of_scope': 0,
+            'execution_routes_current_window': 1,
+            'execution_routes_excluded_out_of_scope': 0,
+            'diagnostic_only_historical_count': 0,
+            'historical_reuse_detected_count': 0,
+            'scope_alignment_reason_codes': ['SCOPE_ALIGNMENT_SUMMARY_CONSUMED_SERIALIZED_THROTTLE_SPLIT'],
+            'scope_alignment_summary': 'risk_decisions_current_window=1 execution_routes_current_window=1',
+        }
+        payload['risk_execution_scope_alignment_examples'] = [
+            {
+                'risk_decision_id': 101,
+                'market_id': 33,
+                'current_window_eligible': True,
+                'diagnostic_only_historical': False,
+                'exclusion_reason': None,
+                'dominant_reason_code': 'CURRENT_WINDOW_SCOPE_ALIGNMENT_PROJECTED_FROM_RISK_THROTTLE',
+            }
+        ]
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        text_payload = export_test_console_log(fmt='text')
+        json_payload = export_test_console_log(fmt='json')
+        self.assertIn('current_window_counts=risk:1/execution:1', text_payload)
+        self.assertIn('diagnostic_only_historical_counts=risk:0/execution:0', text_payload)
+        self.assertEqual(json_payload['risk_execution_scope_alignment_summary']['risk_decisions_current_window'], 1)
+        self.assertEqual(json_payload['risk_execution_scope_alignment_summary']['execution_routes_current_window'], 1)
+        self.assertEqual(json_payload['active_exposure_risk_throttle_summary']['risk_decisions_created_normally_current_window'], 1)
+        self.assertEqual(json_payload['active_exposure_readiness_throttle_summary']['readiness_created_normally_current_window'], 1)
 
     @patch('apps.mission_control.services.test_console._get_state_snapshot')
     def test_export_log_preserves_position_exposure_summary_from_snapshot(self, mock_state_snapshot):

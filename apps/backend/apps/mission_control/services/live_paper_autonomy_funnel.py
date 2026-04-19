@@ -992,7 +992,6 @@ def _apply_scope_split_to_throttle_diagnostics(
         redundant_out_of_scope = int(risk.get('redundant_risk_decisions_throttled_out_of_scope') or 0)
         created_current_window = int(risk.get('risk_decisions_created_normally_current_window') or 0)
         created_out_of_scope = int(risk.get('risk_decisions_created_normally_out_of_scope') or 0)
-        # Keep aggregate totals canonical when split is provided upstream.
         if (redundant_current_window + redundant_out_of_scope) != redundant_total:
             redundant_out_of_scope = max(redundant_total - redundant_current_window, 0)
         if (created_current_window + created_out_of_scope) != created_total:
@@ -1009,12 +1008,58 @@ def _apply_scope_split_to_throttle_diagnostics(
 
     readiness_throttled_total = int(readiness.get('throttled_decision_events') or 0)
     readiness_created_total = int(readiness.get('readiness_created_normally') or 0)
-    readiness_current_window = min(readiness_throttled_total, execution_routes_current_window)
-    readiness_out_of_scope = max(readiness_throttled_total - readiness_current_window, 0)
-    readiness_created_current_window = min(readiness_created_total, execution_routes_current_window)
-    readiness_created_out_of_scope = max(readiness_created_total - readiness_created_current_window, 0)
+    readiness_split_present = any(
+        key in readiness
+        for key in (
+            'additive_entries_throttled_before_readiness_current_window',
+            'additive_entries_throttled_before_readiness_out_of_scope',
+            'readiness_created_normally_current_window',
+            'readiness_created_normally_out_of_scope',
+        )
+    )
+    if readiness_split_present:
+        readiness_current_window = int(readiness.get('additive_entries_throttled_before_readiness_current_window') or 0)
+        readiness_out_of_scope = int(readiness.get('additive_entries_throttled_before_readiness_out_of_scope') or 0)
+        readiness_created_current_window = int(readiness.get('readiness_created_normally_current_window') or 0)
+        readiness_created_out_of_scope = int(readiness.get('readiness_created_normally_out_of_scope') or 0)
+        if (readiness_current_window + readiness_out_of_scope) != readiness_throttled_total:
+            readiness_out_of_scope = max(readiness_throttled_total - readiness_current_window, 0)
+        if (readiness_created_current_window + readiness_created_out_of_scope) != readiness_created_total:
+            readiness_created_out_of_scope = max(readiness_created_total - readiness_created_current_window, 0)
+    else:
+        readiness_current_window = min(readiness_throttled_total, execution_routes_current_window)
+        readiness_out_of_scope = max(readiness_throttled_total - readiness_current_window, 0)
+        readiness_created_current_window = min(readiness_created_total, execution_routes_current_window)
+        readiness_created_out_of_scope = max(readiness_created_total - readiness_created_current_window, 0)
 
-    inferred_historical_visible = max(risk_out_of_scope_estimate, readiness_out_of_scope, 0)
+    projected_scope_from_serialized_split = bool(risk_split_present or readiness_split_present)
+    if projected_scope_from_serialized_split:
+        risk_decisions_current_window = max(risk_decisions_current_window, created_current_window)
+        execution_routes_current_window = max(
+            execution_routes_current_window,
+            readiness_created_current_window,
+            risk_decisions_current_window,
+        )
+        risk_decisions_excluded_out_of_scope = max(risk_decisions_excluded_out_of_scope, risk_out_of_scope_estimate)
+        execution_routes_excluded_out_of_scope = max(
+            execution_routes_excluded_out_of_scope,
+            max(risk_out_of_scope_estimate, readiness_out_of_scope + readiness_created_out_of_scope),
+        )
+        scope_codes = _unique_codes(
+            list(scope.get('scope_alignment_reason_codes') or [])
+            + [
+                'SCOPE_ALIGNMENT_SUMMARY_CONSUMED_SERIALIZED_THROTTLE_SPLIT',
+            ]
+        )
+        if risk_decisions_current_window > 0:
+            scope_codes.append('CURRENT_WINDOW_SCOPE_ALIGNMENT_PROJECTED_FROM_RISK_THROTTLE')
+        if execution_routes_current_window > 0:
+            scope_codes.append('CURRENT_WINDOW_EXECUTION_SCOPE_ALIGNMENT_PROJECTED')
+        if risk_decisions_current_window > 0 and execution_routes_current_window > 0:
+            scope_codes.append('CURRENT_WINDOW_AND_THROTTLE_SUMMARIES_ALIGNED')
+        scope['scope_alignment_reason_codes'] = _unique_codes(scope_codes)
+
+    inferred_historical_visible = max(risk_out_of_scope_estimate, readiness_out_of_scope, readiness_created_out_of_scope, 0)
     current_window_empty_historical_visible = bool(
         inferred_historical_visible > 0
         and risk_decisions_current_window == 0
@@ -1045,9 +1090,6 @@ def _apply_scope_split_to_throttle_diagnostics(
             scope_codes.append('CURRENT_WINDOW_EMPTY_HISTORICAL_THROTTLE_VISIBLE')
             scope_codes = _unique_codes(scope_codes)
         scope['scope_alignment_reason_codes'] = scope_codes
-    if inferred_historical_visible > 0:
-        risk_decisions_excluded_out_of_scope = max(risk_decisions_excluded_out_of_scope, inferred_historical_visible)
-        execution_routes_excluded_out_of_scope = max(execution_routes_excluded_out_of_scope, inferred_historical_visible)
 
     risk_codes = list(risk.get('throttle_reason_codes') or [])
     if redundant_out_of_scope > 0 or created_out_of_scope > 0:
@@ -1137,6 +1179,8 @@ def _apply_scope_split_to_throttle_diagnostics(
         f"throttle_reason_codes={','.join(readiness.get('throttle_reason_codes') or []) or 'none'}"
     )
 
+    scope['risk_decisions_current_window'] = int(risk_decisions_current_window)
+    scope['execution_routes_current_window'] = int(execution_routes_current_window)
     scope['risk_decisions_excluded_out_of_scope'] = int(risk_decisions_excluded_out_of_scope)
     scope['execution_routes_excluded_out_of_scope'] = int(execution_routes_excluded_out_of_scope)
     scope['historical_reuse_detected_count'] = int(historical_reuse_detected_count)
@@ -1147,9 +1191,39 @@ def _apply_scope_split_to_throttle_diagnostics(
             inferred_historical_visible,
         )
     )
-    scope_examples = list(scope.get('scope_alignment_examples') or [])
+    scope_examples = [dict(row) for row in list(scope.get('scope_alignment_examples') or [])]
     for row in scope_examples:
+        row.setdefault('risk_decision_id', None)
+        row.setdefault('market_id', None)
+        row['current_window_eligible'] = bool(row.get('current_window_eligible'))
         row['diagnostic_only_historical'] = not bool(row.get('current_window_eligible'))
+        row.setdefault('exclusion_reason', 'historical_out_of_scope_diagnostic_only' if row['diagnostic_only_historical'] else None)
+        row.setdefault(
+            'dominant_reason_code',
+            'THROTTLE_DIAGNOSTIC_HISTORY_VISIBLE_OUT_OF_SCOPE' if row['diagnostic_only_historical'] else 'CURRENT_WINDOW_FANOUT_ELIGIBLE',
+        )
+
+    if not scope_examples and (risk_examples or readiness_examples):
+        synthesized_examples = (risk_examples or readiness_examples)[:3]
+        for row in synthesized_examples:
+            scope_examples.append(
+                {
+                    'risk_decision_id': _safe_int(row.get('risk_decision_id')),
+                    'market_id': _safe_int(row.get('market_id')),
+                    'current_window_eligible': bool(row.get('current_window_eligible')),
+                    'diagnostic_only_historical': bool(row.get('diagnostic_only_historical')),
+                    'exclusion_reason': row.get('exclusion_reason'),
+                    'dominant_reason_code': str(
+                        row.get('dominant_reason_code')
+                        or (
+                            'THROTTLE_DIAGNOSTIC_HISTORY_VISIBLE_OUT_OF_SCOPE'
+                            if row.get('diagnostic_only_historical')
+                            else 'CURRENT_WINDOW_FANOUT_ELIGIBLE'
+                        )
+                    ),
+                }
+            )
+
     scope['scope_alignment_examples'] = scope_examples[:3]
     scope['scope_alignment_summary'] = (
         f"risk_decisions_current_window={scope.get('risk_decisions_current_window', 0)} "
