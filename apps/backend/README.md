@@ -4938,3 +4938,42 @@ Scope de seguridad:
 - Sigue en modo **REAL_READ_ONLY + PAPER_ONLY**.
 - No habilita live trading real.
 - Observability-first para V1 local/test: si shortlist se bloquea antes de handoff, el export muestra causas explícitas de market linking y downstream route (incluyendo bridge a pursuit review) sin bypass de consensus/risk/policy/safety.
+
+## Mission Control Test Console — backend-only test profiles (Prompt 327A)
+
+Se agregó soporte backend-only para perfiles de prueba en Test Console, sin cambios de policy, thresholds ni lógica central de trading.
+
+Perfiles canónicos:
+
+- `full_e2e` (default): mantiene el comportamiento completo existente.
+- `scope_throttle_diagnostics`: prioriza wiring diagnóstico de scope/throttle + handoff + ejecución paper.
+- `prediction_risk_path`: prioriza ruta prediction→risk con visibilidad de handoff scoring/borderline.
+- `exposure_diagnostics`: foco compacto en diagnósticos exposure/risk/execution.
+- `export_snapshot_integrity`: foco en integridad de export/snapshot sin ejecutar módulos pesados.
+
+Cada perfil declara módulos include/omit:
+
+- `include_scan`
+- `include_handoff`
+- `include_prediction`
+- `include_risk`
+- `include_execution`
+- `include_export_text`
+- `include_export_json`
+
+Uso (backend):
+
+- `POST /api/mission-control/test-console/start/` con `profile_id` opcional.
+- Si no se pasa `profile_id`, se usa `full_e2e`.
+
+Payload/status/export enriquecido:
+
+- `test_profile`
+- `modules_included`
+- `modules_omitted`
+- `run_scope` (`fresh_full_run` vs `targeted_diagnostic_run`)
+
+Nota de alcance:
+
+- cambio backend-only para acelerar validaciones puntuales sin depender siempre de corrida full.
+- no se modifican policy/thresholds/decisiones del bot ni launcher.

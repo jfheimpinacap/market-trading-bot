@@ -75,6 +75,75 @@ _PHASE_LABELS = {
 }
 
 _HISTORY_SIZE = 10
+TEST_PROFILE_FULL_E2E = 'full_e2e'
+TEST_PROFILE_SCOPE_THROTTLE_DIAGNOSTICS = 'scope_throttle_diagnostics'
+TEST_PROFILE_PREDICTION_RISK_PATH = 'prediction_risk_path'
+TEST_PROFILE_EXPOSURE_DIAGNOSTICS = 'exposure_diagnostics'
+TEST_PROFILE_EXPORT_SNAPSHOT_INTEGRITY = 'export_snapshot_integrity'
+
+TEST_CONSOLE_MODULE_SCAN = 'include_scan'
+TEST_CONSOLE_MODULE_HANDOFF = 'include_handoff'
+TEST_CONSOLE_MODULE_PREDICTION = 'include_prediction'
+TEST_CONSOLE_MODULE_RISK = 'include_risk'
+TEST_CONSOLE_MODULE_EXECUTION = 'include_execution'
+TEST_CONSOLE_MODULE_EXPORT_TEXT = 'include_export_text'
+TEST_CONSOLE_MODULE_EXPORT_JSON = 'include_export_json'
+
+_TEST_PROFILE_ORDER = [
+    TEST_PROFILE_FULL_E2E,
+    TEST_PROFILE_SCOPE_THROTTLE_DIAGNOSTICS,
+    TEST_PROFILE_PREDICTION_RISK_PATH,
+    TEST_PROFILE_EXPOSURE_DIAGNOSTICS,
+    TEST_PROFILE_EXPORT_SNAPSHOT_INTEGRITY,
+]
+
+_TEST_PROFILE_DEFINITIONS: dict[str, dict[str, bool]] = {
+    TEST_PROFILE_FULL_E2E: {
+        TEST_CONSOLE_MODULE_SCAN: True,
+        TEST_CONSOLE_MODULE_HANDOFF: True,
+        TEST_CONSOLE_MODULE_PREDICTION: True,
+        TEST_CONSOLE_MODULE_RISK: True,
+        TEST_CONSOLE_MODULE_EXECUTION: True,
+        TEST_CONSOLE_MODULE_EXPORT_TEXT: True,
+        TEST_CONSOLE_MODULE_EXPORT_JSON: True,
+    },
+    TEST_PROFILE_SCOPE_THROTTLE_DIAGNOSTICS: {
+        TEST_CONSOLE_MODULE_SCAN: False,
+        TEST_CONSOLE_MODULE_HANDOFF: True,
+        TEST_CONSOLE_MODULE_PREDICTION: False,
+        TEST_CONSOLE_MODULE_RISK: True,
+        TEST_CONSOLE_MODULE_EXECUTION: True,
+        TEST_CONSOLE_MODULE_EXPORT_TEXT: True,
+        TEST_CONSOLE_MODULE_EXPORT_JSON: True,
+    },
+    TEST_PROFILE_PREDICTION_RISK_PATH: {
+        TEST_CONSOLE_MODULE_SCAN: False,
+        TEST_CONSOLE_MODULE_HANDOFF: True,
+        TEST_CONSOLE_MODULE_PREDICTION: True,
+        TEST_CONSOLE_MODULE_RISK: True,
+        TEST_CONSOLE_MODULE_EXECUTION: False,
+        TEST_CONSOLE_MODULE_EXPORT_TEXT: True,
+        TEST_CONSOLE_MODULE_EXPORT_JSON: True,
+    },
+    TEST_PROFILE_EXPOSURE_DIAGNOSTICS: {
+        TEST_CONSOLE_MODULE_SCAN: False,
+        TEST_CONSOLE_MODULE_HANDOFF: False,
+        TEST_CONSOLE_MODULE_PREDICTION: False,
+        TEST_CONSOLE_MODULE_RISK: True,
+        TEST_CONSOLE_MODULE_EXECUTION: True,
+        TEST_CONSOLE_MODULE_EXPORT_TEXT: True,
+        TEST_CONSOLE_MODULE_EXPORT_JSON: True,
+    },
+    TEST_PROFILE_EXPORT_SNAPSHOT_INTEGRITY: {
+        TEST_CONSOLE_MODULE_SCAN: False,
+        TEST_CONSOLE_MODULE_HANDOFF: False,
+        TEST_CONSOLE_MODULE_PREDICTION: False,
+        TEST_CONSOLE_MODULE_RISK: False,
+        TEST_CONSOLE_MODULE_EXECUTION: False,
+        TEST_CONSOLE_MODULE_EXPORT_TEXT: True,
+        TEST_CONSOLE_MODULE_EXPORT_JSON: True,
+    },
+}
 
 
 @dataclass
@@ -88,6 +157,11 @@ _state_lock = Lock()
 _state = _ConsoleState(
     status={
         'test_status': TEST_STATUS_IDLE,
+        'test_profile': TEST_PROFILE_FULL_E2E,
+        'available_test_profiles': {profile_id: dict(_TEST_PROFILE_DEFINITIONS[profile_id]) for profile_id in _TEST_PROFILE_ORDER},
+        'modules_included': [],
+        'modules_omitted': [],
+        'run_scope': 'fresh_full_run',
         'current_phase': None,
         'started_at': None,
         'ended_at': None,
@@ -176,6 +250,36 @@ def _str_field(payload: dict[str, Any], key: str) -> str:
 
 def _list_field(payload: dict[str, Any], key: str) -> list[Any]:
     return list(payload.get(key) or [])
+
+
+def list_test_profiles() -> dict[str, dict[str, bool]]:
+    return {profile_id: dict(_TEST_PROFILE_DEFINITIONS[profile_id]) for profile_id in _TEST_PROFILE_ORDER}
+
+
+def resolve_test_profile(*, profile_id: str | None) -> tuple[str, dict[str, bool]]:
+    candidate = str(profile_id or TEST_PROFILE_FULL_E2E).strip() or TEST_PROFILE_FULL_E2E
+    if candidate not in _TEST_PROFILE_DEFINITIONS:
+        candidate = TEST_PROFILE_FULL_E2E
+    return candidate, dict(_TEST_PROFILE_DEFINITIONS[candidate])
+
+
+def _profile_module_lists(profile_modules: dict[str, bool]) -> tuple[list[str], list[str]]:
+    included: list[str] = []
+    omitted: list[str] = []
+    for module_name in (
+        TEST_CONSOLE_MODULE_SCAN,
+        TEST_CONSOLE_MODULE_HANDOFF,
+        TEST_CONSOLE_MODULE_PREDICTION,
+        TEST_CONSOLE_MODULE_RISK,
+        TEST_CONSOLE_MODULE_EXECUTION,
+        TEST_CONSOLE_MODULE_EXPORT_TEXT,
+        TEST_CONSOLE_MODULE_EXPORT_JSON,
+    ):
+        if bool(profile_modules.get(module_name)):
+            included.append(module_name)
+        else:
+            omitted.append(module_name)
+    return included, omitted
 
 
 def _set_state(*, status: dict[str, Any] | None = None, log: dict[str, Any] | None = None, append_history: bool = False) -> None:
@@ -456,15 +560,143 @@ def _build_active_operational_overlay_summary(*, payload: dict[str, Any]) -> tup
 
 
 def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, scan_run: SourceScanRun | None = None) -> None:
+    _sync_operational_snapshot_for_profile(
+        payload=payload,
+        preset_name=preset_name,
+        scan_run=scan_run,
+        profile_modules=dict(_TEST_PROFILE_DEFINITIONS[TEST_PROFILE_FULL_E2E]),
+    )
+
+
+def _apply_profile_payload_scope(*, payload: dict[str, Any], profile_modules: dict[str, bool]) -> None:
+    if not profile_modules.get(TEST_CONSOLE_MODULE_SCAN, False):
+        payload['scan_summary'] = {}
+    if not profile_modules.get(TEST_CONSOLE_MODULE_HANDOFF, False):
+        for key in (
+            'handoff_summary',
+            'shortlist_handoff_summary',
+            'downstream_route_summary',
+            'downstream_route_examples',
+            'market_link_summary',
+            'market_link_examples',
+            'consensus_alignment',
+            'handoff_scoring_summary',
+            'handoff_scoring_examples',
+            'handoff_borderline_summary',
+            'handoff_borderline_examples',
+            'handoff_structural_summary',
+            'handoff_structural_examples',
+        ):
+            payload.pop(key, None)
+    if not profile_modules.get(TEST_CONSOLE_MODULE_PREDICTION, False):
+        for key in (
+            'prediction_intake_summary',
+            'prediction_intake_examples',
+            'prediction_visibility_summary',
+            'prediction_visibility_examples',
+            'prediction_artifact_summary',
+            'prediction_artifact_examples',
+            'prediction_risk_summary',
+            'prediction_risk_examples',
+            'prediction_risk_caution_summary',
+            'prediction_risk_caution_examples',
+            'prediction_status_summary',
+            'prediction_status_examples',
+        ):
+            payload.pop(key, None)
+    if not profile_modules.get(TEST_CONSOLE_MODULE_RISK, False):
+        for key in (
+            'validation_status',
+            'trend_status',
+            'readiness_status',
+            'gate_status',
+            'active_exposure_risk_throttle_summary',
+            'active_exposure_risk_throttle_examples',
+            'risk_execution_scope_alignment_summary',
+            'risk_execution_scope_alignment_examples',
+        ):
+            payload.pop(key, None)
+    if not profile_modules.get(TEST_CONSOLE_MODULE_EXECUTION, False):
+        for key in (
+            'trial_status',
+            'extended_run_status',
+            'paper_execution_summary',
+            'paper_execution_examples',
+            'paper_execution_visibility_summary',
+            'paper_execution_visibility_examples',
+            'paper_trade_summary',
+            'paper_trade_examples',
+            'paper_trade_decision_summary',
+            'paper_trade_decision_examples',
+            'paper_trade_dispatch_summary',
+            'paper_trade_dispatch_examples',
+            'paper_trade_final_summary',
+            'paper_trade_final_examples',
+            'execution_candidate_creation_gate_summary',
+            'execution_candidate_creation_gate_examples',
+            'execution_exposure_provenance_summary',
+            'execution_exposure_provenance_examples',
+            'execution_exposure_release_audit_summary',
+            'execution_exposure_release_audit_examples',
+            'active_exposure_readiness_throttle_summary',
+            'active_exposure_readiness_throttle_examples',
+            'execution_promotion_gate_summary',
+            'execution_promotion_gate_examples',
+            'execution_lineage_summary',
+            'final_fanout_summary',
+            'final_fanout_examples',
+            'cash_pressure_summary',
+            'cash_pressure_examples',
+            'position_exposure_summary',
+            'execution_artifact_summary',
+            'execution_artifact_examples',
+        ):
+            payload.pop(key, None)
+
+
+def _sync_operational_snapshot_for_profile(
+    *,
+    payload: dict[str, Any],
+    preset_name: str,
+    scan_run: SourceScanRun | None = None,
+    profile_modules: dict[str, bool],
+) -> None:
     bootstrap_status = get_live_paper_bootstrap_status(preset_name=preset_name)
-    validation = build_live_paper_validation_digest(preset_name=preset_name)
-    trend = build_live_paper_trial_trend_digest(limit=5, preset=preset_name)
-    gate = build_extended_paper_run_gate(preset_name=preset_name)
-    extended = get_extended_paper_run_status(preset_name=preset_name)
+    validation = (
+        build_live_paper_validation_digest(preset_name=preset_name)
+        if profile_modules.get(TEST_CONSOLE_MODULE_RISK, False)
+        else {'validation_status': 'SKIPPED_BY_PROFILE'}
+    )
+    trend = (
+        build_live_paper_trial_trend_digest(limit=5, preset=preset_name)
+        if profile_modules.get(TEST_CONSOLE_MODULE_RISK, False)
+        else {'trend_status': 'SKIPPED_BY_PROFILE', 'readiness_status': 'SKIPPED_BY_PROFILE'}
+    )
+    gate = (
+        build_extended_paper_run_gate(preset_name=preset_name)
+        if profile_modules.get(TEST_CONSOLE_MODULE_RISK, False)
+        else {'gate_status': 'SKIPPED_BY_PROFILE', 'next_action_hint': 'Run full_e2e profile for gate evaluation', 'reason_codes': []}
+    )
+    extended = (
+        get_extended_paper_run_status(preset_name=preset_name)
+        if profile_modules.get(TEST_CONSOLE_MODULE_EXECUTION, False)
+        else {'extended_run_active': False, 'gate_status': 'SKIPPED_BY_PROFILE'}
+    )
     attention = get_live_paper_attention_alert_status()
     funnel: dict[str, Any]
     try:
-        funnel = build_live_paper_autonomy_funnel_snapshot(window_minutes=60, preset_name=preset_name)
+        if any(
+            profile_modules.get(module_name, False)
+            for module_name in (
+                TEST_CONSOLE_MODULE_HANDOFF,
+                TEST_CONSOLE_MODULE_PREDICTION,
+                TEST_CONSOLE_MODULE_RISK,
+                TEST_CONSOLE_MODULE_EXECUTION,
+            )
+        ):
+            funnel = build_live_paper_autonomy_funnel_snapshot(window_minutes=60, preset_name=preset_name)
+        else:
+            funnel = {}
     except (NameError, KeyError, UnboundLocalError):
         funnel = {}
         payload.setdefault('warnings', []).append(TEST_CONSOLE_EXPOSURE_DIAGNOSTIC_FALLBACK_USED)
@@ -679,6 +911,7 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
         payload['position_exposure_summary'] = position_exposure
     payload['funnel_status_window'] = str(funnel.get('funnel_status') or 'UNKNOWN')
     payload['funnel_status'] = effective_funnel_status
+    _apply_profile_payload_scope(payload=payload, profile_modules=profile_modules)
     payload['summary'] = (
         f"funnel_status={payload.get('funnel_status')} window_funnel_status={payload.get('funnel_status_window')} "
         f"overlay_status={overlay_summary.get('overlay_status')} gate_status={payload.get('gate_status')}. "
@@ -769,6 +1002,10 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         f"timestamp: {payload.get('timestamp')}",
         f"preset: {payload.get('preset_name')}",
         f"test_status: {payload.get('test_status')}",
+        f"test_profile: {payload.get('test_profile') or TEST_PROFILE_FULL_E2E}",
+        f"fresh_full_run_vs_targeted: {payload.get('run_scope') or 'fresh_full_run'}",
+        f"modules_included: {','.join(payload.get('modules_included') or []) or 'none'}",
+        f"modules_omitted: {','.join(payload.get('modules_omitted') or []) or 'none'}",
         f"current_phase: {payload.get('current_phase')}",
         f"validation_status: {payload.get('validation_status')}",
         f"trial_status: {payload.get('trial_status')}",
@@ -1349,14 +1586,22 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     return '\n'.join(lines)
 
 
-def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
+def start_test_console(*, preset_name: str | None = None, profile_id: str | None = None) -> dict[str, Any]:
     target_preset = (preset_name or PRESET_NAME).strip() or PRESET_NAME
+    resolved_profile_id, profile_modules = resolve_test_profile(profile_id=profile_id)
+    modules_included, modules_omitted = _profile_module_lists(profile_modules)
+    run_scope = 'fresh_full_run' if resolved_profile_id == TEST_PROFILE_FULL_E2E else 'targeted_diagnostic_run'
     now = timezone.now()
     payload: dict[str, Any] = {
         'timestamp': now,
         'started_at': now,
         'ended_at': None,
         'preset_name': target_preset,
+        'test_profile': resolved_profile_id,
+        'available_test_profiles': list_test_profiles(),
+        'modules_included': modules_included,
+        'modules_omitted': modules_omitted,
+        'run_scope': run_scope,
         'test_status': TEST_STATUS_RUNNING,
         'current_phase': 'bootstrap',
         'trial_status': 'SKIPPED',
@@ -1400,32 +1645,37 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         payload['updated_at'] = timezone.now()
         payload['last_event'] = 'Scan phase started'
         _set_state(status=_augment_progress(payload))
-        try:
-            scan_run = run_scan_agent(triggered_by='mission_control_test_console')
-            payload['step_results'].append(
-                {
-                    'phase': 'scan',
-                    'status': 'ok',
-                    'result': {
-                        'run_id': scan_run.id,
-                        'signal_count': scan_run.signal_count,
-                        'deduped_item_count': scan_run.deduped_item_count,
-                        'clustered_count': scan_run.clustered_count,
-                    },
-                }
-            )
+        if profile_modules.get(TEST_CONSOLE_MODULE_SCAN, False):
+            try:
+                scan_run = run_scan_agent(triggered_by='mission_control_test_console')
+                payload['step_results'].append(
+                    {
+                        'phase': 'scan',
+                        'status': 'ok',
+                        'result': {
+                            'run_id': scan_run.id,
+                            'signal_count': scan_run.signal_count,
+                            'deduped_item_count': scan_run.deduped_item_count,
+                            'clustered_count': scan_run.clustered_count,
+                        },
+                    }
+                )
+                payload['updated_at'] = timezone.now()
+                payload['last_event'] = 'Scan completed'
+                if int(scan_run.signal_count or 0) <= 0:
+                    payload['warnings'].append('scan produced zero signals')
+                    payload['blocker_summary'].append('SCAN_ZERO_SIGNALS')
+                    payload['last_reason_code'] = 'SCAN_ZERO_SIGNALS'
+            except Exception as exc:  # pragma: no cover
+                payload['warnings'].append(f'scan skipped/failed: {exc}')
+                payload['step_results'].append({'phase': 'scan', 'status': 'warning', 'result': {'error': str(exc)}})
+                payload['updated_at'] = timezone.now()
+                payload['last_event'] = 'Scan warning'
+                payload['last_reason_code'] = 'SCAN_WARNING'
+        else:
+            payload['step_results'].append({'phase': 'scan', 'status': 'skipped', 'result': {'reason': 'profile_scan_disabled'}})
             payload['updated_at'] = timezone.now()
-            payload['last_event'] = 'Scan completed'
-            if int(scan_run.signal_count or 0) <= 0:
-                payload['warnings'].append('scan produced zero signals')
-                payload['blocker_summary'].append('SCAN_ZERO_SIGNALS')
-                payload['last_reason_code'] = 'SCAN_ZERO_SIGNALS'
-        except Exception as exc:  # pragma: no cover
-            payload['warnings'].append(f'scan skipped/failed: {exc}')
-            payload['step_results'].append({'phase': 'scan', 'status': 'warning', 'result': {'error': str(exc)}})
-            payload['updated_at'] = timezone.now()
-            payload['last_event'] = 'Scan warning'
-            payload['last_reason_code'] = 'SCAN_WARNING'
+            payload['last_event'] = 'Scan skipped by test profile'
         _set_state(status=_augment_progress(payload))
 
         payload['current_phase'] = 'consensus_review'
@@ -1437,7 +1687,13 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
             shortlisted_count = scan_run.signals.filter(status=NarrativeSignalStatus.SHORTLISTED).count()
         else:
             shortlisted_count = NarrativeSignal.objects.filter(status=NarrativeSignalStatus.SHORTLISTED).count()
-        if shortlisted_count > 0:
+        if not profile_modules.get(TEST_CONSOLE_MODULE_HANDOFF, False):
+            payload['step_results'].append({'phase': 'consensus_review', 'status': 'skipped', 'result': {'reason': 'profile_handoff_disabled'}})
+            payload['step_results'].append({'phase': 'pursuit_review', 'status': 'skipped', 'result': {'reason': 'profile_handoff_disabled'}})
+            payload['updated_at'] = timezone.now()
+            payload['last_event'] = 'Handoff skipped by test profile'
+            _set_state(status=_augment_progress(payload))
+        elif shortlisted_count > 0:
             try:
                 consensus = run_consensus_review(triggered_by='mission_control_test_console')
                 payload['step_results'].append(
@@ -1459,30 +1715,35 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
                 payload['last_event'] = 'Consensus review warning'
                 payload['last_reason_code'] = 'CONSENSUS_WARNING'
             _set_state(status=_augment_progress(payload))
-            try:
-                pursuit = run_pursuit_review(
-                    triggered_by='mission_control_test_console',
-                    market_limit=max(int(shortlisted_count), 1),
-                )
-                payload['step_results'].append(
-                    {
-                        'phase': 'pursuit_review',
-                        'status': 'ok',
-                        'result': {
-                            'pursuit_run_id': pursuit.id,
-                            'considered_market_count': pursuit.considered_market_count,
-                            'prediction_ready_count': pursuit.prediction_ready_count,
-                        },
-                    }
-                )
+            if profile_modules.get(TEST_CONSOLE_MODULE_PREDICTION, False):
+                try:
+                    pursuit = run_pursuit_review(
+                        triggered_by='mission_control_test_console',
+                        market_limit=max(int(shortlisted_count), 1),
+                    )
+                    payload['step_results'].append(
+                        {
+                            'phase': 'pursuit_review',
+                            'status': 'ok',
+                            'result': {
+                                'pursuit_run_id': pursuit.id,
+                                'considered_market_count': pursuit.considered_market_count,
+                                'prediction_ready_count': pursuit.prediction_ready_count,
+                            },
+                        }
+                    )
+                    payload['updated_at'] = timezone.now()
+                    payload['last_event'] = 'Pursuit review completed'
+                except Exception as exc:  # pragma: no cover
+                    payload['warnings'].append(f'pursuit review failed: {exc}')
+                    payload['step_results'].append({'phase': 'pursuit_review', 'status': 'warning', 'result': {'error': str(exc)}})
+                    payload['updated_at'] = timezone.now()
+                    payload['last_event'] = 'Pursuit review warning'
+                    payload['last_reason_code'] = 'PURSUIT_WARNING'
+            else:
+                payload['step_results'].append({'phase': 'pursuit_review', 'status': 'skipped', 'result': {'reason': 'profile_prediction_disabled'}})
                 payload['updated_at'] = timezone.now()
-                payload['last_event'] = 'Pursuit review completed'
-            except Exception as exc:  # pragma: no cover
-                payload['warnings'].append(f'pursuit review failed: {exc}')
-                payload['step_results'].append({'phase': 'pursuit_review', 'status': 'warning', 'result': {'error': str(exc)}})
-                payload['updated_at'] = timezone.now()
-                payload['last_event'] = 'Pursuit review warning'
-                payload['last_reason_code'] = 'PURSUIT_WARNING'
+                payload['last_event'] = 'Pursuit skipped by test profile'
             _set_state(status=_augment_progress(payload))
         else:
             payload['step_results'].append({'phase': 'consensus_review', 'status': 'skipped', 'result': {'reason': 'no_shortlisted_signals'}})
@@ -1496,9 +1757,13 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         payload['updated_at'] = timezone.now()
         payload['last_event'] = 'Execution trial started'
         _set_state(status=_augment_progress(payload))
-        trial = run_live_paper_trial_run(preset_name=target_preset, heartbeat_passes=1)
-        payload['trial_status'] = str(trial.get('trial_status') or 'UNKNOWN')
-        payload['step_results'].append({'phase': 'trial', 'status': 'ok', 'result': trial})
+        if profile_modules.get(TEST_CONSOLE_MODULE_EXECUTION, False):
+            trial = run_live_paper_trial_run(preset_name=target_preset, heartbeat_passes=1)
+            payload['trial_status'] = str(trial.get('trial_status') or 'UNKNOWN')
+            payload['step_results'].append({'phase': 'trial', 'status': 'ok', 'result': trial})
+        else:
+            payload['trial_status'] = 'SKIPPED_BY_PROFILE'
+            payload['step_results'].append({'phase': 'trial', 'status': 'skipped', 'result': {'reason': 'profile_execution_disabled'}})
         payload['updated_at'] = timezone.now()
         payload['last_event'] = 'Execution trial completed'
         _set_state(status=_augment_progress(payload))
@@ -1507,9 +1772,13 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         payload['updated_at'] = timezone.now()
         payload['last_event'] = 'Risk validation started'
         _set_state(status=_augment_progress(payload))
-        validation = build_live_paper_validation_digest(preset_name=target_preset)
-        payload['validation_status'] = str(validation.get('validation_status') or 'UNKNOWN')
-        payload['step_results'].append({'phase': 'validation', 'status': 'ok', 'result': validation})
+        if profile_modules.get(TEST_CONSOLE_MODULE_RISK, False):
+            validation = build_live_paper_validation_digest(preset_name=target_preset)
+            payload['validation_status'] = str(validation.get('validation_status') or 'UNKNOWN')
+            payload['step_results'].append({'phase': 'validation', 'status': 'ok', 'result': validation})
+        else:
+            payload['validation_status'] = 'SKIPPED_BY_PROFILE'
+            payload['step_results'].append({'phase': 'validation', 'status': 'skipped', 'result': {'reason': 'profile_risk_disabled'}})
         payload['updated_at'] = timezone.now()
         payload['last_event'] = 'Risk validation completed'
         _set_state(status=_augment_progress(payload))
@@ -1518,10 +1787,15 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         payload['updated_at'] = timezone.now()
         payload['last_event'] = 'Trend review started'
         _set_state(status=_augment_progress(payload))
-        trend = build_live_paper_trial_trend_digest(limit=5, preset=target_preset)
-        payload['trend_status'] = str(trend.get('trend_status') or 'UNKNOWN')
-        payload['readiness_status'] = str(trend.get('readiness_status') or 'UNKNOWN')
-        payload['step_results'].append({'phase': 'trend', 'status': 'ok', 'result': trend})
+        if profile_modules.get(TEST_CONSOLE_MODULE_RISK, False):
+            trend = build_live_paper_trial_trend_digest(limit=5, preset=target_preset)
+            payload['trend_status'] = str(trend.get('trend_status') or 'UNKNOWN')
+            payload['readiness_status'] = str(trend.get('readiness_status') or 'UNKNOWN')
+            payload['step_results'].append({'phase': 'trend', 'status': 'ok', 'result': trend})
+        else:
+            payload['trend_status'] = 'SKIPPED_BY_PROFILE'
+            payload['readiness_status'] = 'SKIPPED_BY_PROFILE'
+            payload['step_results'].append({'phase': 'trend', 'status': 'skipped', 'result': {'reason': 'profile_risk_disabled'}})
         payload['updated_at'] = timezone.now()
         payload['last_event'] = 'Trend review completed'
         _set_state(status=_augment_progress(payload))
@@ -1530,13 +1804,17 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         payload['updated_at'] = timezone.now()
         payload['last_event'] = 'Gate evaluation started'
         _set_state(status=_augment_progress(payload))
-        gate = build_extended_paper_run_gate(preset_name=target_preset)
-        payload['gate_status'] = str(gate.get('gate_status') or 'UNKNOWN')
-        payload['reason_codes'] = list(dict.fromkeys(gate.get('reason_codes') or []))
-        payload['step_results'].append({'phase': 'gate', 'status': 'ok', 'result': gate})
-        if payload['gate_status'] == 'BLOCK':
-            payload['blocker_summary'].append('GATE_BLOCKED')
-            payload['last_reason_code'] = 'GATE_BLOCKED'
+        if profile_modules.get(TEST_CONSOLE_MODULE_RISK, False):
+            gate = build_extended_paper_run_gate(preset_name=target_preset)
+            payload['gate_status'] = str(gate.get('gate_status') or 'UNKNOWN')
+            payload['reason_codes'] = list(dict.fromkeys(gate.get('reason_codes') or []))
+            payload['step_results'].append({'phase': 'gate', 'status': 'ok', 'result': gate})
+            if payload['gate_status'] == 'BLOCK':
+                payload['blocker_summary'].append('GATE_BLOCKED')
+                payload['last_reason_code'] = 'GATE_BLOCKED'
+        else:
+            payload['gate_status'] = 'SKIPPED_BY_PROFILE'
+            payload['step_results'].append({'phase': 'gate', 'status': 'skipped', 'result': {'reason': 'profile_risk_disabled'}})
         payload['updated_at'] = timezone.now()
         payload['last_event'] = 'Gate evaluation completed'
         _set_state(status=_augment_progress(payload))
@@ -1545,7 +1823,11 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         payload['updated_at'] = timezone.now()
         payload['last_event'] = 'Extended run phase started'
         _set_state(status=_augment_progress(payload))
-        if payload['gate_status'] in {GATE_ALLOW, GATE_ALLOW_WITH_CAUTION}:
+        if not profile_modules.get(TEST_CONSOLE_MODULE_EXECUTION, False):
+            payload['extended_run_status'] = 'SKIPPED_BY_PROFILE'
+            payload['step_results'].append({'phase': 'extended_run', 'status': 'skipped', 'result': {'reason': 'profile_execution_disabled'}})
+            payload['last_event'] = 'Extended run skipped by test profile'
+        elif payload['gate_status'] in {GATE_ALLOW, GATE_ALLOW_WITH_CAUTION}:
             launch = launch_extended_paper_run(preset_name=target_preset)
             payload['extended_run_status'] = str(launch.get('launch_status') or 'UNKNOWN')
             payload['step_results'].append({'phase': 'extended_run', 'status': 'ok', 'result': launch})
@@ -1562,7 +1844,12 @@ def start_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         payload['updated_at'] = timezone.now()
         payload['last_event'] = 'Finalizing test console run'
         _set_state(status=_augment_progress(payload))
-        _sync_operational_snapshot(payload=payload, preset_name=target_preset, scan_run=scan_run)
+        _sync_operational_snapshot_for_profile(
+            payload=payload,
+            preset_name=target_preset,
+            scan_run=scan_run,
+            profile_modules=profile_modules,
+        )
 
         has_errors = bool(payload['errors'])
         has_warnings = bool(payload['warnings'] or payload['blocker_summary'])
@@ -1663,6 +1950,13 @@ def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
         'summary': 'No test has been executed yet.',
         'history_size': len(history),
     }
+    resolved_profile_id, resolved_modules = resolve_test_profile(profile_id=payload.get('test_profile'))
+    modules_included, modules_omitted = _profile_module_lists(resolved_modules)
+    payload['test_profile'] = resolved_profile_id
+    payload['available_test_profiles'] = list_test_profiles()
+    payload['modules_included'] = list(payload.get('modules_included') or modules_included)
+    payload['modules_omitted'] = list(payload.get('modules_omitted') or modules_omitted)
+    payload['run_scope'] = str(payload.get('run_scope') or ('fresh_full_run' if resolved_profile_id == TEST_PROFILE_FULL_E2E else 'targeted_diagnostic_run'))
     if not payload.get('portfolio_trade_reconciliation_summary'):
         payload['portfolio_trade_reconciliation_summary'] = _build_portfolio_trade_reconciliation_summary(payload=payload)
     payload['reconciliation_status'] = str(payload['portfolio_trade_reconciliation_summary'].get('portfolio_trade_reconciliation_status') or 'UNKNOWN')
