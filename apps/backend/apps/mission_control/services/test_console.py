@@ -1014,7 +1014,11 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         (
             f"  markets_throttled={active_exposure_risk_throttle.get('markets_throttled', 0)} "
             f"redundant_risk_decisions_throttled={active_exposure_risk_throttle.get('redundant_risk_decisions_throttled', 0)} "
+            f"redundant_risk_decisions_throttled_current_window={active_exposure_risk_throttle.get('redundant_risk_decisions_throttled_current_window', 0)} "
+            f"redundant_risk_decisions_throttled_out_of_scope={active_exposure_risk_throttle.get('redundant_risk_decisions_throttled_out_of_scope', 0)} "
             f"risk_decisions_created_normally={active_exposure_risk_throttle.get('risk_decisions_created_normally', 0)} "
+            f"risk_decisions_created_normally_current_window={active_exposure_risk_throttle.get('risk_decisions_created_normally_current_window', 0)} "
+            f"risk_decisions_created_normally_out_of_scope={active_exposure_risk_throttle.get('risk_decisions_created_normally_out_of_scope', 0)} "
             f"candidates_preserved_for_exit={active_exposure_risk_throttle.get('candidates_preserved_for_exit', 0)} "
             f"candidates_preserved_without_valid_blocker={active_exposure_risk_throttle.get('candidates_preserved_without_valid_blocker', 0)}"
         ),
@@ -1046,7 +1050,11 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         (
             f"  markets_throttled={active_exposure_readiness_throttle.get('markets_throttled', 0)} "
             f"additive_entries_throttled_before_readiness={active_exposure_readiness_throttle.get('additive_entries_throttled_before_readiness', 0)} "
+            f"additive_entries_throttled_before_readiness_current_window={active_exposure_readiness_throttle.get('additive_entries_throttled_before_readiness_current_window', 0)} "
+            f"additive_entries_throttled_before_readiness_out_of_scope={active_exposure_readiness_throttle.get('additive_entries_throttled_before_readiness_out_of_scope', 0)} "
             f"readiness_created_normally={active_exposure_readiness_throttle.get('readiness_created_normally', 0)} "
+            f"readiness_created_normally_current_window={active_exposure_readiness_throttle.get('readiness_created_normally_current_window', 0)} "
+            f"readiness_created_normally_out_of_scope={active_exposure_readiness_throttle.get('readiness_created_normally_out_of_scope', 0)} "
             f"candidates_preserved_for_exit={active_exposure_readiness_throttle.get('candidates_preserved_for_exit', 0)} "
             f"candidates_preserved_without_valid_blocker={active_exposure_readiness_throttle.get('candidates_preserved_without_valid_blocker', 0)}"
         ),

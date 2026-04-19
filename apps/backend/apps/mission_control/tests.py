@@ -4452,6 +4452,10 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(summary.get('markets_throttled'), 1)
         self.assertEqual(summary.get('redundant_risk_decisions_throttled'), 2)
         self.assertEqual(summary.get('risk_decisions_created_normally'), 3)
+        self.assertEqual(summary.get('redundant_risk_decisions_throttled_current_window'), 2)
+        self.assertEqual(summary.get('redundant_risk_decisions_throttled_out_of_scope'), 0)
+        self.assertEqual(summary.get('risk_decisions_created_normally_current_window'), 3)
+        self.assertEqual(summary.get('risk_decisions_created_normally_out_of_scope'), 0)
         self.assertEqual(summary.get('candidates_preserved_for_exit'), 1)
         self.assertEqual(summary.get('candidates_preserved_without_valid_blocker'), 1)
         self.assertIn('ACTIVE_EXPOSURE_RISK_THROTTLE_APPLIED', summary.get('throttle_reason_codes', []))
@@ -4461,6 +4465,79 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         )
         examples = summary.get('active_exposure_risk_throttle_examples') or []
         self.assertEqual(examples[0].get('throttle_action'), 'skip_redundant_risk_decision')
+
+    def test_scope_split_marks_historical_throttle_as_diagnostic_only(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _apply_scope_split_to_throttle_diagnostics
+
+        scope, risk, readiness = _apply_scope_split_to_throttle_diagnostics(
+            scope_summary={
+                'risk_decisions_current_window': 0,
+                'risk_decisions_excluded_out_of_scope': 0,
+                'execution_routes_current_window': 0,
+                'execution_routes_excluded_out_of_scope': 0,
+                'historical_reuse_detected_count': 0,
+                'lineage_anchor_mismatch_count': 0,
+                'window_scope_mismatch_count': 0,
+                'scope_alignment_reason_codes': [],
+            },
+            risk_throttle_summary={
+                'redundant_risk_decisions_throttled': 8,
+                'risk_decisions_created_normally': 2,
+                'throttle_reason_codes': ['ACTIVE_EXPOSURE_RISK_THROTTLE_APPLIED'],
+                'active_exposure_risk_throttle_examples': [{'market_id': 11}],
+            },
+            readiness_throttle_summary={
+                'throttled_decision_events': 0,
+                'readiness_created_normally': 0,
+                'throttle_reason_codes': [],
+                'active_exposure_readiness_throttle_examples': [],
+            },
+        )
+
+        self.assertEqual(scope.get('risk_decisions_current_window'), 0)
+        self.assertGreater(scope.get('risk_decisions_excluded_out_of_scope', 0), 0)
+        self.assertGreater(scope.get('historical_reuse_detected_count', 0), 0)
+        self.assertEqual(risk.get('redundant_risk_decisions_throttled_current_window'), 0)
+        self.assertEqual(risk.get('redundant_risk_decisions_throttled_out_of_scope'), 8)
+        self.assertIn('RISK_THROTTLE_COUNTED_AS_DIAGNOSTIC_ONLY', risk.get('throttle_reason_codes', []))
+        self.assertIn(
+            'CURRENT_WINDOW_SCOPE_CLEAN_HISTORICAL_DIAGNOSTICS_PRESENT',
+            scope.get('scope_alignment_reason_codes', []),
+        )
+
+    def test_scope_split_preserves_current_window_throttle_counts(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _apply_scope_split_to_throttle_diagnostics
+
+        scope, risk, readiness = _apply_scope_split_to_throttle_diagnostics(
+            scope_summary={
+                'risk_decisions_current_window': 5,
+                'risk_decisions_excluded_out_of_scope': 0,
+                'execution_routes_current_window': 4,
+                'execution_routes_excluded_out_of_scope': 0,
+                'historical_reuse_detected_count': 0,
+                'lineage_anchor_mismatch_count': 0,
+                'window_scope_mismatch_count': 0,
+                'scope_alignment_reason_codes': ['CURRENT_WINDOW_FANOUT_ELIGIBLE'],
+            },
+            risk_throttle_summary={
+                'redundant_risk_decisions_throttled': 2,
+                'risk_decisions_created_normally': 3,
+                'throttle_reason_codes': ['ACTIVE_EXPOSURE_RISK_THROTTLE_APPLIED'],
+                'active_exposure_risk_throttle_examples': [{'market_id': 12}],
+            },
+            readiness_throttle_summary={
+                'throttled_decision_events': 1,
+                'readiness_created_normally': 3,
+                'throttle_reason_codes': ['ACTIVE_EXPOSURE_READINESS_THROTTLE_APPLIED'],
+                'active_exposure_readiness_throttle_examples': [{'market_id': 12}],
+            },
+        )
+
+        self.assertEqual(risk.get('redundant_risk_decisions_throttled_current_window'), 2)
+        self.assertEqual(risk.get('redundant_risk_decisions_throttled_out_of_scope'), 0)
+        self.assertEqual(readiness.get('additive_entries_throttled_before_readiness_current_window'), 1)
+        self.assertEqual(readiness.get('additive_entries_throttled_before_readiness_out_of_scope'), 0)
+        self.assertEqual(scope.get('risk_decisions_excluded_out_of_scope'), 0)
 
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
@@ -7322,8 +7399,12 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('execution_exposure_release_audit_summary:', text_payload)
         self.assertIn('active_exposure_risk_throttle_summary:', text_payload)
         self.assertIn('redundant_risk_decisions_throttled=', text_payload)
+        self.assertIn('redundant_risk_decisions_throttled_current_window=', text_payload)
+        self.assertIn('redundant_risk_decisions_throttled_out_of_scope=', text_payload)
         self.assertIn('active_exposure_readiness_throttle_summary:', text_payload)
         self.assertIn('additive_entries_throttled_before_readiness=', text_payload)
+        self.assertIn('additive_entries_throttled_before_readiness_current_window=', text_payload)
+        self.assertIn('additive_entries_throttled_before_readiness_out_of_scope=', text_payload)
         self.assertIn('release_audit_summary=', text_payload)
         self.assertIn('suppressions_by_source_type=', text_payload)
         self.assertIn('candidates_promoted_to_decision=', text_payload)
