@@ -562,6 +562,11 @@ export function CockpitPage() {
     setLivePaperSmokeStatusError(null);
     try {
       const payload = await getLivePaperSmokeTestStatus();
+      if (!payload) {
+        setLivePaperSmokeStatus(null);
+        setLivePaperSmokeStatusError('No smoke test result yet');
+        return null;
+      }
       setLivePaperSmokeStatus(payload);
       return payload;
     } catch (smokeStatusError) {
@@ -715,6 +720,13 @@ export function CockpitPage() {
     setLivePaperTrialError(null);
     try {
       const payload = await getLivePaperTrialStatus();
+      if (!payload) {
+        setLivePaperTrialNotFound(true);
+        setLivePaperTrialStatus('IDLE');
+        setLivePaperTrialStatusSnapshot(null);
+        setLivePaperTrialError(null);
+        return null;
+      }
       setLivePaperTrialStatusSnapshot(payload);
       setLivePaperTrialStatus(payload.trial_status);
       setLivePaperTrialNotFound(false);
@@ -794,6 +806,10 @@ export function CockpitPage() {
     setExtendedPaperRunStatusError(null);
     try {
       const payload = await getExtendedPaperRunStatus({ preset: 'live_read_only_paper_conservative' });
+      if (!payload) {
+        setExtendedPaperRunStatus(null);
+        return null;
+      }
       setExtendedPaperRunStatus(payload);
       return payload;
     } catch (statusError) {
