@@ -321,68 +321,6 @@ export function PortfolioPage() {
         </DataStateWrapper>
       </SectionCard>
 
-      <section className="content-grid content-grid--two-columns">
-        <SectionCard
-          eyebrow="Cuenta"
-          title="Paper account details"
-        >
-          <DataStateWrapper
-            isLoading={accountLoading || summaryLoading}
-            isError={Boolean(accountError)}
-            errorMessage={accountError ?? summaryError ?? undefined}
-            isEmpty={!accountLoading && !accountError && !account}
-            loadingTitle="Loading account details"
-            loadingDescription="Waiting for the account and summary endpoints to respond."
-            errorTitle="Could not load account details"
-            emptyTitle="Paper account missing"
-            emptyDescription="Seed the demo account from the backend and refresh the page to unlock this section."
-          >
-            {account ? (
-              <>
-                {summaryError ? <p className="paper-inline-notice">Summary endpoint unavailable: {summaryError}</p> : null}
-                <PaperAccountPanel account={account} summary={summary} />
-              </>
-            ) : null}
-          </DataStateWrapper>
-        </SectionCard>
-
-        <SectionCard
-          eyebrow="Review bridge"
-          title="Recent reviews summary"
-          description="A compact retrospective block so portfolio changes stay connected to trade outcomes and follow-up recommendations."
-          aside={<StatusBadge tone={reviewsError ? 'offline' : reviewsLoading ? 'loading' : 'ready'}>{reviewsLoading ? 'Loading reviews' : `${reviews.length} reviews`}</StatusBadge>}
-        >
-          <DataStateWrapper
-            isLoading={reviewsLoading}
-            isError={Boolean(reviewsError)}
-            errorMessage={reviewsError ?? undefined}
-            isEmpty={!reviewsLoading && !reviewsError && recentReviews.length === 0}
-            loadingTitle="Loading review context"
-            loadingDescription="Requesting recent trade reviews for the portfolio workspace."
-            errorTitle="Could not load review context"
-            emptyTitle="No reviews linked yet"
-            emptyDescription="Generate trade reviews after a few paper trades so this page can point directly into the post-mortem loop."
-            action={
-              <button className="secondary-button" type="button" onClick={() => navigate('/postmortem')}>
-                Open post-mortem
-              </button>
-            }
-          >
-            <div className="table-link-stack">
-              {recentReviews.map((review) => (
-                <a key={review.id} href={`/postmortem/${review.id}`} className="market-link" onClick={(event) => {
-                  event.preventDefault();
-                  navigate(`/postmortem/${review.id}`);
-                }}>
-                  <strong>{review.market_title}</strong>
-                  <span>Trade #{review.trade_id} · {review.recommendation || review.summary}</span>
-                </a>
-              ))}
-            </div>
-          </DataStateWrapper>
-        </SectionCard>
-      </section>
-
       <SectionCard
         eyebrow="Evolución"
         title="Equity and balance history"
@@ -412,14 +350,9 @@ export function PortfolioPage() {
           emptyTitle="No positions yet"
           emptyDescription="Open a market and place a paper trade to create the first position, or review signals first if you want a guided next step."
           action={
-            <div className="empty-state__action-row">
-              <button className="secondary-button" type="button" onClick={() => navigate('/markets')}>
-                Explore markets
-              </button>
-              <button className="secondary-button" type="button" onClick={() => navigate('/signals')}>
-                Review signals
-              </button>
-            </div>
+            <button className="secondary-button" type="button" onClick={() => navigate('/markets')}>
+              Explore markets
+            </button>
           }
         >
           <PaperPositionsTable positions={positions} currency={currency} />
@@ -478,6 +411,70 @@ export function PortfolioPage() {
             <PaperSnapshotsPanel snapshots={snapshots} currency={currency} />
           </DataStateWrapper>
         </SectionCard>
+      </details>
+
+      <details className="portfolio-secondary-blocks">
+        <summary>Ver detalle técnico y contexto</summary>
+        <section className="content-grid content-grid--two-columns">
+          <SectionCard
+            eyebrow="Cuenta"
+            title="Paper account details"
+          >
+            <DataStateWrapper
+              isLoading={accountLoading || summaryLoading}
+              isError={Boolean(accountError)}
+              errorMessage={accountError ?? summaryError ?? undefined}
+              isEmpty={!accountLoading && !accountError && !account}
+              loadingTitle="Loading account details"
+              loadingDescription="Waiting for the account and summary endpoints to respond."
+              errorTitle="Could not load account details"
+              emptyTitle="Paper account missing"
+              emptyDescription="Seed the demo account from the backend and refresh the page to unlock this section."
+            >
+              {account ? (
+                <>
+                  {summaryError ? <p className="paper-inline-notice">Summary endpoint unavailable: {summaryError}</p> : null}
+                  <PaperAccountPanel account={account} summary={summary} />
+                </>
+              ) : null}
+            </DataStateWrapper>
+          </SectionCard>
+
+          <SectionCard
+            eyebrow="Review bridge"
+            title="Recent reviews summary"
+            aside={<StatusBadge tone={reviewsError ? 'offline' : reviewsLoading ? 'loading' : 'ready'}>{reviewsLoading ? 'Loading reviews' : `${reviews.length} reviews`}</StatusBadge>}
+          >
+            <DataStateWrapper
+              isLoading={reviewsLoading}
+              isError={Boolean(reviewsError)}
+              errorMessage={reviewsError ?? undefined}
+              isEmpty={!reviewsLoading && !reviewsError && recentReviews.length === 0}
+              loadingTitle="Loading review context"
+              loadingDescription="Requesting recent trade reviews for the portfolio workspace."
+              errorTitle="Could not load review context"
+              emptyTitle="No reviews linked yet"
+              emptyDescription="Generate trade reviews after a few paper trades so this page can point directly into the post-mortem loop."
+              action={
+                <button className="secondary-button" type="button" onClick={() => navigate('/postmortem')}>
+                  Open post-mortem
+                </button>
+              }
+            >
+              <div className="table-link-stack">
+                {recentReviews.map((review) => (
+                  <a key={review.id} href={`/postmortem/${review.id}`} className="market-link" onClick={(event) => {
+                    event.preventDefault();
+                    navigate(`/postmortem/${review.id}`);
+                  }}>
+                    <strong>{review.market_title}</strong>
+                    <span>Trade #{review.trade_id} · {review.recommendation || review.summary}</span>
+                  </a>
+                ))}
+              </div>
+            </DataStateWrapper>
+          </SectionCard>
+        </section>
       </details>
     </div>
   );
