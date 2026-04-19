@@ -4901,6 +4901,12 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - no hay cambios de policy, no se abren nuevas entradas, no se relajan guardrails ni límites de runtime/safety/policy.
   - añade `active_exposure_risk_throttle_summary` (+ ejemplos compactos) y alinea su lectura en Mission Control/Test Console junto al throttle ya existente de readiness.
   - explicita unidades en el throttle de readiness (`unique_markets_throttled` y `throttled_decision_events`) para evitar inconsistencias de conteo.
+- **Prompt 322 (cleanup diagnóstico final de scope entre current-window vs histórico):**
+  - **sin cambios de policy**: no toca compuertas operativas, no reabre fanout ni modifica frontend/launcher/LLM.
+  - alinea semántica diagnóstica entre `risk_execution_scope_alignment_summary` y throttles de active exposure para separar explícitamente métricas de `current_window` vs `historical_out_of_scope` (solo auditoría).
+  - `active_exposure_risk_throttle_summary` y `active_exposure_readiness_throttle_summary` publican contadores separados (`*_current_window`, `*_out_of_scope`) + reason codes diagnósticos canónicos.
+  - cuando hay visibilidad histórica en throttle con fanout operativo actual limpio, `risk_execution_scope_alignment_summary` ya no queda ambiguamente en cero y refleja exclusión/out-of-scope histórica.
+  - export `text/json` deja explícita la regla de lectura: current-window alimenta fanout operativo; histórico/out-of-scope es diagnóstico-only.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`

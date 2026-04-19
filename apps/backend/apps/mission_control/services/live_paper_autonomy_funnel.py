@@ -872,6 +872,9 @@ def _build_active_exposure_readiness_throttle_summary(
                         'expected_route': expected_route,
                         'dominant_reason_code': dominant_reason_code,
                         'source_stage': source_stage,
+                        'current_window_eligible': True,
+                        'diagnostic_only_historical': False,
+                        'exclusion_reason': None,
                     }
                 )
             continue
@@ -891,6 +894,9 @@ def _build_active_exposure_readiness_throttle_summary(
                         'expected_route': expected_route,
                         'dominant_reason_code': dominant_reason_code,
                         'source_stage': source_stage,
+                        'current_window_eligible': True,
+                        'diagnostic_only_historical': False,
+                        'exclusion_reason': None,
                     }
                 )
         else:
@@ -909,6 +915,9 @@ def _build_active_exposure_readiness_throttle_summary(
                         'expected_route': expected_route,
                         'dominant_reason_code': dominant_reason_code,
                         'source_stage': source_stage,
+                        'current_window_eligible': True,
+                        'diagnostic_only_historical': False,
+                        'exclusion_reason': None,
                     }
                 )
 
@@ -933,7 +942,11 @@ def _build_active_exposure_readiness_throttle_summary(
         'unique_markets_throttled': int(len(throttled_market_ids)),
         'throttled_decision_events': int(throttled_decision_events),
         'additive_entries_throttled_before_readiness': int(throttled_decision_events),
+        'additive_entries_throttled_before_readiness_current_window': int(throttled_decision_events),
+        'additive_entries_throttled_before_readiness_out_of_scope': 0,
         'readiness_created_normally': int(route_created),
+        'readiness_created_normally_current_window': int(route_created),
+        'readiness_created_normally_out_of_scope': 0,
         'candidates_preserved_for_exit': int(creation_allowed_for_exit),
         'candidates_preserved_without_valid_blocker': int(creation_allowed_without_exposure),
         'throttle_reason_codes': normalized_codes,
@@ -945,6 +958,117 @@ def _build_active_exposure_readiness_throttle_summary(
     }
 
 
+def _apply_scope_split_to_throttle_diagnostics(
+    *,
+    scope_summary: dict[str, Any],
+    risk_throttle_summary: dict[str, Any],
+    readiness_throttle_summary: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    scope = dict(scope_summary or {})
+    risk = dict(risk_throttle_summary or {})
+    readiness = dict(readiness_throttle_summary or {})
+
+    risk_decisions_current_window = int(scope.get('risk_decisions_current_window') or 0)
+    risk_decisions_excluded_out_of_scope = int(scope.get('risk_decisions_excluded_out_of_scope') or 0)
+    execution_routes_current_window = int(scope.get('execution_routes_current_window') or 0)
+    execution_routes_excluded_out_of_scope = int(scope.get('execution_routes_excluded_out_of_scope') or 0)
+    historical_reuse_detected_count = int(scope.get('historical_reuse_detected_count') or 0)
+
+    redundant_total = int(risk.get('redundant_risk_decisions_throttled') or 0)
+    created_total = int(risk.get('risk_decisions_created_normally') or 0)
+    risk_total_observed = redundant_total + created_total
+    risk_current_estimate = min(risk_total_observed, risk_decisions_current_window)
+    risk_out_of_scope_estimate = max(risk_total_observed - risk_current_estimate, 0)
+
+    redundant_out_of_scope = min(redundant_total, risk_out_of_scope_estimate)
+    redundant_current_window = max(redundant_total - redundant_out_of_scope, 0)
+    created_current_window = min(created_total, max(risk_current_estimate - redundant_current_window, 0))
+    created_out_of_scope = max(created_total - created_current_window, 0)
+
+    readiness_throttled_total = int(readiness.get('throttled_decision_events') or 0)
+    readiness_created_total = int(readiness.get('readiness_created_normally') or 0)
+    readiness_current_window = min(readiness_throttled_total, execution_routes_current_window)
+    readiness_out_of_scope = max(readiness_throttled_total - readiness_current_window, 0)
+    readiness_created_current_window = min(readiness_created_total, execution_routes_current_window)
+    readiness_created_out_of_scope = max(readiness_created_total - readiness_created_current_window, 0)
+
+    inferred_historical_visible = max(risk_out_of_scope_estimate, readiness_out_of_scope, 0)
+    if inferred_historical_visible > 0 and historical_reuse_detected_count == 0:
+        historical_reuse_detected_count = inferred_historical_visible
+        scope_codes = _unique_codes(
+            list(scope.get('scope_alignment_reason_codes') or [])
+            + [
+                'THROTTLE_DIAGNOSTIC_HISTORY_VISIBLE_OUT_OF_SCOPE',
+                'CURRENT_WINDOW_SCOPE_CLEAN_HISTORICAL_DIAGNOSTICS_PRESENT',
+            ]
+        )
+        scope['scope_alignment_reason_codes'] = scope_codes
+    if inferred_historical_visible > 0:
+        risk_decisions_excluded_out_of_scope = max(risk_decisions_excluded_out_of_scope, inferred_historical_visible)
+        execution_routes_excluded_out_of_scope = max(execution_routes_excluded_out_of_scope, inferred_historical_visible)
+
+    risk_codes = list(risk.get('throttle_reason_codes') or [])
+    if redundant_out_of_scope > 0 or created_out_of_scope > 0:
+        risk_codes.extend(
+            [
+                'THROTTLE_DIAGNOSTIC_HISTORY_VISIBLE_OUT_OF_SCOPE',
+                'RISK_THROTTLE_COUNTED_AS_DIAGNOSTIC_ONLY',
+            ]
+        )
+    risk['throttle_reason_codes'] = _unique_codes(risk_codes)
+    risk['redundant_risk_decisions_throttled_current_window'] = int(redundant_current_window)
+    risk['redundant_risk_decisions_throttled_out_of_scope'] = int(redundant_out_of_scope)
+    risk['risk_decisions_created_normally_current_window'] = int(created_current_window)
+    risk['risk_decisions_created_normally_out_of_scope'] = int(created_out_of_scope)
+    risk_examples = list(risk.get('active_exposure_risk_throttle_examples') or [])
+    for idx, row in enumerate(risk_examples):
+        row = dict(row)
+        is_historical = idx < (redundant_out_of_scope + created_out_of_scope)
+        row['diagnostic_only_historical'] = bool(is_historical)
+        row['current_window_eligible'] = not bool(is_historical)
+        row['exclusion_reason'] = 'historical_out_of_scope_diagnostic_only' if is_historical else None
+        risk_examples[idx] = row
+    risk['active_exposure_risk_throttle_examples'] = risk_examples[:3]
+
+    readiness_codes = list(readiness.get('throttle_reason_codes') or [])
+    if readiness_out_of_scope > 0 or readiness_created_out_of_scope > 0:
+        readiness_codes.extend(
+            [
+                'THROTTLE_DIAGNOSTIC_HISTORY_VISIBLE_OUT_OF_SCOPE',
+                'READINESS_THROTTLE_COUNTED_AS_DIAGNOSTIC_ONLY',
+            ]
+        )
+    readiness['throttle_reason_codes'] = _unique_codes(readiness_codes)
+    readiness['additive_entries_throttled_before_readiness_current_window'] = int(readiness_current_window)
+    readiness['additive_entries_throttled_before_readiness_out_of_scope'] = int(readiness_out_of_scope)
+    readiness['readiness_created_normally_current_window'] = int(readiness_created_current_window)
+    readiness['readiness_created_normally_out_of_scope'] = int(readiness_created_out_of_scope)
+    readiness_examples = list(readiness.get('active_exposure_readiness_throttle_examples') or [])
+    for idx, row in enumerate(readiness_examples):
+        row = dict(row)
+        is_historical = idx < (readiness_out_of_scope + readiness_created_out_of_scope)
+        row['diagnostic_only_historical'] = bool(is_historical)
+        row['current_window_eligible'] = not bool(is_historical)
+        row['exclusion_reason'] = 'historical_out_of_scope_diagnostic_only' if is_historical else None
+        readiness_examples[idx] = row
+    readiness['active_exposure_readiness_throttle_examples'] = readiness_examples[:3]
+
+    scope['risk_decisions_excluded_out_of_scope'] = int(risk_decisions_excluded_out_of_scope)
+    scope['execution_routes_excluded_out_of_scope'] = int(execution_routes_excluded_out_of_scope)
+    scope['historical_reuse_detected_count'] = int(historical_reuse_detected_count)
+    scope['scope_alignment_summary'] = (
+        f"risk_decisions_current_window={scope.get('risk_decisions_current_window', 0)} "
+        f"risk_decisions_excluded_out_of_scope={scope['risk_decisions_excluded_out_of_scope']} "
+        f"execution_routes_current_window={scope.get('execution_routes_current_window', 0)} "
+        f"execution_routes_excluded_out_of_scope={scope['execution_routes_excluded_out_of_scope']} "
+        f"historical_reuse_detected_count={scope['historical_reuse_detected_count']} "
+        f"lineage_anchor_mismatch_count={scope.get('lineage_anchor_mismatch_count', 0)} "
+        f"window_scope_mismatch_count={scope.get('window_scope_mismatch_count', 0)} "
+        f"scope_alignment_reason_codes={','.join(scope.get('scope_alignment_reason_codes') or []) or 'none'}"
+    )
+    return scope, risk, readiness
+
+
 def _build_active_exposure_risk_throttle_summary(*, window_start) -> dict[str, Any]:
     runtime_runs = list(
         RiskRuntimeRun.objects.filter(created_at__gte=window_start)
@@ -954,7 +1078,11 @@ def _build_active_exposure_risk_throttle_summary(*, window_start) -> dict[str, A
         return {
             'markets_throttled': 0,
             'redundant_risk_decisions_throttled': 0,
+            'redundant_risk_decisions_throttled_current_window': 0,
+            'redundant_risk_decisions_throttled_out_of_scope': 0,
             'risk_decisions_created_normally': 0,
+            'risk_decisions_created_normally_current_window': 0,
+            'risk_decisions_created_normally_out_of_scope': 0,
             'candidates_preserved_for_exit': 0,
             'candidates_preserved_without_valid_blocker': 0,
             'throttle_reason_codes': [],
@@ -982,7 +1110,12 @@ def _build_active_exposure_risk_throttle_summary(*, window_start) -> dict[str, A
             if market_id is not None and bool(row.get('risk_decision_creation_skipped')):
                 markets_throttled.add(market_id)
             if len(examples) < 3:
-                examples.append(dict(row))
+                example_row = dict(row)
+                example_row.setdefault('current_window_eligible', True)
+                example_row.setdefault('diagnostic_only_historical', False)
+                example_row.setdefault('exclusion_reason', None)
+                example_row.setdefault('dominant_reason_code', str(example_row.get('dominant_reason_code') or 'ACTIVE_EXPOSURE_RISK_THROTTLE_VISIBLE'))
+                examples.append(example_row)
 
     normalized_codes = _unique_codes(throttle_reason_codes)
     summary_text = (
@@ -996,7 +1129,11 @@ def _build_active_exposure_risk_throttle_summary(*, window_start) -> dict[str, A
     return {
         'markets_throttled': int(len(markets_throttled)),
         'redundant_risk_decisions_throttled': int(redundant_risk_decisions_throttled),
+        'redundant_risk_decisions_throttled_current_window': int(redundant_risk_decisions_throttled),
+        'redundant_risk_decisions_throttled_out_of_scope': 0,
         'risk_decisions_created_normally': int(risk_decisions_created_normally),
+        'risk_decisions_created_normally_current_window': int(risk_decisions_created_normally),
+        'risk_decisions_created_normally_out_of_scope': 0,
         'candidates_preserved_for_exit': int(candidates_preserved_for_exit),
         'candidates_preserved_without_valid_blocker': int(candidates_preserved_without_valid_blocker),
         'throttle_reason_codes': normalized_codes,
@@ -4344,6 +4481,16 @@ def _build_handoff_diagnostics(*, window_start, preset_name: str = PRESET_NAME) 
     risk_count = len(risk_rows_current_window)
     paper_execution_summary = _build_paper_execution_diagnostics(risk_rows=risk_rows_current_window, window_start=window_start)
     active_exposure_risk_throttle_summary = _build_active_exposure_risk_throttle_summary(window_start=window_start)
+    (
+        risk_execution_scope_alignment_summary,
+        active_exposure_risk_throttle_summary,
+        active_exposure_readiness_throttle_summary,
+    ) = _apply_scope_split_to_throttle_diagnostics(
+        scope_summary=risk_execution_scope_alignment_summary,
+        risk_throttle_summary=active_exposure_risk_throttle_summary,
+        readiness_throttle_summary=paper_execution_summary.get('active_exposure_readiness_throttle_summary', {}),
+    )
+    paper_execution_summary['active_exposure_readiness_throttle_summary'] = active_exposure_readiness_throttle_summary
     paper_execution_count = int(paper_execution_summary.get('paper_execution_visible_count') or 0)
     borderline_diagnostics_by_handoff: dict[int, dict[str, Any]] = {}
     bridge_attempted = False
