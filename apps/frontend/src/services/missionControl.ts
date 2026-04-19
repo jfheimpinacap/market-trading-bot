@@ -1,4 +1,4 @@
-import { requestJson } from './api/client';
+import { ApiError, requestJson } from './api/client';
 import { API_BASE_URL } from '../lib/config';
 import type {
   AutonomousCycleExecution,
@@ -181,8 +181,19 @@ export function runLivePaperSmokeTest(payload: LivePaperSmokeTestRequest = {}) {
   });
 }
 
+async function requestOptionalStatusJson<T>(path: string): Promise<T | null> {
+  try {
+    return await requestJson<T>(path);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export function getLivePaperSmokeTestStatus() {
-  return requestJson<LivePaperSmokeTestStatusResponse>('/api/mission-control/live-paper-smoke-test-status/');
+  return requestOptionalStatusJson<LivePaperSmokeTestStatusResponse>('/api/mission-control/live-paper-smoke-test-status/');
 }
 
 export function runLivePaperTrial(payload: LivePaperTrialRunRequest = {}) {
@@ -197,7 +208,7 @@ export function runLivePaperTrial(payload: LivePaperTrialRunRequest = {}) {
 }
 
 export function getLivePaperTrialStatus() {
-  return requestJson<LivePaperTrialRunStatusResponse>('/api/mission-control/live-paper-trial-status/');
+  return requestOptionalStatusJson<LivePaperTrialRunStatusResponse>('/api/mission-control/live-paper-trial-status/');
 }
 
 export function getLivePaperTrialHistory(params?: { limit?: number; status?: 'PASS' | 'WARN' | 'FAIL' }) {
@@ -252,7 +263,7 @@ export function getExtendedPaperRunStatus(params?: { preset?: string; preset_nam
     query.set('preset_name', params.preset_name);
   }
   const suffix = query.size ? `?${query.toString()}` : '';
-  return requestJson<ExtendedPaperRunStatusResponse>(`/api/mission-control/extended-paper-run-status/${suffix}`);
+  return requestOptionalStatusJson<ExtendedPaperRunStatusResponse>(`/api/mission-control/extended-paper-run-status/${suffix}`);
 }
 
 export function getLivePaperAutonomyFunnel(params?: { preset?: string; window_minutes?: number }) {

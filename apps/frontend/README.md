@@ -2,6 +2,17 @@
 
 Frontend local-first para `market-trading-bot`, construido con React + Vite + TypeScript.
 
+## Global hardening for optional mission-control statuses (update)
+
+Se cerró el hardening global para endpoints opcionales de status compartido en Mission Control:
+
+- `GET /api/mission-control/live-paper-trial-status/`
+- `GET /api/mission-control/live-paper-smoke-test-status/`
+- `GET /api/mission-control/extended-paper-run-status/`
+
+Regla aplicada de forma uniforme en el cliente: **404 esperado = empty-state no fatal**.  
+Esto evita contaminar loaders/estado compartido cuando no hay corrida previa y mantiene estables vistas como Dashboard, Markets y Portfolio aunque esos status opcionales no existan todavía.
+
 ## Cockpit Live Paper Trial Run UX (new)
 
 La vista `/cockpit` ahora incluye una card compacta **Live Paper Trial Run** para ejecutar una prueba corta y repetible de la V1 paper con una sola acción principal.
