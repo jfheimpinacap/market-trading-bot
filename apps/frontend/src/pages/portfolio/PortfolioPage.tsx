@@ -19,6 +19,7 @@ import { buildReviewLookupByTradeId, publishDemoFlowRefresh } from '../../lib/de
 import { navigate } from '../../lib/router';
 import { API_BASE_URL } from '../../lib/config';
 import { getTradeReviews } from '../../services/reviews';
+import { isNotFoundApiError } from '../../services/api/client';
 import {
   getPaperAccount,
   getPaperPositions,
@@ -137,7 +138,9 @@ export function PortfolioPage() {
       setReviews(reviewsResult.value);
     } else {
       setReviews([]);
-      setReviewsError(getErrorMessage(reviewsResult.reason, 'Could not load trade reviews for the portfolio links.'));
+      if (!isNotFoundApiError(reviewsResult.reason)) {
+        setReviewsError(getErrorMessage(reviewsResult.reason, 'Could not load trade reviews for the portfolio links.'));
+      }
     }
 
     setAccountLoading(false);
