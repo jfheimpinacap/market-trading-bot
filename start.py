@@ -167,6 +167,19 @@ def verbose_logging_enabled(args: argparse.Namespace) -> bool:
     return False
 
 
+def resolve_startup_preferences(
+    args: argparse.Namespace,
+    *,
+    allow_verbose: bool,
+) -> tuple[str, bool, bool]:
+    gui_silent = bool(getattr(args, 'gui_silent', False))
+    startup_mode = 'separate-windows' if getattr(args, 'separate_windows', False) else DEFAULT_STARTUP_MODE
+    if gui_silent:
+        startup_mode = DEFAULT_STARTUP_MODE
+    verbose_logs = allow_verbose and verbose_logging_enabled(args) and not gui_silent
+    return startup_mode, verbose_logs, gui_silent
+
+
 def build_paths() -> ProjectPaths:
     return PATHS
 
@@ -1517,12 +1530,8 @@ def command_up(args: argparse.Namespace) -> int:
             backend_runtime_env=backend_runtime_env,
         )
 
-        gui_silent = bool(getattr(args, 'gui_silent', False))
-        startup_mode = 'separate-windows' if args.separate_windows else DEFAULT_STARTUP_MODE
-        if gui_silent:
-            startup_mode = DEFAULT_STARTUP_MODE
+        startup_mode, verbose_logs, gui_silent = resolve_startup_preferences(args, allow_verbose=True)
         browser_url = DEFAULT_BROWSER_URL
-        verbose_logs = verbose_logging_enabled(args) and not gui_silent
         if gui_silent and verbose_logging_enabled(args):
             info('GUI silent mode active: forcing detached/no-window startup and ignoring verbose console env flags.')
         attached_backend: subprocess.Popen[str] | None = None
@@ -2035,8 +2044,9 @@ def command_backend(args: argparse.Namespace) -> int:
             'env': backend_command_env(paths, mode, runtime_env=backend_runtime_env),
         }
     ]
-    startup_mode = 'separate-windows' if args.separate_windows else DEFAULT_STARTUP_MODE
-    verbose_logs = verbose_logging_enabled(args)
+    startup_mode, verbose_logs, gui_silent = resolve_startup_preferences(args, allow_verbose=True)
+    if gui_silent and verbose_logging_enabled(args):
+        info('GUI silent mode active: forcing detached/no-window startup and ignoring verbose console env flags.')
     attached_backend: subprocess.Popen[str] | None = None
     try:
         if verbose_logs and startup_mode != 'separate-windows':
@@ -2149,7 +2159,7 @@ def command_frontend(args: argparse.Namespace) -> int:
             'env': frontend_command_env(),
         }
     ]
-    startup_mode = 'separate-windows' if args.separate_windows else DEFAULT_STARTUP_MODE
+    startup_mode, _, _ = resolve_startup_preferences(args, allow_verbose=False)
     try:
         start_dev_servers(
             process_specs,

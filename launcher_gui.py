@@ -33,6 +33,9 @@ DEFAULT_MIN_HEIGHT = 680
 WINDOW_MARGIN_X = 80
 WINDOW_MARGIN_Y = 120
 RESIZE_LAYOUT_DEBOUNCE_MS = 120
+LOG_PANEL_POLL_MS = 2500
+LOG_PANEL_LINES = 80
+LOG_PANEL_SERVICES = ('backend', 'frontend')
 
 
 class LauncherGUI(ctk.CTk):
@@ -65,6 +68,14 @@ class LauncherGUI(ctk.CTk):
         self.main_url_label: ctk.CTkLabel | None = None
         self.footer_feedback_label: ctk.CTkLabel | None = None
         self._resize_layout_job: str | None = None
+        self.logs_panel_frame: ctk.CTkFrame | None = None
+        self.logs_tabview: ctk.CTkTabview | None = None
+        self.logs_textboxes: dict[str, ctk.CTkTextbox] = {}
+        self.logs_panel_visible = False
+        self.logs_autoscroll_var = ctk.BooleanVar(value=True)
+        self._logs_poll_job: str | None = None
+        self._logs_refresh_inflight = False
+        self._logs_cache: dict[str, str] = {service: '' for service in LOG_PANEL_SERVICES}
 
         self._build_ui()
         self.bind('<Configure>', self._on_window_configure)
@@ -140,6 +151,7 @@ class LauncherGUI(ctk.CTk):
     def _build_ui(self) -> None:
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(2, weight=0)
 
         header = ctk.CTkFrame(self, corner_radius=14)
         header.grid(row=0, column=0, padx=20, pady=(20, 12), sticky='ew')
@@ -175,6 +187,8 @@ class LauncherGUI(ctk.CTk):
 
         self._add_action_button(actions, 'Iniciar sistema completo (full)', lambda: self.run_action('full'))
         self._add_action_button(actions, 'Iniciar modo liviano (lite)', lambda: self.run_action('lite'))
+        self._add_action_button(actions, 'Iniciar solo backend', lambda: self.run_action('backend'))
+        self._add_action_button(actions, 'Iniciar solo frontend', lambda: self.run_action('frontend'))
         self._add_action_button(actions, 'Repetir último arranque', self.run_last_mode)
         self._add_action_button(actions, 'Revisar servicios', self.refresh_status)
         self._add_action_button(actions, 'Detener servicios', lambda: self.run_action('stop'))
@@ -184,7 +198,7 @@ class LauncherGUI(ctk.CTk):
             self.open_dashboard,
             state='disabled',
         )
-        self._add_action_button(actions, 'Ver logs (todos)', lambda: self.open_logs('all'))
+        self._add_action_button(actions, 'Ver logs (panel interno)', self.toggle_logs_panel)
 
         ctk.CTkCheckBox(
             actions,
@@ -305,13 +319,13 @@ class LauncherGUI(ctk.CTk):
             logs_box,
             text='Logs backend',
             height=34,
-            command=lambda: self.open_logs('backend'),
+            command=lambda: self.show_logs_panel('backend'),
         ).grid(row=0, column=0, padx=4, pady=4, sticky='ew')
         ctk.CTkButton(
             logs_box,
             text='Logs frontend',
             height=34,
-            command=lambda: self.open_logs('frontend'),
+            command=lambda: self.show_logs_panel('frontend'),
         ).grid(row=0, column=1, padx=4, pady=4, sticky='ew')
         ctk.CTkButton(
             logs_box,
@@ -320,8 +334,12 @@ class LauncherGUI(ctk.CTk):
             command=lambda: self.open_logs('ollama'),
         ).grid(row=0, column=2, padx=4, pady=4, sticky='ew')
 
+        self.logs_panel_frame = self._build_logs_panel()
+        self.logs_panel_frame.grid(row=2, column=0, padx=20, pady=(0, 12), sticky='nsew')
+        self.logs_panel_frame.grid_remove()
+
         footer = ctk.CTkFrame(self, corner_radius=14)
-        footer.grid(row=2, column=0, padx=20, pady=(12, 20), sticky='ew')
+        footer.grid(row=3, column=0, padx=20, pady=(0, 20), sticky='ew')
         footer.grid_columnconfigure(0, weight=1)
         self.footer_feedback_label = ctk.CTkLabel(
             footer,
@@ -350,6 +368,153 @@ class LauncherGUI(ctk.CTk):
             self.main_url_label.configure(wraplength=max(320, width - 620))
         if self.footer_feedback_label is not None:
             self.footer_feedback_label.configure(wraplength=max(500, width - 300))
+
+    def _build_logs_panel(self) -> ctk.CTkFrame:
+        panel = ctk.CTkFrame(self, corner_radius=14)
+        panel.grid_columnconfigure(0, weight=1)
+        panel.grid_rowconfigure(1, weight=1)
+
+        header = ctk.CTkFrame(panel, fg_color='transparent')
+        header.grid(row=0, column=0, padx=12, pady=(10, 6), sticky='ew')
+        header.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            header,
+            text='Logs en launcher (últimas líneas)',
+            font=ctk.CTkFont(size=15, weight='bold'),
+        ).grid(row=0, column=0, padx=(4, 10), sticky='w')
+        ctk.CTkCheckBox(
+            header,
+            text='Auto-scroll',
+            variable=self.logs_autoscroll_var,
+            font=ctk.CTkFont(size=12),
+        ).grid(row=0, column=1, sticky='e')
+        ctk.CTkButton(header, text='Actualizar', width=90, height=30, command=self.refresh_logs_panel_once).grid(
+            row=0, column=2, padx=(8, 0), sticky='e'
+        )
+        ctk.CTkButton(header, text='Limpiar', width=80, height=30, command=self.clear_current_log_tab).grid(
+            row=0, column=3, padx=(8, 0), sticky='e'
+        )
+        ctk.CTkButton(header, text='Copiar', width=80, height=30, command=self.copy_current_log_tab).grid(
+            row=0, column=4, padx=(8, 0), sticky='e'
+        )
+        ctk.CTkButton(header, text='Ocultar', width=80, height=30, command=self.hide_logs_panel).grid(
+            row=0, column=5, padx=(8, 2), sticky='e'
+        )
+
+        self.logs_tabview = ctk.CTkTabview(panel, corner_radius=10)
+        self.logs_tabview.grid(row=1, column=0, padx=12, pady=(0, 12), sticky='nsew')
+        for service in LOG_PANEL_SERVICES:
+            tab = self.logs_tabview.add(service.capitalize())
+            tab.grid_rowconfigure(0, weight=1)
+            tab.grid_columnconfigure(0, weight=1)
+            textbox = ctk.CTkTextbox(tab, corner_radius=8)
+            textbox.grid(row=0, column=0, sticky='nsew')
+            textbox.insert('1.0', f'Sin datos todavía para {service}.')
+            self.logs_textboxes[service] = textbox
+        return panel
+
+    def toggle_logs_panel(self) -> None:
+        if self.logs_panel_visible:
+            self.hide_logs_panel()
+            return
+        self.show_logs_panel()
+
+    def show_logs_panel(self, preferred_service: str | None = None) -> None:
+        if self.logs_panel_frame is None:
+            return
+        self.logs_panel_frame.grid()
+        self.logs_panel_visible = True
+        if preferred_service in LOG_PANEL_SERVICES and self.logs_tabview is not None:
+            self.logs_tabview.set(preferred_service.capitalize())
+        self.refresh_logs_panel_once()
+        self._schedule_logs_poll()
+
+    def hide_logs_panel(self) -> None:
+        if self.logs_panel_frame is not None:
+            self.logs_panel_frame.grid_remove()
+        self.logs_panel_visible = False
+        if self._logs_poll_job is not None:
+            self.after_cancel(self._logs_poll_job)
+            self._logs_poll_job = None
+
+    def _schedule_logs_poll(self) -> None:
+        if not self.logs_panel_visible:
+            return
+        if self._logs_poll_job is not None:
+            self.after_cancel(self._logs_poll_job)
+        self._logs_poll_job = self.after(LOG_PANEL_POLL_MS, self._poll_logs_panel)
+
+    def _poll_logs_panel(self) -> None:
+        self._logs_poll_job = None
+        self.refresh_logs_panel_once()
+        self._schedule_logs_poll()
+
+    def refresh_logs_panel_once(self) -> None:
+        if not self.logs_panel_visible or self._logs_refresh_inflight:
+            return
+        self._logs_refresh_inflight = True
+
+        def worker() -> None:
+            outputs: dict[str, str] = {}
+            errors: list[str] = []
+            for service in LOG_PANEL_SERVICES:
+                result = self._run_start_command('logs', '--service', service, '--lines', str(LOG_PANEL_LINES))
+                if result.returncode == 0:
+                    outputs[service] = (result.stdout or '').strip() or f'No hay logs para {service}.'
+                else:
+                    errors.append(service)
+                    outputs[service] = (result.stderr or result.stdout or f'Error leyendo logs de {service}.').strip()
+            self.after(0, lambda: self._on_logs_panel_polled(outputs, errors))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_logs_panel_polled(self, outputs: dict[str, str], errors: list[str]) -> None:
+        self._logs_refresh_inflight = False
+        for service, content in outputs.items():
+            if self._logs_cache.get(service) == content:
+                continue
+            self._logs_cache[service] = content
+            textbox = self.logs_textboxes.get(service)
+            if textbox is None:
+                continue
+            textbox.delete('1.0', 'end')
+            textbox.insert('1.0', content)
+            if self.logs_autoscroll_var.get():
+                textbox.see('end')
+        if errors:
+            self.feedback_var.set(f'Logs parciales: no se pudieron leer {", ".join(errors)}.')
+
+    def _current_logs_service(self) -> str:
+        if self.logs_tabview is None:
+            return 'backend'
+        current = self.logs_tabview.get().strip().lower()
+        return current if current in LOG_PANEL_SERVICES else 'backend'
+
+    def clear_current_log_tab(self) -> None:
+        service = self._current_logs_service()
+        self._logs_cache[service] = ''
+        textbox = self.logs_textboxes.get(service)
+        if textbox is None:
+            return
+        textbox.delete('1.0', 'end')
+        textbox.insert('1.0', f'Logs limpiados para {service}.')
+
+    def copy_current_log_tab(self) -> None:
+        service = self._current_logs_service()
+        textbox = self.logs_textboxes.get(service)
+        if textbox is None:
+            return
+        try:
+            content = textbox.get('sel.first', 'sel.last').strip()
+        except Exception:
+            content = textbox.get('1.0', 'end').strip()
+        if not content:
+            self.feedback_var.set(f'No hay contenido para copiar ({service}).')
+            return
+        self.clipboard_clear()
+        self.clipboard_append(content)
+        self.feedback_var.set(f'Logs copiados al portapapeles ({service}).')
 
     def _add_action_button(self, parent: ctk.CTkFrame, text: str, command, **kwargs: object) -> ctk.CTkButton:
         button = ctk.CTkButton(
@@ -418,6 +583,8 @@ class LauncherGUI(ctk.CTk):
         feedback_text = {
             'full': 'Iniciando sistema completo... puede tardar unos minutos.',
             'lite': 'Iniciando modo lite... preparando backend y frontend.',
+            'backend': 'Iniciando solo backend...',
+            'frontend': 'Iniciando solo frontend...',
             'stop': 'Deteniendo servicios del launcher...',
         }.get(action, f'Ejecutando {action}...')
 
@@ -450,16 +617,20 @@ class LauncherGUI(ctk.CTk):
     def _build_start_args(self, action: str) -> list[str]:
         global_args: list[str] = []
         command_args: list[str] = [action]
-        if action in {'full', 'lite'} and not self.auto_open_browser_var.get():
+        if action in {'full', 'lite', 'frontend'} and not self.auto_open_browser_var.get():
             command_args.append('--no-browser')
-        if action in {'full', 'lite'}:
+        if action in {'full', 'lite', 'backend'}:
             command_args.extend(['--ollama', 'enabled' if self.use_ollama_var.get() else 'disabled'])
+        if action in {'full', 'lite', 'backend', 'frontend'}:
             if self.debug_visible_processes_var.get():
-                command_args.extend(['--separate-windows', '--verbose'])
+                command_args.append('--separate-windows')
+                if action in {'full', 'lite', 'backend'}:
+                    command_args.append('--verbose')
             else:
                 # Importante: --gui-silent es una bandera global en start.py.
                 # Debe ir antes del subcomando para ser compatible con argparse.
                 global_args.append('--gui-silent')
+        if action in {'full', 'lite', 'backend'}:
             command_args.extend(
                 [
                     '--ollama-aux-signal',
@@ -541,6 +712,8 @@ class LauncherGUI(ctk.CTk):
         success_messages = {
             'full': 'Sistema completo iniciado. Revisa el estado y abre Dashboard cuando esté en OK.',
             'lite': 'Modo lite iniciado. Revisa el estado y abre Dashboard cuando esté en OK.',
+            'backend': 'Backend iniciado por el launcher.',
+            'frontend': 'Frontend iniciado por el launcher.',
             'stop': 'Servicios detenidos por el launcher.',
         }
         status_url = self._extract_primary_url(result.stdout or '')
@@ -831,6 +1004,9 @@ class LauncherGUI(ctk.CTk):
         PREFERENCES_FILE.write_text(json.dumps(self.preferences, indent=2), encoding='utf-8')
 
     def _on_close(self) -> None:
+        if self._logs_poll_job is not None:
+            self.after_cancel(self._logs_poll_job)
+            self._logs_poll_job = None
         self._save_preferences()
         self.destroy()
 

@@ -1441,8 +1441,9 @@ Este launcher **no reimplementa lógica**: delega en `start.py` y ejecuta:
 
 - `full` → **Iniciar sistema completo**
 - `lite` → **Iniciar modo liviano**
+- `backend` → **Iniciar solo backend**
+- `frontend` → **Iniciar solo frontend**
 - `status` → **Revisar servicios**
-- `logs --service <...>` → **Ver logs (todos/backend/frontend/ollama)**
 - `stop` → **Detener servicios**
 
 Incluye un bloque de estado rápido para:
@@ -1454,6 +1455,21 @@ Incluye un bloque de estado rápido para:
 - Frontend
 
 con estados `OK`, `STARTING`, `OFF`, `ENABLED` o `DISABLED`.
+
+Flujo operador vs debug en GUI:
+
+- **Modo operador (default):** `launcher_gui.py` envía `--gui-silent`, por lo que backend/frontend arrancan en detached/no-window (sin abrir consolas separadas), y mantiene apertura normal de navegador según toggle.
+- **Modo debug (checkbox):** habilita `--separate-windows` (y `--verbose` para comandos que lo soportan), dejando consolas visibles para diagnóstico.
+- Esto aplica a arranques `full`, `lite`, `backend` y `frontend` desde la GUI.
+
+La GUI ahora tiene un **panel interno plegable de logs** (tabs `Backend` / `Frontend`) para no depender de ventanas de consola:
+
+- muestra últimas líneas (tail compacta),
+- refresca en segundo plano sin congelar la UI,
+- permite auto-scroll opcional,
+- incluye botones de actualizar, limpiar y copiar.
+
+El botón de **Logs Ollama** se mantiene como salida puntual vía `start.py logs --service ollama`.
 
 El panel ahora expone controles separados para LLM local:
 
