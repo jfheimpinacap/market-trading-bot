@@ -1451,7 +1451,7 @@ python start.py frontend
 
 ### Launcher visual para Windows (`launcher_gui.py`)
 
-Si prefieres un acceso visual (botones grandes) para uso local en Windows, puedes usar:
+Si prefieres un acceso visual compacto para uso local en Windows, puedes usar:
 
 ```bash
 python launcher_gui.py
@@ -1467,6 +1467,15 @@ Este launcher **no reimplementa lógica**: delega en `start.py` y ejecuta:
 - `frontend` → **Iniciar solo frontend**
 - `status` → **Revisar servicios**
 - `stop` → **Detener servicios**
+
+Layout compacto (sin resize manual en condiciones normales):
+
+- **Arranque del sistema:** inicio completo/lite + repetir último inicio.
+- **Servicios individuales:** backend/frontend/estado/stop.
+- **Logs y monitoreo:** dashboard + panel interno de logs + accesos directos de logs.
+- **Preferencias y debug:** toggles de navegador/debug/Ollama, timeout/modelo/base URL y smoke test.
+
+Los botones se renderizan en **2 o 3 columnas según ancho de ventana**, con alturas y paddings más densos para reducir overflow vertical.
 
 Incluye un bloque de estado rápido para:
 

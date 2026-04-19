@@ -26,10 +26,10 @@ DEFAULT_SYSTEM_URL = 'http://localhost:5173/system'
 OLLAMA_TIMEOUT_OPTIONS = ('30', '60', '90', '120')
 DEFAULT_OLLAMA_BASE_URL = 'http://127.0.0.1:11434'
 DEFAULT_OLLAMA_MODEL = 'llama3.2:3b'
-DEFAULT_WINDOW_WIDTH = 980
-DEFAULT_WINDOW_HEIGHT = 760
-DEFAULT_MIN_WIDTH = 860
-DEFAULT_MIN_HEIGHT = 680
+DEFAULT_WINDOW_WIDTH = 940
+DEFAULT_WINDOW_HEIGHT = 700
+DEFAULT_MIN_WIDTH = 820
+DEFAULT_MIN_HEIGHT = 620
 WINDOW_MARGIN_X = 80
 WINDOW_MARGIN_Y = 120
 RESIZE_LAYOUT_DEBOUNCE_MS = 120
@@ -76,6 +76,7 @@ class LauncherGUI(ctk.CTk):
         self._logs_poll_job: str | None = None
         self._logs_refresh_inflight = False
         self._logs_cache: dict[str, str] = {service: '' for service in LOG_PANEL_SERVICES}
+        self._action_button_groups: list[tuple[ctk.CTkFrame, list[ctk.CTkButton], int]] = []
 
         self._build_ui()
         self.bind('<Configure>', self._on_window_configure)
@@ -160,126 +161,162 @@ class LauncherGUI(ctk.CTk):
         ctk.CTkLabel(
             header,
             text='Launcher local de Market Trading Bot',
-            font=ctk.CTkFont(size=22, weight='bold'),
+            font=ctk.CTkFont(size=20, weight='bold'),
         ).grid(row=0, column=0, padx=16, pady=(16, 4), sticky='w')
         ctk.CTkLabel(
             header,
-            text='Fachada visual para ejecutar start.py (full / lite / status / logs / stop).',
-            font=ctk.CTkFont(size=13),
+            text='Control local compacto para start.py (full/lite/status/logs/stop).',
+            font=ctk.CTkFont(size=12),
             text_color='gray80',
         ).grid(row=1, column=0, padx=16, pady=(0, 16), sticky='w')
 
         body = ctk.CTkFrame(self, corner_radius=14)
         body.grid(row=1, column=0, padx=20, pady=0, sticky='nsew')
-        body.grid_columnconfigure(0, weight=3)
-        body.grid_columnconfigure(1, weight=2)
+        body.grid_columnconfigure(0, weight=7)
+        body.grid_columnconfigure(1, weight=4)
         body.grid_rowconfigure(0, weight=1)
 
-        actions = ctk.CTkFrame(body, corner_radius=12)
+        actions = ctk.CTkScrollableFrame(body, corner_radius=12)
         actions.grid(row=0, column=0, padx=(14, 8), pady=14, sticky='nsew')
         actions.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(
-            actions,
-            text='Arranque rápido',
-            font=ctk.CTkFont(size=17, weight='bold'),
-        ).pack(anchor='w', padx=14, pady=(12, 2))
-
-        self._add_action_button(actions, 'Iniciar sistema completo (full)', lambda: self.run_action('full'))
-        self._add_action_button(actions, 'Iniciar modo liviano (lite)', lambda: self.run_action('lite'))
-        self._add_action_button(actions, 'Iniciar solo backend', lambda: self.run_action('backend'))
-        self._add_action_button(actions, 'Iniciar solo frontend', lambda: self.run_action('frontend'))
-        self._add_action_button(actions, 'Repetir último arranque', self.run_last_mode)
-        self._add_action_button(actions, 'Revisar servicios', self.refresh_status)
-        self._add_action_button(actions, 'Detener servicios', lambda: self.run_action('stop'))
-        self.dashboard_button = self._add_action_button(
-            actions,
-            'Abrir Dashboard',
-            self.open_dashboard,
-            state='disabled',
+        ctk.CTkLabel(actions, text='Arranque del sistema', font=ctk.CTkFont(size=15, weight='bold')).grid(
+            row=0, column=0, padx=12, pady=(10, 2), sticky='w'
         )
-        self._add_action_button(actions, 'Ver logs (panel interno)', self.toggle_logs_panel)
+        startup_group = ctk.CTkFrame(actions, corner_radius=10)
+        startup_group.grid(row=1, column=0, padx=10, pady=(0, 8), sticky='ew')
+        startup_buttons = [
+            self._add_action_button(startup_group, 'Iniciar completo', lambda: self.run_action('full'), primary=True),
+            self._add_action_button(startup_group, 'Iniciar lite', lambda: self.run_action('lite'), primary=True),
+            self._add_action_button(startup_group, 'Repetir último inicio', self.run_last_mode, primary=True),
+        ]
+        self._register_action_button_group(startup_group, startup_buttons, max_columns=3)
+
+        ctk.CTkLabel(actions, text='Servicios individuales', font=ctk.CTkFont(size=15, weight='bold')).grid(
+            row=2, column=0, padx=12, pady=(4, 2), sticky='w'
+        )
+        services_group = ctk.CTkFrame(actions, corner_radius=10)
+        services_group.grid(row=3, column=0, padx=10, pady=(0, 8), sticky='ew')
+        services_buttons = [
+            self._add_action_button(services_group, 'Solo backend', lambda: self.run_action('backend')),
+            self._add_action_button(services_group, 'Solo frontend', lambda: self.run_action('frontend')),
+            self._add_action_button(services_group, 'Revisar estado', self.refresh_status),
+            self._add_action_button(services_group, 'Detener servicios', lambda: self.run_action('stop')),
+        ]
+        self._register_action_button_group(services_group, services_buttons, max_columns=2)
+
+        ctk.CTkLabel(actions, text='Logs y monitoreo', font=ctk.CTkFont(size=15, weight='bold')).grid(
+            row=4, column=0, padx=12, pady=(4, 2), sticky='w'
+        )
+        monitor_group = ctk.CTkFrame(actions, corner_radius=10)
+        monitor_group.grid(row=5, column=0, padx=10, pady=(0, 8), sticky='ew')
+        self.dashboard_button = self._add_action_button(
+            monitor_group, 'Abrir dashboard', self.open_dashboard, state='disabled'
+        )
+        monitor_buttons = [
+            self.dashboard_button,
+            self._add_action_button(monitor_group, 'Panel interno logs', self.toggle_logs_panel),
+            self._add_action_button(monitor_group, 'Logs backend', lambda: self.show_logs_panel('backend')),
+            self._add_action_button(monitor_group, 'Logs frontend', lambda: self.show_logs_panel('frontend')),
+            self._add_action_button(monitor_group, 'Logs Ollama', lambda: self.open_logs('ollama')),
+        ]
+        self._register_action_button_group(monitor_group, monitor_buttons, max_columns=3)
+
+        ctk.CTkLabel(actions, text='Preferencias y debug', font=ctk.CTkFont(size=15, weight='bold')).grid(
+            row=6, column=0, padx=12, pady=(4, 2), sticky='w'
+        )
+        preferences_group = ctk.CTkFrame(actions, corner_radius=10)
+        preferences_group.grid(row=7, column=0, padx=10, pady=(0, 10), sticky='ew')
+        preferences_group.grid_columnconfigure(0, weight=1)
+        preferences_group.grid_columnconfigure(1, weight=1)
 
         ctk.CTkCheckBox(
-            actions,
-            text='Abrir navegador automáticamente al iniciar',
+            preferences_group,
+            text='Abrir navegador al iniciar',
             variable=self.auto_open_browser_var,
             command=self._save_preferences,
-            font=ctk.CTkFont(size=13),
-        ).pack(anchor='w', padx=16, pady=(8, 4))
+            font=ctk.CTkFont(size=12),
+        ).grid(row=0, column=0, padx=12, pady=(8, 2), sticky='w')
         ctk.CTkCheckBox(
-            actions,
-            text='Modo debug (mostrar consolas de procesos)',
+            preferences_group,
+            text='Modo debug (consolas visibles)',
             variable=self.debug_visible_processes_var,
             command=self._save_preferences,
-            font=ctk.CTkFont(size=13),
-        ).pack(anchor='w', padx=16, pady=(4, 4))
+            font=ctk.CTkFont(size=12),
+        ).grid(row=0, column=1, padx=12, pady=(8, 2), sticky='w')
         ctk.CTkCheckBox(
-            actions,
+            preferences_group,
             text='Usar Ollama (shadow)',
             variable=self.use_ollama_var,
             command=self._save_preferences,
-            font=ctk.CTkFont(size=13),
-        ).pack(anchor='w', padx=16, pady=(4, 4))
+            font=ctk.CTkFont(size=12),
+        ).grid(row=1, column=0, padx=12, pady=(2, 2), sticky='w')
         ctk.CTkCheckBox(
-            actions,
-            text='Activar señal auxiliar LLM',
+            preferences_group,
+            text='Señal auxiliar LLM',
             variable=self.aux_signal_var,
             command=self._save_preferences,
-            font=ctk.CTkFont(size=13),
-        ).pack(anchor='w', padx=16, pady=(4, 4))
+            font=ctk.CTkFont(size=12),
+        ).grid(row=1, column=1, padx=12, pady=(2, 2), sticky='w')
 
-        timeout_row = ctk.CTkFrame(actions, fg_color='transparent')
-        timeout_row.pack(fill='x', padx=16, pady=(4, 6))
+        timeout_row = ctk.CTkFrame(preferences_group, fg_color='transparent')
+        timeout_row.grid(row=2, column=0, padx=12, pady=(2, 4), sticky='ew')
         ctk.CTkLabel(
             timeout_row,
             text='Timeout Ollama (s):',
-            font=ctk.CTkFont(size=13),
+            font=ctk.CTkFont(size=12),
         ).pack(side='left')
         timeout_selector = ctk.CTkOptionMenu(
             timeout_row,
             values=list(OLLAMA_TIMEOUT_OPTIONS),
             variable=self.ollama_timeout_var,
-            width=100,
+            width=90,
+            height=30,
             command=lambda _: self._save_preferences(),
         )
         timeout_selector.pack(side='left', padx=(8, 0))
 
-        model_row = ctk.CTkFrame(actions, fg_color='transparent')
-        model_row.pack(fill='x', padx=16, pady=(2, 4))
+        model_row = ctk.CTkFrame(preferences_group, fg_color='transparent')
+        model_row.grid(row=2, column=1, padx=12, pady=(2, 4), sticky='ew')
         ctk.CTkLabel(
             model_row,
             text='Modelo Ollama:',
-            font=ctk.CTkFont(size=13),
+            font=ctk.CTkFont(size=12),
         ).pack(side='left')
-        model_entry = ctk.CTkEntry(model_row, textvariable=self.ollama_model_var)
+        model_entry = ctk.CTkEntry(model_row, textvariable=self.ollama_model_var, height=30)
         model_entry.pack(side='left', padx=(8, 0), fill='x', expand=True)
         model_entry.bind('<FocusOut>', lambda _: self._save_preferences())
 
-        base_url_row = ctk.CTkFrame(actions, fg_color='transparent')
-        base_url_row.pack(fill='x', padx=16, pady=(2, 8))
+        base_url_row = ctk.CTkFrame(preferences_group, fg_color='transparent')
+        base_url_row.grid(row=3, column=0, columnspan=2, padx=12, pady=(2, 4), sticky='ew')
         ctk.CTkLabel(
             base_url_row,
             text='Base URL Ollama:',
-            font=ctk.CTkFont(size=13),
+            font=ctk.CTkFont(size=12),
         ).pack(side='left')
-        base_url_entry = ctk.CTkEntry(base_url_row, textvariable=self.ollama_base_url_var)
+        base_url_entry = ctk.CTkEntry(base_url_row, textvariable=self.ollama_base_url_var, height=30)
         base_url_entry.pack(side='left', padx=(8, 0), fill='x', expand=True)
         base_url_entry.bind('<FocusOut>', lambda _: self._save_preferences())
 
-        self._add_action_button(actions, 'Probar Ollama (smoke test)', self.run_llm_shadow_smoke_test)
+        preferences_buttons_group = ctk.CTkFrame(preferences_group, fg_color='transparent')
+        preferences_buttons_group.grid(row=4, column=0, columnspan=2, padx=6, pady=(2, 6), sticky='ew')
+        pref_buttons = [
+            self._add_action_button(preferences_buttons_group, 'Smoke test Ollama', self.run_llm_shadow_smoke_test),
+            self._add_action_button(
+                preferences_buttons_group, 'Salir launcher', self.destroy, fg_color='#3c3c3c', hover_color='#4a4a4a'
+            ),
+        ]
+        self._register_action_button_group(preferences_buttons_group, pref_buttons, max_columns=2)
 
         self.main_url_label = ctk.CTkLabel(
-            actions,
+            preferences_group,
             textvariable=self.main_url_var,
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=11),
             text_color='gray80',
-            wraplength=390,
+            wraplength=460,
             justify='left',
         )
-        self.main_url_label.pack(anchor='w', padx=16, pady=(4, 10))
-
-        self._add_action_button(actions, 'Salir', self.destroy, fg_color='#3c3c3c', hover_color='#4a4a4a')
+        self.main_url_label.grid(row=5, column=0, columnspan=2, padx=12, pady=(0, 8), sticky='w')
 
         status_box = ctk.CTkFrame(body, corner_radius=12)
         status_box.grid(row=0, column=1, padx=(8, 14), pady=14, sticky='nsew')
@@ -288,51 +325,29 @@ class LauncherGUI(ctk.CTk):
         ctk.CTkLabel(
             status_box,
             text='Estado rápido',
-            font=ctk.CTkFont(size=18, weight='bold'),
+            font=ctk.CTkFont(size=16, weight='bold'),
         ).grid(row=0, column=0, columnspan=2, padx=14, pady=(14, 10), sticky='w')
 
         for i, name in enumerate(STATUS_KEYS, start=1):
-            ctk.CTkLabel(status_box, text=f'{name}:', font=ctk.CTkFont(size=14, weight='bold')).grid(
+            ctk.CTkLabel(status_box, text=f'{name}:', font=ctk.CTkFont(size=13, weight='bold')).grid(
                 row=i,
                 column=0,
                 padx=(14, 8),
-                pady=8,
+                pady=6,
                 sticky='w',
             )
-            value = ctk.CTkLabel(status_box, text=STATUS_DEFAULT, font=ctk.CTkFont(size=14), text_color='#f5a524')
-            value.grid(row=i, column=1, padx=(0, 14), pady=8, sticky='w')
+            value = ctk.CTkLabel(status_box, text=STATUS_DEFAULT, font=ctk.CTkFont(size=13), text_color='#f5a524')
+            value.grid(row=i, column=1, padx=(0, 14), pady=6, sticky='w')
             self.status_labels[name] = value
 
         ctk.CTkLabel(
             status_box,
             textvariable=self.last_status_check_var,
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=11),
             text_color='gray80',
             wraplength=250,
             justify='left',
         ).grid(row=len(STATUS_KEYS) + 1, column=0, columnspan=2, padx=14, pady=(8, 14), sticky='w')
-
-        logs_box = ctk.CTkFrame(status_box, corner_radius=8, fg_color='transparent')
-        logs_box.grid(row=len(STATUS_KEYS) + 2, column=0, columnspan=2, padx=12, pady=(0, 14), sticky='ew')
-        logs_box.grid_columnconfigure((0, 1, 2), weight=1)
-        ctk.CTkButton(
-            logs_box,
-            text='Logs backend',
-            height=34,
-            command=lambda: self.show_logs_panel('backend'),
-        ).grid(row=0, column=0, padx=4, pady=4, sticky='ew')
-        ctk.CTkButton(
-            logs_box,
-            text='Logs frontend',
-            height=34,
-            command=lambda: self.show_logs_panel('frontend'),
-        ).grid(row=0, column=1, padx=4, pady=4, sticky='ew')
-        ctk.CTkButton(
-            logs_box,
-            text='Logs Ollama',
-            height=34,
-            command=lambda: self.open_logs('ollama'),
-        ).grid(row=0, column=2, padx=4, pady=4, sticky='ew')
 
         self.logs_panel_frame = self._build_logs_panel()
         self.logs_panel_frame.grid(row=2, column=0, padx=20, pady=(0, 12), sticky='nsew')
@@ -365,9 +380,34 @@ class LauncherGUI(ctk.CTk):
         # y facilita una futura migración gradual a otro toolkit (por ejemplo PySide6) sin
         # mezclar lógica de procesos/startup con el framework gráfico.
         if self.main_url_label is not None:
-            self.main_url_label.configure(wraplength=max(320, width - 620))
+            self.main_url_label.configure(wraplength=max(320, width - 560))
         if self.footer_feedback_label is not None:
             self.footer_feedback_label.configure(wraplength=max(500, width - 300))
+        columns = 3 if width >= 1220 else 2
+        for frame, buttons, max_columns in self._action_button_groups:
+            target_columns = max(1, min(columns, max_columns))
+            self._layout_action_button_group(frame, buttons, target_columns)
+
+    @staticmethod
+    def _layout_action_button_group(
+        frame: ctk.CTkFrame,
+        buttons: list[ctk.CTkButton],
+        columns: int,
+    ) -> None:
+        for idx in range(columns):
+            frame.grid_columnconfigure(idx, weight=1)
+        for index, button in enumerate(buttons):
+            row = index // columns
+            column = index % columns
+            button.grid(row=row, column=column, padx=6, pady=5, sticky='ew')
+
+    def _register_action_button_group(
+        self,
+        frame: ctk.CTkFrame,
+        buttons: list[ctk.CTkButton],
+        max_columns: int,
+    ) -> None:
+        self._action_button_groups.append((frame, buttons, max_columns))
 
     def _build_logs_panel(self) -> ctk.CTkFrame:
         panel = ctk.CTkFrame(self, corner_radius=14)
@@ -516,17 +556,24 @@ class LauncherGUI(ctk.CTk):
         self.clipboard_append(content)
         self.feedback_var.set(f'Logs copiados al portapapeles ({service}).')
 
-    def _add_action_button(self, parent: ctk.CTkFrame, text: str, command, **kwargs: object) -> ctk.CTkButton:
+    def _add_action_button(
+        self,
+        parent: ctk.CTkFrame,
+        text: str,
+        command,
+        primary: bool = False,
+        **kwargs: object,
+    ) -> ctk.CTkButton:
+        button_font = ctk.CTkFont(size=13, weight='bold' if primary else 'normal')
         button = ctk.CTkButton(
             parent,
             text=text,
             command=command,
-            height=46,
-            corner_radius=10,
-            font=ctk.CTkFont(size=15, weight='bold'),
+            height=34,
+            corner_radius=8,
+            font=button_font,
             **kwargs,
         )
-        button.pack(fill='x', padx=12, pady=8)
         self.action_buttons.append(button)
         return button
 
