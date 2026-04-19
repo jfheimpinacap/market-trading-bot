@@ -56,17 +56,36 @@ class StartWindowsSilentSpawnTests(unittest.TestCase):
 
     @mock.patch('start.os.name', 'nt')
     def test_frontend_command_uses_npm_cli_without_cmd_wrapper(self) -> None:
-        npm_cmd = r'C:\Program Files\nodejs\npm.cmd'
+        npm_cmd = r'C:\Program Files\nodejs\npm'
         expected_cli = str(PureWindowsPath(r'C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js'))
         with (
             mock.patch('start.npm_exec', return_value=npm_cmd),
             mock.patch('start.node_exec', return_value=r'C:\Program Files\nodejs\node.exe'),
+            mock.patch('start.shutil.which', return_value=None),
             mock.patch('start.os.path.exists', return_value=True),
         ):
             command = start.frontend_run_command()
         self.assertEqual(command[0], r'C:\Program Files\nodejs\node.exe')
         self.assertEqual(command[1], str(expected_cli))
         self.assertEqual(command[2:5], ['run', 'dev', '--'])
+
+    def test_backend_command_adds_noreload_for_gui_silent_mode(self) -> None:
+        paths = start.build_paths()
+        command = start.backend_run_command(paths, no_reload=True)
+        self.assertEqual(command[-1], '--noreload')
+
+    def test_build_dev_process_specs_uses_noreload_when_requested(self) -> None:
+        paths = start.build_paths()
+        specs = start.build_dev_process_specs(
+            paths,
+            start.FULL_MODE,
+            include_backend=True,
+            include_frontend=False,
+            with_sim_loop=False,
+            backend_no_reload=True,
+        )
+        backend_spec = specs[0]
+        self.assertIn('--noreload', backend_spec['command'])
 
 
 if __name__ == '__main__':
