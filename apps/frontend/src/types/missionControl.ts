@@ -257,6 +257,10 @@ export type LivePaperSmokeTestResultResponse = {
 };
 
 export type LivePaperSmokeTestStatusResponse = {
+  exists?: boolean;
+  status?: 'AVAILABLE' | 'NO_RUN_YET' | string | null;
+  summary?: string | null;
+  reason_code?: string | null;
   preset_name: string;
   smoke_test_status: LivePaperSmokeTestStatus;
   executed_at: string;
@@ -298,6 +302,10 @@ export type LivePaperTrialRunResultResponse = {
 };
 
 export type LivePaperTrialRunStatusResponse = {
+  exists?: boolean;
+  status?: 'AVAILABLE' | 'NO_RUN_YET' | string | null;
+  summary?: string | null;
+  reason_code?: string | null;
   preset_name: string;
   trial_status: LivePaperTrialRunStatus;
   executed_at: string;
@@ -401,6 +409,10 @@ export type ExtendedPaperRunLaunchResponse = {
 };
 
 export type ExtendedPaperRunStatusResponse = {
+  exists?: boolean;
+  status?: 'AVAILABLE' | 'NO_RUN_YET' | string | null;
+  summary?: string | null;
+  reason_code?: string | null;
   preset_name: string;
   extended_run_active: boolean;
   gate_status: LivePaperExtendedRunGateStatus;
