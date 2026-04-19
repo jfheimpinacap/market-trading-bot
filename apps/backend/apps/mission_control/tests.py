@@ -7514,6 +7514,25 @@ class TestConsoleApiTests(TestCase):
         mock_start.assert_called_once_with(preset_name='live_read_only_paper_conservative', profile_id='prediction_risk_path')
         self.assertEqual(response.json()['test_profile'], 'prediction_risk_path')
 
+    @patch('apps.mission_control.views.start_test_console')
+    def test_start_test_console_includes_profile_catalog_for_ui_selector(self, mock_start):
+        payload = self._status_payload()
+        payload['available_test_profiles'] = {
+            'full_e2e': {'include_scan': True, 'include_handoff': True, 'include_prediction': True, 'include_risk': True, 'include_execution': True, 'include_export_text': True, 'include_export_json': True},
+            'scope_throttle_diagnostics': {'include_scan': False, 'include_handoff': True, 'include_prediction': False, 'include_risk': True, 'include_execution': True, 'include_export_text': True, 'include_export_json': True},
+            'prediction_risk_path': {'include_scan': False, 'include_handoff': True, 'include_prediction': True, 'include_risk': True, 'include_execution': False, 'include_export_text': True, 'include_export_json': True},
+            'exposure_diagnostics': {'include_scan': False, 'include_handoff': False, 'include_prediction': False, 'include_risk': True, 'include_execution': True, 'include_export_text': True, 'include_export_json': True},
+            'export_snapshot_integrity': {'include_scan': False, 'include_handoff': False, 'include_prediction': False, 'include_risk': False, 'include_execution': False, 'include_export_text': True, 'include_export_json': True},
+        }
+        mock_start.return_value = payload
+
+        response = self.client.post(reverse('mission_control:test-console-start'), data='{}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIn('available_test_profiles', body)
+        self.assertIn('full_e2e', body['available_test_profiles'])
+        self.assertIn('prediction_risk_path', body['available_test_profiles'])
+
     @patch('apps.mission_control.views.stop_test_console')
     def test_stop_test_console_is_explicit_and_safe(self, mock_stop):
         payload = self._status_payload()

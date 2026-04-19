@@ -107,6 +107,23 @@ const formatRelativeSeconds = (value: string | null | undefined) => {
   return `${seconds}s`;
 };
 const TEST_CONSOLE_PHASES = ['bootstrap', 'scan', 'consensus_review', 'pursuit_review', 'trial', 'validation', 'trend', 'gate', 'extended_run', 'finalize'];
+const TEST_CONSOLE_PROFILE_OPTIONS = [
+  { id: 'full_e2e', label: 'Full E2E' },
+  { id: 'scope_throttle_diagnostics', label: 'Scope + Throttle Diagnostics' },
+  { id: 'prediction_risk_path', label: 'Prediction + Risk Path' },
+  { id: 'exposure_diagnostics', label: 'Exposure Diagnostics' },
+  { id: 'export_snapshot_integrity', label: 'Export / Snapshot Integrity' },
+] as const;
+type TestConsoleProfileId = typeof TEST_CONSOLE_PROFILE_OPTIONS[number]['id'];
+const TEST_CONSOLE_MODULE_LABELS: Record<string, string> = {
+  include_scan: 'Scan',
+  include_handoff: 'Handoff',
+  include_prediction: 'Prediction',
+  include_risk: 'Risk',
+  include_execution: 'Execution',
+  include_export_text: 'Export text',
+  include_export_json: 'Export JSON',
+};
 const parseNumber = (value: string | null | undefined) => {
   if (!value) return null;
   const parsed = Number(value);
@@ -356,6 +373,8 @@ export function CockpitPage() {
   const [testConsoleLogError, setTestConsoleLogError] = useState<string | null>(null);
   const [testConsoleCopyMessage, setTestConsoleCopyMessage] = useState<string | null>(null);
   const [testConsoleRawJsonOpen, setTestConsoleRawJsonOpen] = useState(false);
+  const [selectedTestProfileId, setSelectedTestProfileId] = useState<TestConsoleProfileId>('full_e2e');
+  const [testConsoleAdvancedOpen, setTestConsoleAdvancedOpen] = useState(false);
   const heartbeatAutoSyncHint = useMemo(() => {
     const heartbeatSync = autonomousHeartbeatSummary?.live_paper_attention_sync;
     const lastAutoSync = livePaperAttentionStatus?.last_auto_sync;
@@ -395,6 +414,18 @@ export function CockpitPage() {
   const testConsolePortfolioSummary = typeof testConsoleStatus?.portfolio_summary === 'string'
     ? testConsoleStatus.portfolio_summary
     : testConsoleStatus?.portfolio_summary?.summary ?? 'n/a';
+  const availableTestProfiles = testConsoleStatus?.available_test_profiles ?? {};
+  const selectedProfileModules = useMemo(
+    () => availableTestProfiles[selectedTestProfileId] ?? availableTestProfiles.full_e2e ?? {},
+    [availableTestProfiles, selectedTestProfileId],
+  );
+  const selectedProfileIncludedModules = useMemo(
+    () => Object.entries(selectedProfileModules).filter(([, enabled]) => Boolean(enabled)).map(([moduleName]) => moduleName),
+    [selectedProfileModules],
+  );
+  const selectedProfileRunScope = selectedTestProfileId === 'full_e2e' ? 'fresh_full_run' : 'targeted_diagnostic_run';
+  const executedTestProfileId = testConsoleStatus?.test_profile ?? selectedTestProfileId;
+  const executedRunScope = testConsoleStatus?.run_scope ?? selectedProfileRunScope;
   const testConsoleRunActive = Boolean(
     testConsoleStatus?.test_status
       && ['RUNNING', 'IN_PROGRESS', 'ACTIVE'].includes(testConsoleStatus.test_status.toUpperCase()),
@@ -476,7 +507,7 @@ export function CockpitPage() {
     setTestConsoleStatusError(null);
     setTestConsoleCopyMessage(null);
     try {
-      const payload = await startTestConsoleRun();
+      const payload = await startTestConsoleRun({ profile_id: selectedTestProfileId });
       setTestConsoleStatus(payload);
       await loadTestConsoleStatus();
       await exportTestConsoleLog();
@@ -485,7 +516,7 @@ export function CockpitPage() {
     } finally {
       setTestConsoleStartLoading(false);
     }
-  }, [exportTestConsoleLog, loadTestConsoleStatus]);
+  }, [exportTestConsoleLog, loadTestConsoleStatus, selectedTestProfileId]);
 
   const stopTestConsoleFromCockpit = useCallback(async () => {
     setTestConsoleStopLoading(true);
@@ -930,6 +961,14 @@ export function CockpitPage() {
   }, [loadTestConsoleStatus]);
 
   useEffect(() => {
+    if (!testConsoleStatus?.test_profile) return;
+    const profileFromStatus = TEST_CONSOLE_PROFILE_OPTIONS.find((profile) => profile.id === testConsoleStatus.test_profile)?.id;
+    if (profileFromStatus) {
+      setSelectedTestProfileId(profileFromStatus);
+    }
+  }, [testConsoleStatus?.test_profile]);
+
+  useEffect(() => {
     if (!testConsoleRunActive && !testConsoleStartLoading) return undefined;
     const timer = window.setInterval(() => {
       void loadTestConsoleStatus();
@@ -1272,9 +1311,56 @@ export function CockpitPage() {
                       </ul>
                     </>
                   ) : null}
+                  <div className="stack-md">
+                    <div className="button-row">
+                      <label htmlFor="test-console-profile-select"><strong>Profile</strong></label>
+                      <select
+                        id="test-console-profile-select"
+                        value={selectedTestProfileId}
+                        disabled={testConsoleStartLoading || testConsoleStopLoading}
+                        onChange={(event) => {
+                          const nextProfile = TEST_CONSOLE_PROFILE_OPTIONS.find((profile) => profile.id === event.target.value)?.id;
+                          if (nextProfile) {
+                            setSelectedTestProfileId(nextProfile);
+                          }
+                        }}
+                      >
+                        {TEST_CONSOLE_PROFILE_OPTIONS.map((profile) => (
+                          <option key={profile.id} value={profile.id}>{profile.label}</option>
+                        ))}
+                      </select>
+                      <StatusBadge tone={executedRunScope === 'fresh_full_run' ? 'ready' : 'pending'}>
+                        {executedRunScope === 'fresh_full_run' ? 'FULL' : 'TARGETED'}
+                      </StatusBadge>
+                    </div>
+                    <div className="button-row">
+                      <span className="muted-text">Includes:</span>
+                      {(selectedProfileIncludedModules.length > 0 ? selectedProfileIncludedModules : ['none']).map((moduleName) => (
+                        <StatusBadge key={moduleName} tone="neutral">{TEST_CONSOLE_MODULE_LABELS[moduleName] ?? moduleName}</StatusBadge>
+                      ))}
+                    </div>
+                    <div className="button-row">
+                      <button className="ghost-button" type="button" onClick={() => setTestConsoleAdvancedOpen((value) => !value)}>
+                        {testConsoleAdvancedOpen ? 'Hide advanced modules' : 'Advanced modules'}
+                      </button>
+                    </div>
+                    {testConsoleAdvancedOpen ? (
+                      <div className="button-row">
+                        {Object.keys(TEST_CONSOLE_MODULE_LABELS).map((moduleName) => (
+                          <StatusBadge key={moduleName} tone={selectedProfileModules[moduleName] ? 'ready' : 'pending'}>
+                            {selectedProfileModules[moduleName] ? '✓' : '·'} {moduleName}
+                          </StatusBadge>
+                        ))}
+                      </div>
+                    ) : null}
+                    <ul className="key-value-list">
+                      <li><span>Executed profile</span><strong>{executedTestProfileId}</strong></li>
+                      <li><span>Run scope</span><strong>{executedRunScope}</strong></li>
+                    </ul>
+                  </div>
                   <div className="button-row test-console-actions">
                     <button className="secondary-button" type="button" disabled={testConsoleStartLoading || testConsoleStopLoading} onClick={() => void startTestConsoleFromCockpit()}>
-                      {testConsoleStartLoading ? 'Starting…' : 'Start test'}
+                      {testConsoleStartLoading ? 'Starting…' : 'Run selected profile'}
                     </button>
                     <button
                       className="secondary-button"
@@ -1371,6 +1457,7 @@ export function CockpitPage() {
                   </SectionCard>
                   <div className="subsection test-console-output-block">
                     <p className="section-label">Exported log</p>
+                    <p className="muted-text">profile={executedTestProfileId} · scope={executedRunScope}</p>
                     <pre className="test-console-output">{testConsoleLog || 'No log exported yet'}</pre>
                   </div>
                   {testConsoleRawJsonOpen ? (
