@@ -1405,7 +1405,7 @@ def build_dev_process_specs(
     include_backend: bool,
     include_frontend: bool,
     with_sim_loop: bool,
-    backend_no_reload: bool = False,
+    backend_no_reload: bool = True,
     backend_runtime_env: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     process_specs: list[dict[str, Any]] = []
@@ -1609,7 +1609,7 @@ def command_up(args: argparse.Namespace) -> int:
             include_backend=include_backend,
             include_frontend=include_frontend,
             with_sim_loop=args.with_sim_loop and include_backend,
-            backend_no_reload=gui_silent,
+            backend_no_reload=True,
             backend_runtime_env=backend_runtime_env,
         )
 
@@ -2122,7 +2122,7 @@ def command_backend(args: argparse.Namespace) -> int:
         {
             'label': 'backend',
             'title': 'market-trading-bot backend',
-            'command': backend_run_command(paths, no_reload=gui_silent),
+            'command': backend_run_command(paths, no_reload=True),
             'cwd': paths.backend,
             'env': backend_command_env(paths, mode, runtime_env=backend_runtime_env),
         }

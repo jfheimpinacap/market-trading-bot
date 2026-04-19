@@ -36,6 +36,7 @@ RESIZE_LAYOUT_DEBOUNCE_MS = 120
 LOG_PANEL_POLL_MS = 2500
 LOG_PANEL_LINES = 80
 LOG_PANEL_SERVICES = ('backend', 'frontend')
+STATE_FILE = ROOT / '.tmp' / 'start-state.json'
 
 
 class LauncherGUI(ctk.CTk):
@@ -1066,8 +1067,64 @@ class LauncherGUI(ctk.CTk):
         if self._logs_poll_job is not None:
             self.after_cancel(self._logs_poll_job)
             self._logs_poll_job = None
+        managed = self._launcher_managed_processes_running()
+        if managed:
+            labels = ', '.join(process.get('label', 'process') for process in managed)
+            decision = messagebox.askyesnocancel(
+                'Cerrar launcher',
+                'Hay servicios launcher-managed activos:\n'
+                f'{labels}\n\n'
+                'Sí: cerrar launcher y detener servicios.\n'
+                'No: cerrar launcher y dejar servicios corriendo.\n'
+                'Cancelar: volver al launcher.',
+            )
+            if decision is None:
+                return
+            if decision:
+                self.feedback_var.set('Deteniendo servicios launcher-managed...')
+                self.update_idletasks()
+                result = self._run_start_command('down')
+                if result.returncode != 0:
+                    error_output = (result.stderr or result.stdout or 'Error desconocido').strip()
+                    messagebox.showerror('No se pudo detener servicios', error_output)
+                    return
         self._save_preferences()
         self.destroy()
+
+    @staticmethod
+    def _process_running(pid: int | None) -> bool:
+        if not pid:
+            return False
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+        return True
+
+    def _launcher_managed_processes_running(self) -> list[dict[str, object]]:
+        if not STATE_FILE.exists():
+            return []
+        try:
+            state = json.loads(STATE_FILE.read_text(encoding='utf-8'))
+        except (json.JSONDecodeError, OSError):
+            return []
+        if not isinstance(state, dict):
+            return []
+        processes = state.get('processes', [])
+        if not isinstance(processes, list):
+            return []
+        running: list[dict[str, object]] = []
+        for entry in processes:
+            if not isinstance(entry, dict):
+                continue
+            pid = entry.get('pid')
+            if isinstance(pid, int) and self._process_running(pid):
+                running.append(entry)
+        return running
 
 
 def maybe_relaunch_with_pythonw() -> None:
