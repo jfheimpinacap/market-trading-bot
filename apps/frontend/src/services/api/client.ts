@@ -77,3 +77,8 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
 
   return (await response.json()) as T;
 }
+
+
+export function isNotFoundApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.status === 404;
+}

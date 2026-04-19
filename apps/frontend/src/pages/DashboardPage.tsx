@@ -7,10 +7,8 @@ import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { useSystemHealth } from '../app/SystemHealthProvider';
 import { PROJECT_NAME } from '../lib/config';
 import { navigate } from '../lib/router';
-import { getCockpitAttention, getCockpitSummary } from '../services/cockpit';
 import { getTestConsoleStatus } from '../services/missionControl';
 import { getPaperSnapshots, getPaperSummary } from '../services/paperTrading';
-import type { CockpitAttentionItem } from '../types/cockpit';
 import type { LlmAuxSignalSummary, TestConsoleStatusResponse } from '../types/missionControl';
 import type { PaperPortfolioSnapshot, PaperPortfolioSummary } from '../types/paperTrading';
 
@@ -119,17 +117,12 @@ export function DashboardPage() {
   const [testConsoleStatus, setTestConsoleStatus] = useState<TestConsoleStatusResponse | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
-  const [attentionItems, setAttentionItems] = useState<CockpitAttentionItem[]>([]);
-  const [attentionLoading, setAttentionLoading] = useState(true);
-  const [attentionError, setAttentionError] = useState<string | null>(null);
 
   const loadExecutiveData = useCallback(async () => {
     setPaperLoading(true);
     setPaperError(null);
     setStatusLoading(true);
     setStatusError(null);
-    setAttentionLoading(true);
-    setAttentionError(null);
 
     await Promise.all([
       (async () => {
@@ -154,18 +147,6 @@ export function DashboardPage() {
           setStatusError(getErrorMessage(error, 'No se pudo cargar el estado operativo.'));
         } finally {
           setStatusLoading(false);
-        }
-      })(),
-      (async () => {
-        try {
-          const snapshot = await getCockpitSummary();
-          const response = getCockpitAttention(snapshot);
-          setAttentionItems(response.slice(0, 3));
-        } catch (error) {
-          setAttentionItems([]);
-          setAttentionError(getErrorMessage(error, 'No se pudieron cargar alertas priorizadas.'));
-        } finally {
-          setAttentionLoading(false);
         }
       })(),
     ]);
@@ -213,10 +194,9 @@ export function DashboardPage() {
   );
 
   const latestTrade = paperSummary?.recent_trades[0] ?? null;
-  const priorityAttentionItems = attentionItems.slice(0, 2);
-  const remainingAttentionItems = attentionItems.slice(2);
-  const hasCriticalAttention = attentionItems.some((item) => item.severity === 'CRITICAL' || item.severity === 'HIGH');
-  const exposureBlock = testConsoleStatus?.blocker_summary ?? (testConsoleStatus?.gate_status === 'BLOCK' ? 'Gate bloqueado' : 'Sin bloqueo dominante');
+  const hasCriticalAttention = ['REVIEW_NOW', 'BLOCK'].includes((testConsoleStatus?.attention_mode ?? '').toUpperCase())
+    || (testConsoleStatus?.gate_status ?? '').toUpperCase() === 'BLOCK';
+  const exposureBlock = testConsoleStatus?.blocker_summary ?? 'Sin bloqueo dominante';
 
   return (
     <div className="page-stack dashboard-page executive-dashboard-page">
@@ -276,32 +256,20 @@ export function DashboardPage() {
           aside={<StatusBadge tone={statusTone(testConsoleStatus?.attention_mode)}>{testConsoleStatus?.attention_mode ?? 'Sin dato'}</StatusBadge>}
         >
           <DataStateWrapper
-            isLoading={attentionLoading}
-            isError={Boolean(attentionError)}
-            errorMessage={attentionError ?? undefined}
+            isLoading={statusLoading}
+            isError={Boolean(statusError)}
+            errorMessage={statusError ?? undefined}
             loadingTitle="Cargando alertas"
             loadingDescription="Consultando prioridades actuales."
             errorTitle="No se pudieron cargar alertas"
           >
             <ul className="bullet-list compact-list">
-              {attentionItems.length === 0 ? <li>Sin items prioritarios.</li> : null}
-              {priorityAttentionItems.map((item) => (
-                <li key={item.id}>
-                  <strong>{item.severity}:</strong> {item.title}
-                </li>
-              ))}
+              {!hasCriticalAttention ? <li>Sin items prioritarios.</li> : null}
+              {hasCriticalAttention ? <li><strong>CRITICAL:</strong> Revisión operativa requerida.</li> : null}
             </ul>
             <details className="dashboard-secondary-details">
               <summary>Resumen auxiliar</summary>
-              {remainingAttentionItems.length > 0 ? (
-                <ul className="bullet-list compact-list">
-                  {remainingAttentionItems.map((item) => (
-                    <li key={item.id}>
-                      <strong>{item.severity}:</strong> {item.title}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+              <p className="muted-text">{testConsoleStatus?.next_action_hint ?? 'Sin recomendaciones inmediatas.'}</p>
               <div className="executive-llm-hint">
                 {llmHint?.aux_signal_status ? `(${llmHint.aux_signal_status})` : '(sin señal)'} {getLlmHintText(llmHint)}
               </div>

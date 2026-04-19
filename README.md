@@ -3830,3 +3830,5 @@ Qué **no** valida:
 `apps/backend` now supports backend-only Test Console profiles to run targeted diagnostics faster without policy or trading-logic changes. Use `profile_id` on `POST /api/mission-control/test-console/start/`; default remains `full_e2e`.
 
 Export/status include `test_profile`, `modules_included`, `modules_omitted`, and `run_scope` (`fresh_full_run` vs `targeted_diagnostic_run`).
+
+- Frontend hardening: fixed avoidable 404 wiring in Dashboard/Markets/Portfolio and converted optional missing resources to clean empty-state handling (no fatal UX break).

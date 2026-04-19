@@ -6,6 +6,7 @@ import { MarketsSummaryCards } from '../../components/markets/MarketsSummaryCard
 import { MarketsTable } from '../../components/markets/MarketsTable';
 import { SectionCard } from '../../components/SectionCard';
 import { getEvents, getMarketSystemSummary, getMarkets, getProviders } from '../../services/markets';
+import { isNotFoundApiError } from '../../services/api/client';
 import type { MarketEvent, MarketFilters, MarketListItem, MarketProvider, MarketSystemSummary } from '../../types/markets';
 
 const defaultFilters: MarketFilters = {
@@ -42,30 +43,40 @@ export function MarketsPage() {
       setCatalogLoading(true);
       setCatalogError(null);
 
-      try {
-        const [summaryResponse, providersResponse, eventsResponse] = await Promise.all([
-          getMarketSystemSummary(),
-          getProviders(),
-          getEvents(),
-        ]);
+      const [summaryResult, providersResult, eventsResult] = await Promise.allSettled([
+        getMarketSystemSummary(),
+        getProviders(),
+        getEvents(),
+      ]);
 
-        if (!isMounted) {
-          return;
-        }
+      if (!isMounted) {
+        return;
+      }
 
-        setSummary(summaryResponse);
-        setProviders(providersResponse);
-        setEvents(eventsResponse);
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
+      if (summaryResult.status === 'fulfilled') {
+        setSummary(summaryResult.value);
+      } else if (!isNotFoundApiError(summaryResult.reason)) {
+        setCatalogError(getErrorMessage(summaryResult.reason, 'No se pudo cargar el resumen de mercados y filtros.'));
+      }
 
-        setCatalogError(getErrorMessage(error, 'No se pudo cargar el resumen de mercados y filtros.'));
-      } finally {
-        if (isMounted) {
-          setCatalogLoading(false);
-        }
+      if (providersResult.status === 'fulfilled') {
+        setProviders(providersResult.value);
+      } else if (isNotFoundApiError(providersResult.reason)) {
+        setProviders([]);
+      } else {
+        setCatalogError((current) => current ?? getErrorMessage(providersResult.reason, 'No se pudo cargar la lista de proveedores.'));
+      }
+
+      if (eventsResult.status === 'fulfilled') {
+        setEvents(eventsResult.value);
+      } else if (isNotFoundApiError(eventsResult.reason)) {
+        setEvents([]);
+      } else {
+        setCatalogError((current) => current ?? getErrorMessage(eventsResult.reason, 'No se pudieron cargar las categorías/eventos.'));
+      }
+
+      if (isMounted) {
+        setCatalogLoading(false);
       }
     }
 
