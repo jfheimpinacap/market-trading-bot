@@ -4916,6 +4916,12 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - **sin cambios de policy** y **sin cambios de gating operativo**: ajuste backend-only de wiring diagnóstico para consumir explícitamente los splits históricos ya publicados por los throttles.
   - `risk_execution_scope_alignment_summary` deja de verse ambiguamente en cero cuando hay historial `out_of_scope` visible en throttles, rellenando exclusiones/contador histórico y reason codes de cierre de lectura diagnóstica.
   - el wiring prioriza splits ya serializados (`*_current_window`, `*_out_of_scope`) cuando existen en `active_exposure_risk_throttle_summary`, manteniendo consistencia de snapshot/export entre bloques.
+- **Prompt 325 (scope-alignment projection fix final entre throttle split y scope summary):**
+  - backend-only/diagnostic wiring: `risk_execution_scope_alignment_summary` ahora consume explícitamente el split serializado de `active_exposure_risk_throttle_summary` (y readiness cuando aporta) para proyectar `current_window` operativo real y `historical/out_of_scope` diagnóstico.
+  - cuando hay actividad current-window real, evita el falso cero en scope-alignment y proyecta `risk_decisions_current_window` + `execution_routes_current_window` alineados con los throttles.
+  - cuando la ventana actual está limpia pero existe historial visible, mantiene el marcado `diagnostic_only_historical`/`out_of_scope` sin mezclar semánticas.
+  - añade reason codes de alineación de cierre (`CURRENT_WINDOW_SCOPE_ALIGNMENT_PROJECTED_FROM_RISK_THROTTLE`, `CURRENT_WINDOW_EXECUTION_SCOPE_ALIGNMENT_PROJECTED`, `SCOPE_ALIGNMENT_SUMMARY_CONSUMED_SERIALIZED_THROTTLE_SPLIT`, `CURRENT_WINDOW_AND_THROTTLE_SUMMARIES_ALIGNED`).
+  - alcance intacto: **sin cambios de policy** y **sin cambios de gating operativo**.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`
