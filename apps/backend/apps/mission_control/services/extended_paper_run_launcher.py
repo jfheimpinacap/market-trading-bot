@@ -202,6 +202,7 @@ def get_extended_paper_run_status(*, preset_name: str | None = None) -> dict[str
     session_active = bool(bootstrap_status.get('session_active'))
     heartbeat_active = bool(bootstrap_status.get('heartbeat_active'))
     launch_status = str(last_launch.get('launch_status') or '')
+    launch_exists = bool(launch_status)
 
     extended_run_active = (
         gate_status in {GATE_ALLOW, GATE_ALLOW_WITH_CAUTION}
@@ -226,6 +227,10 @@ def get_extended_paper_run_status(*, preset_name: str | None = None) -> dict[str
         status_summary = 'Extended run not active yet; launch has not started in this process.'
 
     return {
+        'exists': launch_exists,
+        'status': 'AVAILABLE' if launch_exists else 'NO_RUN_YET',
+        'summary': status_summary,
+        'reason_code': 'EXTENDED_RUN_STATUS_AVAILABLE' if launch_exists else 'EXTENDED_RUN_NOT_STARTED',
         'preset_name': target_preset,
         'extended_run_active': extended_run_active,
         'gate_status': gate_status,
