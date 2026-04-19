@@ -216,15 +216,45 @@ def subprocess_env(extra: dict[str, str] | None = None) -> dict[str, str]:
 def windows_no_window_kwargs() -> dict[str, Any]:
     if os.name != 'nt':
         return {}
-    kwargs: dict[str, Any] = {'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0)}
+    kwargs: dict[str, Any] = {'creationflags': windows_creationflags(hidden_window=True)}
+    startupinfo = windows_startupinfo(hidden_window=True)
+    if startupinfo is not None:
+        kwargs['startupinfo'] = startupinfo
+    return kwargs
+
+
+def windows_creationflags(
+    *,
+    hidden_window: bool,
+    new_console: bool = False,
+    detached_process: bool = False,
+    new_process_group: bool = True,
+) -> int:
+    if os.name != 'nt':
+        return 0
+    flags = 0
+    if new_process_group:
+        flags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+    if new_console:
+        flags |= getattr(subprocess, 'CREATE_NEW_CONSOLE', 0)
+    if detached_process:
+        flags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
+    if hidden_window:
+        flags |= getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+    return flags
+
+
+def windows_startupinfo(*, hidden_window: bool) -> Any | None:
+    if os.name != 'nt' or not hidden_window:
+        return None
     startupinfo_factory = getattr(subprocess, 'STARTUPINFO', None)
     startf_use_showwindow = getattr(subprocess, 'STARTF_USESHOWWINDOW', 0)
     if startupinfo_factory is not None:
         startupinfo = startupinfo_factory()
         startupinfo.dwFlags |= startf_use_showwindow
         startupinfo.wShowWindow = 0
-        kwargs['startupinfo'] = startupinfo
-    return kwargs
+        return startupinfo
+    return None
 
 
 def run_command(
@@ -1047,10 +1077,7 @@ def maybe_seed(paths: ProjectPaths, mode: RuntimeMode, *, no_seed: bool) -> None
 def process_kwargs(new_console: bool = False) -> dict[str, Any]:
     kwargs: dict[str, Any] = {'text': True}
     if os.name == 'nt':
-        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
-        if new_console:
-            creationflags |= subprocess.CREATE_NEW_CONSOLE
-        kwargs['creationflags'] = creationflags
+        kwargs['creationflags'] = windows_creationflags(hidden_window=False, new_console=new_console)
     else:
         kwargs['start_new_session'] = True
     return kwargs
@@ -1159,17 +1186,12 @@ def detached_process_kwargs(log_file: Path) -> dict[str, Any]:
         'stdin': subprocess.DEVNULL,
     }
     if os.name == 'nt':
-        kwargs['creationflags'] = (
-            getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
-            | getattr(subprocess, 'DETACHED_PROCESS', 0)
-            | getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+        kwargs['creationflags'] = windows_creationflags(
+            hidden_window=True,
+            detached_process=True,
         )
-        startupinfo_factory = getattr(subprocess, 'STARTUPINFO', None)
-        startf_use_showwindow = getattr(subprocess, 'STARTF_USESHOWWINDOW', 0)
-        if startupinfo_factory is not None:
-            startupinfo = startupinfo_factory()
-            startupinfo.dwFlags |= startf_use_showwindow
-            startupinfo.wShowWindow = 0
+        startupinfo = windows_startupinfo(hidden_window=True)
+        if startupinfo is not None:
             kwargs['startupinfo'] = startupinfo
     else:
         kwargs['start_new_session'] = True
@@ -1179,13 +1201,22 @@ def detached_process_kwargs(log_file: Path) -> dict[str, Any]:
 def resolve_windows_npm_cli(npm_command: str | None = None) -> str | None:
     if os.name != 'nt':
         return None
-    resolved_npm = npm_command or npm_exec()
-    npm_path = PureWindowsPath(resolved_npm)
-    if npm_path.suffix.lower() != '.cmd':
-        return None
-    npm_cli = str(npm_path.parent / 'node_modules' / 'npm' / 'bin' / 'npm-cli.js')
-    if os.path.exists(npm_cli):
-        return npm_cli
+
+    candidates: list[str] = []
+    for candidate in (
+        npm_command,
+        shutil.which('npm.cmd'),
+        shutil.which('npm'),
+        npm_exec(),
+    ):
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+
+    for candidate in candidates:
+        npm_path = PureWindowsPath(candidate)
+        npm_cli = str(npm_path.parent / 'node_modules' / 'npm' / 'bin' / 'npm-cli.js')
+        if os.path.exists(npm_cli):
+            return npm_cli
     return None
 
 
@@ -1195,6 +1226,7 @@ def spawn_process(label: str, command: Sequence[str], cwd: Path, env: dict[str, 
         [str(part) for part in command],
         cwd=cwd,
         env=subprocess_env(env),
+        shell=False,
         **process_kwargs(),
     )
 
@@ -1216,6 +1248,7 @@ def spawn_detached_process(
             [str(part) for part in command],
             cwd=cwd,
             env=subprocess_env(env),
+            shell=False,
             **kwargs,
         )
     finally:
@@ -1235,6 +1268,7 @@ def open_new_console_windows(process_specs: Sequence[dict[str, Any]]) -> list[di
             command,
             cwd=cwd,
             env=subprocess_env(spec.get('env')),
+            shell=False,
             **process_kwargs(new_console=True),
         )
         launched.append(
@@ -1338,8 +1372,11 @@ def launcher_status_snapshot(paths: ProjectPaths) -> dict[str, Any]:
     }
 
 
-def backend_run_command(paths: ProjectPaths) -> list[str]:
-    return [str(get_backend_venv_python(paths)), str(paths.backend_manage), 'runserver', '0.0.0.0:8000']
+def backend_run_command(paths: ProjectPaths, *, no_reload: bool = False) -> list[str]:
+    command = [str(get_backend_venv_python(paths)), str(paths.backend_manage), 'runserver', '0.0.0.0:8000']
+    if no_reload:
+        command.append('--noreload')
+    return command
 
 
 def frontend_run_command() -> list[str]:
@@ -1357,6 +1394,7 @@ def build_dev_process_specs(
     include_backend: bool,
     include_frontend: bool,
     with_sim_loop: bool,
+    backend_no_reload: bool = False,
     backend_runtime_env: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     process_specs: list[dict[str, Any]] = []
@@ -1365,7 +1403,7 @@ def build_dev_process_specs(
             {
                 'label': 'backend',
                 'title': 'market-trading-bot backend',
-                'command': backend_run_command(paths),
+                'command': backend_run_command(paths, no_reload=backend_no_reload),
                 'cwd': paths.backend,
                 'env': backend_command_env(paths, mode, runtime_env=backend_runtime_env),
             }
@@ -1553,16 +1591,17 @@ def command_up(args: argparse.Namespace) -> int:
         include_frontend = not args.skip_frontend
         if args.with_sim_loop and not include_backend:
             warn('Simulation loop was requested, but backend startup is skipped, so the loop was not started.')
+        startup_mode, verbose_logs, gui_silent = resolve_startup_preferences(args, allow_verbose=True)
         process_specs = build_dev_process_specs(
             paths,
             mode,
             include_backend=include_backend,
             include_frontend=include_frontend,
             with_sim_loop=args.with_sim_loop and include_backend,
+            backend_no_reload=gui_silent,
             backend_runtime_env=backend_runtime_env,
         )
 
-        startup_mode, verbose_logs, gui_silent = resolve_startup_preferences(args, allow_verbose=True)
         browser_url = DEFAULT_BROWSER_URL
         if gui_silent and verbose_logging_enabled(args):
             info('GUI silent mode active: forcing detached/no-window startup and ignoring verbose console env flags.')
@@ -2067,16 +2106,16 @@ def command_backend(args: argparse.Namespace) -> int:
         warn('Skipping automatic seed for backend-only startup because --no-seed was used.')
     else:
         maybe_seed(paths, mode, no_seed=False)
+    startup_mode, verbose_logs, gui_silent = resolve_startup_preferences(args, allow_verbose=True)
     process_specs = [
         {
             'label': 'backend',
             'title': 'market-trading-bot backend',
-            'command': backend_run_command(paths),
+            'command': backend_run_command(paths, no_reload=gui_silent),
             'cwd': paths.backend,
             'env': backend_command_env(paths, mode, runtime_env=backend_runtime_env),
         }
     ]
-    startup_mode, verbose_logs, gui_silent = resolve_startup_preferences(args, allow_verbose=True)
     if gui_silent and verbose_logging_enabled(args):
         info('GUI silent mode active: forcing detached/no-window startup and ignoring verbose console env flags.')
     attached_backend: subprocess.Popen[str] | None = None

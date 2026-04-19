@@ -1490,7 +1490,9 @@ con estados `OK`, `STARTING`, `OFF`, `ENABLED` o `DISABLED`.
 Flujo operador vs debug en GUI:
 
 - **Modo operador (default):** `launcher_gui.py` envía `--gui-silent`, por lo que backend/frontend arrancan en detached/no-window (sin abrir consolas separadas), y mantiene apertura normal de navegador según toggle.
-  - En Windows, el arranque silencioso oculta explícitamente la ventana de proceso (`startupinfo + CREATE_NO_WINDOW`) y el frontend evita el wrapper `npm.cmd` cuando detecta `npm-cli.js` (ejecuta `node .../npm-cli.js`) para prevenir ventanas `cmd.exe` visibles.
+  - En Windows, el arranque silencioso usa un único camino de spawn sin ventana (`shell=False`, `DETACHED_PROCESS + CREATE_NO_WINDOW + STARTF_USESHOWWINDOW`) tanto para `full`/`lite` como para `backend`/`frontend`.
+  - El frontend prioriza `node .../npm-cli.js` para evitar wrappers visibles de `cmd.exe`.
+  - El backend en modo operador agrega `runserver --noreload` para evitar el proceso hijo del autoreloader que podía reabrir `python.exe` con ventana.
 - **Modo debug (checkbox):** habilita `--separate-windows` (y `--verbose` para comandos que lo soportan), dejando consolas visibles para diagnóstico.
 - Esto aplica a arranques `full`, `lite`, `backend` y `frontend` desde la GUI.
 
