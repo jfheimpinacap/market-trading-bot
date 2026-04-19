@@ -977,13 +977,35 @@ def _apply_scope_split_to_throttle_diagnostics(
     redundant_total = int(risk.get('redundant_risk_decisions_throttled') or 0)
     created_total = int(risk.get('risk_decisions_created_normally') or 0)
     risk_total_observed = redundant_total + created_total
-    risk_current_estimate = min(risk_total_observed, risk_decisions_current_window)
-    risk_out_of_scope_estimate = max(risk_total_observed - risk_current_estimate, 0)
 
-    redundant_out_of_scope = min(redundant_total, risk_out_of_scope_estimate)
-    redundant_current_window = max(redundant_total - redundant_out_of_scope, 0)
-    created_current_window = min(created_total, max(risk_current_estimate - redundant_current_window, 0))
-    created_out_of_scope = max(created_total - created_current_window, 0)
+    risk_split_present = any(
+        key in risk
+        for key in (
+            'redundant_risk_decisions_throttled_current_window',
+            'redundant_risk_decisions_throttled_out_of_scope',
+            'risk_decisions_created_normally_current_window',
+            'risk_decisions_created_normally_out_of_scope',
+        )
+    )
+    if risk_split_present:
+        redundant_current_window = int(risk.get('redundant_risk_decisions_throttled_current_window') or 0)
+        redundant_out_of_scope = int(risk.get('redundant_risk_decisions_throttled_out_of_scope') or 0)
+        created_current_window = int(risk.get('risk_decisions_created_normally_current_window') or 0)
+        created_out_of_scope = int(risk.get('risk_decisions_created_normally_out_of_scope') or 0)
+        # Keep aggregate totals canonical when split is provided upstream.
+        if (redundant_current_window + redundant_out_of_scope) != redundant_total:
+            redundant_out_of_scope = max(redundant_total - redundant_current_window, 0)
+        if (created_current_window + created_out_of_scope) != created_total:
+            created_out_of_scope = max(created_total - created_current_window, 0)
+    else:
+        risk_current_estimate = min(risk_total_observed, risk_decisions_current_window)
+        risk_out_of_scope_estimate = max(risk_total_observed - risk_current_estimate, 0)
+        redundant_out_of_scope = min(redundant_total, risk_out_of_scope_estimate)
+        redundant_current_window = max(redundant_total - redundant_out_of_scope, 0)
+        created_current_window = min(created_total, max(risk_current_estimate - redundant_current_window, 0))
+        created_out_of_scope = max(created_total - created_current_window, 0)
+
+    risk_out_of_scope_estimate = max(redundant_out_of_scope + created_out_of_scope, 0)
 
     readiness_throttled_total = int(readiness.get('throttled_decision_events') or 0)
     readiness_created_total = int(readiness.get('readiness_created_normally') or 0)
@@ -1125,6 +1147,10 @@ def _apply_scope_split_to_throttle_diagnostics(
             inferred_historical_visible,
         )
     )
+    scope_examples = list(scope.get('scope_alignment_examples') or [])
+    for row in scope_examples:
+        row['diagnostic_only_historical'] = not bool(row.get('current_window_eligible'))
+    scope['scope_alignment_examples'] = scope_examples[:3]
     scope['scope_alignment_summary'] = (
         f"risk_decisions_current_window={scope.get('risk_decisions_current_window', 0)} "
         f"risk_decisions_excluded_out_of_scope={scope['risk_decisions_excluded_out_of_scope']} "

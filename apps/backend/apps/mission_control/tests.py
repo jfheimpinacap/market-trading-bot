@@ -4550,6 +4550,58 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(readiness.get('additive_entries_throttled_before_readiness_out_of_scope'), 0)
         self.assertEqual(scope.get('risk_decisions_excluded_out_of_scope'), 0)
 
+    def test_scope_split_consumes_pre_split_risk_throttle_diagnostics(self):
+        from apps.mission_control.services.live_paper_autonomy_funnel import _apply_scope_split_to_throttle_diagnostics
+
+        scope, risk, _readiness = _apply_scope_split_to_throttle_diagnostics(
+            scope_summary={
+                'risk_decisions_current_window': 0,
+                'risk_decisions_excluded_out_of_scope': 0,
+                'execution_routes_current_window': 0,
+                'execution_routes_excluded_out_of_scope': 0,
+                'historical_reuse_detected_count': 0,
+                'lineage_anchor_mismatch_count': 0,
+                'window_scope_mismatch_count': 0,
+                'scope_alignment_reason_codes': [],
+                'scope_alignment_examples': [
+                    {
+                        'risk_decision_id': 33,
+                        'current_window_eligible': False,
+                        'exclusion_reason': 'outside_current_window',
+                        'dominant_reason_code': 'RISK_DECISION_EXCLUDED_OUTSIDE_CURRENT_WINDOW',
+                    }
+                ],
+            },
+            risk_throttle_summary={
+                'redundant_risk_decisions_throttled': 1380,
+                'redundant_risk_decisions_throttled_current_window': 0,
+                'redundant_risk_decisions_throttled_out_of_scope': 1380,
+                'risk_decisions_created_normally': 20,
+                'risk_decisions_created_normally_current_window': 0,
+                'risk_decisions_created_normally_out_of_scope': 20,
+                'throttle_reason_codes': ['ACTIVE_EXPOSURE_RISK_THROTTLE_APPLIED'],
+                'active_exposure_risk_throttle_examples': [{'market_id': 11}],
+            },
+            readiness_throttle_summary={
+                'throttled_decision_events': 0,
+                'readiness_created_normally': 0,
+                'throttle_reason_codes': [],
+                'active_exposure_readiness_throttle_examples': [],
+            },
+        )
+
+        self.assertEqual(risk.get('redundant_risk_decisions_throttled_out_of_scope'), 1380)
+        self.assertEqual(risk.get('risk_decisions_created_normally_out_of_scope'), 20)
+        self.assertEqual(scope.get('risk_decisions_excluded_out_of_scope'), 1400)
+        self.assertEqual(scope.get('historical_reuse_detected_count'), 1400)
+        self.assertIn(
+            'CURRENT_WINDOW_EMPTY_HISTORICAL_THROTTLE_VISIBLE',
+            scope.get('scope_alignment_reason_codes', []),
+        )
+        first_scope_example = (scope.get('scope_alignment_examples') or [{}])[0]
+        self.assertFalse(first_scope_example.get('current_window_eligible'))
+        self.assertTrue(first_scope_example.get('diagnostic_only_historical'))
+
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.build_account_summary', return_value={'cash_balance': Decimal('1000.00')})
     @patch('apps.mission_control.services.live_paper_autonomy_funnel.get_active_account')
     def test_execution_visibility_prefers_suppression_reason_over_model_mismatch(self, mock_get_active_account, _mock_summary):

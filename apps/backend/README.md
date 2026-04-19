@@ -4912,6 +4912,10 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - cuando `current-window` está limpio pero hay historial visible en throttles, `risk_execution_scope_alignment_summary` incorpora explícitamente visibilidad histórico/out-of-scope (diagnostic-only) y reason codes de cierre (`CURRENT_WINDOW_EMPTY_HISTORICAL_THROTTLE_VISIBLE`, `SCOPE_ALIGNMENT_SUMMARY_INCLUDES_DIAGNOSTIC_ONLY_HISTORY`).
   - los bloques `active_exposure_risk_throttle_summary` y `active_exposure_readiness_throttle_summary` refuerzan el split legible `current_window` vs `diagnostic_only_historical` también en su `throttle_summary`.
   - el export textual muestra la lectura explícita del split (`current_window_counts` vs `diagnostic_only_historical_counts`) para que scope-alignment y throttle cuenten exactamente la misma historia.
+- **Prompt 324 (scope-summary wiring fix final):**
+  - **sin cambios de policy** y **sin cambios de gating operativo**: ajuste backend-only de wiring diagnóstico para consumir explícitamente los splits históricos ya publicados por los throttles.
+  - `risk_execution_scope_alignment_summary` deja de verse ambiguamente en cero cuando hay historial `out_of_scope` visible en throttles, rellenando exclusiones/contador histórico y reason codes de cierre de lectura diagnóstica.
+  - el wiring prioriza splits ya serializados (`*_current_window`, `*_out_of_scope`) cuando existen en `active_exposure_risk_throttle_summary`, manteniendo consistencia de snapshot/export entre bloques.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`
