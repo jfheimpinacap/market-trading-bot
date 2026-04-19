@@ -1036,6 +1036,13 @@ def _log_line_items(payload: dict[str, Any]) -> str:
             f"execution_routes_excluded_out_of_scope={risk_execution_scope_alignment.get('execution_routes_excluded_out_of_scope', 0)}"
         ),
         (
+            f"  current_window_counts=risk:{risk_execution_scope_alignment.get('risk_decisions_current_window', 0)}/"
+            f"execution:{risk_execution_scope_alignment.get('execution_routes_current_window', 0)} "
+            f"diagnostic_only_historical_counts=risk:{risk_execution_scope_alignment.get('risk_decisions_excluded_out_of_scope', 0)}/"
+            f"execution:{risk_execution_scope_alignment.get('execution_routes_excluded_out_of_scope', 0)} "
+            f"diagnostic_only_historical_count={risk_execution_scope_alignment.get('diagnostic_only_historical_count', 0)}"
+        ),
+        (
             f"  historical_reuse_detected_count={risk_execution_scope_alignment.get('historical_reuse_detected_count', 0)} "
             f"lineage_anchor_mismatch_count={risk_execution_scope_alignment.get('lineage_anchor_mismatch_count', 0)} "
             f"window_scope_mismatch_count={risk_execution_scope_alignment.get('window_scope_mismatch_count', 0)}"
