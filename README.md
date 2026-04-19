@@ -12,6 +12,16 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
 - **Precedent-aware decision support (new):** research, prediction, risk, signal-fusion, and postmortem now consume semantic precedents automatically in internal flows with conservative influence and explicit audit trails (`AgentPrecedentUse`).
 
+### Dashboard operator-first compact layout (Prompt 329)
+
+The main dashboard was compacted for operator-first scanning with less vertical noise and less default explanatory text.
+
+- Added a top compact status strip for bot state, funnel, validation, gate, trial, and attention mode.
+- Prioritized at-a-glance operator blocks: latest useful signal, active exposure, relevant blocking, and warning focus.
+- Moved technical/verbose context into collapsible detail sections while preserving navigation to advanced cockpit views.
+- Reduced card padding/height and tightened KPI presentation to lower scroll and improve responsive stacking behavior.
+
+
 ### Mission Control Ollama shadow analyst (Prompt 289)
 
 Mission Control/Test Console now includes an **Ollama local shadow analyst** path that reads real pipeline artifacts, emits a compact `llm_shadow_summary` in status/export payloads, and persists each shadow output as a reusable historical backend artifact.
