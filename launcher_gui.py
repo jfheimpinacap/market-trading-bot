@@ -530,6 +530,20 @@ class LauncherGUI(ctk.CTk):
         self.action_buttons.append(button)
         return button
 
+    @staticmethod
+    def _windows_hidden_subprocess_kwargs() -> dict[str, object]:
+        if os.name != 'nt':
+            return {}
+        kwargs: dict[str, object] = {'creationflags': subprocess.CREATE_NO_WINDOW}
+        startupinfo_factory = getattr(subprocess, 'STARTUPINFO', None)
+        startf_use_showwindow = getattr(subprocess, 'STARTF_USESHOWWINDOW', 0)
+        if startupinfo_factory is not None:
+            startupinfo = startupinfo_factory()
+            startupinfo.dwFlags |= startf_use_showwindow
+            startupinfo.wShowWindow = 0
+            kwargs['startupinfo'] = startupinfo
+        return kwargs
+
     def _run_start_command(self, *args: str) -> subprocess.CompletedProcess[str]:
         command = [sys.executable, str(START_SCRIPT), *args]
         run_kwargs: dict[str, object] = {
@@ -538,8 +552,7 @@ class LauncherGUI(ctk.CTk):
             'capture_output': True,
             'check': False,
         }
-        if os.name == 'nt':
-            run_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+        run_kwargs.update(self._windows_hidden_subprocess_kwargs())
         return subprocess.run(command, **run_kwargs)
 
     def _run_backend_manage_command(
@@ -559,8 +572,7 @@ class LauncherGUI(ctk.CTk):
             'check': False,
             'env': env,
         }
-        if os.name == 'nt':
-            run_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+        run_kwargs.update(self._windows_hidden_subprocess_kwargs())
         return subprocess.run(command, **run_kwargs)
 
     @staticmethod
