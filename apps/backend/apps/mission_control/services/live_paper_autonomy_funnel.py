@@ -6072,6 +6072,8 @@ def build_live_paper_autonomy_funnel_snapshot(*, window_minutes: int = 60, prese
         'execution_exposure_provenance_examples': exposure_diagnostics.get('execution_exposure_provenance_examples', []),
         'execution_exposure_release_audit_summary': exposure_diagnostics.get('execution_exposure_release_audit_summary', empty_execution_exposure_release_audit_summary()),
         'execution_exposure_release_audit_examples': exposure_diagnostics.get('execution_exposure_release_audit_examples', []),
+        'risk_execution_scope_alignment_summary': handoff_diagnostics.get('risk_execution_scope_alignment_summary', {}),
+        'risk_execution_scope_alignment_examples': handoff_diagnostics.get('risk_execution_scope_alignment_examples', []),
         'active_exposure_risk_throttle_summary': handoff_diagnostics.get('active_exposure_risk_throttle_summary', {}),
         'active_exposure_risk_throttle_examples': handoff_diagnostics.get('active_exposure_risk_throttle_examples', []),
         'active_exposure_readiness_throttle_summary': handoff_diagnostics.get('active_exposure_readiness_throttle_summary', {}),

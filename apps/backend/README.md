@@ -4922,6 +4922,11 @@ El backend incorpora un módulo compacto `mission_control.services.test_console`
   - cuando la ventana actual está limpia pero existe historial visible, mantiene el marcado `diagnostic_only_historical`/`out_of_scope` sin mezclar semánticas.
   - añade reason codes de alineación de cierre (`CURRENT_WINDOW_SCOPE_ALIGNMENT_PROJECTED_FROM_RISK_THROTTLE`, `CURRENT_WINDOW_EXECUTION_SCOPE_ALIGNMENT_PROJECTED`, `SCOPE_ALIGNMENT_SUMMARY_CONSUMED_SERIALIZED_THROTTLE_SPLIT`, `CURRENT_WINDOW_AND_THROTTLE_SUMMARIES_ALIGNED`).
   - alcance intacto: **sin cambios de policy** y **sin cambios de gating operativo**.
+- **Prompt 326 (orden final de proyección scope-alignment en snapshot/export):**
+  - fix backend-only de wiring/ordering: `build_live_paper_autonomy_funnel_snapshot` ahora propaga explícitamente `risk_execution_scope_alignment_summary` y `risk_execution_scope_alignment_examples` desde el mismo objeto final de handoff diagnostics que ya trae el split definitivo de throttles.
+  - evita reset implícito a `{}`/cero en status/export cuando sí existe flujo `current_window` o visibilidad `out_of_scope` diagnóstica.
+  - mantiene consistencia de historia entre `handoff_summary`, `paper_execution_summary`, throttles de active exposure y `risk_execution_scope_alignment_summary`.
+  - alcance intacto: **sin cambios de policy** y **sin cambios de gating operativo**.
 
 Endpoints:
 - `POST /api/mission-control/test-console/start/`
