@@ -4497,13 +4497,24 @@ class LivePaperAutonomyFunnelShortlistDiagnosticsTests(TestCase):
         self.assertEqual(scope.get('risk_decisions_current_window'), 0)
         self.assertGreater(scope.get('risk_decisions_excluded_out_of_scope', 0), 0)
         self.assertGreater(scope.get('historical_reuse_detected_count', 0), 0)
+        self.assertGreater(scope.get('diagnostic_only_historical_count', 0), 0)
         self.assertEqual(risk.get('redundant_risk_decisions_throttled_current_window'), 0)
         self.assertEqual(risk.get('redundant_risk_decisions_throttled_out_of_scope'), 8)
         self.assertIn('RISK_THROTTLE_COUNTED_AS_DIAGNOSTIC_ONLY', risk.get('throttle_reason_codes', []))
+        self.assertIn('CURRENT_WINDOW_EMPTY_HISTORICAL_THROTTLE_VISIBLE', risk.get('throttle_reason_codes', []))
+        self.assertIn(
+            'SCOPE_ALIGNMENT_SUMMARY_INCLUDES_DIAGNOSTIC_ONLY_HISTORY',
+            scope.get('scope_alignment_reason_codes', []),
+        )
         self.assertIn(
             'CURRENT_WINDOW_SCOPE_CLEAN_HISTORICAL_DIAGNOSTICS_PRESENT',
             scope.get('scope_alignment_reason_codes', []),
         )
+        first_example = (risk.get('active_exposure_risk_throttle_examples') or [{}])[0]
+        self.assertFalse(first_example.get('current_window_eligible'))
+        self.assertTrue(first_example.get('diagnostic_only_historical'))
+        self.assertEqual(first_example.get('exclusion_reason'), 'historical_out_of_scope_diagnostic_only')
+        self.assertTrue(first_example.get('dominant_reason_code'))
 
     def test_scope_split_preserves_current_window_throttle_counts(self):
         from apps.mission_control.services.live_paper_autonomy_funnel import _apply_scope_split_to_throttle_diagnostics
@@ -7401,10 +7412,13 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('redundant_risk_decisions_throttled=', text_payload)
         self.assertIn('redundant_risk_decisions_throttled_current_window=', text_payload)
         self.assertIn('redundant_risk_decisions_throttled_out_of_scope=', text_payload)
+        self.assertIn('diagnostic_only_historical_redundant=', text_payload)
         self.assertIn('active_exposure_readiness_throttle_summary:', text_payload)
         self.assertIn('additive_entries_throttled_before_readiness=', text_payload)
         self.assertIn('additive_entries_throttled_before_readiness_current_window=', text_payload)
         self.assertIn('additive_entries_throttled_before_readiness_out_of_scope=', text_payload)
+        self.assertIn('current_window_counts=risk:', text_payload)
+        self.assertIn('diagnostic_only_historical_counts=risk:', text_payload)
         self.assertIn('release_audit_summary=', text_payload)
         self.assertIn('suppressions_by_source_type=', text_payload)
         self.assertIn('candidates_promoted_to_decision=', text_payload)

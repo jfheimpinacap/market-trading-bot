@@ -993,6 +993,11 @@ def _apply_scope_split_to_throttle_diagnostics(
     readiness_created_out_of_scope = max(readiness_created_total - readiness_created_current_window, 0)
 
     inferred_historical_visible = max(risk_out_of_scope_estimate, readiness_out_of_scope, 0)
+    current_window_empty_historical_visible = bool(
+        inferred_historical_visible > 0
+        and risk_decisions_current_window == 0
+        and execution_routes_current_window == 0
+    )
     if inferred_historical_visible > 0 and historical_reuse_detected_count == 0:
         historical_reuse_detected_count = inferred_historical_visible
         scope_codes = _unique_codes(
@@ -1000,8 +1005,23 @@ def _apply_scope_split_to_throttle_diagnostics(
             + [
                 'THROTTLE_DIAGNOSTIC_HISTORY_VISIBLE_OUT_OF_SCOPE',
                 'CURRENT_WINDOW_SCOPE_CLEAN_HISTORICAL_DIAGNOSTICS_PRESENT',
+                'SCOPE_ALIGNMENT_SUMMARY_INCLUDES_DIAGNOSTIC_ONLY_HISTORY',
             ]
         )
+        if current_window_empty_historical_visible:
+            scope_codes.append('CURRENT_WINDOW_EMPTY_HISTORICAL_THROTTLE_VISIBLE')
+            scope_codes = _unique_codes(scope_codes)
+        scope['scope_alignment_reason_codes'] = scope_codes
+    elif inferred_historical_visible > 0:
+        scope_codes = _unique_codes(
+            list(scope.get('scope_alignment_reason_codes') or [])
+            + [
+                'SCOPE_ALIGNMENT_SUMMARY_INCLUDES_DIAGNOSTIC_ONLY_HISTORY',
+            ]
+        )
+        if current_window_empty_historical_visible:
+            scope_codes.append('CURRENT_WINDOW_EMPTY_HISTORICAL_THROTTLE_VISIBLE')
+            scope_codes = _unique_codes(scope_codes)
         scope['scope_alignment_reason_codes'] = scope_codes
     if inferred_historical_visible > 0:
         risk_decisions_excluded_out_of_scope = max(risk_decisions_excluded_out_of_scope, inferred_historical_visible)
@@ -1013,8 +1033,11 @@ def _apply_scope_split_to_throttle_diagnostics(
             [
                 'THROTTLE_DIAGNOSTIC_HISTORY_VISIBLE_OUT_OF_SCOPE',
                 'RISK_THROTTLE_COUNTED_AS_DIAGNOSTIC_ONLY',
+                'SCOPE_ALIGNMENT_SUMMARY_INCLUDES_DIAGNOSTIC_ONLY_HISTORY',
             ]
         )
+        if current_window_empty_historical_visible:
+            risk_codes.append('CURRENT_WINDOW_EMPTY_HISTORICAL_THROTTLE_VISIBLE')
     risk['throttle_reason_codes'] = _unique_codes(risk_codes)
     risk['redundant_risk_decisions_throttled_current_window'] = int(redundant_current_window)
     risk['redundant_risk_decisions_throttled_out_of_scope'] = int(redundant_out_of_scope)
@@ -1027,8 +1050,26 @@ def _apply_scope_split_to_throttle_diagnostics(
         row['diagnostic_only_historical'] = bool(is_historical)
         row['current_window_eligible'] = not bool(is_historical)
         row['exclusion_reason'] = 'historical_out_of_scope_diagnostic_only' if is_historical else None
+        row['dominant_reason_code'] = str(
+            row.get('dominant_reason_code')
+            or (
+                'CURRENT_WINDOW_EMPTY_HISTORICAL_THROTTLE_VISIBLE'
+                if current_window_empty_historical_visible and is_historical
+                else 'THROTTLE_DIAGNOSTIC_HISTORY_VISIBLE_OUT_OF_SCOPE'
+            )
+        )
         risk_examples[idx] = row
     risk['active_exposure_risk_throttle_examples'] = risk_examples[:3]
+    risk['throttle_summary'] = (
+        f"markets_throttled={risk.get('markets_throttled', 0)} "
+        f"redundant_risk_decisions_throttled={risk.get('redundant_risk_decisions_throttled', 0)} "
+        f"risk_decisions_created_normally={risk.get('risk_decisions_created_normally', 0)} "
+        f"current_window_redundant={risk['redundant_risk_decisions_throttled_current_window']} "
+        f"diagnostic_only_historical_redundant={risk['redundant_risk_decisions_throttled_out_of_scope']} "
+        f"current_window_created={risk['risk_decisions_created_normally_current_window']} "
+        f"diagnostic_only_historical_created={risk['risk_decisions_created_normally_out_of_scope']} "
+        f"throttle_reason_codes={','.join(risk.get('throttle_reason_codes') or []) or 'none'}"
+    )
 
     readiness_codes = list(readiness.get('throttle_reason_codes') or [])
     if readiness_out_of_scope > 0 or readiness_created_out_of_scope > 0:
@@ -1036,8 +1077,11 @@ def _apply_scope_split_to_throttle_diagnostics(
             [
                 'THROTTLE_DIAGNOSTIC_HISTORY_VISIBLE_OUT_OF_SCOPE',
                 'READINESS_THROTTLE_COUNTED_AS_DIAGNOSTIC_ONLY',
+                'SCOPE_ALIGNMENT_SUMMARY_INCLUDES_DIAGNOSTIC_ONLY_HISTORY',
             ]
         )
+        if current_window_empty_historical_visible:
+            readiness_codes.append('CURRENT_WINDOW_EMPTY_HISTORICAL_THROTTLE_VISIBLE')
     readiness['throttle_reason_codes'] = _unique_codes(readiness_codes)
     readiness['additive_entries_throttled_before_readiness_current_window'] = int(readiness_current_window)
     readiness['additive_entries_throttled_before_readiness_out_of_scope'] = int(readiness_out_of_scope)
@@ -1050,17 +1094,43 @@ def _apply_scope_split_to_throttle_diagnostics(
         row['diagnostic_only_historical'] = bool(is_historical)
         row['current_window_eligible'] = not bool(is_historical)
         row['exclusion_reason'] = 'historical_out_of_scope_diagnostic_only' if is_historical else None
+        row['dominant_reason_code'] = str(
+            row.get('dominant_reason_code')
+            or (
+                'CURRENT_WINDOW_EMPTY_HISTORICAL_THROTTLE_VISIBLE'
+                if current_window_empty_historical_visible and is_historical
+                else 'THROTTLE_DIAGNOSTIC_HISTORY_VISIBLE_OUT_OF_SCOPE'
+            )
+        )
         readiness_examples[idx] = row
     readiness['active_exposure_readiness_throttle_examples'] = readiness_examples[:3]
+    readiness['throttle_summary'] = (
+        f"markets_throttled={readiness.get('markets_throttled', 0)} "
+        f"additive_entries_throttled_before_readiness={readiness.get('additive_entries_throttled_before_readiness', 0)} "
+        f"readiness_created_normally={readiness.get('readiness_created_normally', 0)} "
+        f"current_window_throttled={readiness['additive_entries_throttled_before_readiness_current_window']} "
+        f"diagnostic_only_historical_throttled={readiness['additive_entries_throttled_before_readiness_out_of_scope']} "
+        f"current_window_created={readiness['readiness_created_normally_current_window']} "
+        f"diagnostic_only_historical_created={readiness['readiness_created_normally_out_of_scope']} "
+        f"throttle_reason_codes={','.join(readiness.get('throttle_reason_codes') or []) or 'none'}"
+    )
 
     scope['risk_decisions_excluded_out_of_scope'] = int(risk_decisions_excluded_out_of_scope)
     scope['execution_routes_excluded_out_of_scope'] = int(execution_routes_excluded_out_of_scope)
     scope['historical_reuse_detected_count'] = int(historical_reuse_detected_count)
+    scope['diagnostic_only_historical_count'] = int(
+        max(
+            scope['risk_decisions_excluded_out_of_scope'],
+            scope['execution_routes_excluded_out_of_scope'],
+            inferred_historical_visible,
+        )
+    )
     scope['scope_alignment_summary'] = (
         f"risk_decisions_current_window={scope.get('risk_decisions_current_window', 0)} "
         f"risk_decisions_excluded_out_of_scope={scope['risk_decisions_excluded_out_of_scope']} "
         f"execution_routes_current_window={scope.get('execution_routes_current_window', 0)} "
         f"execution_routes_excluded_out_of_scope={scope['execution_routes_excluded_out_of_scope']} "
+        f"diagnostic_only_historical_count={scope['diagnostic_only_historical_count']} "
         f"historical_reuse_detected_count={scope['historical_reuse_detected_count']} "
         f"lineage_anchor_mismatch_count={scope.get('lineage_anchor_mismatch_count', 0)} "
         f"window_scope_mismatch_count={scope.get('window_scope_mismatch_count', 0)} "
