@@ -7,8 +7,10 @@ Frontend local-first para `market-trading-bot`, construido con React + Vite + Ty
 Se redujo el fanout inicial de `/cockpit` aplicando una estrategia operator-first por etapas, sin tocar policy ni la lógica central del bot:
 
 - **Stage 1 (critical above-the-fold):** carga inmediata de `cockpit summary`, `live-paper status`, `test-console status` y `live-paper validation` para pintar rápido el estado operativo base.
-- **Stage 2 (summaries ligeros):** carga diferida corta de `autonomy scenario summary`, `scan summary`, `runtime tuning attention`, `autonomy funnel` y `operational snapshot`.
-- **Stage 3 (advanced/deep):** carga diferida de bloques pesados (review queue/aging/escalation/activity/autotriage, trial history/trend/status, extended run gate/status, paper account/summary/snapshots, smoke status).
+- **Stage 2 (summaries ligeros):** carga diferida corta de `autonomy scenario summary`, `scan summary` y `runtime tuning attention` (resumen compacto).
+- **Deferred on-demand (operator-first):** los bloques pesados ya no se disparan automáticamente en primer render. Se habilitan bajo demanda desde Cockpit:
+  - **Deferred live-paper sections:** `autonomy funnel`, `operational snapshot`, `smoke status`, `trial status/history/trend`, `extended run gate/status`, `paper account/summary/snapshots`.
+  - **Runtime tuning advanced layer:** `review queue/aging/escalation/activity`, `autotriage`, y detalle de estados de revisión por scope.
 
 También se añadió instrumentación mínima de desarrollo en Cockpit para contar fanout inicial (`critical` vs `deferred`) y exponerlo de forma discreta en la UI.
 
