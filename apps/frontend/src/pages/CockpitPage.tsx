@@ -6,6 +6,7 @@ import { SectionCard } from '../components/SectionCard';
 import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
+import { usePollingTicker } from '../hooks/usePollingTicker';
 import { isSettledRejected, resolveExpectedStatusError } from '../lib/missionControlStatus';
 import { getCockpitAttention, getCockpitQuickLinks, getCockpitSummary, runCockpitAction } from '../services/cockpit';
 import {
@@ -1013,13 +1014,12 @@ export function CockpitPage() {
     }
   }, [testConsoleStatus?.test_profile]);
 
-  useEffect(() => {
-    if (!testConsoleRunActive && !testConsoleStartLoading) return undefined;
-    const timer = window.setInterval(() => {
-      void loadTestConsoleStatus();
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, [loadTestConsoleStatus, testConsoleRunActive, testConsoleStartLoading]);
+  usePollingTicker(
+    'cockpit:test-console-status',
+    loadTestConsoleStatus,
+    3000,
+    testConsoleRunActive || testConsoleStartLoading,
+  );
 
   useEffect(() => {
     void loadLivePaperOperationalSnapshot();
