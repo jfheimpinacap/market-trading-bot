@@ -318,6 +318,7 @@ export function CockpitPage() {
   const [livePaperSmokeStatus, setLivePaperSmokeStatus] = useState<LivePaperSmokeTestStatusResponse | null>(null);
   const [livePaperSmokeStatusLoading, setLivePaperSmokeStatusLoading] = useState(true);
   const [livePaperSmokeStatusError, setLivePaperSmokeStatusError] = useState<string | null>(null);
+  const [livePaperSmokeStatusNotFound, setLivePaperSmokeStatusNotFound] = useState(false);
   const [livePaperSmokeRunLoading, setLivePaperSmokeRunLoading] = useState(false);
   const [livePaperSmokeRunError, setLivePaperSmokeRunError] = useState<string | null>(null);
   const [livePaperSmokeRunResult, setLivePaperSmokeRunResult] = useState<LivePaperSmokeTestResultResponse | null>(null);
@@ -568,20 +569,27 @@ export function CockpitPage() {
     try {
       const payload = await getLivePaperSmokeTestStatus();
       if (!payload) {
+        setLivePaperSmokeStatusNotFound(true);
         setLivePaperSmokeStatus(null);
-        setLivePaperSmokeStatusError('No smoke test result yet');
         return null;
       }
+      setLivePaperSmokeStatusNotFound(false);
       setLivePaperSmokeStatus(payload);
       return payload;
     } catch (smokeStatusError) {
       setLivePaperSmokeStatus(null);
       const statusState = resolveExpectedStatusError(smokeStatusError, {
-        expected404Message: 'No smoke test result yet',
+        emptyStateMessage: 'No smoke test result yet',
         fallbackMessage: 'Live paper smoke test unavailable',
         knownExpectedPhrases: ['no smoke test has been executed yet'],
       });
-      setLivePaperSmokeStatusError(statusState.message);
+      if (statusState.kind === 'empty') {
+        setLivePaperSmokeStatusNotFound(true);
+        setLivePaperSmokeStatusError(null);
+      } else {
+        setLivePaperSmokeStatusNotFound(false);
+        setLivePaperSmokeStatusError(statusState.message);
+      }
       return null;
     } finally {
       setLivePaperSmokeStatusLoading(false);
@@ -702,6 +710,7 @@ export function CockpitPage() {
         preset: 'live_read_only_paper_conservative',
         heartbeat_passes: 1,
       });
+      setLivePaperSmokeStatusNotFound(false);
       setLivePaperSmokeRunResult(payload);
       setLivePaperSmokeStatus({
         preset_name: payload.preset_name,
@@ -738,7 +747,7 @@ export function CockpitPage() {
       return payload;
     } catch (statusError) {
       const statusState = resolveExpectedStatusError(statusError, {
-        expected404Message: 'No trial run yet',
+        emptyStateMessage: 'No trial run yet',
         fallbackMessage: 'Could not load live paper trial status.',
         knownExpectedPhrases: ['no live paper trial run has been executed yet'],
       });
@@ -820,9 +829,20 @@ export function CockpitPage() {
       setExtendedPaperRunStatus(payload);
       return payload;
     } catch (statusError) {
-      setExtendedPaperRunNotFound(false);
-      setExtendedPaperRunStatus(null);
-      setExtendedPaperRunStatusError(getErrorMessage(statusError, 'Extended paper run status unavailable.'));
+      const statusState = resolveExpectedStatusError(statusError, {
+        emptyStateMessage: 'No extended run yet',
+        fallbackMessage: 'Extended paper run status unavailable.',
+        knownExpectedPhrases: ['no extended paper run has been started yet'],
+      });
+      if (statusState.kind === 'empty') {
+        setExtendedPaperRunNotFound(true);
+        setExtendedPaperRunStatus(null);
+        setExtendedPaperRunStatusError(null);
+      } else {
+        setExtendedPaperRunNotFound(false);
+        setExtendedPaperRunStatus(null);
+        setExtendedPaperRunStatusError(statusState.message);
+      }
       return null;
     } finally {
       setExtendedPaperRunStatusLoading(false);
@@ -1890,10 +1910,10 @@ export function CockpitPage() {
                   description="Short, repeatable V1 paper validation run (real market data read-only + fake money only)."
                 >
                   {livePaperSmokeStatusLoading ? <p>Loading smoke test status…</p> : null}
-                  {!livePaperSmokeStatusLoading && livePaperSmokeStatusError === 'No smoke test result yet' ? (
+                  {!livePaperSmokeStatusLoading && livePaperSmokeStatusNotFound ? (
                     <p className="muted-text">No smoke test result yet.</p>
                   ) : null}
-                  {!livePaperSmokeStatusLoading && livePaperSmokeStatusError && livePaperSmokeStatusError !== 'No smoke test result yet' ? (
+                  {!livePaperSmokeStatusLoading && livePaperSmokeStatusError ? (
                     <p className="warning-text">Live paper smoke test unavailable.</p>
                   ) : null}
                   {livePaperSmokeStatus ? (

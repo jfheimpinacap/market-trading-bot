@@ -11,20 +11,20 @@ function hasStatus(error: unknown, status: number) {
 export function resolveExpectedStatusError(
   error: unknown,
   config: {
-    expected404Message: string;
+    emptyStateMessage: string;
     fallbackMessage: string;
     knownExpectedPhrases?: string[];
   },
 ): MissionControlStatusState {
   if (hasStatus(error, 404)) {
-    return { kind: 'empty', message: config.expected404Message };
+    return { kind: 'empty', message: config.emptyStateMessage };
   }
 
   if (error instanceof Error) {
     const normalized = error.message.toLowerCase();
     const phrases = config.knownExpectedPhrases ?? [];
     if (phrases.some((phrase) => normalized.includes(phrase.toLowerCase()))) {
-      return { kind: 'empty', message: config.expected404Message };
+      return { kind: 'empty', message: config.emptyStateMessage };
     }
 
     return { kind: 'unavailable', message: error.message || config.fallbackMessage };
