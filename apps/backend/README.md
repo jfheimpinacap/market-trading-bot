@@ -11,7 +11,7 @@ Backend base for the `market-trading-bot` monorepo. This service is intentionall
 - Make the demo dataset feel alive locally without real provider integrations, trading, or websockets.
 - Provide precedent-aware agent support via `memory_retrieval` with conservative and auditable influence on research/prediction/risk/signals/postmortem.
 
-## Mission Control optional status empty-state contract (Prompt 337)
+## Mission Control optional status empty-state contract (Prompts 337, 342)
 
 Mission Control optional status endpoints now return HTTP `200` with an explicit empty-state payload when no run exists yet (instead of HTTP `404`):
 
@@ -27,6 +27,8 @@ Canonical empty-state fields:
 - `reason_code: "<stable machine code>"`
 
 Real backend failures (wiring/runtime exceptions) are still surfaced as real server errors (5xx).
+
+For compatibility, these optional status endpoints now also resolve with or without trailing slash.
 
 ## Ollama shadow mode in Mission Control/Test Console (Prompt 289)
 

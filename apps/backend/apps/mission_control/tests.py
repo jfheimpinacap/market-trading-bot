@@ -2137,6 +2137,17 @@ class LivePaperSmokeTestApiTests(TestCase):
         self.assertEqual(payload['reason_code'], 'SMOKE_TEST_NOT_RUN')
         self.assertIsNone(payload['smoke_test_status'])
 
+    @override_settings(DEBUG=False)
+    @patch('apps.mission_control.views.get_last_live_paper_smoke_test_result', side_effect=RuntimeError('boom'))
+    def test_get_status_propagates_real_errors(self, _mock_get_latest):
+        self.client.raise_request_exception = False
+        response = self.client.get(reverse('mission_control:live-paper-smoke-test-status'))
+        self.assertEqual(response.status_code, 500)
+
+    def test_get_status_route_without_trailing_slash_stays_200(self):
+        response = self.client.get('/api/mission-control/live-paper-smoke-test-status')
+        self.assertEqual(response.status_code, 200)
+
     @patch('apps.mission_control.services.live_paper_smoke_test.build_heartbeat_summary', return_value={'latest_run': 666})
     @patch('apps.mission_control.services.live_paper_smoke_test.run_heartbeat_pass')
     @patch('apps.mission_control.services.live_paper_smoke_test.get_live_paper_bootstrap_status', return_value={'session_active': True, 'heartbeat_active': True})
@@ -2370,6 +2381,10 @@ class LivePaperTrialRunApiTests(TestCase):
         self.client.raise_request_exception = False
         response = self.client.get(reverse('mission_control:live-paper-trial-status'))
         self.assertEqual(response.status_code, 500)
+
+    def test_get_status_route_without_trailing_slash_stays_200(self):
+        response = self.client.get('/api/mission-control/live-paper-trial-status')
+        self.assertEqual(response.status_code, 200)
 
     def test_existing_mission_control_summary_flow_still_works(self):
         response = self.client.get(reverse('mission_control:autonomous-session-summary'))
@@ -7213,6 +7228,17 @@ class ExtendedPaperRunLauncherApiTests(TestCase):
         self.assertFalse(payload['exists'])
         self.assertEqual(payload['status'], 'NO_RUN_YET')
         self.assertEqual(payload['reason_code'], 'EXTENDED_RUN_NOT_STARTED')
+
+    @override_settings(DEBUG=False)
+    @patch('apps.mission_control.services.extended_paper_run_launcher.build_extended_paper_run_gate', side_effect=RuntimeError('boom'))
+    def test_status_propagates_real_errors(self, _mock_gate):
+        self.client.raise_request_exception = False
+        response = self.client.get(reverse('mission_control:extended-paper-run-status'))
+        self.assertEqual(response.status_code, 500)
+
+    def test_status_route_without_trailing_slash_stays_200(self):
+        response = self.client.get('/api/mission-control/extended-paper-run-status')
+        self.assertEqual(response.status_code, 200)
 
     @patch('apps.mission_control.services.extended_paper_run_launcher.get_live_paper_bootstrap_status')
     @patch('apps.mission_control.services.extended_paper_run_launcher.bootstrap_live_read_only_paper_session')
