@@ -101,9 +101,7 @@ export function MarketsPage() {
           setEvents(response);
         }
       } catch {
-        if (isMounted) {
-          setEvents([]);
-        }
+        // Preserve the latest successful event list to avoid flicker while filters are revalidated.
       }
     }
 
@@ -184,6 +182,8 @@ export function MarketsPage() {
       <DataStateWrapper
         isLoading={catalogLoading}
         isError={Boolean(catalogError)}
+        hasData={Boolean(summary) || providers.length > 0 || events.length > 0}
+        staleWhileRevalidate
         errorMessage={catalogError ?? undefined}
         loadingTitle="Cargando vista de mercados"
         loadingDescription="Consultando resumen, proveedores y categorías."
@@ -217,6 +217,8 @@ export function MarketsPage() {
           <DataStateWrapper
             isLoading={marketsLoading}
             isError={Boolean(marketsError)}
+            hasData={markets.length > 0}
+            staleWhileRevalidate
             errorMessage={marketsError ?? undefined}
             isEmpty={!marketsLoading && !marketsError && markets.length === 0}
             loadingTitle="Cargando mercados"
