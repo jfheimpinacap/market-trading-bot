@@ -2,6 +2,16 @@
 
 Frontend local-first para `market-trading-bot`, construido con React + Vite + TypeScript.
 
+## Cockpit staged/lazy loading optimization (Prompt 346)
+
+Se redujo el fanout inicial de `/cockpit` aplicando una estrategia operator-first por etapas, sin tocar policy ni la lógica central del bot:
+
+- **Stage 1 (critical above-the-fold):** carga inmediata de `cockpit summary`, `live-paper status`, `test-console status` y `live-paper validation` para pintar rápido el estado operativo base.
+- **Stage 2 (summaries ligeros):** carga diferida corta de `autonomy scenario summary`, `scan summary`, `runtime tuning attention`, `autonomy funnel` y `operational snapshot`.
+- **Stage 3 (advanced/deep):** carga diferida de bloques pesados (review queue/aging/escalation/activity/autotriage, trial history/trend/status, extended run gate/status, paper account/summary/snapshots, smoke status).
+
+También se añadió instrumentación mínima de desarrollo en Cockpit para contar fanout inicial (`critical` vs `deferred`) y exponerlo de forma discreta en la UI.
+
 ## Navigation/loading revalidation UX hardening (new)
 
 Se mejoró la navegación interna entre vistas principales (especialmente `Dashboard`, `Markets` y `Portfolio`) para evitar quedar demasiado tiempo en estado global de “consultando datos” después de cambiar de ruta.
