@@ -6,6 +6,7 @@ import { StatusBadge } from '../components/dashboard/StatusBadge';
 import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { useSystemHealth } from '../app/SystemHealthProvider';
 import { PROJECT_NAME } from '../lib/config';
+import { getViewCache, setViewCache } from '../lib/viewCache';
 import { navigate } from '../lib/router';
 import { getTestConsoleStatus } from '../services/missionControl';
 import { getPaperSnapshots, getPaperSummary } from '../services/paperTrading';
@@ -70,6 +71,16 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+const DASHBOARD_CACHE_KEY = 'dashboard:executive';
+
+type DashboardCache = {
+  paperSummary: PaperPortfolioSummary | null;
+  paperSnapshots: PaperPortfolioSnapshot[];
+  testConsoleStatus: TestConsoleStatusResponse | null;
+  paperLoaded: boolean;
+  statusLoaded: boolean;
+};
+
 function MiniTrendChart({
   points,
   label,
@@ -109,14 +120,17 @@ function MiniTrendChart({
 }
 
 export function DashboardPage() {
+  const cached = getViewCache<DashboardCache>(DASHBOARD_CACHE_KEY);
   const health = useSystemHealth();
-  const [paperSummary, setPaperSummary] = useState<PaperPortfolioSummary | null>(null);
-  const [paperSnapshots, setPaperSnapshots] = useState<PaperPortfolioSnapshot[]>([]);
-  const [paperLoading, setPaperLoading] = useState(true);
+  const [paperSummary, setPaperSummary] = useState<PaperPortfolioSummary | null>(cached?.paperSummary ?? null);
+  const [paperSnapshots, setPaperSnapshots] = useState<PaperPortfolioSnapshot[]>(cached?.paperSnapshots ?? []);
+  const [paperLoading, setPaperLoading] = useState(!cached?.paperLoaded);
   const [paperError, setPaperError] = useState<string | null>(null);
-  const [testConsoleStatus, setTestConsoleStatus] = useState<TestConsoleStatusResponse | null>(null);
-  const [statusLoading, setStatusLoading] = useState(true);
+  const [paperLoaded, setPaperLoaded] = useState(cached?.paperLoaded ?? false);
+  const [testConsoleStatus, setTestConsoleStatus] = useState<TestConsoleStatusResponse | null>(cached?.testConsoleStatus ?? null);
+  const [statusLoading, setStatusLoading] = useState(!cached?.statusLoaded);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [statusLoaded, setStatusLoaded] = useState(cached?.statusLoaded ?? false);
 
   const loadExecutiveData = useCallback(async () => {
     setPaperLoading(true);
@@ -133,6 +147,7 @@ export function DashboardPage() {
         } catch (error) {
           setPaperError(getErrorMessage(error, 'No se pudo cargar el estado paper.'));
         } finally {
+          setPaperLoaded(true);
           setPaperLoading(false);
         }
       })(),
@@ -143,6 +158,7 @@ export function DashboardPage() {
         } catch (error) {
           setStatusError(getErrorMessage(error, 'No se pudo cargar el estado operativo.'));
         } finally {
+          setStatusLoaded(true);
           setStatusLoading(false);
         }
       })(),
@@ -153,10 +169,20 @@ export function DashboardPage() {
     void loadExecutiveData();
   }, [loadExecutiveData]);
 
+  useEffect(() => {
+    setViewCache<DashboardCache>(DASHBOARD_CACHE_KEY, {
+      paperSummary,
+      paperSnapshots,
+      testConsoleStatus,
+      paperLoaded,
+      statusLoaded,
+    });
+  }, [paperLoaded, paperSnapshots, paperSummary, statusLoaded, testConsoleStatus]);
+
   const executiveTone = statusTone(testConsoleStatus?.validation_status ?? health.backendStatus);
   const llmHint = testConsoleStatus?.llm_aux_signal_summary ?? null;
-  const hasPaperData = Boolean(paperSummary) || paperSnapshots.length > 0;
-  const hasStatusData = Boolean(testConsoleStatus);
+  const hasPaperData = paperLoaded || Boolean(paperSummary) || paperSnapshots.length > 0;
+  const hasStatusData = statusLoaded || Boolean(testConsoleStatus);
 
   const quickState = useMemo(
     () => [

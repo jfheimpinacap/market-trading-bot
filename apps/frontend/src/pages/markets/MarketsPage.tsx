@@ -5,6 +5,7 @@ import { MarketsFilters } from '../../components/markets/MarketsFilters';
 import { MarketsSummaryCards } from '../../components/markets/MarketsSummaryCards';
 import { MarketsTable } from '../../components/markets/MarketsTable';
 import { SectionCard } from '../../components/SectionCard';
+import { getViewCache, setViewCache } from '../../lib/viewCache';
 import { getEvents, getMarketSystemSummary, getMarkets, getProviders } from '../../services/markets';
 import { isNotFoundApiError } from '../../services/api/client';
 import type { MarketEvent, MarketFilters, MarketListItem, MarketProvider, MarketSystemSummary } from '../../types/markets';
@@ -24,17 +25,32 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-export function MarketsPage() {
-  const [filters, setFilters] = useState<MarketFilters>(defaultFilters);
-  const [summary, setSummary] = useState<MarketSystemSummary | null>(null);
-  const [providers, setProviders] = useState<MarketProvider[]>([]);
-  const [events, setEvents] = useState<MarketEvent[]>([]);
-  const [markets, setMarkets] = useState<MarketListItem[]>([]);
+const MARKETS_CACHE_KEY = 'markets:overview';
 
-  const [catalogLoading, setCatalogLoading] = useState(true);
+type MarketsCache = {
+  filters: MarketFilters;
+  summary: MarketSystemSummary | null;
+  providers: MarketProvider[];
+  events: MarketEvent[];
+  markets: MarketListItem[];
+  catalogLoaded: boolean;
+  marketsLoaded: boolean;
+};
+
+export function MarketsPage() {
+  const cached = getViewCache<MarketsCache>(MARKETS_CACHE_KEY);
+  const [filters, setFilters] = useState<MarketFilters>(cached?.filters ?? defaultFilters);
+  const [summary, setSummary] = useState<MarketSystemSummary | null>(cached?.summary ?? null);
+  const [providers, setProviders] = useState<MarketProvider[]>(cached?.providers ?? []);
+  const [events, setEvents] = useState<MarketEvent[]>(cached?.events ?? []);
+  const [markets, setMarkets] = useState<MarketListItem[]>(cached?.markets ?? []);
+
+  const [catalogLoading, setCatalogLoading] = useState(!cached?.catalogLoaded);
   const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [marketsLoading, setMarketsLoading] = useState(true);
+  const [marketsLoading, setMarketsLoading] = useState(!cached?.marketsLoaded);
   const [marketsError, setMarketsError] = useState<string | null>(null);
+  const [catalogLoaded, setCatalogLoaded] = useState(cached?.catalogLoaded ?? false);
+  const [marketsLoaded, setMarketsLoaded] = useState(cached?.marketsLoaded ?? false);
 
   useEffect(() => {
     let isMounted = true;
@@ -76,6 +92,7 @@ export function MarketsPage() {
       }
 
       if (isMounted) {
+        setCatalogLoaded(true);
         setCatalogLoading(false);
       }
     }
@@ -133,6 +150,7 @@ export function MarketsPage() {
         setMarketsError(getErrorMessage(error, 'No se pudieron cargar mercados para los filtros seleccionados.'));
       } finally {
         if (isMounted) {
+          setMarketsLoaded(true);
           setMarketsLoading(false);
         }
       }
@@ -144,6 +162,18 @@ export function MarketsPage() {
       isMounted = false;
     };
   }, [filters]);
+
+  useEffect(() => {
+    setViewCache<MarketsCache>(MARKETS_CACHE_KEY, {
+      filters,
+      summary,
+      providers,
+      events,
+      markets,
+      catalogLoaded,
+      marketsLoaded,
+    });
+  }, [catalogLoaded, events, filters, markets, marketsLoaded, providers, summary]);
 
   const activeFilterCount = useMemo(
     () => Object.values(filters).filter((value) => value.trim().length > 0).length,
@@ -182,7 +212,7 @@ export function MarketsPage() {
       <DataStateWrapper
         isLoading={catalogLoading}
         isError={Boolean(catalogError)}
-        hasData={Boolean(summary) || providers.length > 0 || events.length > 0}
+        hasData={catalogLoaded || Boolean(summary) || providers.length > 0 || events.length > 0}
         staleWhileRevalidate
         errorMessage={catalogError ?? undefined}
         loadingTitle="Cargando vista de mercados"
@@ -217,7 +247,7 @@ export function MarketsPage() {
           <DataStateWrapper
             isLoading={marketsLoading}
             isError={Boolean(marketsError)}
-            hasData={markets.length > 0}
+            hasData={marketsLoaded || markets.length > 0}
             staleWhileRevalidate
             errorMessage={marketsError ?? undefined}
             isEmpty={!marketsLoading && !marketsError && markets.length === 0}

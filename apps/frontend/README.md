@@ -2,6 +2,15 @@
 
 Frontend local-first para `market-trading-bot`, construido con React + Vite + TypeScript.
 
+## Navigation/loading revalidation UX hardening (new)
+
+Se mejoró la navegación interna entre vistas principales (especialmente `Dashboard`, `Markets` y `Portfolio`) para evitar quedar demasiado tiempo en estado global de “consultando datos” después de cambiar de ruta.
+
+- Se agregó caché en memoria por vista para reusar el **último dato válido** al volver a una página durante la misma sesión.
+- La recarga ahora ocurre con patrón **stale-while-revalidate**: la vista mantiene datos previos visibles mientras refresca en background.
+- Los bloques ya consultados no vuelven a mostrar loader global si el resultado previo fue vacío; se mantiene el estado vacío útil mientras revalida.
+- Se reduce la necesidad de refresh manual del navegador para recuperar información visible rápidamente.
+
 ## Global hardening for optional mission-control statuses (update)
 
 Se cerró el hardening global para endpoints opcionales de status compartido en Mission Control:
