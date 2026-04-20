@@ -33,6 +33,15 @@ Secondary views now follow the same compact operator-first visual hierarchy used
   - reduced default descriptive text noise,
   - denser buttons/tables/cards for lower scroll and cleaner responsive base.
 
+### Navigation/revalidation UX hardening (Prompt 340)
+
+Dashboard, Markets, and Portfolio now keep the **last valid payload visible** while revalidating in the background during internal navigation/focus refreshes.
+
+- `DataStateWrapper` now supports stale-while-revalidate behavior (`hasData` + `staleWhileRevalidate`) so a block only shows full loading/error states when it has no usable prior data.
+- Dashboard, Markets, and Portfolio loaders now preserve previously successful data on transient refresh failures instead of clearing the UI back to an empty loading state.
+- Markets filter refresh keeps the prior event catalog when a filter-triggered event reload fails, reducing route-change and filter-change flicker.
+- Result: internal route changes no longer depend on manual browser refresh to quickly recover a usable view when cached valid data exists.
+
 
 ### Mission Control Ollama shadow analyst (Prompt 289)
 

@@ -4,6 +4,8 @@ import { EmptyState } from '../EmptyState';
 type DataStateWrapperProps = PropsWithChildren<{
   isLoading: boolean;
   isError: boolean;
+  hasData?: boolean;
+  staleWhileRevalidate?: boolean;
   errorMessage?: string;
   isEmpty?: boolean;
   emptyTitle?: string;
@@ -18,6 +20,8 @@ export function DataStateWrapper({
   children,
   isLoading,
   isError,
+  hasData = false,
+  staleWhileRevalidate = false,
   errorMessage,
   isEmpty = false,
   emptyTitle = 'Sin datos por ahora',
@@ -27,11 +31,13 @@ export function DataStateWrapper({
   errorTitle = 'No se pudo cargar la información',
   action,
 }: DataStateWrapperProps) {
-  if (isLoading) {
+  const showStaleContent = staleWhileRevalidate && hasData;
+
+  if (isLoading && !showStaleContent) {
     return <EmptyState title={loadingTitle} description={loadingDescription} action={action} eyebrow="Cargando" />;
   }
 
-  if (isError) {
+  if (isError && !showStaleContent) {
     return (
       <EmptyState
         title={errorTitle}
@@ -46,5 +52,11 @@ export function DataStateWrapper({
     return <EmptyState title={emptyTitle} description={emptyDescription} action={action} eyebrow="Sin datos" />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {showStaleContent && isLoading ? <p className="muted-text">Actualizando datos en segundo plano…</p> : null}
+      {showStaleContent && isError ? <p className="muted-text">Mostrando último dato válido mientras reconectamos.</p> : null}
+      {children}
+    </>
+  );
 }

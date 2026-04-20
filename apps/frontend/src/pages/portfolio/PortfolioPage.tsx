@@ -102,42 +102,36 @@ export function PortfolioPage() {
     if (accountResult.status === 'fulfilled') {
       setAccount(accountResult.value);
     } else {
-      setAccount(null);
       setAccountError(getErrorMessage(accountResult.reason, 'Could not load the active paper account.'));
     }
 
     if (summaryResult.status === 'fulfilled') {
       setSummary(summaryResult.value);
     } else {
-      setSummary(null);
       setSummaryError(getErrorMessage(summaryResult.reason, 'Could not load the portfolio summary.'));
     }
 
     if (positionsResult.status === 'fulfilled') {
       setPositions(positionsResult.value);
     } else {
-      setPositions([]);
       setPositionsError(getErrorMessage(positionsResult.reason, 'Could not load paper positions.'));
     }
 
     if (tradesResult.status === 'fulfilled') {
       setTrades(tradesResult.value);
     } else {
-      setTrades([]);
       setTradesError(getErrorMessage(tradesResult.reason, 'Could not load paper trades.'));
     }
 
     if (snapshotsResult.status === 'fulfilled') {
       setSnapshots(snapshotsResult.value);
     } else {
-      setSnapshots([]);
       setSnapshotsError(getErrorMessage(snapshotsResult.reason, 'Could not load portfolio snapshots.'));
     }
 
     if (reviewsResult.status === 'fulfilled') {
       setReviews(reviewsResult.value);
     } else {
-      setReviews([]);
       if (!isNotFoundApiError(reviewsResult.reason)) {
         setReviewsError(getErrorMessage(reviewsResult.reason, 'Could not load trade reviews for the portfolio links.'));
       }
@@ -298,6 +292,8 @@ export function PortfolioPage() {
         <DataStateWrapper
           isLoading={accountLoading || summaryLoading || tradesLoading}
           isError={Boolean(accountError)}
+          hasData={Boolean(account)}
+          staleWhileRevalidate
           errorMessage={accountError ?? undefined}
           isEmpty={!accountLoading && !accountError && !account}
           loadingTitle="Loading paper account"
@@ -345,6 +341,8 @@ export function PortfolioPage() {
         <DataStateWrapper
           isLoading={positionsLoading}
           isError={Boolean(positionsError)}
+          hasData={positions.length > 0}
+          staleWhileRevalidate
           errorMessage={positionsError ?? undefined}
           isEmpty={!positionsLoading && !positionsError && positions.length === 0}
           loadingTitle="Loading paper positions"
@@ -370,6 +368,8 @@ export function PortfolioPage() {
         <DataStateWrapper
           isLoading={tradesLoading}
           isError={Boolean(tradesError)}
+          hasData={trades.length > 0}
+          staleWhileRevalidate
           errorMessage={tradesError ?? undefined}
           isEmpty={!tradesLoading && !tradesError && trades.length === 0}
           loadingTitle="Loading trade history"
@@ -398,6 +398,8 @@ export function PortfolioPage() {
           <DataStateWrapper
             isLoading={snapshotsLoading}
             isError={Boolean(snapshotsError)}
+            hasData={snapshots.length > 0}
+            staleWhileRevalidate
             errorMessage={snapshotsError ?? undefined}
             isEmpty={!snapshotsLoading && !snapshotsError && snapshots.length === 0}
             loadingTitle="Loading portfolio snapshots"
@@ -426,6 +428,8 @@ export function PortfolioPage() {
             <DataStateWrapper
               isLoading={accountLoading || summaryLoading}
               isError={Boolean(accountError)}
+              hasData={Boolean(account)}
+              staleWhileRevalidate
               errorMessage={accountError ?? summaryError ?? undefined}
               isEmpty={!accountLoading && !accountError && !account}
               loadingTitle="Loading account details"
@@ -451,6 +455,8 @@ export function PortfolioPage() {
             <DataStateWrapper
               isLoading={reviewsLoading}
               isError={Boolean(reviewsError)}
+              hasData={recentReviews.length > 0}
+              staleWhileRevalidate
               errorMessage={reviewsError ?? undefined}
               isEmpty={!reviewsLoading && !reviewsError && recentReviews.length === 0}
               loadingTitle="Loading review context"

@@ -131,8 +131,6 @@ export function DashboardPage() {
           setPaperSummary(summary);
           setPaperSnapshots(snapshots.slice(-12));
         } catch (error) {
-          setPaperSummary(null);
-          setPaperSnapshots([]);
           setPaperError(getErrorMessage(error, 'No se pudo cargar el estado paper.'));
         } finally {
           setPaperLoading(false);
@@ -143,7 +141,6 @@ export function DashboardPage() {
           const response = await getTestConsoleStatus();
           setTestConsoleStatus(response);
         } catch (error) {
-          setTestConsoleStatus(null);
           setStatusError(getErrorMessage(error, 'No se pudo cargar el estado operativo.'));
         } finally {
           setStatusLoading(false);
@@ -158,6 +155,8 @@ export function DashboardPage() {
 
   const executiveTone = statusTone(testConsoleStatus?.validation_status ?? health.backendStatus);
   const llmHint = testConsoleStatus?.llm_aux_signal_summary ?? null;
+  const hasPaperData = Boolean(paperSummary) || paperSnapshots.length > 0;
+  const hasStatusData = Boolean(testConsoleStatus);
 
   const quickState = useMemo(
     () => [
@@ -229,6 +228,8 @@ export function DashboardPage() {
           <DataStateWrapper
             isLoading={statusLoading}
             isError={Boolean(statusError)}
+            hasData={hasStatusData}
+            staleWhileRevalidate
             errorMessage={statusError ?? undefined}
             loadingTitle="Cargando estado operativo"
             loadingDescription="Consolidando status del test console."
@@ -258,6 +259,8 @@ export function DashboardPage() {
           <DataStateWrapper
             isLoading={statusLoading}
             isError={Boolean(statusError)}
+            hasData={hasStatusData}
+            staleWhileRevalidate
             errorMessage={statusError ?? undefined}
             loadingTitle="Cargando alertas"
             loadingDescription="Consultando prioridades actuales."
@@ -282,6 +285,8 @@ export function DashboardPage() {
         <DataStateWrapper
           isLoading={paperLoading}
           isError={Boolean(paperError)}
+          hasData={hasPaperData}
+          staleWhileRevalidate
           errorMessage={paperError ?? undefined}
           loadingTitle="Cargando KPIs paper"
           loadingDescription="Consultando summary de portafolio paper."
