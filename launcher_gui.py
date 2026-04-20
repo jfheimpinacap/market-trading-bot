@@ -33,10 +33,63 @@ DEFAULT_MIN_HEIGHT = 620
 WINDOW_MARGIN_X = 80
 WINDOW_MARGIN_Y = 120
 RESIZE_LAYOUT_DEBOUNCE_MS = 120
-LOG_PANEL_POLL_MS = 2500
+LOG_PANEL_POLL_MS = 4000
 LOG_PANEL_LINES = 80
 LOG_PANEL_SERVICES = ('backend', 'frontend')
 STATE_FILE = ROOT / '.tmp' / 'start-state.json'
+
+
+def _safe_read_text(path: Path) -> str:
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return ''
+    return raw.decode('utf-8', errors='replace')
+
+
+def _tail_text_file(path: Path, lines: int) -> str:
+    if not path.exists() or lines <= 0:
+        return ''
+    data = _safe_read_text(path).splitlines()
+    return '\n'.join(data[-lines:])
+
+
+def _log_files_by_service_from_state() -> dict[str, Path]:
+    if not STATE_FILE.exists():
+        return {}
+    try:
+        state = json.loads(_safe_read_text(STATE_FILE))
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(state, dict):
+        return {}
+    processes = state.get('processes', [])
+    if not isinstance(processes, list):
+        return {}
+    log_files: dict[str, Path] = {}
+    for entry in processes:
+        if not isinstance(entry, dict):
+            continue
+        label = str(entry.get('label', '')).strip().lower()
+        log_file = entry.get('log_file')
+        if label in LOG_PANEL_SERVICES and isinstance(log_file, str) and log_file.strip():
+            log_files[label] = Path(log_file)
+    return log_files
+
+
+def collect_logs_panel_outputs(services: tuple[str, ...], *, lines: int) -> tuple[dict[str, str], list[str]]:
+    log_files = _log_files_by_service_from_state()
+    outputs: dict[str, str] = {}
+    missing_services: list[str] = []
+    for service in services:
+        log_path = log_files.get(service)
+        if log_path is None:
+            missing_services.append(service)
+            outputs[service] = f'No hay archivo de logs launcher-managed para {service}.'
+            continue
+        content = _tail_text_file(log_path, lines=lines).strip()
+        outputs[service] = content or f'No hay logs para {service}.'
+    return outputs, missing_services
 
 
 class LauncherGUI(ctk.CTk):
@@ -497,16 +550,8 @@ class LauncherGUI(ctk.CTk):
         self._logs_refresh_inflight = True
 
         def worker() -> None:
-            outputs: dict[str, str] = {}
-            errors: list[str] = []
-            for service in LOG_PANEL_SERVICES:
-                result = self._run_start_command('logs', '--service', service, '--lines', str(LOG_PANEL_LINES))
-                if result.returncode == 0:
-                    outputs[service] = (result.stdout or '').strip() or f'No hay logs para {service}.'
-                else:
-                    errors.append(service)
-                    outputs[service] = (result.stderr or result.stdout or f'Error leyendo logs de {service}.').strip()
-            self.after(0, lambda: self._on_logs_panel_polled(outputs, errors))
+            outputs, missing_services = collect_logs_panel_outputs(LOG_PANEL_SERVICES, lines=LOG_PANEL_LINES)
+            self.after(0, lambda: self._on_logs_panel_polled(outputs, missing_services))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -524,7 +569,10 @@ class LauncherGUI(ctk.CTk):
             if self.logs_autoscroll_var.get():
                 textbox.see('end')
         if errors:
-            self.feedback_var.set(f'Logs parciales: no se pudieron leer {", ".join(errors)}.')
+            self.feedback_var.set(
+                'Logs parciales: faltan servicios launcher-managed en estado para '
+                f'{", ".join(errors)}.'
+            )
 
     def _current_logs_service(self) -> str:
         if self.logs_tabview is None:
