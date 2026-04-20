@@ -2113,6 +2113,19 @@ def tail_file(path: Path, lines: int = 120) -> str:
     return '\n'.join(data[-lines:])
 
 
+def safe_stdout_write(text: str) -> None:
+    try:
+        sys.stdout.write(text)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, 'encoding', None) or 'utf-8'
+        buffer = getattr(sys.stdout, 'buffer', None)
+        if buffer is not None:
+            buffer.write(text.encode(encoding, errors='replace'))
+            return
+        safe_text = text.encode(encoding, errors='replace').decode(encoding, errors='replace')
+        sys.stdout.write(safe_text)
+
+
 def command_logs(args: argparse.Namespace) -> int:
     state = cleanup_state_file()
     processes = state.get('processes', [])
@@ -2135,12 +2148,12 @@ def command_logs(args: argparse.Namespace) -> int:
             warn(f'No log file tracked for {process.get("label", "process")} (mode: {process.get("mode", "unknown")}).')
             continue
         log_path = Path(log_file)
-        print(f'\n=== {process.get("label", "process")} logs ({log_path}) ===')
+        safe_stdout_write(f'\n=== {process.get("label", "process")} logs ({log_path}) ===\n')
         content = tail_file(log_path, lines=args.lines)
         if content:
-            print(content)
+            safe_stdout_write(f'{content}\n')
         else:
-            print('(log file is empty or missing)')
+            safe_stdout_write('(log file is empty or missing)\n')
         printed += 1
 
     if printed == 0:

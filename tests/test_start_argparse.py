@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 from pathlib import PureWindowsPath
+import io
 from unittest import mock
 
 import start
@@ -103,16 +104,49 @@ class StartWindowsSilentSpawnTests(unittest.TestCase):
 class StartLogsStateTests(unittest.TestCase):
     def test_command_logs_reads_launcher_managed_backend_entry(self) -> None:
         args = SimpleNamespace(service='backend', lines=50)
+        emitted: list[str] = []
         with (
             mock.patch('start.cleanup_state_file', return_value={'processes': [{'label': 'backend', 'log_file': '/tmp/backend.log', 'mode': 'detached-process'}]}),
             mock.patch('start.tail_file', return_value='backend-line'),
-            mock.patch('builtins.print') as print_mock,
+            mock.patch('start.safe_stdout_write', side_effect=lambda text: emitted.append(text)),
         ):
             rc = start.command_logs(args)
         self.assertEqual(rc, 0)
-        printed = '\n'.join(' '.join(str(part) for part in call.args) for call in print_mock.call_args_list)
+        printed = ''.join(emitted)
         self.assertIn('backend logs', printed.lower())
         self.assertIn('backend-line', printed)
+
+    def test_safe_stdout_write_replaces_unencodable_characters(self) -> None:
+        class Cp1252Stdout(io.StringIO):
+            encoding = 'cp1252'
+
+            def write(self, s: str) -> int:
+                s.encode(self.encoding)
+                return super().write(s)
+
+        fake_stdout = Cp1252Stdout()
+        with mock.patch('start.sys.stdout', fake_stdout):
+            start.safe_stdout_write('ok🙂\n')
+        self.assertIn('ok?', fake_stdout.getvalue())
+
+    def test_command_logs_does_not_crash_on_cp1252_stdout(self) -> None:
+        class Cp1252Stdout(io.StringIO):
+            encoding = 'cp1252'
+
+            def write(self, s: str) -> int:
+                s.encode(self.encoding)
+                return super().write(s)
+
+        args = SimpleNamespace(service='backend', lines=10)
+        fake_stdout = Cp1252Stdout()
+        with (
+            mock.patch('start.cleanup_state_file', return_value={'processes': [{'label': 'backend', 'log_file': '/tmp/backend.log', 'mode': 'detached-process'}]}),
+            mock.patch('start.tail_file', return_value='línea🙂'),
+            mock.patch('start.sys.stdout', fake_stdout),
+        ):
+            rc = start.command_logs(args)
+        self.assertEqual(rc, 0)
+        self.assertIn('línea?', fake_stdout.getvalue())
 
 
 class StartWindowsProcessOwnershipTests(unittest.TestCase):

@@ -1517,10 +1517,12 @@ La GUI ahora tiene un **panel interno plegable de logs** (tabs `Backend` / `Fron
 
 - muestra últimas líneas (tail compacta),
 - refresca en segundo plano sin congelar la UI,
+- lee directamente los `log_file` launcher-managed desde `.tmp/start-state.json` (sin invocar `python start.py logs` en cada refresh),
+- evita spawn repetido de subprocesos en Windows durante el refresco del panel (sin flashes de consola asociados al polling),
 - permite auto-scroll opcional,
 - incluye botones de actualizar, limpiar y copiar.
 
-El botón de **Logs Ollama** se mantiene como salida puntual vía `start.py logs --service ollama`.
+El botón de **Logs Ollama** se mantiene como salida puntual vía `start.py logs --service ollama`. Además, `start.py logs` endurece la salida Unicode en Windows para reemplazar caracteres no representables y evitar `UnicodeEncodeError` por `cp1252/charmap`.
 
 El panel ahora expone controles separados para LLM local:
 
