@@ -115,5 +115,30 @@ class StartLogsStateTests(unittest.TestCase):
         self.assertIn('backend-line', printed)
 
 
+class StartWindowsProcessOwnershipTests(unittest.TestCase):
+    @mock.patch('start.os.name', 'nt')
+    def test_process_running_uses_tasklist_for_windows_detached_processes(self) -> None:
+        completed = mock.Mock(stdout='"python.exe","1234","Console","1","12,000 K"\n', returncode=0)
+        with mock.patch('start.subprocess.run', return_value=completed) as run_mock:
+            self.assertTrue(start.process_running(1234))
+        run_mock.assert_called_once()
+
+    @mock.patch('start.os.name', 'nt')
+    def test_build_process_entry_rebinds_to_child_pid_when_backend_spawns_worker(self) -> None:
+        with (
+            mock.patch('start._windows_list_child_processes', side_effect=[[{'pid': 9999, 'name': 'python.exe', 'command': 'python manage.py runserver 0.0.0.0:8000 --noreload'}], []]),
+            mock.patch('start.time.time', side_effect=[0.0, 0.1, 3.0]),
+        ):
+            entry = start.build_process_entry(
+                label='backend',
+                pid=4321,
+                command=['python.exe', 'manage.py', 'runserver', '0.0.0.0:8000', '--noreload'],
+                cwd=start.build_paths().backend,
+                mode='detached-process',
+                log_file=start.build_paths().state_dir / 'logs' / 'backend.log',
+            )
+        self.assertEqual(entry['pid'], 9999)
+
+
 if __name__ == '__main__':
     unittest.main()
