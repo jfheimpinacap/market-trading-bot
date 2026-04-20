@@ -22,6 +22,11 @@ Se cerró el hardening global para endpoints opcionales de status compartido en 
 Regla aplicada de forma uniforme en el cliente: **200 con `exists=false` / `status=NO_RUN_YET` = empty-state no fatal** (con compatibilidad legacy para 404 esperado).  
 Esto evita contaminar loaders/estado compartido cuando no hay corrida previa y mantiene estables vistas como Dashboard, Markets, Portfolio y Cockpit aunque esos status opcionales no existan todavía.
 
+Implementación frontend:
+- consumers ajustados: `getLivePaperTrialStatus`, `getLivePaperSmokeTestStatus`, `getExtendedPaperRunStatus` en `src/services/missionControl.ts`.
+- fallback no fatal: el helper normaliza empty-state opcional a `null` y la UI renderiza mensajes compactos (`No trial run yet`, `No smoke test result yet`, `No extended run yet`) sin elevar error operacional.
+- errores reales (5xx/network/payload inválido) se mantienen visibles como warning/error real.
+
 ## Cockpit Live Paper Trial Run UX (new)
 
 La vista `/cockpit` ahora incluye una card compacta **Live Paper Trial Run** para ejecutar una prueba corta y repetible de la V1 paper con una sola acción principal.
