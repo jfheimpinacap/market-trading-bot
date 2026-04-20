@@ -266,6 +266,9 @@ function TraceButton({ item }: { item: CockpitAttentionItem }) {
 }
 
 export function CockpitPage() {
+  const [loadStage, setLoadStage] = useState<1 | 2 | 3>(1);
+  const [fanoutCounters, setFanoutCounters] = useState({ critical: 0, deferred: 0 });
+  const [countInitialFanout, setCountInitialFanout] = useState(true);
   const [snapshot, setSnapshot] = useState<CockpitSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -461,8 +464,17 @@ export function CockpitPage() {
   const llmAuxSignalSummary = testConsoleStatus?.llm_aux_signal_summary ?? null;
   const llmAuxReasonCodes = normalizeTextList(llmAuxSignalSummary?.aux_signal_reason_codes);
   const llmShadowHistoryCount = testConsoleStatus?.llm_shadow_history_count ?? llmShadowHistory.length;
+  const stage2Enabled = loadStage >= 2;
+  const stage3Enabled = loadStage >= 3;
+
+  const registerFanout = useCallback((bucket: 'critical' | 'deferred', endpoint: string, count = 1) => {
+    if (!countInitialFanout) return;
+    setFanoutCounters((current) => ({ ...current, [bucket]: current[bucket] + count }));
+    console.debug(`[cockpit-fanout] ${bucket}:${endpoint}`);
+  }, [countInitialFanout]);
 
   const loadLivePaperStatus = useCallback(async (): Promise<LivePaperBootstrapStatusResponse | null> => {
+    registerFanout('critical', 'getLivePaperBootstrapStatus');
     setLivePaperStatusLoading(true);
     setLivePaperStatusError(null);
     try {
@@ -476,9 +488,10 @@ export function CockpitPage() {
     } finally {
       setLivePaperStatusLoading(false);
     }
-  }, []);
+  }, [registerFanout]);
 
   const loadTestConsoleStatus = useCallback(async (): Promise<TestConsoleStatusResponse | null> => {
+    registerFanout('critical', 'getTestConsoleStatus');
     setTestConsoleStatusLoading(true);
     setTestConsoleStatusError(null);
     try {
@@ -492,7 +505,7 @@ export function CockpitPage() {
     } finally {
       setTestConsoleStatusLoading(false);
     }
-  }, []);
+  }, [registerFanout]);
 
   const exportTestConsoleLog = useCallback(async () => {
     setTestConsoleExportLoading(true);
@@ -549,6 +562,7 @@ export function CockpitPage() {
   }, [testConsoleLog]);
 
   const loadLivePaperValidation = useCallback(async (): Promise<LivePaperValidationDigestResponse | null> => {
+    registerFanout('critical', 'getLivePaperValidation');
     setLivePaperValidationLoading(true);
     setLivePaperValidationError(null);
     try {
@@ -562,9 +576,10 @@ export function CockpitPage() {
     } finally {
       setLivePaperValidationLoading(false);
     }
-  }, []);
+  }, [registerFanout]);
 
   const loadLivePaperSmokeTestStatus = useCallback(async (): Promise<LivePaperSmokeTestStatusResponse | null> => {
+    registerFanout('deferred', 'getLivePaperSmokeTestStatus');
     setLivePaperSmokeStatusLoading(true);
     setLivePaperSmokeStatusError(null);
     try {
@@ -595,9 +610,10 @@ export function CockpitPage() {
     } finally {
       setLivePaperSmokeStatusLoading(false);
     }
-  }, []);
+  }, [registerFanout]);
 
   const loadLivePaperAutonomyFunnel = useCallback(async () => {
+    registerFanout('deferred', 'getLivePaperAutonomyFunnel');
     setLivePaperAutonomyFunnelLoading(true);
     setLivePaperAutonomyFunnelError(null);
     try {
@@ -609,9 +625,10 @@ export function CockpitPage() {
     } finally {
       setLivePaperAutonomyFunnelLoading(false);
     }
-  }, []);
+  }, [registerFanout]);
 
   const loadLivePaperOperationalSnapshot = useCallback(async () => {
+    registerFanout('deferred', 'live-paper-operational-snapshot', 3);
     setLivePaperOperationalSnapshotLoading(true);
     setLivePaperOperationalSnapshotError(null);
     setLivePaperAttentionStatusError(null);
@@ -653,9 +670,10 @@ export function CockpitPage() {
     } finally {
       setLivePaperOperationalSnapshotLoading(false);
     }
-  }, []);
+  }, [registerFanout]);
 
   const loadPaperPortfolioSnapshot = useCallback(async () => {
+    registerFanout('deferred', 'paper-portfolio-snapshot', 3);
     setPaperPortfolioLoading(true);
     setPaperPortfolioError(null);
     try {
@@ -685,7 +703,7 @@ export function CockpitPage() {
     } finally {
       setPaperPortfolioLoading(false);
     }
-  }, []);
+  }, [registerFanout]);
 
   const startLivePaperAutopilot = useCallback(async () => {
     setLivePaperStartLoading(true);
@@ -731,6 +749,7 @@ export function CockpitPage() {
   }, [loadLivePaperSmokeTestStatus, loadLivePaperValidation, loadLivePaperAutonomyFunnel]);
 
   const loadLivePaperTrialStatus = useCallback(async () => {
+    registerFanout('deferred', 'getLivePaperTrialStatus');
     setLivePaperTrialStatusLoading(true);
     setLivePaperTrialError(null);
     try {
@@ -766,9 +785,10 @@ export function CockpitPage() {
     } finally {
       setLivePaperTrialStatusLoading(false);
     }
-  }, []);
+  }, [registerFanout]);
 
   const loadLivePaperTrialHistory = useCallback(async () => {
+    registerFanout('deferred', 'getLivePaperTrialHistory');
     setLivePaperTrialHistoryLoading(true);
     setLivePaperTrialHistoryError(null);
     try {
@@ -782,9 +802,10 @@ export function CockpitPage() {
     } finally {
       setLivePaperTrialHistoryLoading(false);
     }
-  }, []);
+  }, [registerFanout]);
 
   const loadLivePaperTrialTrend = useCallback(async () => {
+    registerFanout('deferred', 'getLivePaperTrialTrend');
     setLivePaperTrialTrendLoading(true);
     setLivePaperTrialTrendError(null);
     try {
@@ -798,9 +819,10 @@ export function CockpitPage() {
     } finally {
       setLivePaperTrialTrendLoading(false);
     }
-  }, []);
+  }, [registerFanout]);
 
   const loadExtendedRunGate = useCallback(async () => {
+    registerFanout('deferred', 'getExtendedPaperRunGate');
     setExtendedRunGateLoading(true);
     setExtendedRunGateError(null);
     try {
@@ -814,9 +836,10 @@ export function CockpitPage() {
     } finally {
       setExtendedRunGateLoading(false);
     }
-  }, []);
+  }, [registerFanout]);
 
   const loadExtendedPaperRunStatus = useCallback(async () => {
+    registerFanout('deferred', 'getExtendedPaperRunStatus');
     setExtendedPaperRunStatusLoading(true);
     setExtendedPaperRunStatusError(null);
     try {
@@ -848,7 +871,7 @@ export function CockpitPage() {
     } finally {
       setExtendedPaperRunStatusLoading(false);
     }
-  }, []);
+  }, [registerFanout]);
 
   const startExtendedPaperRunFromCockpit = useCallback(async () => {
     setExtendedPaperRunStartLoading(true);
@@ -912,16 +935,46 @@ export function CockpitPage() {
     await Promise.all([loadLivePaperValidation(), loadExtendedRunGate()]);
   }, [loadExtendedRunGate, loadLivePaperValidation]);
 
-  const loadCockpit = useCallback(async () => {
+  const loadCockpitCore = useCallback(async () => {
     setLoading(true);
     setError(null);
+    registerFanout('critical', 'getCockpitSummary');
+    const [snapshotResult] = await Promise.allSettled([getCockpitSummary()]);
+
+    if (snapshotResult.status === 'fulfilled') {
+      setSnapshot(snapshotResult.value);
+    } else {
+      setSnapshot(null);
+      setError(getErrorMessage(snapshotResult.reason, 'Could not load cockpit data.'));
+    }
+
+    setLoading(false);
+  }, [registerFanout]);
+
+  const loadCockpitSummaries = useCallback(async () => {
     setTuningPanelError(null);
-    setReviewQueueError(null);
-    const [snapshotResult, scenarioSummaryResult, scanSummaryResult, tuningPanelResult, reviewQueueResult, reviewAgingResult, reviewEscalationResult, reviewActivityResult, autotriageResult, autotriageAlertStatusResult] = await Promise.allSettled([
-      getCockpitSummary(),
+    registerFanout('deferred', 'stage2-cockpit-summaries', 3);
+    const [scenarioSummaryResult, scanSummaryResult, tuningPanelResult] = await Promise.allSettled([
       getAutonomyScenarioSummary(),
       getScanSummary(),
       getRuntimeTuningCockpitPanel({ attention_only: attentionOnly, limit: 5 }),
+    ]);
+
+    setAutonomyScenarioSummary(scenarioSummaryResult.status === 'fulfilled' ? scenarioSummaryResult.value : null);
+    setScanSummary(scanSummaryResult.status === 'fulfilled' ? scanSummaryResult.value : null);
+    if (tuningPanelResult.status === 'fulfilled') setTuningPanel(tuningPanelResult.value);
+    else {
+      setTuningPanel(null);
+      setTuningPanelError(getErrorMessage(tuningPanelResult.reason, 'Could not load runtime tuning attention panel.'));
+    }
+    setReviewStateCache({});
+    setReviewStateErrorCache({});
+  }, [attentionOnly, registerFanout]);
+
+  const loadCockpitAdvanced = useCallback(async () => {
+    setReviewQueueError(null);
+    registerFanout('deferred', 'stage3-cockpit-advanced', 5);
+    const [reviewQueueResult, reviewAgingResult, reviewEscalationResult, reviewActivityResult, autotriageResult, autotriageAlertStatusResult] = await Promise.allSettled([
       getRuntimeTuningReviewQueue({
         unresolved_only: reviewQueueUnresolvedOnly,
         effective_review_status: reviewQueueStatusFilter === 'ALL' ? undefined : reviewQueueStatusFilter,
@@ -945,30 +998,11 @@ export function CockpitPage() {
       getRuntimeTuningAutotriageAlertStatus(),
     ]);
 
-    if (snapshotResult.status === 'fulfilled') {
-      setSnapshot(snapshotResult.value);
-    } else {
-      setSnapshot(null);
-      setError(getErrorMessage(snapshotResult.reason, 'Could not load cockpit data.'));
-    }
-
-    setAutonomyScenarioSummary(scenarioSummaryResult.status === 'fulfilled' ? scenarioSummaryResult.value : null);
-    setScanSummary(scanSummaryResult.status === 'fulfilled' ? scanSummaryResult.value : null);
-
-    if (tuningPanelResult.status === 'fulfilled') {
-      setTuningPanel(tuningPanelResult.value);
-    } else {
-      setTuningPanel(null);
-      setTuningPanelError(getErrorMessage(tuningPanelResult.reason, 'Could not load runtime tuning attention panel.'));
-    }
-
-    if (reviewQueueResult.status === 'fulfilled') {
-      setReviewQueue(reviewQueueResult.value);
-    } else {
+    if (reviewQueueResult.status === 'fulfilled') setReviewQueue(reviewQueueResult.value);
+    else {
       setReviewQueue(null);
       setReviewQueueError(getErrorMessage(reviewQueueResult.reason, 'Could not load runtime tuning review queue.'));
     }
-
     setReviewAging(reviewAgingResult.status === 'fulfilled' ? reviewAgingResult.value : null);
     setReviewEscalation(reviewEscalationResult.status === 'fulfilled' ? reviewEscalationResult.value : null);
     setReviewActivity(reviewActivityResult.status === 'fulfilled' ? reviewActivityResult.value : null);
@@ -982,9 +1016,7 @@ export function CockpitPage() {
 
     setReviewStateCache({});
     setReviewStateErrorCache({});
-    setLoading(false);
   }, [
-    attentionOnly,
     reviewActivityActionTypeFilter,
     reviewActivityLimit,
     reviewEscalatedOnly,
@@ -992,11 +1024,41 @@ export function CockpitPage() {
     reviewQueueAgeBucketFilter,
     reviewQueueStatusFilter,
     reviewQueueUnresolvedOnly,
+    registerFanout,
   ]);
 
+  const loadCockpit = useCallback(async () => {
+    await loadCockpitCore();
+    if (stage2Enabled) await loadCockpitSummaries();
+    if (stage3Enabled) await loadCockpitAdvanced();
+  }, [loadCockpitAdvanced, loadCockpitCore, loadCockpitSummaries, stage2Enabled, stage3Enabled]);
+
   useEffect(() => {
-    void loadCockpit();
-  }, [loadCockpit]);
+    const stage2Timer = window.setTimeout(() => setLoadStage(2), 200);
+    const stage3Timer = window.setTimeout(() => setLoadStage(3), 1400);
+    const fanoutWindowTimer = window.setTimeout(() => {
+      setCountInitialFanout(false);
+    }, 8000);
+    return () => {
+      window.clearTimeout(stage2Timer);
+      window.clearTimeout(stage3Timer);
+      window.clearTimeout(fanoutWindowTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    void loadCockpitCore();
+  }, [loadCockpitCore]);
+
+  useEffect(() => {
+    if (!stage2Enabled) return;
+    void loadCockpitSummaries();
+  }, [loadCockpitSummaries, stage2Enabled]);
+
+  useEffect(() => {
+    if (!stage3Enabled) return;
+    void loadCockpitAdvanced();
+  }, [loadCockpitAdvanced, stage3Enabled]);
 
   useEffect(() => {
     void loadLivePaperStatus();
@@ -1022,44 +1084,53 @@ export function CockpitPage() {
   );
 
   useEffect(() => {
+    if (!stage2Enabled) return;
     void loadLivePaperOperationalSnapshot();
-  }, [loadLivePaperOperationalSnapshot]);
+  }, [loadLivePaperOperationalSnapshot, stage2Enabled]);
 
   useEffect(() => {
     void loadLivePaperValidation();
   }, [loadLivePaperValidation]);
 
   useEffect(() => {
+    if (!stage3Enabled) return;
     void loadLivePaperSmokeTestStatus();
-  }, [loadLivePaperSmokeTestStatus]);
+  }, [loadLivePaperSmokeTestStatus, stage3Enabled]);
 
   useEffect(() => {
+    if (!stage3Enabled) return;
     void loadLivePaperTrialStatus();
-  }, [loadLivePaperTrialStatus]);
+  }, [loadLivePaperTrialStatus, stage3Enabled]);
 
   useEffect(() => {
+    if (!stage3Enabled) return;
     void loadLivePaperTrialHistory();
-  }, [loadLivePaperTrialHistory]);
+  }, [loadLivePaperTrialHistory, stage3Enabled]);
 
   useEffect(() => {
+    if (!stage3Enabled) return;
     void loadLivePaperTrialTrend();
-  }, [loadLivePaperTrialTrend]);
+  }, [loadLivePaperTrialTrend, stage3Enabled]);
 
   useEffect(() => {
+    if (!stage3Enabled) return;
     void loadExtendedRunGate();
-  }, [loadExtendedRunGate]);
+  }, [loadExtendedRunGate, stage3Enabled]);
 
   useEffect(() => {
+    if (!stage3Enabled) return;
     void loadExtendedPaperRunStatus();
-  }, [loadExtendedPaperRunStatus]);
+  }, [loadExtendedPaperRunStatus, stage3Enabled]);
 
   useEffect(() => {
+    if (!stage2Enabled) return;
     void loadLivePaperAutonomyFunnel();
-  }, [loadLivePaperAutonomyFunnel]);
+  }, [loadLivePaperAutonomyFunnel, stage2Enabled]);
 
   useEffect(() => {
+    if (!stage3Enabled) return;
     void loadPaperPortfolioSnapshot();
-  }, [loadPaperPortfolioSnapshot]);
+  }, [loadPaperPortfolioSnapshot, stage3Enabled]);
 
   useEffect(() => {
     if (!tuningPanel?.items?.length) return;
@@ -1268,6 +1339,12 @@ export function CockpitPage() {
         </details>
         {actionMessage ? <p className="success-text">{actionMessage}</p> : null}
         {actionError ? <p className="error-text">{actionError}</p> : null}
+      </SectionCard>
+
+      <SectionCard eyebrow="Staged loading" title="Cockpit load strategy">
+        <p className="muted-text">
+          Stage {loadStage}/3 · first paint fanout: critical {fanoutCounters.critical} · deferred {fanoutCounters.deferred}
+        </p>
       </SectionCard>
 
       <DataStateWrapper isLoading={loading} isError={Boolean(error)} errorMessage={error ?? undefined}>
