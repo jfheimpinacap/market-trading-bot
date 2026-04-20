@@ -266,9 +266,11 @@ function TraceButton({ item }: { item: CockpitAttentionItem }) {
 }
 
 export function CockpitPage() {
-  const [loadStage, setLoadStage] = useState<1 | 2 | 3>(1);
+  const [loadStage, setLoadStage] = useState<1 | 2>(1);
   const [fanoutCounters, setFanoutCounters] = useState({ critical: 0, deferred: 0 });
   const [countInitialFanout, setCountInitialFanout] = useState(true);
+  const [runtimeAdvancedEnabled, setRuntimeAdvancedEnabled] = useState(false);
+  const [livePaperDeferredEnabled, setLivePaperDeferredEnabled] = useState(false);
   const [snapshot, setSnapshot] = useState<CockpitSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -320,19 +322,19 @@ export function CockpitPage() {
   const [livePaperValidationLoading, setLivePaperValidationLoading] = useState(true);
   const [livePaperValidationError, setLivePaperValidationError] = useState<string | null>(null);
   const [livePaperSmokeStatus, setLivePaperSmokeStatus] = useState<LivePaperSmokeTestStatusResponse | null>(null);
-  const [livePaperSmokeStatusLoading, setLivePaperSmokeStatusLoading] = useState(true);
+  const [livePaperSmokeStatusLoading, setLivePaperSmokeStatusLoading] = useState(false);
   const [livePaperSmokeStatusError, setLivePaperSmokeStatusError] = useState<string | null>(null);
   const [livePaperSmokeStatusNotFound, setLivePaperSmokeStatusNotFound] = useState(false);
   const [livePaperSmokeRunLoading, setLivePaperSmokeRunLoading] = useState(false);
   const [livePaperSmokeRunError, setLivePaperSmokeRunError] = useState<string | null>(null);
   const [livePaperSmokeRunResult, setLivePaperSmokeRunResult] = useState<LivePaperSmokeTestResultResponse | null>(null);
   const [livePaperAutonomyFunnel, setLivePaperAutonomyFunnel] = useState<LivePaperAutonomyFunnelResponse | null>(null);
-  const [livePaperAutonomyFunnelLoading, setLivePaperAutonomyFunnelLoading] = useState(true);
+  const [livePaperAutonomyFunnelLoading, setLivePaperAutonomyFunnelLoading] = useState(false);
   const [livePaperAutonomyFunnelError, setLivePaperAutonomyFunnelError] = useState<string | null>(null);
   const [livePaperStartLoading, setLivePaperStartLoading] = useState(false);
   const [livePaperStartError, setLivePaperStartError] = useState<string | null>(null);
   const [livePaperStartResult, setLivePaperStartResult] = useState<LivePaperBootstrapResponse | null>(null);
-  const [livePaperOperationalSnapshotLoading, setLivePaperOperationalSnapshotLoading] = useState(true);
+  const [livePaperOperationalSnapshotLoading, setLivePaperOperationalSnapshotLoading] = useState(false);
   const [livePaperOperationalSnapshotError, setLivePaperOperationalSnapshotError] = useState<string | null>(null);
   const [autonomousHeartbeatSummary, setAutonomousHeartbeatSummary] = useState<AutonomousHeartbeatSummary | null>(null);
   const [latestAutonomousHeartbeatRun, setLatestAutonomousHeartbeatRun] = useState<AutonomousHeartbeatRun | null>(null);
@@ -344,25 +346,25 @@ export function CockpitPage() {
   const [paperAccountSnapshot, setPaperAccountSnapshot] = useState<PaperAccount | null>(null);
   const [paperPortfolioSummary, setPaperPortfolioSummary] = useState<PaperPortfolioSummary | null>(null);
   const [paperPortfolioSnapshots, setPaperPortfolioSnapshots] = useState<PaperPortfolioSnapshot[]>([]);
-  const [paperPortfolioLoading, setPaperPortfolioLoading] = useState(true);
+  const [paperPortfolioLoading, setPaperPortfolioLoading] = useState(false);
   const [paperPortfolioError, setPaperPortfolioError] = useState<string | null>(null);
   const [livePaperTrialRequestLoading, setLivePaperTrialRequestLoading] = useState(false);
-  const [livePaperTrialStatusLoading, setLivePaperTrialStatusLoading] = useState(true);
+  const [livePaperTrialStatusLoading, setLivePaperTrialStatusLoading] = useState(false);
   const [livePaperTrialStatus, setLivePaperTrialStatus] = useState<LivePaperTrialRunStatus | 'IDLE' | 'RUNNING'>('IDLE');
   const [livePaperTrialError, setLivePaperTrialError] = useState<string | null>(null);
   const [livePaperTrialNotFound, setLivePaperTrialNotFound] = useState(false);
   const [livePaperTrialResult, setLivePaperTrialResult] = useState<LivePaperTrialRunResultResponse | null>(null);
   const [livePaperTrialStatusSnapshot, setLivePaperTrialStatusSnapshot] = useState<LivePaperTrialRunStatusResponse | null>(null);
-  const [livePaperTrialHistoryLoading, setLivePaperTrialHistoryLoading] = useState(true);
+  const [livePaperTrialHistoryLoading, setLivePaperTrialHistoryLoading] = useState(false);
   const [livePaperTrialHistoryError, setLivePaperTrialHistoryError] = useState<string | null>(null);
   const [livePaperTrialHistory, setLivePaperTrialHistory] = useState<LivePaperTrialHistoryResponse | null>(null);
-  const [livePaperTrialTrendLoading, setLivePaperTrialTrendLoading] = useState(true);
+  const [livePaperTrialTrendLoading, setLivePaperTrialTrendLoading] = useState(false);
   const [livePaperTrialTrendError, setLivePaperTrialTrendError] = useState<string | null>(null);
   const [livePaperTrialTrend, setLivePaperTrialTrend] = useState<LivePaperTrialTrendResponse | null>(null);
-  const [extendedRunGateLoading, setExtendedRunGateLoading] = useState(true);
+  const [extendedRunGateLoading, setExtendedRunGateLoading] = useState(false);
   const [extendedRunGateError, setExtendedRunGateError] = useState<string | null>(null);
   const [extendedRunGate, setExtendedRunGate] = useState<LivePaperExtendedRunGateResponse | null>(null);
-  const [extendedPaperRunStatusLoading, setExtendedPaperRunStatusLoading] = useState(true);
+  const [extendedPaperRunStatusLoading, setExtendedPaperRunStatusLoading] = useState(false);
   const [extendedPaperRunStatusError, setExtendedPaperRunStatusError] = useState<string | null>(null);
   const [extendedPaperRunNotFound, setExtendedPaperRunNotFound] = useState(false);
   const [extendedPaperRunStatus, setExtendedPaperRunStatus] = useState<ExtendedPaperRunStatusResponse | null>(null);
@@ -465,7 +467,6 @@ export function CockpitPage() {
   const llmAuxReasonCodes = normalizeTextList(llmAuxSignalSummary?.aux_signal_reason_codes);
   const llmShadowHistoryCount = testConsoleStatus?.llm_shadow_history_count ?? llmShadowHistory.length;
   const stage2Enabled = loadStage >= 2;
-  const stage3Enabled = loadStage >= 3;
 
   const registerFanout = useCallback((bucket: 'critical' | 'deferred', endpoint: string, count = 1) => {
     if (!countInitialFanout) return;
@@ -1030,18 +1031,16 @@ export function CockpitPage() {
   const loadCockpit = useCallback(async () => {
     await loadCockpitCore();
     if (stage2Enabled) await loadCockpitSummaries();
-    if (stage3Enabled) await loadCockpitAdvanced();
-  }, [loadCockpitAdvanced, loadCockpitCore, loadCockpitSummaries, stage2Enabled, stage3Enabled]);
+    if (runtimeAdvancedEnabled) await loadCockpitAdvanced();
+  }, [loadCockpitAdvanced, loadCockpitCore, loadCockpitSummaries, runtimeAdvancedEnabled, stage2Enabled]);
 
   useEffect(() => {
     const stage2Timer = window.setTimeout(() => setLoadStage(2), 200);
-    const stage3Timer = window.setTimeout(() => setLoadStage(3), 1400);
     const fanoutWindowTimer = window.setTimeout(() => {
       setCountInitialFanout(false);
     }, 8000);
     return () => {
       window.clearTimeout(stage2Timer);
-      window.clearTimeout(stage3Timer);
       window.clearTimeout(fanoutWindowTimer);
     };
   }, []);
@@ -1056,9 +1055,9 @@ export function CockpitPage() {
   }, [loadCockpitSummaries, stage2Enabled]);
 
   useEffect(() => {
-    if (!stage3Enabled) return;
+    if (!runtimeAdvancedEnabled) return;
     void loadCockpitAdvanced();
-  }, [loadCockpitAdvanced, stage3Enabled]);
+  }, [loadCockpitAdvanced, runtimeAdvancedEnabled]);
 
   useEffect(() => {
     void loadLivePaperStatus();
@@ -1084,55 +1083,56 @@ export function CockpitPage() {
   );
 
   useEffect(() => {
-    if (!stage2Enabled) return;
+    if (!livePaperDeferredEnabled) return;
     void loadLivePaperOperationalSnapshot();
-  }, [loadLivePaperOperationalSnapshot, stage2Enabled]);
+  }, [livePaperDeferredEnabled, loadLivePaperOperationalSnapshot]);
 
   useEffect(() => {
     void loadLivePaperValidation();
   }, [loadLivePaperValidation]);
 
   useEffect(() => {
-    if (!stage3Enabled) return;
+    if (!livePaperDeferredEnabled) return;
     void loadLivePaperSmokeTestStatus();
-  }, [loadLivePaperSmokeTestStatus, stage3Enabled]);
+  }, [livePaperDeferredEnabled, loadLivePaperSmokeTestStatus]);
 
   useEffect(() => {
-    if (!stage3Enabled) return;
+    if (!livePaperDeferredEnabled) return;
     void loadLivePaperTrialStatus();
-  }, [loadLivePaperTrialStatus, stage3Enabled]);
+  }, [livePaperDeferredEnabled, loadLivePaperTrialStatus]);
 
   useEffect(() => {
-    if (!stage3Enabled) return;
+    if (!livePaperDeferredEnabled) return;
     void loadLivePaperTrialHistory();
-  }, [loadLivePaperTrialHistory, stage3Enabled]);
+  }, [livePaperDeferredEnabled, loadLivePaperTrialHistory]);
 
   useEffect(() => {
-    if (!stage3Enabled) return;
+    if (!livePaperDeferredEnabled) return;
     void loadLivePaperTrialTrend();
-  }, [loadLivePaperTrialTrend, stage3Enabled]);
+  }, [livePaperDeferredEnabled, loadLivePaperTrialTrend]);
 
   useEffect(() => {
-    if (!stage3Enabled) return;
+    if (!livePaperDeferredEnabled) return;
     void loadExtendedRunGate();
-  }, [loadExtendedRunGate, stage3Enabled]);
+  }, [livePaperDeferredEnabled, loadExtendedRunGate]);
 
   useEffect(() => {
-    if (!stage3Enabled) return;
+    if (!livePaperDeferredEnabled) return;
     void loadExtendedPaperRunStatus();
-  }, [loadExtendedPaperRunStatus, stage3Enabled]);
+  }, [livePaperDeferredEnabled, loadExtendedPaperRunStatus]);
 
   useEffect(() => {
-    if (!stage2Enabled) return;
+    if (!livePaperDeferredEnabled) return;
     void loadLivePaperAutonomyFunnel();
-  }, [loadLivePaperAutonomyFunnel, stage2Enabled]);
+  }, [livePaperDeferredEnabled, loadLivePaperAutonomyFunnel]);
 
   useEffect(() => {
-    if (!stage3Enabled) return;
+    if (!livePaperDeferredEnabled) return;
     void loadPaperPortfolioSnapshot();
-  }, [loadPaperPortfolioSnapshot, stage3Enabled]);
+  }, [livePaperDeferredEnabled, loadPaperPortfolioSnapshot]);
 
   useEffect(() => {
+    if (!runtimeAdvancedEnabled) return;
     if (!tuningPanel?.items?.length) return;
     const missingScopes = tuningPanel.items
       .map((item) => item.source_scope)
@@ -1153,7 +1153,7 @@ export function CockpitPage() {
         }
       }),
     );
-  }, [reviewStateCache, reviewStateErrorCache, tuningPanel]);
+  }, [reviewStateCache, reviewStateErrorCache, runtimeAdvancedEnabled, tuningPanel]);
 
   const attention = useMemo(() => (snapshot ? getCockpitAttention(snapshot) : []), [snapshot]);
   const quickLinks = useMemo(() => getCockpitQuickLinks(), []);
@@ -1343,7 +1343,18 @@ export function CockpitPage() {
 
       <SectionCard eyebrow="Staged loading" title="Cockpit load strategy">
         <p className="muted-text">
-          Stage {loadStage}/3 · first paint fanout: critical {fanoutCounters.critical} · deferred {fanoutCounters.deferred}
+          Stage {loadStage}/2 (core → compact summaries) · first paint fanout: critical {fanoutCounters.critical} · deferred {fanoutCounters.deferred}
+        </p>
+        <div className="button-row">
+          <button className="secondary-button" type="button" onClick={() => setLivePaperDeferredEnabled((current) => !current)}>
+            {livePaperDeferredEnabled ? 'Hide deferred live-paper loading' : 'Load deferred live-paper sections'}
+          </button>
+          <button className="secondary-button" type="button" onClick={() => setRuntimeAdvancedEnabled((current) => !current)}>
+            {runtimeAdvancedEnabled ? 'Hide runtime tuning advanced layer' : 'Load runtime tuning advanced layer'}
+          </button>
+        </div>
+        <p className="muted-text">
+          Deferred live-paper: {livePaperDeferredEnabled ? 'enabled' : 'paused'} · runtime tuning advanced: {runtimeAdvancedEnabled ? 'enabled' : 'paused'}.
         </p>
       </SectionCard>
 
