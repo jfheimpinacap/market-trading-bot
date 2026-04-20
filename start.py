@@ -1100,6 +1100,21 @@ def load_state_file() -> dict[str, Any]:
 def process_running(pid: int | None) -> bool:
     if not pid:
         return False
+    if os.name == 'nt':
+        try:
+            result = subprocess.run(
+                ['tasklist', '/FI', f'PID eq {pid}', '/FO', 'CSV', '/NH'],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=subprocess_env(),
+            )
+        except OSError:
+            return False
+        output = (result.stdout or '').strip()
+        if not output or output.startswith('INFO: No tasks are running'):
+            return False
+        return f'"{pid}"' in output
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -1261,6 +1276,108 @@ def spawn_detached_process(
     finally:
         stdout_stream.close()
     return process, log_path
+
+
+def _windows_list_child_processes(parent_pid: int) -> list[dict[str, Any]]:
+    if os.name != 'nt':
+        return []
+    script = (
+        f"Get-CimInstance Win32_Process -Filter \"ParentProcessId = {parent_pid}\" | "
+        "Select-Object ProcessId, ParentProcessId, CommandLine, Name | "
+        "ConvertTo-Json -Compress"
+    )
+    try:
+        result = subprocess.run(
+            ['powershell', '-NoProfile', '-Command', script],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=subprocess_env(),
+        )
+    except OSError:
+        return []
+    raw = (result.stdout or '').strip()
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if isinstance(parsed, dict):
+        candidates = [parsed]
+    elif isinstance(parsed, list):
+        candidates = parsed
+    else:
+        return []
+    children: list[dict[str, Any]] = []
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        child_pid = item.get('ProcessId')
+        if not isinstance(child_pid, int):
+            continue
+        children.append(
+            {
+                'pid': child_pid,
+                'parent_pid': item.get('ParentProcessId'),
+                'command': str(item.get('CommandLine') or ''),
+                'name': str(item.get('Name') or ''),
+            }
+        )
+    return children
+
+
+def _resolve_windows_owned_pid(label: str, command: Sequence[str], initial_pid: int) -> int:
+    if os.name != 'nt':
+        return initial_pid
+
+    expected_markers = [str(part).lower() for part in command[1:] if str(part).strip()]
+    if not expected_markers:
+        return initial_pid
+
+    deadline = time.time() + 2.0
+    best_pid = initial_pid
+    visited: set[int] = {initial_pid}
+    queue: list[int] = [initial_pid]
+    while time.time() < deadline and queue:
+        current_parent = queue.pop(0)
+        children = _windows_list_child_processes(current_parent)
+        if not children and current_parent == initial_pid:
+            time.sleep(0.15)
+            queue.append(current_parent)
+            continue
+        for child in children:
+            child_pid = child['pid']
+            if child_pid in visited:
+                continue
+            visited.add(child_pid)
+            queue.append(child_pid)
+            haystack = f"{child.get('name', '')} {child.get('command', '')}".lower()
+            if all(marker in haystack for marker in expected_markers):
+                best_pid = child_pid
+    if best_pid != initial_pid:
+        info(f'Resolved launcher-owned pid for {label}: parent {initial_pid} -> child {best_pid}')
+    return best_pid
+
+
+def build_process_entry(
+    *,
+    label: str,
+    pid: int,
+    command: Sequence[str],
+    cwd: Path,
+    mode: str,
+    log_file: Path | None,
+) -> dict[str, Any]:
+    resolved_pid = _resolve_windows_owned_pid(label, command, pid)
+    return {
+        'label': label,
+        'pid': resolved_pid,
+        'command': ' '.join(str(part) for part in command),
+        'cwd': str(cwd),
+        'mode': mode,
+        'log_file': str(log_file) if log_file is not None else None,
+    }
 
 
 def open_new_console_windows(process_specs: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1458,14 +1575,14 @@ def start_dev_servers_verbose(
                 )
                 backend_process = process
                 launched.append(
-                    {
-                        'label': spec['label'],
-                        'pid': process.pid,
-                        'command': ' '.join(str(part) for part in spec['command']),
-                        'cwd': str(spec['cwd']),
-                        'mode': 'console-attached',
-                        'log_file': None,
-                    }
+                    build_process_entry(
+                        label=spec['label'],
+                        pid=process.pid,
+                        command=spec['command'],
+                        cwd=spec['cwd'],
+                        mode='console-attached',
+                        log_file=None,
+                    )
                 )
                 continue
 
@@ -1477,14 +1594,14 @@ def start_dev_servers_verbose(
                 log_name=spec.get('log_name'),
             )
             launched.append(
-                {
-                    'label': spec['label'],
-                    'pid': process.pid,
-                    'command': ' '.join(str(part) for part in spec['command']),
-                    'cwd': str(spec['cwd']),
-                    'mode': 'detached-process',
-                    'log_file': str(log_path),
-                }
+                build_process_entry(
+                    label=spec['label'],
+                    pid=process.pid,
+                    command=spec['command'],
+                    cwd=spec['cwd'],
+                    mode='detached-process',
+                    log_file=log_path,
+                )
             )
     except Exception:
         stop_process_entries(launched)
@@ -1520,14 +1637,14 @@ def start_dev_servers(
                 log_name=spec.get('log_name'),
             )
             launched.append(
-                {
-                    'label': spec['label'],
-                    'pid': process.pid,
-                    'command': ' '.join(str(part) for part in spec['command']),
-                    'cwd': str(spec['cwd']),
-                    'mode': 'detached-process',
-                    'log_file': str(log_path),
-                }
+                build_process_entry(
+                    label=spec['label'],
+                    pid=process.pid,
+                    command=spec['command'],
+                    cwd=spec['cwd'],
+                    mode='detached-process',
+                    log_file=log_path,
+                )
             )
     except Exception:
         stop_process_entries(launched)

@@ -1493,6 +1493,7 @@ Flujo operador vs debug en GUI:
   - En Windows, el arranque silencioso usa un único camino de spawn sin ventana (`shell=False`, `DETACHED_PROCESS + CREATE_NO_WINDOW + STARTF_USESHOWWINDOW`) tanto para `full`/`lite` como para `backend`/`frontend`.
   - El frontend prioriza ejecutar Vite directo (`node apps/frontend/node_modules/vite/bin/vite.js ...`) y, como fallback, `node .../npm-cli.js`, para evitar wrappers visibles de `cmd.exe`.
   - El backend launcher-managed se ejecuta con `runserver --noreload` (también cuando se lanza en modo debug/separate windows), para evitar que el autoreloader cree un hijo fuera del ownership del launcher/state.
+  - Cierre final de ownership en Windows: si el PID inicial del backend es solo bootstrap/intermedio, el launcher rebindea y guarda el PID hijo real (`python manage.py runserver ...`) en `.tmp/start-state.json`; además, la verificación de proceso vivo usa `tasklist` para evitar falsos negativos de `os.kill(..., 0)` en procesos detached. Con esto `Logs backend` y `down/cleanup` apuntan al proceso backend real.
   - El launcher guarda en `.tmp/start-state.json` los procesos **reales launcher-managed** (backend/frontend/ollama/sim-loop) con `pid`, `mode` y `log_file`, y el panel interno de logs consume ese mismo estado para `Logs backend` / `Logs frontend`.
 - **Modo debug (checkbox):** habilita `--separate-windows` (y `--verbose` para comandos que lo soportan), dejando consolas visibles para diagnóstico.
 - Esto aplica a arranques `full`, `lite`, `backend` y `frontend` desde la GUI.
