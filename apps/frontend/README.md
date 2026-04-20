@@ -11,6 +11,25 @@ Se mejoró la navegación interna entre vistas principales (especialmente `Dashb
 - Los bloques ya consultados no vuelven a mostrar loader global si el resultado previo fue vacío; se mantiene el estado vacío útil mientras revalida.
 - Se reduce la necesidad de refresh manual del navegador para recuperar información visible rápidamente.
 
+
+## Frontend fetch-storm mitigation (Prompt 345)
+
+Se estabilizó la carga en `Dashboard`, `Markets`, `Portfolio` y `Cockpit` para evitar ráfagas de requests duplicadas por segundo hacia recursos compartidos de paper/reviews.
+
+Cambios aplicados:
+- deduplicación global de requests `GET` en `requestJson` (si ya existe una request en vuelo para el mismo recurso, los consumidores reutilizan la misma promesa)
+- cache corta de éxito (stale-while-revalidate local) para absorber bursts de remount/focus/eventos sin volver a disparar inmediatamente el mismo endpoint
+- instrumentación mínima de desarrollo:
+  - contador de listeners activos de `useDemoFlowRefresh`
+  - contador de pollers activos por owner (`usePollingTicker`)
+  - contador de requests activas por recurso ruidoso (`paper/*`, `reviews`, `test-console/status`)
+- hardening de lifecycle en hooks de refresh/polling para evitar acumulación de handlers o timers zombie al navegar
+
+Resultado esperado:
+- sin polling duplicado en paralelo para los recursos paper/reviews más usados
+- menos fanout de fetches idénticos durante navegación entre vistas
+- Cockpit con polling explícitamente propietario (`cockpit:test-console-status`) y cleanup garantizado al desmontar.
+
 ## Global hardening for optional mission-control statuses (update)
 
 Se cerró el hardening global para endpoints opcionales de status compartido en Mission Control:
