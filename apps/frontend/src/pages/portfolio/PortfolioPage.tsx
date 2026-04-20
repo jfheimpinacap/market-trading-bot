@@ -18,6 +18,7 @@ import { useDemoFlowRefresh } from '../../hooks/useDemoFlowRefresh';
 import { buildReviewLookupByTradeId, publishDemoFlowRefresh } from '../../lib/demoFlow';
 import { navigate } from '../../lib/router';
 import { API_BASE_URL } from '../../lib/config';
+import { getViewCache, setViewCache } from '../../lib/viewCache';
 import { getTradeReviews } from '../../services/reviews';
 import { isNotFoundApiError } from '../../services/api/client';
 import {
@@ -42,20 +43,38 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-export function PortfolioPage() {
-  const [account, setAccount] = useState<PaperAccount | null>(null);
-  const [summary, setSummary] = useState<PaperPortfolioSummary | null>(null);
-  const [positions, setPositions] = useState<PaperPosition[]>([]);
-  const [trades, setTrades] = useState<PaperTrade[]>([]);
-  const [snapshots, setSnapshots] = useState<PaperPortfolioSnapshot[]>([]);
-  const [reviews, setReviews] = useState<TradeReview[]>([]);
+const PORTFOLIO_CACHE_KEY = 'portfolio:workspace';
 
-  const [accountLoading, setAccountLoading] = useState(true);
-  const [summaryLoading, setSummaryLoading] = useState(true);
-  const [positionsLoading, setPositionsLoading] = useState(true);
-  const [tradesLoading, setTradesLoading] = useState(true);
-  const [snapshotsLoading, setSnapshotsLoading] = useState(true);
-  const [reviewsLoading, setReviewsLoading] = useState(true);
+type PortfolioCache = {
+  account: PaperAccount | null;
+  summary: PaperPortfolioSummary | null;
+  positions: PaperPosition[];
+  trades: PaperTrade[];
+  snapshots: PaperPortfolioSnapshot[];
+  reviews: TradeReview[];
+  accountLoaded: boolean;
+  summaryLoaded: boolean;
+  positionsLoaded: boolean;
+  tradesLoaded: boolean;
+  snapshotsLoaded: boolean;
+  reviewsLoaded: boolean;
+};
+
+export function PortfolioPage() {
+  const cached = getViewCache<PortfolioCache>(PORTFOLIO_CACHE_KEY);
+  const [account, setAccount] = useState<PaperAccount | null>(cached?.account ?? null);
+  const [summary, setSummary] = useState<PaperPortfolioSummary | null>(cached?.summary ?? null);
+  const [positions, setPositions] = useState<PaperPosition[]>(cached?.positions ?? []);
+  const [trades, setTrades] = useState<PaperTrade[]>(cached?.trades ?? []);
+  const [snapshots, setSnapshots] = useState<PaperPortfolioSnapshot[]>(cached?.snapshots ?? []);
+  const [reviews, setReviews] = useState<TradeReview[]>(cached?.reviews ?? []);
+
+  const [accountLoading, setAccountLoading] = useState(!cached?.accountLoaded);
+  const [summaryLoading, setSummaryLoading] = useState(!cached?.summaryLoaded);
+  const [positionsLoading, setPositionsLoading] = useState(!cached?.positionsLoaded);
+  const [tradesLoading, setTradesLoading] = useState(!cached?.tradesLoaded);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(!cached?.snapshotsLoaded);
+  const [reviewsLoading, setReviewsLoading] = useState(!cached?.reviewsLoaded);
 
   const [accountError, setAccountError] = useState<string | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -67,6 +86,12 @@ export function PortfolioPage() {
   const [isRevaluing, setIsRevaluing] = useState(false);
   const [revalueMessage, setRevalueMessage] = useState<string | null>(null);
   const [revalueError, setRevalueError] = useState<string | null>(null);
+  const [accountLoaded, setAccountLoaded] = useState(cached?.accountLoaded ?? false);
+  const [summaryLoaded, setSummaryLoaded] = useState(cached?.summaryLoaded ?? false);
+  const [positionsLoaded, setPositionsLoaded] = useState(cached?.positionsLoaded ?? false);
+  const [tradesLoaded, setTradesLoaded] = useState(cached?.tradesLoaded ?? false);
+  const [snapshotsLoaded, setSnapshotsLoaded] = useState(cached?.snapshotsLoaded ?? false);
+  const [reviewsLoaded, setReviewsLoaded] = useState(cached?.reviewsLoaded ?? false);
 
   const loadPortfolio = useCallback(async () => {
     setAccountLoading(true);
@@ -104,30 +129,35 @@ export function PortfolioPage() {
     } else {
       setAccountError(getErrorMessage(accountResult.reason, 'Could not load the active paper account.'));
     }
+    setAccountLoaded(true);
 
     if (summaryResult.status === 'fulfilled') {
       setSummary(summaryResult.value);
     } else {
       setSummaryError(getErrorMessage(summaryResult.reason, 'Could not load the portfolio summary.'));
     }
+    setSummaryLoaded(true);
 
     if (positionsResult.status === 'fulfilled') {
       setPositions(positionsResult.value);
     } else {
       setPositionsError(getErrorMessage(positionsResult.reason, 'Could not load paper positions.'));
     }
+    setPositionsLoaded(true);
 
     if (tradesResult.status === 'fulfilled') {
       setTrades(tradesResult.value);
     } else {
       setTradesError(getErrorMessage(tradesResult.reason, 'Could not load paper trades.'));
     }
+    setTradesLoaded(true);
 
     if (snapshotsResult.status === 'fulfilled') {
       setSnapshots(snapshotsResult.value);
     } else {
       setSnapshotsError(getErrorMessage(snapshotsResult.reason, 'Could not load portfolio snapshots.'));
     }
+    setSnapshotsLoaded(true);
 
     if (reviewsResult.status === 'fulfilled') {
       setReviews(reviewsResult.value);
@@ -136,6 +166,7 @@ export function PortfolioPage() {
         setReviewsError(getErrorMessage(reviewsResult.reason, 'Could not load trade reviews for the portfolio links.'));
       }
     }
+    setReviewsLoaded(true);
 
     setAccountLoading(false);
     setSummaryLoading(false);
@@ -150,6 +181,23 @@ export function PortfolioPage() {
   }, [loadPortfolio]);
 
   useDemoFlowRefresh(loadPortfolio);
+
+  useEffect(() => {
+    setViewCache<PortfolioCache>(PORTFOLIO_CACHE_KEY, {
+      account,
+      summary,
+      positions,
+      trades,
+      snapshots,
+      reviews,
+      accountLoaded,
+      summaryLoaded,
+      positionsLoaded,
+      tradesLoaded,
+      snapshotsLoaded,
+      reviewsLoaded,
+    });
+  }, [account, accountLoaded, positions, positionsLoaded, reviews, reviewsLoaded, snapshots, snapshotsLoaded, summary, summaryLoaded, trades, tradesLoaded]);
 
   const handleRevalue = useCallback(async () => {
     setIsRevaluing(true);
@@ -292,7 +340,7 @@ export function PortfolioPage() {
         <DataStateWrapper
           isLoading={accountLoading || summaryLoading || tradesLoading}
           isError={Boolean(accountError)}
-          hasData={Boolean(account)}
+          hasData={accountLoaded || summaryLoaded || tradesLoaded || Boolean(account)}
           staleWhileRevalidate
           errorMessage={accountError ?? undefined}
           isEmpty={!accountLoading && !accountError && !account}
@@ -341,7 +389,7 @@ export function PortfolioPage() {
         <DataStateWrapper
           isLoading={positionsLoading}
           isError={Boolean(positionsError)}
-          hasData={positions.length > 0}
+          hasData={positionsLoaded || positions.length > 0}
           staleWhileRevalidate
           errorMessage={positionsError ?? undefined}
           isEmpty={!positionsLoading && !positionsError && positions.length === 0}
@@ -368,7 +416,7 @@ export function PortfolioPage() {
         <DataStateWrapper
           isLoading={tradesLoading}
           isError={Boolean(tradesError)}
-          hasData={trades.length > 0}
+          hasData={tradesLoaded || trades.length > 0}
           staleWhileRevalidate
           errorMessage={tradesError ?? undefined}
           isEmpty={!tradesLoading && !tradesError && trades.length === 0}
@@ -398,7 +446,7 @@ export function PortfolioPage() {
           <DataStateWrapper
             isLoading={snapshotsLoading}
             isError={Boolean(snapshotsError)}
-            hasData={snapshots.length > 0}
+            hasData={snapshotsLoaded || snapshots.length > 0}
             staleWhileRevalidate
             errorMessage={snapshotsError ?? undefined}
             isEmpty={!snapshotsLoading && !snapshotsError && snapshots.length === 0}
@@ -428,7 +476,7 @@ export function PortfolioPage() {
             <DataStateWrapper
               isLoading={accountLoading || summaryLoading}
               isError={Boolean(accountError)}
-              hasData={Boolean(account)}
+              hasData={accountLoaded || summaryLoaded || Boolean(account)}
               staleWhileRevalidate
               errorMessage={accountError ?? summaryError ?? undefined}
               isEmpty={!accountLoading && !accountError && !account}
@@ -455,7 +503,7 @@ export function PortfolioPage() {
             <DataStateWrapper
               isLoading={reviewsLoading}
               isError={Boolean(reviewsError)}
-              hasData={recentReviews.length > 0}
+              hasData={reviewsLoaded || recentReviews.length > 0}
               staleWhileRevalidate
               errorMessage={reviewsError ?? undefined}
               isEmpty={!reviewsLoading && !reviewsError && recentReviews.length === 0}
