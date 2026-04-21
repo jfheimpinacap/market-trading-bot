@@ -4992,6 +4992,12 @@ Payload/status/export enriquecido:
 - `modules_omitted`
 - `run_scope` (`fresh_full_run` vs `targeted_diagnostic_run`)
 
+Contrato canónico (status/export):
+
+- Todos los perfiles (`full_e2e`, `scope_throttle_diagnostics`, `prediction_risk_path`, etc.) normalizan el payload antes de serializer/export.
+- Aunque un perfil omita módulos, `status` y `export` mantienen shape top-level estable (por ejemplo `trial_status`, `validation_status`, `trend_status`, `readiness_status`, `gate_status`, `extended_run_status`, `attention_mode`, `funnel_status`, `funnel_status_window`).
+- Para módulos omitidos se usan defaults honestos/canónicos (p. ej. `SKIPPED_BY_PROFILE`, `UNKNOWN`, `NOT_RUN`) sin inventar datos operativos.
+
 Nota de alcance:
 
 - cambio backend-only para acelerar validaciones puntuales sin depender siempre de corrida full.

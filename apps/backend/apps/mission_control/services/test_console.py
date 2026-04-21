@@ -285,11 +285,11 @@ def _profile_module_lists(profile_modules: dict[str, bool]) -> tuple[list[str], 
 def _set_state(*, status: dict[str, Any] | None = None, log: dict[str, Any] | None = None, append_history: bool = False) -> None:
     with _state_lock:
         if status is not None:
-            _state.status = deepcopy(status)
+            _state.status = deepcopy(_normalize_test_console_payload(status))
         if log is not None:
-            _state.last_log = deepcopy(log)
+            _state.last_log = deepcopy(_normalize_test_console_payload(log))
             if append_history:
-                _state.history.appendleft(deepcopy(log))
+                _state.history.appendleft(deepcopy(_normalize_test_console_payload(log)))
 
 
 def _phase_index(phase: str | None) -> int:
@@ -339,6 +339,51 @@ def _augment_progress(status_payload: dict[str, Any]) -> dict[str, Any]:
     payload['export_available'] = export_available
     payload['is_stale'] = stale_seconds > 30 and payload['progress_state'] != 'running'
     return payload
+
+
+def _normalize_test_console_payload(status_payload: dict[str, Any] | None) -> dict[str, Any]:
+    payload = deepcopy(status_payload or {})
+    resolved_profile_id, resolved_modules = resolve_test_profile(profile_id=payload.get('test_profile'))
+    modules_included, modules_omitted = _profile_module_lists(resolved_modules)
+
+    payload['test_profile'] = resolved_profile_id
+    payload['available_test_profiles'] = list_test_profiles()
+    payload['modules_included'] = list(payload.get('modules_included') or modules_included)
+    payload['modules_omitted'] = list(payload.get('modules_omitted') or modules_omitted)
+    payload['run_scope'] = str(payload.get('run_scope') or ('fresh_full_run' if resolved_profile_id == TEST_PROFILE_FULL_E2E else 'targeted_diagnostic_run'))
+
+    payload['test_status'] = str(payload.get('test_status') or TEST_STATUS_IDLE)
+    payload['preset_name'] = str(payload.get('preset_name') or PRESET_NAME)
+    payload['session_active'] = bool(payload.get('session_active'))
+    payload['heartbeat_active'] = bool(payload.get('heartbeat_active'))
+    payload['current_session_status'] = str(payload.get('current_session_status') or 'UNKNOWN')
+    payload['attention_mode'] = str(payload.get('attention_mode') or 'UNKNOWN')
+    payload['funnel_status'] = str(payload.get('funnel_status') or 'UNKNOWN')
+    payload['funnel_status_window'] = str(payload.get('funnel_status_window') or payload.get('funnel_status') or 'UNKNOWN')
+    payload['next_action_hint'] = str(payload.get('next_action_hint') or 'Review test console log')
+
+    if payload.get('trial_status') in {None, ''}:
+        payload['trial_status'] = 'SKIPPED_BY_PROFILE' if not resolved_modules.get(TEST_CONSOLE_MODULE_EXECUTION, False) else 'UNKNOWN'
+    if payload.get('validation_status') in {None, ''}:
+        payload['validation_status'] = 'SKIPPED_BY_PROFILE' if not resolved_modules.get(TEST_CONSOLE_MODULE_RISK, False) else 'UNKNOWN'
+    if payload.get('trend_status') in {None, ''}:
+        payload['trend_status'] = 'SKIPPED_BY_PROFILE' if not resolved_modules.get(TEST_CONSOLE_MODULE_RISK, False) else 'UNKNOWN'
+    if payload.get('readiness_status') in {None, ''}:
+        payload['readiness_status'] = 'SKIPPED_BY_PROFILE' if not resolved_modules.get(TEST_CONSOLE_MODULE_RISK, False) else 'UNKNOWN'
+    if payload.get('gate_status') in {None, ''}:
+        payload['gate_status'] = 'SKIPPED_BY_PROFILE' if not resolved_modules.get(TEST_CONSOLE_MODULE_RISK, False) else 'UNKNOWN'
+    if payload.get('extended_run_status') in {None, ''}:
+        payload['extended_run_status'] = 'SKIPPED_BY_PROFILE' if not resolved_modules.get(TEST_CONSOLE_MODULE_EXECUTION, False) else 'NOT_RUN'
+
+    payload['warnings'] = list(payload.get('warnings') or [])
+    payload['errors'] = list(payload.get('errors') or [])
+    payload['reason_codes'] = list(payload.get('reason_codes') or [])
+    payload['blocker_summary'] = list(payload.get('blocker_summary') or [])
+    return payload
+
+
+def normalize_test_console_payload(status_payload: dict[str, Any] | None) -> dict[str, Any]:
+    return _normalize_test_console_payload(status_payload)
 
 
 def _get_state_snapshot() -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, Any]]]:
@@ -606,10 +651,6 @@ def _apply_profile_payload_scope(*, payload: dict[str, Any], profile_modules: di
             payload.pop(key, None)
     if not profile_modules.get(TEST_CONSOLE_MODULE_RISK, False):
         for key in (
-            'validation_status',
-            'trend_status',
-            'readiness_status',
-            'gate_status',
             'active_exposure_risk_throttle_summary',
             'active_exposure_risk_throttle_examples',
             'risk_execution_scope_alignment_summary',
@@ -618,8 +659,6 @@ def _apply_profile_payload_scope(*, payload: dict[str, Any], profile_modules: di
             payload.pop(key, None)
     if not profile_modules.get(TEST_CONSOLE_MODULE_EXECUTION, False):
         for key in (
-            'trial_status',
-            'extended_run_status',
             'paper_execution_summary',
             'paper_execution_examples',
             'paper_execution_visibility_summary',
@@ -1877,7 +1916,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             f"overlay_status={overlay.get('overlay_status') or 'UNKNOWN'}"
         )
         payload['text_export'] = _log_line_items(payload)
-        payload = _augment_progress(payload)
+        payload = _augment_progress(_normalize_test_console_payload(payload))
         _set_state(status=payload, log=payload, append_history=True)
 
     return payload
@@ -1932,14 +1971,14 @@ def stop_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         'last_reason_code': warnings[0] if warnings else (actions[0] if actions else None),
     }
     payload['text_export'] = _log_line_items(payload)
-    payload = _augment_progress(payload)
+    payload = _augment_progress(_normalize_test_console_payload(payload))
     _set_state(status=payload, log=payload, append_history=True)
     return payload
 
 
 def get_test_console_status() -> dict[str, Any]:
     status_snapshot, _last_log, _history = _get_state_snapshot()
-    return _augment_progress(status_snapshot)
+    return _augment_progress(_normalize_test_console_payload(status_snapshot))
 
 
 def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
@@ -1950,13 +1989,7 @@ def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
         'summary': 'No test has been executed yet.',
         'history_size': len(history),
     }
-    resolved_profile_id, resolved_modules = resolve_test_profile(profile_id=payload.get('test_profile'))
-    modules_included, modules_omitted = _profile_module_lists(resolved_modules)
-    payload['test_profile'] = resolved_profile_id
-    payload['available_test_profiles'] = list_test_profiles()
-    payload['modules_included'] = list(payload.get('modules_included') or modules_included)
-    payload['modules_omitted'] = list(payload.get('modules_omitted') or modules_omitted)
-    payload['run_scope'] = str(payload.get('run_scope') or ('fresh_full_run' if resolved_profile_id == TEST_PROFILE_FULL_E2E else 'targeted_diagnostic_run'))
+    payload = _normalize_test_console_payload(payload)
     if not payload.get('portfolio_trade_reconciliation_summary'):
         payload['portfolio_trade_reconciliation_summary'] = _build_portfolio_trade_reconciliation_summary(payload=payload)
     payload['reconciliation_status'] = str(payload['portfolio_trade_reconciliation_summary'].get('portfolio_trade_reconciliation_status') or 'UNKNOWN')

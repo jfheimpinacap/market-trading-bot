@@ -237,6 +237,7 @@ from apps.mission_control.services.extended_paper_run_launcher import (
 from apps.mission_control.services.test_console import (
     export_test_console_log,
     get_test_console_status,
+    normalize_test_console_payload,
     start_test_console,
     stop_test_console,
 )
@@ -673,7 +674,7 @@ class StartTestConsoleView(APIView):
             preset_name=serializer.validated_data.get('preset'),
             profile_id=serializer.validated_data.get('profile_id'),
         )
-        return Response(TestConsoleStatusSerializer(payload).data, status=status.HTTP_200_OK)
+        return Response(TestConsoleStatusSerializer(normalize_test_console_payload(payload)).data, status=status.HTTP_200_OK)
 
 
 class StopTestConsoleView(APIView):
@@ -681,12 +682,12 @@ class StopTestConsoleView(APIView):
         serializer = TestConsoleStopRequestSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
         payload = stop_test_console(preset_name=serializer.validated_data.get('preset'))
-        return Response(TestConsoleStatusSerializer(payload).data, status=status.HTTP_200_OK)
+        return Response(TestConsoleStatusSerializer(normalize_test_console_payload(payload)).data, status=status.HTTP_200_OK)
 
 
 class TestConsoleStatusView(APIView):
     def get(self, request, *args, **kwargs):
-        return Response(TestConsoleStatusSerializer(get_test_console_status()).data, status=status.HTTP_200_OK)
+        return Response(TestConsoleStatusSerializer(normalize_test_console_payload(get_test_console_status())).data, status=status.HTTP_200_OK)
 
 
 class TestConsoleExportLogView(APIView):
