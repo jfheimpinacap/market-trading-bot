@@ -8400,6 +8400,78 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('SCAN_ZERO_SIGNALS', body['blocker_summary'])
 
     @patch('apps.mission_control.views.start_test_console')
+    def test_start_targeted_payload_missing_execution_keys_is_normalized(self, mock_start):
+        payload = self._status_payload()
+        payload['test_profile'] = 'prediction_risk_path'
+        payload['modules_included'] = ['include_handoff', 'include_prediction', 'include_risk', 'include_export_text', 'include_export_json']
+        payload['modules_omitted'] = ['include_scan', 'include_execution']
+        payload.pop('trial_status', None)
+        payload.pop('extended_run_status', None)
+        mock_start.return_value = payload
+
+        response = self.client.post(reverse('mission_control:test-console-start'), data='{"profile_id":"prediction_risk_path"}', content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body['test_profile'], 'prediction_risk_path')
+        self.assertEqual(body['trial_status'], 'SKIPPED_BY_PROFILE')
+        self.assertEqual(body['extended_run_status'], 'SKIPPED_BY_PROFILE')
+
+    @patch('apps.mission_control.views.get_test_console_status')
+    def test_status_targeted_payload_missing_required_keys_is_normalized(self, mock_status):
+        payload = self._status_payload()
+        payload['test_profile'] = 'prediction_risk_path'
+        payload.pop('trial_status', None)
+        payload.pop('validation_status', None)
+        payload.pop('trend_status', None)
+        payload.pop('readiness_status', None)
+        payload.pop('gate_status', None)
+        payload.pop('extended_run_status', None)
+        payload.pop('attention_mode', None)
+        payload.pop('funnel_status_window', None)
+        mock_status.return_value = payload
+
+        response = self.client.get(reverse('mission_control:test-console-status'))
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body['trial_status'], 'SKIPPED_BY_PROFILE')
+        self.assertEqual(body['validation_status'], 'UNKNOWN')
+        self.assertEqual(body['trend_status'], 'UNKNOWN')
+        self.assertEqual(body['readiness_status'], 'UNKNOWN')
+        self.assertEqual(body['gate_status'], 'UNKNOWN')
+        self.assertEqual(body['extended_run_status'], 'SKIPPED_BY_PROFILE')
+        self.assertEqual(body['attention_mode'], 'UNKNOWN')
+        self.assertEqual(body['funnel_status_window'], body['funnel_status'])
+
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_export_log_targeted_payload_missing_required_keys_is_normalized(self, mock_state_snapshot):
+        from apps.mission_control.services.test_console import export_test_console_log
+
+        payload = self._status_payload()
+        payload['test_profile'] = 'scope_throttle_diagnostics'
+        payload.pop('trial_status', None)
+        payload.pop('validation_status', None)
+        payload.pop('trend_status', None)
+        payload.pop('readiness_status', None)
+        payload.pop('gate_status', None)
+        payload.pop('extended_run_status', None)
+        payload.pop('attention_mode', None)
+        payload.pop('funnel_status_window', None)
+        payload['text_export'] = ''
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        json_payload = export_test_console_log(fmt='json')
+        self.assertEqual(json_payload.get('trial_status'), 'UNKNOWN')
+        self.assertEqual(json_payload.get('validation_status'), 'UNKNOWN')
+        self.assertEqual(json_payload.get('trend_status'), 'UNKNOWN')
+        self.assertEqual(json_payload.get('readiness_status'), 'UNKNOWN')
+        self.assertEqual(json_payload.get('gate_status'), 'UNKNOWN')
+        self.assertEqual(json_payload.get('extended_run_status'), 'NOT_RUN')
+        self.assertEqual(json_payload.get('attention_mode'), 'UNKNOWN')
+        self.assertEqual(json_payload.get('funnel_status_window'), json_payload.get('funnel_status'))
+        text_payload = export_test_console_log(fmt='text')
+        self.assertIn('trial_status: UNKNOWN', text_payload)
+
+    @patch('apps.mission_control.views.start_test_console')
     def test_gate_block_is_reflected_in_status(self, mock_start):
         payload = self._status_payload()
         payload['test_status'] = 'BLOCKED'
