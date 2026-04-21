@@ -8270,6 +8270,7 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('handoff_summary', payload)
         self.assertIn('paper_execution_summary', payload)
         self.assertNotIn('prediction_intake_summary', payload)
+        self.assertNotIn('prediction_path_scope_status', payload)
 
     @patch('apps.mission_control.services.test_console.build_state_consistency_snapshot')
     @patch('apps.mission_control.services.test_console.get_active_account')
@@ -8323,7 +8324,57 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('prediction_status_summary', payload)
         self.assertIn('handoff_scoring_summary', payload)
         self.assertIn('handoff_borderline_summary', payload)
+        self.assertEqual(payload.get('prediction_path_scope_status'), 'CURRENT_PREDICTION_PATH_DATA_AVAILABLE')
+        self.assertEqual(payload.get('active_exposure_risk_throttle_summary', {}).get('scope_status'), 'OUT_OF_SCOPE_FOR_PREDICTION_PATH_PROFILE')
+        self.assertEqual(payload.get('risk_execution_scope_alignment_summary', {}).get('scope_status'), 'OUT_OF_SCOPE_FOR_PREDICTION_PATH_PROFILE')
         self.assertNotIn('paper_execution_summary', payload)
+
+    @patch('apps.mission_control.services.test_console.build_state_consistency_snapshot')
+    @patch('apps.mission_control.services.test_console.get_active_account')
+    @patch('apps.mission_control.services.test_console._find_active_preset_session', return_value=None)
+    @patch('apps.mission_control.services.test_console._build_scan_summary', return_value={'runs': 0})
+    @patch('apps.mission_control.services.test_console._build_portfolio_summary', return_value={'open_positions': 0, 'recent_trades_count': 0})
+    @patch('apps.mission_control.services.test_console.get_live_paper_attention_alert_status', return_value={'attention_mode': 'HEALTHY'})
+    @patch('apps.mission_control.services.test_console.get_extended_paper_run_status', return_value={'extended_run_active': False, 'gate_status': 'ALLOW'})
+    @patch('apps.mission_control.services.test_console.build_extended_paper_run_gate', return_value={'gate_status': 'ALLOW', 'next_action_hint': 'ok', 'reason_codes': []})
+    @patch('apps.mission_control.services.test_console.build_live_paper_trial_trend_digest', return_value={'trend_status': 'STABLE', 'readiness_status': 'READY_FOR_EXTENDED_RUN'})
+    @patch('apps.mission_control.services.test_console.build_live_paper_validation_digest', return_value={'validation_status': 'READY'})
+    @patch('apps.mission_control.services.test_console.get_live_paper_bootstrap_status', return_value={'session_active': True, 'heartbeat_active': True, 'current_session_status': 'RUNNING'})
+    @patch('apps.mission_control.services.test_console.build_live_paper_autonomy_funnel_snapshot')
+    def test_prediction_risk_profile_without_current_path_data_returns_clean_no_data_status(
+        self,
+        mock_funnel,
+        _mock_bootstrap,
+        _mock_validation,
+        _mock_trend,
+        _mock_gate,
+        _mock_extended,
+        _mock_attention,
+        _mock_portfolio,
+        _mock_scan,
+        _mock_find_session,
+        mock_get_active_account,
+        mock_consistency,
+    ):
+        from apps.mission_control.services.test_console import _sync_operational_snapshot_for_profile, resolve_test_profile
+
+        mock_get_active_account.return_value = SimpleNamespace(slug='demo-paper-account')
+        mock_consistency.return_value = SimpleNamespace(summary={'state_consistency_reason_codes': ['STATE_ALIGNMENT_OK']}, examples=[])
+        mock_funnel.return_value = {
+            'window_minutes': 60,
+            'funnel_status': 'STALLED',
+            'active_exposure_risk_throttle_summary': {'redundant_risk_decisions_throttled': 1200},
+            'risk_execution_scope_alignment_summary': {'risk_decisions_current_window': 0, 'risk_decisions_excluded_out_of_scope': 3000},
+        }
+        _, modules = resolve_test_profile(profile_id='prediction_risk_path')
+        payload = {}
+        _sync_operational_snapshot_for_profile(payload=payload, preset_name='live_read_only_paper_conservative', profile_modules=modules)
+        self.assertEqual(payload.get('prediction_path_scope_status'), 'NO_CURRENT_PREDICTION_PATH_DATA')
+        self.assertIn('NO_CURRENT_PREDICTION_PATH_DATA', payload.get('reason_codes', []))
+        self.assertEqual(payload.get('active_exposure_risk_throttle_summary', {}).get('scope_status'), 'OUT_OF_SCOPE_FOR_PREDICTION_PATH_PROFILE')
+        self.assertEqual(payload.get('risk_execution_scope_alignment_summary', {}).get('scope_status'), 'OUT_OF_SCOPE_FOR_PREDICTION_PATH_PROFILE')
+        self.assertEqual(payload.get('active_exposure_risk_throttle_examples'), [])
+        self.assertEqual(payload.get('risk_execution_scope_alignment_examples'), [])
 
     @patch('apps.mission_control.services.test_console._get_state_snapshot')
     def test_export_log_json_includes_profile_and_modules_metadata(self, mock_state_snapshot):

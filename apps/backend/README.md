@@ -5002,3 +5002,8 @@ Nota de alcance:
 
 - cambio backend-only para acelerar validaciones puntuales sin depender siempre de corrida full.
 - no se modifican policy/thresholds/decisiones del bot ni launcher.
+
+Actualización semántica de `prediction_risk_path`:
+
+- El perfil ahora aísla explícitamente el tramo prediction→risk actual y evita mezclar telemetría global de runtime risk/execution (por ejemplo `active_exposure_risk_throttle_summary` y `risk_execution_scope_alignment_summary` quedan marcados `OUT_OF_SCOPE_FOR_PREDICTION_PATH_PROFILE` en este perfil).
+- Si no hay datos actuales de handoff/prediction en ventana útil, publica estado canónico `NO_CURRENT_PREDICTION_PATH_DATA` y mantiene salida limpia para diagnóstico del path.
