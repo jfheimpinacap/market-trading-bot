@@ -4,6 +4,7 @@ from collections import deque
 from copy import deepcopy
 from dataclasses import dataclass
 from decimal import Decimal
+import logging
 from threading import Lock
 from typing import Any
 
@@ -39,6 +40,8 @@ from apps.research_agent.models import NarrativeSignal, NarrativeSignalStatus, S
 from apps.research_agent.services.intelligence_handoff.run import run_consensus_review
 from apps.research_agent.services.pursuit_scoring.run import run_pursuit_review
 from apps.research_agent.services.run import run_scan_agent
+
+logger = logging.getLogger(__name__)
 
 TEST_STATUS_IDLE = 'IDLE'
 TEST_STATUS_RUNNING = 'RUNNING'
@@ -88,6 +91,23 @@ TEST_CONSOLE_MODULE_RISK = 'include_risk'
 TEST_CONSOLE_MODULE_EXECUTION = 'include_execution'
 TEST_CONSOLE_MODULE_EXPORT_TEXT = 'include_export_text'
 TEST_CONSOLE_MODULE_EXPORT_JSON = 'include_export_json'
+
+_SERIALIZER_REQUIRED_TOP_LEVEL_KEYS = (
+    'test_status',
+    'preset_name',
+    'session_active',
+    'heartbeat_active',
+    'current_session_status',
+    'validation_status',
+    'trial_status',
+    'trend_status',
+    'readiness_status',
+    'gate_status',
+    'extended_run_status',
+    'funnel_status',
+    'attention_mode',
+    'next_action_hint',
+)
 
 _TEST_PROFILE_ORDER = [
     TEST_PROFILE_FULL_E2E,
@@ -384,6 +404,25 @@ def _normalize_test_console_payload(status_payload: dict[str, Any] | None) -> di
 
 def normalize_test_console_payload(status_payload: dict[str, Any] | None) -> dict[str, Any]:
     return _normalize_test_console_payload(status_payload)
+
+
+def finalize_test_console_payload_for_serializer(
+    status_payload: dict[str, Any] | None,
+    *,
+    source: str = 'unknown',
+) -> dict[str, Any]:
+    payload = _augment_progress(_normalize_test_console_payload(status_payload))
+    missing_keys = [key for key in _SERIALIZER_REQUIRED_TOP_LEVEL_KEYS if key not in payload]
+    if missing_keys:
+        logger.warning(
+            'test_console payload missing canonical top-level keys before serializer (%s): %s',
+            source,
+            ','.join(missing_keys),
+        )
+        fallback_payload = _normalize_test_console_payload({})
+        for key in missing_keys:
+            payload[key] = fallback_payload.get(key)
+    return payload
 
 
 def _get_state_snapshot() -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, Any]]]:
@@ -691,6 +730,9 @@ def _apply_profile_payload_scope(*, payload: dict[str, Any], profile_modules: di
             'execution_artifact_examples',
         ):
             payload.pop(key, None)
+    normalized = _normalize_test_console_payload(payload)
+    for key in _SERIALIZER_REQUIRED_TOP_LEVEL_KEYS:
+        payload[key] = normalized[key]
 
 
 def _sync_operational_snapshot_for_profile(
@@ -1978,7 +2020,7 @@ def stop_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
 
 def get_test_console_status() -> dict[str, Any]:
     status_snapshot, _last_log, _history = _get_state_snapshot()
-    return _augment_progress(_normalize_test_console_payload(status_snapshot))
+    return finalize_test_console_payload_for_serializer(status_snapshot, source='get_test_console_status')
 
 
 def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
@@ -2020,6 +2062,7 @@ def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
     if exposure_diagnostics.get('fallback_used'):
         payload['warnings'] = list(dict.fromkeys(list(payload.get('warnings') or []) + [TEST_CONSOLE_EXPORT_PARTIAL_DIAGNOSTIC_RECOVERED]))
         payload['reason_codes'] = list(dict.fromkeys(list(payload.get('reason_codes') or []) + [TEST_CONSOLE_EXPORT_PARTIAL_DIAGNOSTIC_RECOVERED]))
+    payload = finalize_test_console_payload_for_serializer(payload, source=f'export_test_console_log:{fmt}')
     if fmt == 'json':
         return payload
     return str(payload.get('text_export') or _log_line_items(payload))
