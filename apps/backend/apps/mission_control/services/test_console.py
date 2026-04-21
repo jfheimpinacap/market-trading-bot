@@ -652,7 +652,7 @@ def _sync_operational_snapshot(*, payload: dict[str, Any], preset_name: str, sca
     )
 
 
-def _apply_profile_payload_scope(*, payload: dict[str, Any], profile_modules: dict[str, bool]) -> None:
+def _apply_profile_payload_scope(*, payload: dict[str, Any], profile_modules: dict[str, bool], profile_id: str) -> None:
     if not profile_modules.get(TEST_CONSOLE_MODULE_SCAN, False):
         payload['scan_summary'] = {}
     if not profile_modules.get(TEST_CONSOLE_MODULE_HANDOFF, False):
@@ -730,9 +730,89 @@ def _apply_profile_payload_scope(*, payload: dict[str, Any], profile_modules: di
             'execution_artifact_examples',
         ):
             payload.pop(key, None)
+    if profile_id == TEST_PROFILE_PREDICTION_RISK_PATH:
+        _isolate_prediction_risk_path_payload(payload)
     normalized = _normalize_test_console_payload(payload)
     for key in _SERIALIZER_REQUIRED_TOP_LEVEL_KEYS:
         payload[key] = normalized[key]
+
+
+def _has_non_zero_metric(value: Any) -> bool:
+    if isinstance(value, bool):
+        return bool(value)
+    if isinstance(value, (int, float)):
+        return value > 0
+    if isinstance(value, dict):
+        for nested_key, nested_value in value.items():
+            if nested_key.endswith('_reason_codes'):
+                continue
+            if _has_non_zero_metric(nested_value):
+                return True
+    if isinstance(value, list):
+        return len(value) > 0
+    return False
+
+
+def _prediction_path_has_current_data(payload: dict[str, Any]) -> bool:
+    for key in (
+        'handoff_scoring_summary',
+        'handoff_borderline_summary',
+        'prediction_intake_summary',
+        'prediction_visibility_summary',
+        'prediction_artifact_summary',
+        'prediction_risk_summary',
+        'prediction_risk_caution_summary',
+        'prediction_status_summary',
+    ):
+        if _has_non_zero_metric(payload.get(key) or {}):
+            return True
+    for key in (
+        'handoff_scoring_examples',
+        'handoff_borderline_examples',
+        'prediction_intake_examples',
+        'prediction_visibility_examples',
+        'prediction_artifact_examples',
+        'prediction_risk_examples',
+        'prediction_risk_caution_examples',
+        'prediction_status_examples',
+    ):
+        if len(payload.get(key) or []) > 0:
+            return True
+    return False
+
+
+def _isolate_prediction_risk_path_payload(payload: dict[str, Any]) -> None:
+    has_current_data = _prediction_path_has_current_data(payload)
+    payload['prediction_path_scope_status'] = (
+        'CURRENT_PREDICTION_PATH_DATA_AVAILABLE'
+        if has_current_data
+        else 'NO_CURRENT_PREDICTION_PATH_DATA'
+    )
+    payload['prediction_path_scope_summary'] = (
+        'Prediction→risk path isolated to current window data.'
+        if has_current_data
+        else 'No current prediction→risk path data in window; global risk/runtime telemetry excluded from this profile.'
+    )
+
+    payload['active_exposure_risk_throttle_summary'] = {
+        'scope_status': 'OUT_OF_SCOPE_FOR_PREDICTION_PATH_PROFILE',
+        'reason_codes': ['OUT_OF_SCOPE_FOR_PREDICTION_PATH_PROFILE'],
+    }
+    payload['active_exposure_risk_throttle_examples'] = []
+    payload['risk_execution_scope_alignment_summary'] = {
+        'scope_status': 'OUT_OF_SCOPE_FOR_PREDICTION_PATH_PROFILE',
+        'reason_codes': ['OUT_OF_SCOPE_FOR_PREDICTION_PATH_PROFILE'],
+    }
+    payload['risk_execution_scope_alignment_examples'] = []
+    payload['next_action_hint'] = (
+        str(payload.get('next_action_hint') or 'Review prediction risk diagnostics')
+        if has_current_data
+        else 'No current prediction-path data; rerun when new handoff/prediction candidates are produced.'
+    )
+    if not has_current_data:
+        reason_codes = list(payload.get('reason_codes') or [])
+        reason_codes.append('NO_CURRENT_PREDICTION_PATH_DATA')
+        payload['reason_codes'] = list(dict.fromkeys(reason_codes))
 
 
 def _sync_operational_snapshot_for_profile(
@@ -992,7 +1072,7 @@ def _sync_operational_snapshot_for_profile(
         payload['position_exposure_summary'] = position_exposure
     payload['funnel_status_window'] = str(funnel.get('funnel_status') or 'UNKNOWN')
     payload['funnel_status'] = effective_funnel_status
-    _apply_profile_payload_scope(payload=payload, profile_modules=profile_modules)
+    _apply_profile_payload_scope(payload=payload, profile_modules=profile_modules, profile_id=str(payload.get('test_profile') or TEST_PROFILE_FULL_E2E))
     payload['summary'] = (
         f"funnel_status={payload.get('funnel_status')} window_funnel_status={payload.get('funnel_status_window')} "
         f"overlay_status={overlay_summary.get('overlay_status')} gate_status={payload.get('gate_status')}. "
