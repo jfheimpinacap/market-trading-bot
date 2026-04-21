@@ -42,3 +42,11 @@ Scope:
   - executed profile + run scope (`fresh_full_run` vs `targeted_diagnostic_run`),
   - export header metadata (`profile` and `scope`).
 - Optional advanced panel (collapsed by default) shows module checklist visibility for diagnostics without changing trading logic.
+
+## Prompt 349 (targeted profile canonical payload wiring closure)
+
+- Backend wiring fix only: start/status/export now run a **final canonical normalization pass immediately before serializer/export output**.
+- This closes the `KeyError: 'trial_status'` path for targeted profiles (notably `prediction_risk_path`) when partial/historical payloads appear.
+- Profile scope pruning now preserves serializer-required top-level canonical keys; only optional module blocks are omitted.
+- Added discrete warning logs when required canonical keys are missing right before serializer/export finalization.
+- No policy changes and no bot decision-logic changes.

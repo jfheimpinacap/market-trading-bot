@@ -8471,6 +8471,41 @@ class TestConsoleApiTests(TestCase):
         text_payload = export_test_console_log(fmt='text')
         self.assertIn('trial_status: UNKNOWN', text_payload)
 
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_get_status_historical_targeted_payload_is_canonicalized_before_serializer(self, mock_state_snapshot):
+        from apps.mission_control.services.test_console import get_test_console_status
+
+        payload = self._status_payload()
+        payload['test_profile'] = 'prediction_risk_path'
+        payload['modules_included'] = ['include_handoff', 'include_prediction', 'include_risk', 'include_export_text', 'include_export_json']
+        payload['modules_omitted'] = ['include_scan', 'include_execution']
+        payload.pop('trial_status', None)
+        payload.pop('extended_run_status', None)
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        status_payload = get_test_console_status()
+        self.assertEqual(status_payload.get('trial_status'), 'SKIPPED_BY_PROFILE')
+        self.assertEqual(status_payload.get('extended_run_status'), 'SKIPPED_BY_PROFILE')
+
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_export_log_prediction_risk_profile_keeps_required_top_level_keys(self, mock_state_snapshot):
+        from apps.mission_control.services.test_console import export_test_console_log
+
+        payload = self._status_payload()
+        payload['test_profile'] = 'prediction_risk_path'
+        payload['modules_included'] = ['include_handoff', 'include_prediction', 'include_risk', 'include_export_text', 'include_export_json']
+        payload['modules_omitted'] = ['include_scan', 'include_execution']
+        for key in ('trial_status', 'validation_status', 'trend_status', 'readiness_status', 'gate_status', 'extended_run_status'):
+            payload.pop(key, None)
+        payload['text_export'] = ''
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        json_payload = export_test_console_log(fmt='json')
+        self.assertEqual(json_payload.get('trial_status'), 'SKIPPED_BY_PROFILE')
+        self.assertEqual(json_payload.get('extended_run_status'), 'SKIPPED_BY_PROFILE')
+        self.assertEqual(json_payload.get('validation_status'), 'UNKNOWN')
+        self.assertEqual(json_payload.get('trend_status'), 'UNKNOWN')
+
     @patch('apps.mission_control.views.start_test_console')
     def test_gate_block_is_reflected_in_status(self, mock_start):
         payload = self._status_payload()
