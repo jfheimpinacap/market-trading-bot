@@ -3866,3 +3866,15 @@ Qué **no** valida:
 Export/status include `test_profile`, `modules_included`, `modules_omitted`, and `run_scope` (`fresh_full_run` vs `targeted_diagnostic_run`).
 
 - Frontend hardening: fixed avoidable 404 wiring in Dashboard/Markets/Portfolio and converted optional missing resources to clean empty-state handling (no fatal UX break).
+
+### Stabilization audit note (2026-04-22)
+
+Se registró una auditoría técnica estructural (sin refactor masivo ni cambios de policy) con foco en Mission Control, Test Console, Cockpit/Advanced y lifecycle `status/export/snapshot`.
+
+Documento:
+- `docs/architecture/stabilization-audit-2026-04-22.md`
+
+Incluye:
+- Top 10 hotspots técnicos con severidad/síntoma/módulos/recomendación.
+- Priorización de quick wins vs fixes medianos vs refactors grandes.
+- Plan de estabilización en 3 fases: (1) lifecycle/contracts, (2) polling/state/UI sync, (3) consolidación/cleanup.
