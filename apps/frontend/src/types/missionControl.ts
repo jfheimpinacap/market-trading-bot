@@ -539,6 +539,11 @@ export type TestConsoleStatusResponse = {
   progress_state?: 'idle' | 'running' | 'completed' | 'blocked' | 'failed' | 'stopped' | string;
   started_at: string | null;
   updated_at?: string | null;
+  last_progress_at?: string | null;
+  phase_entered_at?: string | null;
+  hang_detected_at?: string | null;
+  hang_detection_reason?: string | null;
+  stop_requested_at?: string | null;
   ended_at: string | null;
   elapsed_seconds?: number | null;
   last_event?: string | null;

@@ -561,7 +561,7 @@ class TestConsoleStopRequestSerializer(serializers.Serializer):
 
 
 class TestConsoleStatusSerializer(serializers.Serializer):
-    test_status = serializers.ChoiceField(choices=['IDLE', 'RUNNING', 'STOPPED', 'COMPLETED', 'COMPLETED_WITH_WARNINGS', 'BLOCKED', 'FAILED'])
+    test_status = serializers.ChoiceField(choices=['IDLE', 'RUNNING', 'STOPPED', 'COMPLETED', 'COMPLETED_WITH_WARNINGS', 'BLOCKED', 'FAILED', 'TIMED_OUT', 'HUNG'])
     test_profile = serializers.CharField(required=False)
     available_test_profiles = serializers.DictField(required=False)
     modules_included = serializers.ListField(child=serializers.CharField(), required=False)
@@ -637,6 +637,11 @@ class TestConsoleStatusSerializer(serializers.Serializer):
     total_steps = serializers.IntegerField(required=False)
     progress_state = serializers.CharField(required=False)
     updated_at = serializers.DateTimeField(required=False, allow_null=True)
+    last_progress_at = serializers.DateTimeField(required=False, allow_null=True)
+    phase_entered_at = serializers.DateTimeField(required=False, allow_null=True)
+    hang_detected_at = serializers.DateTimeField(required=False, allow_null=True)
+    hang_detection_reason = serializers.CharField(required=False, allow_blank=True)
+    stop_requested_at = serializers.DateTimeField(required=False, allow_null=True)
     elapsed_seconds = serializers.IntegerField(required=False, allow_null=True)
     last_event = serializers.CharField(required=False, allow_blank=True)
     last_reason_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
