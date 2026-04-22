@@ -30,13 +30,17 @@ export function usePollingTicker(
     }
 
     let cancelled = false;
+    let inFlight = false;
     updateCount(owner, 1);
 
     const timer = window.setInterval(() => {
-      if (cancelled) {
+      if (cancelled || inFlight) {
         return;
       }
-      void callback();
+      inFlight = true;
+      Promise.resolve(callback()).finally(() => {
+        inFlight = false;
+      });
     }, intervalMs);
 
     return () => {

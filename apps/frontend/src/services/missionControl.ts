@@ -151,22 +151,28 @@ export function bootstrapLivePaperSession(payload: LivePaperBootstrapRequest = {
   });
 }
 
-export function getLivePaperBootstrapStatus(params?: { preset?: string }) {
-  const query = new URLSearchParams();
-  if (params?.preset) {
-    query.set('preset', params.preset);
+function buildQuery(params?: Record<string, string | number | null | undefined>) {
+  if (!params) {
+    return '';
   }
-  const suffix = query.size ? `?${query.toString()}` : '';
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === null || value === undefined || value === '') {
+      return;
+    }
+    query.set(key, String(value));
+  });
+  return query.size ? `?${query.toString()}` : '';
+}
+
+export function getLivePaperBootstrapStatus(params?: { preset?: string }) {
+  const suffix = buildQuery({ preset: params?.preset });
   return requestJson<LivePaperBootstrapStatusResponse>(`/api/mission-control/live-paper-bootstrap-status/${suffix}`);
 }
 
 
 export function getLivePaperValidation(params?: { preset?: string }) {
-  const query = new URLSearchParams();
-  if (params?.preset) {
-    query.set('preset', params.preset);
-  }
-  const suffix = query.size ? `?${query.toString()}` : '';
+  const suffix = buildQuery({ preset: params?.preset });
   return requestJson<LivePaperValidationDigestResponse>(`/api/mission-control/live-paper-validation/${suffix}`);
 }
 
@@ -186,21 +192,9 @@ type OptionalStatusContract = {
   status?: string | null;
 };
 
-function isEmptyOptionalStatusPayload(payload: unknown): boolean {
-  if (!payload || typeof payload !== 'object') {
-    return false;
-  }
-  const optionalPayload = payload as OptionalStatusContract;
-  return optionalPayload.exists === false || String(optionalPayload.status ?? '').toUpperCase() === 'NO_RUN_YET';
-}
-
 async function requestOptionalStatusJson<T extends OptionalStatusContract>(path: string): Promise<T | null> {
   try {
-    const payload = await requestJson<T>(path);
-    if (isEmptyOptionalStatusPayload(payload)) {
-      return null;
-    }
-    return payload;
+    return await requestJson<T>(path);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       return null;
@@ -229,35 +223,17 @@ export function getLivePaperTrialStatus() {
 }
 
 export function getLivePaperTrialHistory(params?: { limit?: number; status?: 'PASS' | 'WARN' | 'FAIL' }) {
-  const query = new URLSearchParams();
-  if (params?.limit) {
-    query.set('limit', String(params.limit));
-  }
-  if (params?.status) {
-    query.set('status', params.status);
-  }
-  const suffix = query.size ? `?${query.toString()}` : '';
+  const suffix = buildQuery({ limit: params?.limit, status: params?.status });
   return requestJson<LivePaperTrialHistoryResponse>(`/api/mission-control/live-paper-trial-history/${suffix}`);
 }
 
 export function getLivePaperTrialTrend(params?: { limit?: number; preset?: string }) {
-  const query = new URLSearchParams();
-  if (params?.limit) {
-    query.set('limit', String(params.limit));
-  }
-  if (params?.preset) {
-    query.set('preset', params.preset);
-  }
-  const suffix = query.size ? `?${query.toString()}` : '';
+  const suffix = buildQuery({ limit: params?.limit, preset: params?.preset });
   return requestJson<LivePaperTrialTrendResponse>(`/api/mission-control/live-paper-trial-trend/${suffix}`);
 }
 
 export function getExtendedPaperRunGate(params?: { preset?: string }) {
-  const query = new URLSearchParams();
-  if (params?.preset) {
-    query.set('preset', params.preset);
-  }
-  const suffix = query.size ? `?${query.toString()}` : '';
+  const suffix = buildQuery({ preset: params?.preset });
   return requestJson<LivePaperExtendedRunGateResponse>(`/api/mission-control/extended-paper-run-gate/${suffix}`);
 }
 
@@ -272,26 +248,12 @@ export function startExtendedPaperRun(payload: ExtendedPaperRunLaunchRequest = {
 }
 
 export function getExtendedPaperRunStatus(params?: { preset?: string; preset_name?: string }) {
-  const query = new URLSearchParams();
-  if (params?.preset) {
-    query.set('preset', params.preset);
-  }
-  if (params?.preset_name) {
-    query.set('preset_name', params.preset_name);
-  }
-  const suffix = query.size ? `?${query.toString()}` : '';
+  const suffix = buildQuery({ preset: params?.preset, preset_name: params?.preset_name });
   return requestOptionalStatusJson<ExtendedPaperRunStatusResponse>(`/api/mission-control/extended-paper-run-status/${suffix}`);
 }
 
 export function getLivePaperAutonomyFunnel(params?: { preset?: string; window_minutes?: number }) {
-  const query = new URLSearchParams();
-  if (params?.preset) {
-    query.set('preset', params.preset);
-  }
-  if (params?.window_minutes) {
-    query.set('window_minutes', String(params.window_minutes));
-  }
-  const suffix = query.size ? `?${query.toString()}` : '';
+  const suffix = buildQuery({ preset: params?.preset, window_minutes: params?.window_minutes });
   return requestJson<LivePaperAutonomyFunnelResponse>(`/api/mission-control/live-paper-autonomy-funnel/${suffix}`);
 }
 
