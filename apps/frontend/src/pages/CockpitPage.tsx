@@ -228,6 +228,30 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+function toTimestampMs(value: string | null | undefined) {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function shouldApplyFreshTestConsoleStatus(
+  previous: TestConsoleStatusResponse | null,
+  incoming: TestConsoleStatusResponse,
+) {
+  if (!previous) return true;
+  const previousRunIdentity = `${previous.current_run_id ?? 'none'}:${previous.last_run_id ?? 'none'}`;
+  const incomingRunIdentity = `${incoming.current_run_id ?? 'none'}:${incoming.last_run_id ?? 'none'}`;
+  const previousUpdatedAt = toTimestampMs(previous.updated_at);
+  const incomingUpdatedAt = toTimestampMs(incoming.updated_at);
+  if (incomingRunIdentity !== previousRunIdentity && incomingUpdatedAt < previousUpdatedAt) {
+    return false;
+  }
+  if (incomingUpdatedAt < previousUpdatedAt) {
+    return false;
+  }
+  return true;
+}
+
 function formatReasonCode(value: string) {
   return value.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (letter: string) => letter.toUpperCase());
 }
@@ -522,7 +546,7 @@ export function CockpitPage() {
         is_terminal: payload.is_terminal,
         last_event: payload.last_event,
       });
-      setTestConsoleStatus(payload);
+      setTestConsoleStatus((previous) => (shouldApplyFreshTestConsoleStatus(previous, payload) ? payload : previous));
       return payload;
     } catch {
       setTestConsoleStatus(null);
@@ -1118,9 +1142,59 @@ export function CockpitPage() {
 
   usePollingTicker(
     'cockpit:test-console-status',
-    loadTestConsoleStatus,
-    3000,
-    testConsoleRunActive || testConsoleStartLoading,
+    async () => {
+      const payload = await loadTestConsoleStatus();
+      return {
+        idle: !payload || !resolveTestConsoleLifecycleState(payload, lastCompletedTestConsoleSnapshot).runActive,
+      };
+    },
+    testConsoleRunActive ? 2500 : 7000,
+    true,
+    { maxBackoffMs: 20000 },
+  );
+
+  usePollingTicker(
+    'cockpit:live-paper-validation',
+    async () => {
+      const payload = await loadLivePaperValidation();
+      return { idle: !payload || payload.validation_status !== 'WARNING' };
+    },
+    8000,
+    stage2Enabled,
+    { maxBackoffMs: 25000 },
+  );
+
+  usePollingTicker(
+    'cockpit:live-paper-funnel',
+    async () => {
+      await Promise.all([loadLivePaperAutonomyFunnel(), loadLivePaperTrialStatus()]);
+      return { idle: livePaperTrialStatus !== 'RUNNING' };
+    },
+    10000,
+    livePaperDeferredEnabled,
+    { maxBackoffMs: 30000 },
+  );
+
+  usePollingTicker(
+    'cockpit:paper-portfolio-summary',
+    async () => {
+      await loadPaperPortfolioSnapshot();
+      return { idle: !paperPortfolioSummary };
+    },
+    12000,
+    livePaperDeferredEnabled,
+    { maxBackoffMs: 30000 },
+  );
+
+  usePollingTicker(
+    'cockpit:runtime-attention',
+    async () => {
+      await Promise.all([loadCockpitSummaries(), loadCockpitAdvanced()]);
+      return { idle: !runtimeAdvancedEnabled };
+    },
+    9000,
+    runtimeAdvancedEnabled,
+    { maxBackoffMs: 25000 },
   );
 
   useEffect(() => {

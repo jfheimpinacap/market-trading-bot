@@ -40,6 +40,12 @@ Referencias enlazadas: auditoría base `docs/architecture/stabilization-audit-20
 Se ejecutó una validación de estabilización posterior a Batch 3 para comprobar reducción real de contradicciones entre serializer/backend payload/export JSON y consumo frontend (Dashboard/Cockpit/Test Console), sin agregar features ni refactor masivo.  
 Reporte corto con hallazgos residuales reales y recomendación de siguiente batch: `docs/architecture/stabilization-validation-after-batch-3-2026-04-22.md`.
 
+### Stabilization Batch 4 completed (2026-04-22)
+
+Se ejecutó Batch 4 acotado de estabilización enfocado en polling por dominio (cadencia, stop conditions, visibility/focus, freshness y backoff conservador) para bajar fragilidad residual entre lifecycle/funnel/portfolio/runtime attention sin agregar features nuevas y sin refactor masivo.  
+Detalle del batch: `docs/architecture/stabilization-batch-4-2026-04-22.md`.  
+Referencias enlazadas: auditoría base `docs/architecture/stabilization-audit-2026-04-22.md` + Batch 1 `docs/architecture/stabilization-batch-1-2026-04-22.md` + Batch 2 `docs/architecture/stabilization-batch-2-2026-04-22.md` + Batch 3 `docs/architecture/stabilization-batch-3-2026-04-22.md` + validación posterior `docs/architecture/stabilization-validation-after-batch-3-2026-04-22.md`.
+
 ### Test Console lifecycle hardening for real-progress hangs (Prompt 352)
 
 Mission Control Test Console lifecycle now distinguishes **real pipeline progress** from **refresh noise** so runs cannot stay `RUNNING` indefinitely due to minor snapshot churn.

@@ -9,6 +9,7 @@ import { PROJECT_NAME } from '../lib/config';
 import { getViewCache, setViewCache } from '../lib/viewCache';
 import { navigate } from '../lib/router';
 import { resolveTestConsoleLifecycleState, type TestConsoleLifecycleState } from '../lib/testConsoleLifecycle';
+import { usePollingTicker } from '../hooks/usePollingTicker';
 import { getTestConsoleStatus } from '../services/missionControl';
 import { getPaperSnapshots, getPaperSummary } from '../services/paperTrading';
 import type { LlmAuxSignalSummary, TestConsoleStatusResponse } from '../types/missionControl';
@@ -169,6 +170,50 @@ export function DashboardPage() {
   useEffect(() => {
     void loadExecutiveData();
   }, [loadExecutiveData]);
+
+  usePollingTicker(
+    'dashboard:test-console-status',
+    async () => {
+      try {
+        const response = await getTestConsoleStatus();
+        setTestConsoleStatus(response);
+        setStatusError(null);
+        setStatusLoaded(true);
+        const lifecycle = resolveTestConsoleLifecycleState(response, null);
+        return { idle: !lifecycle.runActive };
+      } catch (error) {
+        setStatusError(getErrorMessage(error, 'No se pudo cargar el estado operativo.'));
+        return { idle: true };
+      } finally {
+        setStatusLoading(false);
+      }
+    },
+    resolveTestConsoleLifecycleState(testConsoleStatus, null).runActive ? 3500 : 9000,
+    true,
+    { maxBackoffMs: 25000 },
+  );
+
+  usePollingTicker(
+    'dashboard:paper-summary',
+    async () => {
+      try {
+        const [summary, snapshots] = await Promise.all([getPaperSummary(), getPaperSnapshots()]);
+        setPaperSummary(summary);
+        setPaperSnapshots(snapshots.slice(-12));
+        setPaperError(null);
+        setPaperLoaded(true);
+        return { idle: false };
+      } catch (error) {
+        setPaperError(getErrorMessage(error, 'No se pudo cargar el estado paper.'));
+        return { idle: true };
+      } finally {
+        setPaperLoading(false);
+      }
+    },
+    12000,
+    true,
+    { maxBackoffMs: 30000 },
+  );
 
   useEffect(() => {
     setViewCache<DashboardCache>(DASHBOARD_CACHE_KEY, {
