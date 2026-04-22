@@ -108,6 +108,7 @@ const formatRelativeSeconds = (value: string | null | undefined) => {
   return `${seconds}s`;
 };
 const TEST_CONSOLE_PHASES = ['bootstrap', 'scan', 'consensus_review', 'pursuit_review', 'trial', 'validation', 'trend', 'gate', 'extended_run', 'finalize'];
+const TEST_CONSOLE_TERMINAL_STATUSES = new Set(['IDLE', 'STOPPED', 'COMPLETED', 'COMPLETED_WITH_WARNINGS', 'BLOCKED', 'FAILED', 'TIMED_OUT', 'HUNG']);
 const TEST_CONSOLE_PROFILE_OPTIONS = [
   { id: 'full_e2e', label: 'Full E2E' },
   { id: 'scope_throttle_diagnostics', label: 'Scope + Throttle Diagnostics' },
@@ -438,10 +439,8 @@ export function CockpitPage() {
   const selectedProfileRunScope = selectedTestProfileId === 'full_e2e' ? 'fresh_full_run' : 'targeted_diagnostic_run';
   const executedTestProfileId = testConsoleStatus?.test_profile ?? selectedTestProfileId;
   const executedRunScope = testConsoleStatus?.run_scope ?? selectedProfileRunScope;
-  const testConsoleRunActive = Boolean(
-    testConsoleStatus?.test_status
-      && ['RUNNING', 'IN_PROGRESS', 'ACTIVE'].includes(testConsoleStatus.test_status.toUpperCase()),
-  );
+  const normalizedTestConsoleStatus = (testConsoleStatus?.test_status ?? '').toUpperCase();
+  const testConsoleRunActive = Boolean(testConsoleStatus?.test_status) && !TEST_CONSOLE_TERMINAL_STATUSES.has(normalizedTestConsoleStatus);
   const testConsoleCurrentStep = testConsoleStatus?.current_step ?? (testConsoleStatus?.current_phase ? TEST_CONSOLE_PHASES.indexOf(testConsoleStatus.current_phase) + 1 : null);
   const testConsoleTotalSteps = testConsoleStatus?.total_steps ?? TEST_CONSOLE_PHASES.length;
   const testConsoleProgressPercent = testConsoleCurrentStep && testConsoleTotalSteps
@@ -1503,7 +1502,7 @@ export function CockpitPage() {
                     <button
                       className="secondary-button"
                       type="button"
-                      title={testConsoleRunActive ? 'Stop active test' : 'Not available: no active test'}
+                      title={testConsoleRunActive ? 'Stop active/non-terminal test run' : 'Not available: no active test'}
                       disabled={testConsoleStopLoading || testConsoleStartLoading || !testConsoleRunActive}
                       onClick={() => void stopTestConsoleFromCockpit()}
                     >

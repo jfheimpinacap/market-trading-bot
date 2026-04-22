@@ -50,3 +50,15 @@ Scope:
 - Profile scope pruning now preserves serializer-required top-level canonical keys; only optional module blocks are omitted.
 - Added discrete warning logs when required canonical keys are missing right before serializer/export finalization.
 - No policy changes and no bot decision-logic changes.
+
+## Prompt 351 (test console running/gate hang lifecycle hardening)
+
+- Added explicit no-progress hang detection for Test Console runs still marked `RUNNING`.
+  - Detection tracks `last_progress_at` and `phase_entered_at`.
+  - `gate` uses a stricter per-phase timeout threshold; stale `RUNNING` snapshots are terminalized as `TIMED_OUT`.
+- `Stop test` backend behavior now force-finalizes non-terminal runs to `STOPPED` even when pause primitives are unavailable, preventing infinite `RUNNING` polling loops.
+- Added discrete lifecycle instrumentation fields in status payload:
+  - `last_progress_at`, `phase_entered_at`, `hang_detected_at`, `hang_detection_reason`, `stop_requested_at`.
+- Partial export is preserved for interrupted/timed-out runs via terminal snapshot + `text_export` regeneration.
+- Frontend stop-action enablement is now based on non-terminal run state (instead of a narrow active-phase/status check), so frozen `gate` runs remain manually stoppable.
+- No policy changes and no core bot decision logic changes.

@@ -7625,6 +7625,62 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(body['test_status'], 'STOPPED')
         self.assertEqual(body['summary'], 'Stop applied conservatively.')
 
+    @patch('apps.mission_control.services.test_console._set_state')
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_get_test_console_status_marks_running_gate_as_timed_out_when_stale(self, mock_state_snapshot, mock_set_state):
+        from apps.mission_control.services.test_console import get_test_console_status
+
+        stale_time = timezone.now() - timedelta(minutes=25)
+        payload = self._status_payload()
+        payload.update(
+            {
+                'test_status': 'RUNNING',
+                'current_phase': 'gate',
+                'started_at': stale_time,
+                'updated_at': stale_time,
+                'last_progress_at': stale_time,
+                'phase_entered_at': stale_time,
+                'ended_at': None,
+            }
+        )
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        status_payload = get_test_console_status()
+        self.assertEqual(status_payload['test_status'], 'TIMED_OUT')
+        self.assertEqual(status_payload['progress_state'], 'failed')
+        self.assertIsNotNone(status_payload.get('ended_at'))
+        self.assertIn('TEST_CONSOLE_HANG_TIMEOUT', status_payload.get('reason_codes', []))
+        mock_set_state.assert_called()
+
+    @patch('apps.mission_control.services.test_console.get_live_paper_bootstrap_status')
+    @patch('apps.mission_control.services.test_console._find_active_preset_session')
+    @patch('apps.mission_control.services.test_console.get_runner_state')
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_stop_test_console_force_stops_non_terminal_run_without_pause_primitives(
+        self,
+        mock_state_snapshot,
+        mock_runner_state,
+        mock_find_active_session,
+        mock_bootstrap_status,
+    ):
+        from apps.mission_control.services.test_console import stop_test_console
+
+        payload = self._status_payload()
+        payload.update({'test_status': 'RUNNING', 'ended_at': None, 'current_phase': 'gate'})
+        mock_state_snapshot.return_value = (payload, payload, [])
+        mock_runner_state.return_value = SimpleNamespace(runner_status='PAUSED')
+        mock_find_active_session.return_value = None
+        mock_bootstrap_status.return_value = {
+            'session_active': False,
+            'heartbeat_active': False,
+            'current_session_status': 'PAUSED',
+        }
+
+        stopped_payload = stop_test_console()
+        self.assertEqual(stopped_payload['test_status'], 'STOPPED')
+        self.assertIn('force-marked STOPPED', stopped_payload['summary'])
+        self.assertIsNotNone(stopped_payload.get('stop_requested_at'))
+
     @patch('apps.mission_control.views.export_test_console_log')
     def test_export_log_text_works(self, mock_export):
         mock_export.return_value = 'copy paste friendly log\nhandoff_summary:\n  shortlisted_signals=1'
