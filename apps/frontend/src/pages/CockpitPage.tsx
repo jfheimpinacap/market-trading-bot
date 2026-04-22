@@ -382,6 +382,7 @@ export function CockpitPage() {
   const [testConsoleLogError, setTestConsoleLogError] = useState<string | null>(null);
   const [testConsoleCopyMessage, setTestConsoleCopyMessage] = useState<string | null>(null);
   const [testConsoleRawJsonOpen, setTestConsoleRawJsonOpen] = useState(false);
+  const [lastCompletedTestConsoleSnapshot, setLastCompletedTestConsoleSnapshot] = useState<TestConsoleStatusResponse | null>(null);
   const [selectedTestProfileId, setSelectedTestProfileId] = useState<TestConsoleProfileId>('full_e2e');
   const [testConsoleAdvancedOpen, setTestConsoleAdvancedOpen] = useState(false);
   const heartbeatAutoSyncHint = useMemo(() => {
@@ -421,12 +422,6 @@ export function CockpitPage() {
   const extendedPaperRunHint = extendedPaperRunLaunch?.next_action_hint
     ?? extendedPaperRunStatus?.next_action_hint
     ?? (extendedPaperRunNotFound ? 'Start extended run to generate status.' : 'Refresh status to get latest hint.');
-  const testConsoleScanSummary = typeof testConsoleStatus?.scan_summary === 'string'
-    ? testConsoleStatus.scan_summary
-    : testConsoleStatus?.scan_summary?.summary ?? 'n/a';
-  const testConsolePortfolioSummary = typeof testConsoleStatus?.portfolio_summary === 'string'
-    ? testConsoleStatus.portfolio_summary
-    : testConsoleStatus?.portfolio_summary?.summary ?? 'n/a';
   const availableTestProfiles = testConsoleStatus?.available_test_profiles ?? {};
   const selectedProfileModules = useMemo(
     () => availableTestProfiles[selectedTestProfileId] ?? availableTestProfiles.full_e2e ?? {},
@@ -437,24 +432,41 @@ export function CockpitPage() {
     [selectedProfileModules],
   );
   const selectedProfileRunScope = selectedTestProfileId === 'full_e2e' ? 'fresh_full_run' : 'targeted_diagnostic_run';
-  const executedTestProfileId = testConsoleStatus?.test_profile ?? selectedTestProfileId;
-  const executedRunScope = testConsoleStatus?.run_scope ?? selectedProfileRunScope;
   const normalizedTestConsoleStatus = (testConsoleStatus?.test_status ?? '').toUpperCase();
-  const testConsoleRunActive = Boolean(testConsoleStatus?.test_status) && !TEST_CONSOLE_TERMINAL_STATUSES.has(normalizedTestConsoleStatus);
-  const testConsoleCanStop = testConsoleStatus?.stop_available ?? testConsoleStatus?.can_stop ?? testConsoleRunActive;
-  const testConsoleCurrentStep = testConsoleStatus?.current_step ?? (testConsoleStatus?.current_phase ? TEST_CONSOLE_PHASES.indexOf(testConsoleStatus.current_phase) + 1 : null);
-  const testConsoleTotalSteps = testConsoleStatus?.total_steps ?? TEST_CONSOLE_PHASES.length;
+  const testConsoleRunActive = testConsoleStatus?.has_active_run
+    ?? (Boolean(testConsoleStatus?.test_status) && !TEST_CONSOLE_TERMINAL_STATUSES.has(normalizedTestConsoleStatus));
+  const currentTestConsoleSnapshot = testConsoleRunActive ? testConsoleStatus : null;
+  const hasLastCompletedRun = testConsoleStatus?.has_last_completed_run
+    ?? Boolean(
+      !testConsoleRunActive
+      && testConsoleStatus?.ended_at
+      && TEST_CONSOLE_TERMINAL_STATUSES.has(normalizedTestConsoleStatus),
+    );
+  const effectiveLastCompletedSnapshot = hasLastCompletedRun
+    ? (testConsoleStatus ?? lastCompletedTestConsoleSnapshot)
+    : lastCompletedTestConsoleSnapshot;
+  const executedTestProfileId = currentTestConsoleSnapshot?.test_profile ?? effectiveLastCompletedSnapshot?.test_profile ?? 'none';
+  const executedRunScope = currentTestConsoleSnapshot?.run_scope ?? effectiveLastCompletedSnapshot?.run_scope ?? 'none';
+  const testConsoleCanStop = testConsoleRunActive && Boolean(
+    currentTestConsoleSnapshot?.stop_available ?? currentTestConsoleSnapshot?.can_stop ?? testConsoleRunActive,
+  );
+  const testConsoleCurrentStep = currentTestConsoleSnapshot?.current_step ?? (currentTestConsoleSnapshot?.current_phase ? TEST_CONSOLE_PHASES.indexOf(currentTestConsoleSnapshot.current_phase) + 1 : null);
+  const testConsoleTotalSteps = currentTestConsoleSnapshot?.total_steps ?? TEST_CONSOLE_PHASES.length;
   const testConsoleProgressPercent = testConsoleCurrentStep && testConsoleTotalSteps
     ? Math.min(100, Math.max(0, Math.round((testConsoleCurrentStep / testConsoleTotalSteps) * 100)))
     : 0;
-  const testConsoleCurrentStepLabel = testConsoleStatus?.current_step_label ?? testConsoleStatus?.current_phase ?? 'Sin etapa';
-  const testConsoleUpdatedAgo = formatRelativeSeconds(testConsoleStatus?.updated_at);
+  const testConsoleCurrentStepLabel = currentTestConsoleSnapshot?.current_step_label ?? currentTestConsoleSnapshot?.current_phase ?? 'No active run';
+  const testConsoleUpdatedAgo = formatRelativeSeconds(currentTestConsoleSnapshot?.updated_at);
   const testConsoleHasExportableLog = Boolean(
     testConsoleLog
       && testConsoleLog !== 'No log exported yet'
       && testConsoleLog !== 'Unable to export test log',
   );
-  const testConsoleCanExportLog = Boolean(testConsoleStatus && !testConsoleStatusError);
+  const testConsoleCanExportLog = Boolean(
+    testConsoleStatus
+      && !testConsoleStatusError
+      && (testConsoleStatus.export_available || testConsoleRunActive || hasLastCompletedRun || Boolean(lastCompletedTestConsoleSnapshot)),
+  );
   const llmShadowSummary = testConsoleStatus?.llm_shadow_summary ?? null;
   const latestLlmShadowSummary = (testConsoleStatus?.latest_llm_shadow_summary ?? llmShadowSummary) as LlmShadowSummary | null;
   const llmShadowHistory = useMemo(
@@ -1090,12 +1102,20 @@ export function CockpitPage() {
   }, [loadTestConsoleStatus]);
 
   useEffect(() => {
-    if (!testConsoleStatus?.test_profile) return;
-    const profileFromStatus = TEST_CONSOLE_PROFILE_OPTIONS.find((profile) => profile.id === testConsoleStatus.test_profile)?.id;
-    if (profileFromStatus) {
-      setSelectedTestProfileId(profileFromStatus);
+    if (!testConsoleStatus) return;
+    const normalizedStatus = (testConsoleStatus.test_status ?? '').toUpperCase();
+    const activeRun = testConsoleStatus.has_active_run
+      ?? (Boolean(testConsoleStatus.test_status) && !TEST_CONSOLE_TERMINAL_STATUSES.has(normalizedStatus));
+    const completedRun = testConsoleStatus.has_last_completed_run
+      ?? Boolean(
+        !activeRun
+        && testConsoleStatus.ended_at
+        && TEST_CONSOLE_TERMINAL_STATUSES.has(normalizedStatus),
+      );
+    if (completedRun) {
+      setLastCompletedTestConsoleSnapshot(testConsoleStatus);
     }
-  }, [testConsoleStatus?.test_profile]);
+  }, [testConsoleStatus]);
 
   usePollingTicker(
     'cockpit:test-console-status',
@@ -1430,9 +1450,9 @@ export function CockpitPage() {
                   <div className="button-row">
                     <StatusBadge tone={toneFromStatus(testConsoleStatus?.test_status)}>{testConsoleStatus?.test_status ?? 'UNKNOWN'}</StatusBadge>
                     <StatusBadge tone={toneFromStatus(testConsoleStatus?.progress_state)}>{testConsoleStatus?.progress_state ?? 'idle'}</StatusBadge>
-                    <StatusBadge tone={toneFromStatus(testConsoleStatus?.validation_status)}>{testConsoleStatus?.validation_status ?? 'n/a'}</StatusBadge>
-                    <StatusBadge tone={toneFromStatus(testConsoleStatus?.trial_status)}>{testConsoleStatus?.trial_status ?? 'n/a'}</StatusBadge>
-                    <StatusBadge tone={toneFromStatus(testConsoleStatus?.gate_status)}>{testConsoleStatus?.gate_status ?? 'n/a'}</StatusBadge>
+                    <StatusBadge tone={toneFromStatus(currentTestConsoleSnapshot?.validation_status)}>{currentTestConsoleSnapshot?.validation_status ?? 'n/a'}</StatusBadge>
+                    <StatusBadge tone={toneFromStatus(currentTestConsoleSnapshot?.trial_status)}>{currentTestConsoleSnapshot?.trial_status ?? 'n/a'}</StatusBadge>
+                    <StatusBadge tone={toneFromStatus(currentTestConsoleSnapshot?.gate_status)}>{currentTestConsoleSnapshot?.gate_status ?? 'n/a'}</StatusBadge>
                     {testConsoleStatus?.is_stale ? <StatusBadge tone="pending">STALE</StatusBadge> : null}
                     {testConsoleStatus?.export_available ? <StatusBadge tone="ready">EXPORT AVAILABLE</StatusBadge> : null}
                   </div>
@@ -1440,36 +1460,42 @@ export function CockpitPage() {
                   {!testConsoleStatusLoading && testConsoleStatusError ? <p className="warning-text">{testConsoleStatusError}</p> : null}
                   {testConsoleStatus ? (
                     <>
-                      <div className="test-console-progress">
-                        <div className="test-console-progress__bar" role="progressbar" aria-valuenow={testConsoleProgressPercent} aria-valuemin={0} aria-valuemax={100}>
-                          <div className="test-console-progress__fill" style={{ width: `${testConsoleProgressPercent}%` }} />
-                        </div>
-                        <p className="muted-text">Etapa actual: {testConsoleCurrentStepLabel} · Paso {testConsoleCurrentStep ?? 0} de {testConsoleTotalSteps} · Última actualización hace {testConsoleUpdatedAgo}</p>
-                      </div>
-                      <ul className="key-value-list">
-                      <li><span>Current phase</span><strong>{testConsoleStatus.current_phase ?? 'n/a'}</strong></li>
-                      <li><span>Started at</span><strong>{formatDate(testConsoleStatus.started_at)}</strong></li>
-                      <li><span>Updated at</span><strong>{formatDate(testConsoleStatus.updated_at)}</strong></li>
-                      <li><span>Ended at</span><strong>{formatDate(testConsoleStatus.ended_at)}</strong></li>
-                      <li><span>Elapsed time</span><strong>{formatDurationSeconds(testConsoleStatus.elapsed_seconds)}</strong></li>
-                      <li><span>Validation status</span><strong>{testConsoleStatus.validation_status ?? 'n/a'}</strong></li>
-                      <li><span>Trial status</span><strong>{testConsoleStatus.trial_status ?? 'n/a'}</strong></li>
-                      <li><span>Trend status</span><strong>{testConsoleStatus.trend_status ?? 'n/a'}</strong></li>
-                      <li><span>Readiness status</span><strong>{testConsoleStatus.readiness_status ?? 'n/a'}</strong></li>
-                      <li><span>Gate status</span><strong>{testConsoleStatus.gate_status ?? 'n/a'}</strong></li>
-                      <li><span>Extended run status</span><strong>{testConsoleStatus.extended_run_status ?? 'n/a'}</strong></li>
-                      <li><span>Attention mode</span><strong>{testConsoleStatus.attention_mode ?? 'n/a'}</strong></li>
-                      <li><span>Funnel status</span><strong>{testConsoleStatus.funnel_status ?? 'n/a'}</strong></li>
-                      <li><span>Scan summary</span><strong>{testConsoleScanSummary}</strong></li>
-                      <li><span>Portfolio summary</span><strong>{testConsolePortfolioSummary}</strong></li>
-                      <li><span>Last event</span><strong>{testConsoleStatus.last_event ?? 'n/a'}</strong></li>
-                      <li><span>Last reason code</span><strong>{testConsoleStatus.last_reason_code ?? 'n/a'}</strong></li>
-                      <li><span>Stop availability</span><strong>{testConsoleCanStop ? 'available' : 'not available'}{testConsoleStatus.can_stop_reason ? ` · ${testConsoleStatus.can_stop_reason}` : ''}</strong></li>
-                      <li><span>Next action hint</span><strong>{testConsoleStatus.next_action_hint ?? 'n/a'}</strong></li>
-                      {testConsoleStatus.blocker_summary ? (
-                        <li><span>Blocker summary</span><strong>{testConsoleStatus.blocker_summary}</strong></li>
+                      {currentTestConsoleSnapshot ? (
+                        <>
+                          <div className="test-console-progress">
+                            <div className="test-console-progress__bar" role="progressbar" aria-valuenow={testConsoleProgressPercent} aria-valuemin={0} aria-valuemax={100}>
+                              <div className="test-console-progress__fill" style={{ width: `${testConsoleProgressPercent}%` }} />
+                            </div>
+                            <p className="muted-text">Etapa actual: {testConsoleCurrentStepLabel} · Paso {testConsoleCurrentStep ?? 0} de {testConsoleTotalSteps} · Última actualización hace {testConsoleUpdatedAgo}</p>
+                          </div>
+                          <ul className="key-value-list">
+                            <li><span>Current phase</span><strong>{currentTestConsoleSnapshot.current_phase ?? 'n/a'}</strong></li>
+                            <li><span>Started at</span><strong>{formatDate(currentTestConsoleSnapshot.started_at)}</strong></li>
+                            <li><span>Updated at</span><strong>{formatDate(currentTestConsoleSnapshot.updated_at)}</strong></li>
+                            <li><span>Ended at</span><strong>{formatDate(currentTestConsoleSnapshot.ended_at)}</strong></li>
+                            <li><span>Elapsed time</span><strong>{formatDurationSeconds(currentTestConsoleSnapshot.elapsed_seconds)}</strong></li>
+                            <li><span>Validation status</span><strong>{currentTestConsoleSnapshot.validation_status ?? 'n/a'}</strong></li>
+                            <li><span>Trial status</span><strong>{currentTestConsoleSnapshot.trial_status ?? 'n/a'}</strong></li>
+                            <li><span>Trend status</span><strong>{currentTestConsoleSnapshot.trend_status ?? 'n/a'}</strong></li>
+                            <li><span>Readiness status</span><strong>{currentTestConsoleSnapshot.readiness_status ?? 'n/a'}</strong></li>
+                            <li><span>Gate status</span><strong>{currentTestConsoleSnapshot.gate_status ?? 'n/a'}</strong></li>
+                            <li><span>Stop availability</span><strong>{testConsoleCanStop ? 'available' : 'not available'}{currentTestConsoleSnapshot.can_stop_reason ? ` · ${currentTestConsoleSnapshot.can_stop_reason}` : ''}</strong></li>
+                            <li><span>Next action hint</span><strong>{currentTestConsoleSnapshot.next_action_hint ?? 'n/a'}</strong></li>
+                          </ul>
+                        </>
+                      ) : (
+                        <p className="muted-text">No active run. Current run panel is clean while idle/terminal.</p>
+                      )}
+                      {effectiveLastCompletedSnapshot ? (
+                        <ul className="key-value-list">
+                          <li><span>Last completed run</span><strong>{effectiveLastCompletedSnapshot.test_status ?? 'n/a'}</strong></li>
+                          <li><span>Completed at</span><strong>{formatDate(effectiveLastCompletedSnapshot.ended_at)}</strong></li>
+                          <li><span>Last event</span><strong>{effectiveLastCompletedSnapshot.last_event ?? 'n/a'}</strong></li>
+                          <li><span>Last reason code</span><strong>{effectiveLastCompletedSnapshot.last_reason_code ?? 'n/a'}</strong></li>
+                          <li><span>Run scope</span><strong>{effectiveLastCompletedSnapshot.run_scope ?? 'n/a'}</strong></li>
+                          <li><span>Executed profile</span><strong>{effectiveLastCompletedSnapshot.test_profile ?? 'n/a'}</strong></li>
+                        </ul>
                       ) : null}
-                      </ul>
                     </>
                   ) : null}
                   <div className="stack-md">
@@ -1515,6 +1541,7 @@ export function CockpitPage() {
                       </div>
                     ) : null}
                     <ul className="key-value-list">
+                      <li><span>Selected profile</span><strong>{selectedTestProfileId}</strong></li>
                       <li><span>Executed profile</span><strong>{executedTestProfileId}</strong></li>
                       <li><span>Run scope</span><strong>{executedRunScope}</strong></li>
                     </ul>
