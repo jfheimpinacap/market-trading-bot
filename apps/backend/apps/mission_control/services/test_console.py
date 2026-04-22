@@ -414,8 +414,14 @@ def _annotate_runtime_flags(payload: dict[str, Any]) -> None:
     normalized_status = str(payload.get('test_status') or '').upper()
     is_terminal = _is_terminal_test_status(normalized_status)
     stop_available = (normalized_status != TEST_STATUS_IDLE) and not is_terminal
+    has_active_run = (normalized_status != TEST_STATUS_IDLE) and not is_terminal
+    has_last_completed_run = is_terminal and bool(payload.get('ended_at'))
     payload['is_terminal'] = is_terminal
     payload['is_hung'] = normalized_status in {TEST_STATUS_TIMED_OUT, TEST_STATUS_HUNG}
+    payload['has_active_run'] = has_active_run
+    payload['has_last_completed_run'] = has_last_completed_run
+    payload['current_run_id'] = str(payload.get('current_run_id') or '') or None
+    payload['last_run_id'] = str(payload.get('last_run_id') or '') or None
     payload['can_stop'] = stop_available
     payload['stop_available'] = stop_available
     if stop_available:

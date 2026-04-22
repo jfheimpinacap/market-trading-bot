@@ -555,6 +555,10 @@ export type TestConsoleStatusResponse = {
   is_stale?: boolean;
   is_terminal?: boolean;
   is_hung?: boolean;
+  has_active_run?: boolean;
+  has_last_completed_run?: boolean;
+  current_run_id?: string | null;
+  last_run_id?: string | null;
   can_stop?: boolean;
   stop_available?: boolean;
   can_stop_reason?: string | null;

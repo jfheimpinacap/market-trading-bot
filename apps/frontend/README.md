@@ -2780,6 +2780,26 @@ The compact tuning investigation view in `/cockpit` now includes a small **Recen
   - actual `POST /api/mission-control/test-console/stop/` dispatch,
   - stop response reception.
 
+## Test Console terminal/idle snapshot separation (Prompt 354)
+
+Cockpit Test Console now keeps three notions explicitly separated to avoid stale mixed terminal UI:
+
+- `selected profile` (operator intent before pressing start)
+- `current active run` (only shown when `has_active_run=true`)
+- `last completed run` (historical terminal snapshot, rendered in a dedicated block)
+
+Status contract now exposes explicit lifecycle flags from backend status:
+
+- `has_active_run`
+- `has_last_completed_run`
+- optional ids: `current_run_id`, `last_run_id`
+
+UI behavior in idle/terminal:
+
+- current-run panel renders a clean `No active run` state (no mixed phase/profile/scope leftovers)
+- historical metadata remains available only under `Last completed run`
+- stop/export controls are computed from active vs terminal/historical state instead of conflating selected-profile local state with executed-profile history
+
 
 ## Runtime manual tuning review UX (new)
 
