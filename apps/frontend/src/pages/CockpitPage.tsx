@@ -445,9 +445,7 @@ export function CockpitPage() {
   const effectiveLastCompletedSnapshot = testConsoleLifecycle.effectiveLastCompletedSnapshot;
   const executedTestProfileId = currentTestConsoleSnapshot?.test_profile ?? effectiveLastCompletedSnapshot?.test_profile ?? 'none';
   const executedRunScope = currentTestConsoleSnapshot?.run_scope ?? effectiveLastCompletedSnapshot?.run_scope ?? 'none';
-  const testConsoleCanStop = testConsoleRunActive && Boolean(
-    currentTestConsoleSnapshot?.stop_available ?? currentTestConsoleSnapshot?.can_stop ?? testConsoleRunActive,
-  );
+  const testConsoleCanStop = testConsoleLifecycle.canStop;
   const testConsoleCurrentStep = currentTestConsoleSnapshot?.current_step ?? (currentTestConsoleSnapshot?.current_phase ? TEST_CONSOLE_PHASES.indexOf(currentTestConsoleSnapshot.current_phase) + 1 : null);
   const testConsoleTotalSteps = currentTestConsoleSnapshot?.total_steps ?? TEST_CONSOLE_PHASES.length;
   const testConsoleProgressPercent = testConsoleCurrentStep && testConsoleTotalSteps
@@ -463,7 +461,7 @@ export function CockpitPage() {
   const testConsoleCanExportLog = Boolean(
     testConsoleStatus
       && !testConsoleStatusError
-      && (testConsoleStatus.export_available || testConsoleRunActive || hasLastCompletedRun || Boolean(lastCompletedTestConsoleSnapshot)),
+      && (testConsoleLifecycle.canExport || Boolean(lastCompletedTestConsoleSnapshot)),
   );
   const llmShadowSummary = testConsoleStatus?.llm_shadow_summary ?? null;
   const latestLlmShadowSummary = (testConsoleStatus?.latest_llm_shadow_summary ?? llmShadowSummary) as LlmShadowSummary | null;

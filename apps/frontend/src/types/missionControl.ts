@@ -525,6 +525,10 @@ export type LlmAuxSignalSummary = {
 };
 
 export type TestConsoleStatusResponse = {
+  exists?: boolean;
+  status?: 'AVAILABLE' | 'NO_RUN_YET' | string | null;
+  reason_code?: string | null;
+  summary?: string | null;
   test_status: string;
   test_profile?: string;
   available_test_profiles?: Record<string, Record<string, boolean>>;
@@ -582,6 +586,7 @@ export type TestConsoleStatusResponse = {
 };
 
 export type TestConsoleExportLogFormat = 'text' | 'json';
+export type TestConsoleExportLogResponse = TestConsoleStatusResponse;
 
 export type AutonomousRuntimeSummary = {
   latest_runtime_run_id: number | null;

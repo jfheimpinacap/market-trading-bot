@@ -118,6 +118,10 @@ TEST_CONSOLE_MODULE_EXPORT_TEXT = 'include_export_text'
 TEST_CONSOLE_MODULE_EXPORT_JSON = 'include_export_json'
 
 _SERIALIZER_REQUIRED_TOP_LEVEL_KEYS = (
+    'exists',
+    'status',
+    'reason_code',
+    'summary',
     'test_status',
     'preset_name',
     'session_active',
@@ -432,6 +436,27 @@ def _annotate_runtime_flags(payload: dict[str, Any]) -> None:
         payload['can_stop_reason'] = 'STOP_UNAVAILABLE_IDLE'
 
 
+def _annotate_optional_status_contract(payload: dict[str, Any]) -> None:
+    has_started = bool(payload.get('started_at'))
+    is_terminal = bool(payload.get('is_terminal'))
+    has_active_run = bool(payload.get('has_active_run'))
+    has_last_completed_run = bool(payload.get('has_last_completed_run'))
+
+    payload['exists'] = has_started
+    payload['status'] = 'AVAILABLE' if has_started else 'NO_RUN_YET'
+    payload['reason_code'] = (
+        str(payload.get('last_reason_code') or '')
+        or ('TEST_CONSOLE_AVAILABLE' if has_started else 'TEST_CONSOLE_NOT_RUN')
+    )
+    if not payload.get('summary'):
+        if has_active_run:
+            payload['summary'] = 'Test console run is active.'
+        elif has_last_completed_run or is_terminal:
+            payload['summary'] = 'Test console run completed.'
+        else:
+            payload['summary'] = 'No test has been executed yet.'
+
+
 def _record_non_progress_refresh(payload: dict[str, Any], *, reason: str) -> None:
     now = timezone.now()
     payload['updated_at'] = now
@@ -476,6 +501,7 @@ def _augment_progress(status_payload: dict[str, Any]) -> dict[str, Any]:
     payload['export_available'] = export_available
     payload['is_stale'] = stale_seconds > 30 and payload['progress_state'] != 'running'
     _annotate_runtime_flags(payload)
+    _annotate_optional_status_contract(payload)
     return payload
 
 

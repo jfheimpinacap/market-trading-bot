@@ -91,6 +91,7 @@ import type {
   LivePaperValidationDigestResponse,
   LivePaperAutonomyFunnelResponse,
   TestConsoleExportLogFormat,
+  TestConsoleExportLogResponse,
   TestConsoleRunRequest,
   TestConsoleStatusResponse,
 } from '../types/missionControl';
@@ -280,7 +281,7 @@ export async function getTestConsoleExportLog(format: TestConsoleExportLogFormat
   if (!response.ok) {
     throw new Error(`Request failed with status ${response.status}`);
   }
-  return format === 'json' ? (await response.json()) as unknown : response.text();
+  return format === 'json' ? (await response.json()) as TestConsoleExportLogResponse : response.text();
 }
 
 export function getLivePaperAttentionAlertStatus() {
