@@ -355,6 +355,51 @@ def _is_terminal_test_status(test_status: str | None) -> bool:
     return str(test_status or '').upper() in _TERMINAL_TEST_STATUSES
 
 
+
+
+def _compute_real_progress_marker(payload: dict[str, Any]) -> tuple[Any, ...]:
+    step_results = payload.get('step_results') or []
+    return (
+        str(payload.get('test_status') or ''),
+        str(payload.get('current_phase') or ''),
+        int(payload.get('current_step') or _phase_index(payload.get('current_phase')) or 0),
+        len(step_results),
+        str(payload.get('last_event') or ''),
+        str(payload.get('last_reason_code') or ''),
+        str(payload.get('validation_status') or ''),
+        str(payload.get('trend_status') or ''),
+        str(payload.get('readiness_status') or ''),
+        str(payload.get('gate_status') or ''),
+        str(payload.get('extended_run_status') or ''),
+    )
+
+
+def _annotate_runtime_flags(payload: dict[str, Any]) -> None:
+    normalized_status = str(payload.get('test_status') or '').upper()
+    is_terminal = _is_terminal_test_status(normalized_status)
+    payload['is_terminal'] = is_terminal
+    payload['is_hung'] = normalized_status in {TEST_STATUS_TIMED_OUT, TEST_STATUS_HUNG}
+    payload['can_stop'] = bool(payload.get('started_at')) and not is_terminal
+
+
+def _record_non_progress_refresh(payload: dict[str, Any], *, reason: str) -> None:
+    now = timezone.now()
+    payload['updated_at'] = now
+    payload['last_non_progress_refresh_at'] = now
+    payload['hang_reason_classification'] = reason
+
+
+def _mark_real_progress(payload: dict[str, Any], *, event: str | None = None, reason_code: str | None = None) -> None:
+    now = timezone.now()
+    payload['updated_at'] = now
+    payload['last_progress_at'] = now
+    payload['last_real_progress_at'] = now
+    payload['hang_reason_classification'] = 'REAL_PROGRESS'
+    if event is not None:
+        payload['last_event'] = event
+    if reason_code is not None:
+        payload['last_reason_code'] = reason_code
+
 def _augment_progress(status_payload: dict[str, Any]) -> dict[str, Any]:
     payload = status_payload
     now = timezone.now()
@@ -380,6 +425,7 @@ def _augment_progress(status_payload: dict[str, Any]) -> dict[str, Any]:
     payload['elapsed_seconds'] = elapsed_seconds
     payload['export_available'] = export_available
     payload['is_stale'] = stale_seconds > 30 and payload['progress_state'] != 'running'
+    _annotate_runtime_flags(payload)
     return payload
 
 
@@ -391,7 +437,7 @@ def _apply_hang_timeout_if_needed(status_payload: dict[str, Any]) -> tuple[dict[
         return payload, False
 
     now = timezone.now()
-    last_progress_at = payload.get('last_progress_at') or payload.get('updated_at') or payload.get('timestamp')
+    last_progress_at = payload.get('last_real_progress_at') or payload.get('last_progress_at') or payload.get('updated_at') or payload.get('timestamp')
     if not last_progress_at:
         return payload, False
     phase_entered_at = payload.get('phase_entered_at')
@@ -411,6 +457,7 @@ def _apply_hang_timeout_if_needed(status_payload: dict[str, Any]) -> tuple[dict[
     payload['updated_at'] = now
     payload['hang_detected_at'] = now
     payload['hang_detection_reason'] = reason
+    payload['hang_reason_classification'] = f'NO_REAL_PROGRESS_IN_{current_phase or "unknown"}'
     payload['last_event'] = 'Test console marked TIMED_OUT due to no progress'
     payload['last_reason_code'] = reason
     payload['next_action_hint'] = 'Run timed out while waiting for progress. Review partial export and restart or stop explicitly.'
@@ -462,9 +509,12 @@ def _normalize_test_console_payload(status_payload: dict[str, Any] | None) -> di
     payload['reason_codes'] = list(payload.get('reason_codes') or [])
     payload['blocker_summary'] = list(payload.get('blocker_summary') or [])
     payload['last_progress_at'] = payload.get('last_progress_at')
+    payload['last_real_progress_at'] = payload.get('last_real_progress_at') or payload.get('last_progress_at')
+    payload['last_non_progress_refresh_at'] = payload.get('last_non_progress_refresh_at')
     payload['phase_entered_at'] = payload.get('phase_entered_at')
     payload['hang_detected_at'] = payload.get('hang_detected_at')
     payload['hang_detection_reason'] = str(payload.get('hang_detection_reason') or '')
+    payload['hang_reason_classification'] = str(payload.get('hang_reason_classification') or '')
     payload['stop_requested_at'] = payload.get('stop_requested_at')
     return payload
 
@@ -1855,6 +1905,9 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         'next_action_hint': 'Running test console pipeline',
         'last_event': 'Test console run started',
         'last_progress_at': now,
+        'last_real_progress_at': now,
+        'last_non_progress_refresh_at': None,
+        'hang_reason_classification': 'REAL_PROGRESS',
         'phase_entered_at': now,
     }
     _set_state(status=_augment_progress(payload))
@@ -1866,6 +1919,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['step_results'].append({'phase': 'bootstrap', 'status': 'ok', 'result': bootstrap_result})
         payload['updated_at'] = timezone.now()
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Bootstrap completed'
         payload['last_reason_code'] = str(bootstrap_result.get('bootstrap_action') or '')
         _set_state(status=_augment_progress(payload))
@@ -1876,6 +1930,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Scan phase started'
         _set_state(status=_augment_progress(payload))
         if profile_modules.get(TEST_CONSOLE_MODULE_SCAN, False):
@@ -1895,6 +1950,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
                 )
                 payload['updated_at'] = timezone.now()
                 payload['last_progress_at'] = payload['updated_at']
+                payload['last_real_progress_at'] = payload['updated_at']
                 payload['last_event'] = 'Scan completed'
                 if int(scan_run.signal_count or 0) <= 0:
                     payload['warnings'].append('scan produced zero signals')
@@ -1905,12 +1961,14 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
                 payload['step_results'].append({'phase': 'scan', 'status': 'warning', 'result': {'error': str(exc)}})
                 payload['updated_at'] = timezone.now()
                 payload['last_progress_at'] = payload['updated_at']
+                payload['last_real_progress_at'] = payload['updated_at']
                 payload['last_event'] = 'Scan warning'
                 payload['last_reason_code'] = 'SCAN_WARNING'
         else:
             payload['step_results'].append({'phase': 'scan', 'status': 'skipped', 'result': {'reason': 'profile_scan_disabled'}})
             payload['updated_at'] = timezone.now()
             payload['last_progress_at'] = payload['updated_at']
+            payload['last_real_progress_at'] = payload['updated_at']
             payload['last_event'] = 'Scan skipped by test profile'
         _set_state(status=_augment_progress(payload))
 
@@ -1918,6 +1976,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Handoff phase started'
         _set_state(status=_augment_progress(payload))
         shortlisted_count = 0
@@ -1930,6 +1989,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             payload['step_results'].append({'phase': 'pursuit_review', 'status': 'skipped', 'result': {'reason': 'profile_handoff_disabled'}})
             payload['updated_at'] = timezone.now()
             payload['last_progress_at'] = payload['updated_at']
+            payload['last_real_progress_at'] = payload['updated_at']
             payload['last_event'] = 'Handoff skipped by test profile'
             _set_state(status=_augment_progress(payload))
         elif shortlisted_count > 0:
@@ -1947,12 +2007,14 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
                 )
                 payload['updated_at'] = timezone.now()
                 payload['last_progress_at'] = payload['updated_at']
+                payload['last_real_progress_at'] = payload['updated_at']
                 payload['last_event'] = 'Consensus review completed'
             except Exception as exc:  # pragma: no cover
                 payload['warnings'].append(f'consensus review failed: {exc}')
                 payload['step_results'].append({'phase': 'consensus_review', 'status': 'warning', 'result': {'error': str(exc)}})
                 payload['updated_at'] = timezone.now()
                 payload['last_progress_at'] = payload['updated_at']
+                payload['last_real_progress_at'] = payload['updated_at']
                 payload['last_event'] = 'Consensus review warning'
                 payload['last_reason_code'] = 'CONSENSUS_WARNING'
             _set_state(status=_augment_progress(payload))
@@ -1975,18 +2037,21 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
                     )
                     payload['updated_at'] = timezone.now()
                     payload['last_progress_at'] = payload['updated_at']
+                    payload['last_real_progress_at'] = payload['updated_at']
                     payload['last_event'] = 'Pursuit review completed'
                 except Exception as exc:  # pragma: no cover
                     payload['warnings'].append(f'pursuit review failed: {exc}')
                     payload['step_results'].append({'phase': 'pursuit_review', 'status': 'warning', 'result': {'error': str(exc)}})
                     payload['updated_at'] = timezone.now()
                     payload['last_progress_at'] = payload['updated_at']
+                    payload['last_real_progress_at'] = payload['updated_at']
                     payload['last_event'] = 'Pursuit review warning'
                     payload['last_reason_code'] = 'PURSUIT_WARNING'
             else:
                 payload['step_results'].append({'phase': 'pursuit_review', 'status': 'skipped', 'result': {'reason': 'profile_prediction_disabled'}})
                 payload['updated_at'] = timezone.now()
                 payload['last_progress_at'] = payload['updated_at']
+                payload['last_real_progress_at'] = payload['updated_at']
                 payload['last_event'] = 'Pursuit skipped by test profile'
             _set_state(status=_augment_progress(payload))
         else:
@@ -1994,6 +2059,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             payload['step_results'].append({'phase': 'pursuit_review', 'status': 'skipped', 'result': {'reason': 'no_shortlisted_signals'}})
             payload['updated_at'] = timezone.now()
             payload['last_progress_at'] = payload['updated_at']
+            payload['last_real_progress_at'] = payload['updated_at']
             payload['last_event'] = 'Handoff skipped'
             payload['last_reason_code'] = 'NO_SHORTLISTED_SIGNALS'
             _set_state(status=_augment_progress(payload))
@@ -2002,6 +2068,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Execution trial started'
         _set_state(status=_augment_progress(payload))
         if profile_modules.get(TEST_CONSOLE_MODULE_EXECUTION, False):
@@ -2013,6 +2080,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             payload['step_results'].append({'phase': 'trial', 'status': 'skipped', 'result': {'reason': 'profile_execution_disabled'}})
         payload['updated_at'] = timezone.now()
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Execution trial completed'
         _set_state(status=_augment_progress(payload))
 
@@ -2020,6 +2088,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Risk validation started'
         _set_state(status=_augment_progress(payload))
         if profile_modules.get(TEST_CONSOLE_MODULE_RISK, False):
@@ -2031,6 +2100,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             payload['step_results'].append({'phase': 'validation', 'status': 'skipped', 'result': {'reason': 'profile_risk_disabled'}})
         payload['updated_at'] = timezone.now()
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Risk validation completed'
         _set_state(status=_augment_progress(payload))
 
@@ -2038,6 +2108,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Trend review started'
         _set_state(status=_augment_progress(payload))
         if profile_modules.get(TEST_CONSOLE_MODULE_RISK, False):
@@ -2051,6 +2122,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             payload['step_results'].append({'phase': 'trend', 'status': 'skipped', 'result': {'reason': 'profile_risk_disabled'}})
         payload['updated_at'] = timezone.now()
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Trend review completed'
         _set_state(status=_augment_progress(payload))
 
@@ -2058,6 +2130,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Gate evaluation started'
         _set_state(status=_augment_progress(payload))
         if profile_modules.get(TEST_CONSOLE_MODULE_RISK, False):
@@ -2073,6 +2146,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             payload['step_results'].append({'phase': 'gate', 'status': 'skipped', 'result': {'reason': 'profile_risk_disabled'}})
         payload['updated_at'] = timezone.now()
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Gate evaluation completed'
         _set_state(status=_augment_progress(payload))
 
@@ -2080,6 +2154,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Extended run phase started'
         _set_state(status=_augment_progress(payload))
         if not profile_modules.get(TEST_CONSOLE_MODULE_EXECUTION, False):
@@ -2098,12 +2173,14 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             payload['last_event'] = 'Extended run skipped (gate blocked)'
         payload['updated_at'] = timezone.now()
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         _set_state(status=_augment_progress(payload))
 
         payload['current_phase'] = 'finalize'
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Finalizing test console run'
         _set_state(status=_augment_progress(payload))
         _sync_operational_snapshot_for_profile(
@@ -2128,11 +2205,13 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['test_status'] = TEST_STATUS_FAILED
         payload['updated_at'] = timezone.now()
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Run failed'
     finally:
         payload['ended_at'] = timezone.now()
         payload['updated_at'] = timezone.now()
         payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
         overlay = payload.get('active_operational_overlay_summary') or {}
         payload['summary'] = (
             f"{payload['test_status']}: phase={payload.get('current_phase')} trial={payload.get('trial_status')} "
@@ -2199,6 +2278,7 @@ def stop_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         'next_action_hint': 'Run start again when ready for next V1 paper diagnostic cycle',
         'updated_at': timezone.now(),
         'last_progress_at': timezone.now(),
+        'last_real_progress_at': timezone.now(),
         'last_event': 'Stop requested by operator',
         'last_reason_code': warnings[0] if warnings else (actions[0] if actions else None),
         'stop_requested_at': timezone.now(),
@@ -2211,9 +2291,30 @@ def stop_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
 
 def get_test_console_status() -> dict[str, Any]:
     status_snapshot, _last_log, _history = _get_state_snapshot()
-    payload, mutated = _apply_hang_timeout_if_needed(status_snapshot)
+    payload = _normalize_test_console_payload(status_snapshot)
+
+    if str(payload.get('test_status') or '').upper() == TEST_STATUS_RUNNING:
+        before_marker = _compute_real_progress_marker(payload)
+        refreshed = deepcopy(payload)
+        try:
+            _sync_operational_snapshot_for_profile(
+                payload=refreshed,
+                preset_name=str(refreshed.get('preset_name') or PRESET_NAME),
+                profile_modules=resolve_test_profile(profile_id=refreshed.get('test_profile'))[1],
+            )
+            after_marker = _compute_real_progress_marker(refreshed)
+            if after_marker != before_marker:
+                _mark_real_progress(refreshed, event=str(refreshed.get('last_event') or 'Pipeline progress observed during status refresh'))
+            else:
+                _record_non_progress_refresh(refreshed, reason='NON_PROGRESS_REFRESH_STATUS_POLL')
+            payload = refreshed
+            _set_state(status=_augment_progress(_normalize_test_console_payload(payload)))
+        except Exception:
+            _record_non_progress_refresh(payload, reason='NON_PROGRESS_REFRESH_FAILED')
+
+    payload, mutated = _apply_hang_timeout_if_needed(payload)
+    payload = _augment_progress(_normalize_test_console_payload(payload))
     if mutated:
-        payload = _augment_progress(_normalize_test_console_payload(payload))
         _set_state(status=payload, log=payload, append_history=True)
     return finalize_test_console_payload_for_serializer(payload, source='get_test_console_status')
 

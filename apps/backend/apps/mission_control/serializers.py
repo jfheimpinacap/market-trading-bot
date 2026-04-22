@@ -638,15 +638,21 @@ class TestConsoleStatusSerializer(serializers.Serializer):
     progress_state = serializers.CharField(required=False)
     updated_at = serializers.DateTimeField(required=False, allow_null=True)
     last_progress_at = serializers.DateTimeField(required=False, allow_null=True)
+    last_real_progress_at = serializers.DateTimeField(required=False, allow_null=True)
+    last_non_progress_refresh_at = serializers.DateTimeField(required=False, allow_null=True)
     phase_entered_at = serializers.DateTimeField(required=False, allow_null=True)
     hang_detected_at = serializers.DateTimeField(required=False, allow_null=True)
     hang_detection_reason = serializers.CharField(required=False, allow_blank=True)
+    hang_reason_classification = serializers.CharField(required=False, allow_blank=True)
     stop_requested_at = serializers.DateTimeField(required=False, allow_null=True)
     elapsed_seconds = serializers.IntegerField(required=False, allow_null=True)
     last_event = serializers.CharField(required=False, allow_blank=True)
     last_reason_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     export_available = serializers.BooleanField(required=False)
     is_stale = serializers.BooleanField(required=False)
+    is_terminal = serializers.BooleanField(required=False)
+    is_hung = serializers.BooleanField(required=False)
+    can_stop = serializers.BooleanField(required=False)
 
 
 class TestConsoleExportLogQuerySerializer(serializers.Serializer):
