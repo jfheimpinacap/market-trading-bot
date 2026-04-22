@@ -407,6 +407,9 @@ export function CockpitPage() {
   const latestPaperSnapshot = paperPortfolioSnapshots[0] ?? null;
   const recentPaperTrades = useMemo(() => (paperPortfolioSummary?.recent_trades ?? []).slice(0, 5), [paperPortfolioSummary]);
   const livePaperTrialSnapshot = livePaperTrialResult ?? livePaperTrialStatusSnapshot;
+  const livePaperSmokeMissing = livePaperSmokeStatus?.exists === false || livePaperSmokeStatusNotFound;
+  const livePaperTrialMissing = livePaperTrialStatusSnapshot?.exists === false || livePaperTrialNotFound;
+  const extendedPaperRunMissing = extendedPaperRunStatus?.exists === false || extendedPaperRunNotFound;
   const livePaperTrialChecks = livePaperTrialResult?.checks ?? [];
   const livePaperTrialHistoryItems = livePaperTrialHistory?.items ?? [];
   const livePaperTrialRecentStatuses = livePaperTrialTrend?.recent_statuses ?? [];
@@ -418,10 +421,10 @@ export function CockpitPage() {
     : toneFromExtendedGateStatus(extendedPaperRunStatus?.gate_status ?? extendedRunGate?.gate_status);
   const extendedPaperRunSummary = extendedPaperRunLaunch?.launch_summary
     ?? extendedPaperRunStatus?.status_summary
-    ?? (extendedPaperRunNotFound ? 'No extended run yet.' : 'No extended run launch yet.');
+    ?? (extendedPaperRunMissing ? 'No extended run yet.' : 'No extended run launch yet.');
   const extendedPaperRunHint = extendedPaperRunLaunch?.next_action_hint
     ?? extendedPaperRunStatus?.next_action_hint
-    ?? (extendedPaperRunNotFound ? 'Start extended run to generate status.' : 'Refresh status to get latest hint.');
+    ?? (extendedPaperRunMissing ? 'Start extended run to generate status.' : 'Refresh status to get latest hint.');
   const availableTestProfiles = testConsoleStatus?.available_test_profiles ?? {};
   const selectedProfileModules = useMemo(
     () => availableTestProfiles[selectedTestProfileId] ?? availableTestProfiles.full_e2e ?? {},
@@ -624,7 +627,7 @@ export function CockpitPage() {
         setLivePaperSmokeStatus(null);
         return null;
       }
-      setLivePaperSmokeStatusNotFound(false);
+      setLivePaperSmokeStatusNotFound(payload.exists === false);
       setLivePaperSmokeStatus(payload);
       return payload;
     } catch (smokeStatusError) {
@@ -767,6 +770,10 @@ export function CockpitPage() {
       setLivePaperSmokeStatusNotFound(false);
       setLivePaperSmokeRunResult(payload);
       setLivePaperSmokeStatus({
+        exists: true,
+        status: 'AVAILABLE',
+        summary: payload.smoke_test_summary,
+        reason_code: 'SMOKE_TEST_AVAILABLE',
         preset_name: payload.preset_name,
         smoke_test_status: payload.smoke_test_status,
         executed_at: payload.executed_at,
@@ -797,8 +804,8 @@ export function CockpitPage() {
         return null;
       }
       setLivePaperTrialStatusSnapshot(payload);
-      setLivePaperTrialStatus(payload.trial_status);
-      setLivePaperTrialNotFound(false);
+      setLivePaperTrialNotFound(payload.exists === false);
+      setLivePaperTrialStatus(payload.exists === false ? 'IDLE' : payload.trial_status);
       return payload;
     } catch (statusError) {
       const statusState = resolveExpectedStatusError(statusError, {
@@ -884,7 +891,7 @@ export function CockpitPage() {
         setExtendedPaperRunStatus(null);
         return null;
       }
-      setExtendedPaperRunNotFound(false);
+      setExtendedPaperRunNotFound(payload.exists === false);
       setExtendedPaperRunStatus(payload);
       return payload;
     } catch (statusError) {
@@ -1727,8 +1734,8 @@ export function CockpitPage() {
                     <StatusBadge tone="ready">PAPER_ONLY</StatusBadge>
                   </div>
                   {livePaperTrialStatusLoading ? <p>Loading live paper trial status…</p> : null}
-                  {!livePaperTrialStatusLoading && livePaperTrialNotFound ? <p className="muted-text">No trial run yet.</p> : null}
-                  {!livePaperTrialStatusLoading && !livePaperTrialNotFound ? (
+                  {!livePaperTrialStatusLoading && livePaperTrialMissing ? <p className="muted-text">No trial run yet.</p> : null}
+                  {!livePaperTrialStatusLoading && !livePaperTrialMissing ? (
                     <ul className="key-value-list">
                       <li><span>Trial summary</span><strong>{livePaperTrialSnapshot?.trial_summary ?? 'n/a'}</strong></li>
                       <li><span>Next action hint</span><strong>{livePaperTrialSnapshot?.next_action_hint ?? 'n/a'}</strong></li>
@@ -1742,7 +1749,7 @@ export function CockpitPage() {
                       <li><span>Portfolio snapshot ready</span><strong>{livePaperTrialResult ? String(livePaperTrialResult.portfolio_snapshot_ready) : 'n/a'}</strong></li>
                     </ul>
                   ) : null}
-                  {!livePaperTrialStatusLoading && !livePaperTrialNotFound && livePaperTrialChecks.length > 0 ? (
+                  {!livePaperTrialStatusLoading && !livePaperTrialMissing && livePaperTrialChecks.length > 0 ? (
                     <div className="subsection">
                       <p className="section-label">Trial checks</p>
                       <ul className="key-value-list">
@@ -1893,7 +1900,7 @@ export function CockpitPage() {
                     </StatusBadge>
                   </div>
                   {extendedPaperRunStatusLoading ? <p>Loading extended paper run status…</p> : null}
-                  {!extendedPaperRunStatusLoading && extendedPaperRunNotFound ? <p className="muted-text">No extended run yet.</p> : null}
+                  {!extendedPaperRunStatusLoading && extendedPaperRunMissing ? <p className="muted-text">No extended run yet.</p> : null}
                   {!extendedPaperRunStatusLoading && extendedPaperRunStatusError ? <p className="warning-text">{extendedPaperRunStatusError}</p> : null}
                   <ul className="key-value-list">
                     <li><span>Launch summary</span><strong>{extendedPaperRunSummary}</strong></li>
@@ -2048,7 +2055,7 @@ export function CockpitPage() {
                   description="Short, repeatable V1 paper validation run (real market data read-only + fake money only)."
                 >
                   {livePaperSmokeStatusLoading ? <p>Loading smoke test status…</p> : null}
-                  {!livePaperSmokeStatusLoading && livePaperSmokeStatusNotFound ? (
+                  {!livePaperSmokeStatusLoading && livePaperSmokeMissing ? (
                     <p className="muted-text">No smoke test result yet.</p>
                   ) : null}
                   {!livePaperSmokeStatusLoading && livePaperSmokeStatusError ? (

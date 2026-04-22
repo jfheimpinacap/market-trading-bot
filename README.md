@@ -12,6 +12,12 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
 - **Precedent-aware decision support (new):** research, prediction, risk, signal-fusion, and postmortem now consume semantic precedents automatically in internal flows with conservative influence and explicit audit trails (`AgentPrecedentUse`).
 
+### Stabilization Batch 1 completed (2026-04-22)
+
+Se ejecutó el primer batch acotado de estabilización de Fase 1, priorizando lifecycle/contracts/polling con cambios conservadores y compatibles (sin features nuevas ni cambios de policy).  
+Detalle del batch: `docs/architecture/stabilization-batch-1-2026-04-22.md`.  
+Auditoría base de referencia: `docs/architecture/stabilization-audit-2026-04-22.md`.
+
 ### Test Console lifecycle hardening for real-progress hangs (Prompt 352)
 
 Mission Control Test Console lifecycle now distinguishes **real pipeline progress** from **refresh noise** so runs cannot stay `RUNNING` indefinitely due to minor snapshot churn.

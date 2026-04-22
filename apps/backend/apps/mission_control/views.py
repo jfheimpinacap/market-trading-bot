@@ -254,7 +254,13 @@ class PlainTextRenderer(BaseRenderer):
         return str(data).encode(self.charset)
 
 
-def _build_optional_status_empty_payload(*, summary: str, reason_code: str, preset_name: str | None = None) -> dict:
+def _build_optional_status_empty_payload(
+    *,
+    summary: str,
+    reason_code: str,
+    preset_name: str | None = None,
+    next_action_hint: str | None = None,
+) -> dict:
     payload = {
         'exists': False,
         'status': 'NO_RUN_YET',
@@ -263,6 +269,8 @@ def _build_optional_status_empty_payload(*, summary: str, reason_code: str, pres
     }
     if preset_name is not None:
         payload['preset_name'] = preset_name
+    if next_action_hint is not None:
+        payload['next_action_hint'] = next_action_hint
     return payload
 
 
@@ -515,6 +523,7 @@ class LivePaperSmokeTestStatusView(APIView):
             payload = _build_optional_status_empty_payload(
                 summary='No smoke test has been executed yet.',
                 reason_code='SMOKE_TEST_NOT_RUN',
+                next_action_hint='Run /api/mission-control/run-live-paper-smoke-test/ to generate status.',
             )
             payload.update(
                 {
@@ -524,7 +533,6 @@ class LivePaperSmokeTestStatusView(APIView):
                     'validation_status_after': None,
                     'heartbeat_passes_completed': None,
                     'smoke_test_summary': payload['summary'],
-                    'next_action_hint': 'Run /api/mission-control/run-live-paper-smoke-test/ to generate status.',
                 }
             )
             return Response(LivePaperSmokeTestStatusSerializer(payload).data, status=status.HTTP_200_OK)
@@ -564,6 +572,7 @@ class LivePaperTrialRunStatusView(APIView):
             payload = _build_optional_status_empty_payload(
                 summary='No live paper trial run has been executed yet.',
                 reason_code='TRIAL_RUN_NOT_RUN',
+                next_action_hint='Run /api/mission-control/run-live-paper-trial/ to generate status.',
             )
             payload.update(
                 {
@@ -574,7 +583,6 @@ class LivePaperTrialRunStatusView(APIView):
                     'validation_status_after': None,
                     'heartbeat_passes_completed': None,
                     'trial_summary': payload['summary'],
-                    'next_action_hint': 'Run /api/mission-control/run-live-paper-trial/ to generate status.',
                 }
             )
             return Response(LivePaperTrialRunStatusSerializer(payload).data, status=status.HTTP_200_OK)
