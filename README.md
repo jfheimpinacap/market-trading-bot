@@ -18,6 +18,12 @@ Se ejecutó el primer batch acotado de estabilización de Fase 1, priorizando li
 Detalle del batch: `docs/architecture/stabilization-batch-1-2026-04-22.md`.  
 Auditoría base de referencia: `docs/architecture/stabilization-audit-2026-04-22.md`.
 
+### Stabilization Batch 2 completed (2026-04-22)
+
+Se ejecutó Batch 2 de estabilización media sobre lifecycle/contracts de Mission Control + Test Console + Cockpit, enfocado en separar de forma canónica current run vs last completed run y reducir shaping redundante de status sin introducir features nuevas.  
+Detalle del batch: `docs/architecture/stabilization-batch-2-2026-04-22.md`.  
+Referencias enlazadas: auditoría base `docs/architecture/stabilization-audit-2026-04-22.md` + Batch 1 `docs/architecture/stabilization-batch-1-2026-04-22.md`.
+
 ### Test Console lifecycle hardening for real-progress hangs (Prompt 352)
 
 Mission Control Test Console lifecycle now distinguishes **real pipeline progress** from **refresh noise** so runs cannot stay `RUNNING` indefinitely due to minor snapshot churn.

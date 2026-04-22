@@ -703,7 +703,7 @@ class TestConsoleStatusView(APIView):
     def get(self, request, *args, **kwargs):
         payload = get_test_console_status()
         return Response(
-            TestConsoleStatusSerializer(finalize_test_console_payload_for_serializer(payload, source='view:status')).data,
+            TestConsoleStatusSerializer(payload).data,
             status=status.HTTP_200_OK,
         )
 

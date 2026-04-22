@@ -8,6 +8,7 @@ import { useSystemHealth } from '../app/SystemHealthProvider';
 import { PROJECT_NAME } from '../lib/config';
 import { getViewCache, setViewCache } from '../lib/viewCache';
 import { navigate } from '../lib/router';
+import { resolveTestConsoleLifecycleState } from '../lib/testConsoleLifecycle';
 import { getTestConsoleStatus } from '../services/missionControl';
 import { getPaperSnapshots, getPaperSummary } from '../services/paperTrading';
 import type { LlmAuxSignalSummary, TestConsoleStatusResponse } from '../types/missionControl';
@@ -55,13 +56,14 @@ const statusTone = (status: string | null | undefined): 'ready' | 'pending' | 'o
 
 const getExecutivePhrase = (status: TestConsoleStatusResponse | null) => {
   if (!status) return 'Sin snapshot operativo reciente';
+  const lifecycle = resolveTestConsoleLifecycleState(status, null);
   if (status.gate_status === 'BLOCK' || status.validation_status === 'BLOCKED') {
     return 'Bloqueado: requiere revisión';
   }
   if (status.attention_mode === 'REVIEW_NOW' || status.attention_mode === 'REVIEW_SOON') {
     return 'Cautela: revisión sugerida';
   }
-  if (status.test_status?.toUpperCase() === 'RUNNING') {
+  if (lifecycle.runActive) {
     return 'Operativo: monitoreo activo';
   }
   return 'Operativo estable';
