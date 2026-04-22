@@ -7712,6 +7712,76 @@ class TestConsoleApiTests(TestCase):
         status_payload = get_test_console_status()
         self.assertFalse(status_payload.get('is_terminal'))
         self.assertTrue(status_payload.get('can_stop'))
+        self.assertTrue(status_payload.get('stop_available'))
+        self.assertEqual(status_payload.get('can_stop_reason'), 'STOP_ALLOWED_NON_TERMINAL')
+
+    @patch('apps.mission_control.services.test_console._set_state')
+    @patch('apps.mission_control.services.test_console._sync_operational_snapshot_for_profile')
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_get_test_console_status_reused_session_validation_refresh_noise_times_out(
+        self,
+        mock_state_snapshot,
+        mock_sync,
+        _mock_set_state,
+    ):
+        from apps.mission_control.services.test_console import get_test_console_status
+
+        stale_time = timezone.now() - timedelta(minutes=10)
+        payload = self._status_payload()
+        payload.update(
+            {
+                'test_status': 'RUNNING',
+                'bootstrap_action': 'REUSED_EXISTING_SESSION',
+                'last_reason_code': 'REUSED_EXISTING_SESSION',
+                'current_phase': 'validation',
+                'started_at': stale_time,
+                'updated_at': stale_time,
+                'last_progress_at': stale_time,
+                'last_real_progress_at': stale_time,
+                'phase_entered_at': stale_time,
+                'ended_at': None,
+            }
+        )
+        mock_state_snapshot.return_value = (payload, payload, [])
+        mock_sync.side_effect = lambda **kwargs: kwargs['payload'].update({'validation_status': 'READY', 'last_event': 'Risk validation started'})
+
+        status_payload = get_test_console_status()
+        self.assertEqual(status_payload['test_status'], 'TIMED_OUT')
+        self.assertEqual(status_payload.get('hang_reason_classification'), 'NO_REAL_PROGRESS_IN_validation')
+
+    @patch('apps.mission_control.services.test_console._set_state')
+    @patch('apps.mission_control.services.test_console._sync_operational_snapshot_for_profile')
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_get_test_console_status_reused_session_gate_refresh_noise_times_out(
+        self,
+        mock_state_snapshot,
+        mock_sync,
+        _mock_set_state,
+    ):
+        from apps.mission_control.services.test_console import get_test_console_status
+
+        stale_time = timezone.now() - timedelta(minutes=10)
+        payload = self._status_payload()
+        payload.update(
+            {
+                'test_status': 'RUNNING',
+                'bootstrap_action': 'STARTED_EXISTING_SAFE_SESSION',
+                'last_reason_code': 'STARTED_EXISTING_SAFE_SESSION',
+                'current_phase': 'gate',
+                'started_at': stale_time,
+                'updated_at': stale_time,
+                'last_progress_at': stale_time,
+                'last_real_progress_at': stale_time,
+                'phase_entered_at': stale_time,
+                'ended_at': None,
+            }
+        )
+        mock_state_snapshot.return_value = (payload, payload, [])
+        mock_sync.side_effect = lambda **kwargs: kwargs['payload'].update({'gate_status': 'ALLOW_WITH_CAUTION', 'last_event': 'Gate evaluation started'})
+
+        status_payload = get_test_console_status()
+        self.assertEqual(status_payload['test_status'], 'TIMED_OUT')
+        self.assertEqual(status_payload.get('hang_reason_classification'), 'NO_REAL_PROGRESS_IN_gate')
 
     @patch('apps.mission_control.services.test_console.get_live_paper_bootstrap_status')
     @patch('apps.mission_control.services.test_console._find_active_preset_session')
@@ -7741,6 +7811,8 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(stopped_payload['test_status'], 'STOPPED')
         self.assertIn('force-marked STOPPED', stopped_payload['summary'])
         self.assertIsNotNone(stopped_payload.get('stop_requested_at'))
+        self.assertIsNotNone(stopped_payload.get('ended_at'))
+        self.assertFalse(stopped_payload.get('stop_available'))
 
     @patch('apps.mission_control.views.export_test_console_log')
     def test_export_log_text_works(self, mock_export):

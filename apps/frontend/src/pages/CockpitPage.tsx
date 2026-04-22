@@ -441,7 +441,7 @@ export function CockpitPage() {
   const executedRunScope = testConsoleStatus?.run_scope ?? selectedProfileRunScope;
   const normalizedTestConsoleStatus = (testConsoleStatus?.test_status ?? '').toUpperCase();
   const testConsoleRunActive = Boolean(testConsoleStatus?.test_status) && !TEST_CONSOLE_TERMINAL_STATUSES.has(normalizedTestConsoleStatus);
-  const testConsoleCanStop = testConsoleStatus?.can_stop ?? testConsoleRunActive;
+  const testConsoleCanStop = testConsoleStatus?.stop_available ?? testConsoleStatus?.can_stop ?? testConsoleRunActive;
   const testConsoleCurrentStep = testConsoleStatus?.current_step ?? (testConsoleStatus?.current_phase ? TEST_CONSOLE_PHASES.indexOf(testConsoleStatus.current_phase) + 1 : null);
   const testConsoleTotalSteps = testConsoleStatus?.total_steps ?? TEST_CONSOLE_PHASES.length;
   const testConsoleProgressPercent = testConsoleCurrentStep && testConsoleTotalSteps
@@ -497,6 +497,15 @@ export function CockpitPage() {
     setTestConsoleStatusError(null);
     try {
       const payload = await getTestConsoleStatus();
+      console.debug('[test-console] status payload', {
+        test_status: payload.test_status,
+        current_phase: payload.current_phase,
+        can_stop: payload.can_stop,
+        stop_available: payload.stop_available,
+        can_stop_reason: payload.can_stop_reason,
+        is_terminal: payload.is_terminal,
+        last_event: payload.last_event,
+      });
       setTestConsoleStatus(payload);
       return payload;
     } catch {
@@ -540,10 +549,23 @@ export function CockpitPage() {
   }, [exportTestConsoleLog, loadTestConsoleStatus, selectedTestProfileId]);
 
   const stopTestConsoleFromCockpit = useCallback(async () => {
+    console.debug('[test-console] stop click', {
+      can_stop: testConsoleStatus?.can_stop,
+      stop_available: testConsoleStatus?.stop_available,
+      can_stop_reason: testConsoleStatus?.can_stop_reason,
+      test_status: testConsoleStatus?.test_status,
+      current_phase: testConsoleStatus?.current_phase,
+    });
     setTestConsoleStopLoading(true);
     setTestConsoleStatusError(null);
     try {
+      console.debug('[test-console] sending POST /api/mission-control/test-console/stop/');
       const payload = await stopTestConsoleRun();
+      console.debug('[test-console] stop response', {
+        test_status: payload.test_status,
+        ended_at: payload.ended_at,
+        is_terminal: payload.is_terminal,
+      });
       setTestConsoleStatus(payload);
       await loadTestConsoleStatus();
     } catch {
@@ -551,7 +573,7 @@ export function CockpitPage() {
     } finally {
       setTestConsoleStopLoading(false);
     }
-  }, [loadTestConsoleStatus]);
+  }, [loadTestConsoleStatus, testConsoleStatus?.can_stop, testConsoleStatus?.can_stop_reason, testConsoleStatus?.current_phase, testConsoleStatus?.stop_available, testConsoleStatus?.test_status]);
 
   const copyTestConsoleLog = useCallback(async () => {
     try {
@@ -1442,6 +1464,7 @@ export function CockpitPage() {
                       <li><span>Portfolio summary</span><strong>{testConsolePortfolioSummary}</strong></li>
                       <li><span>Last event</span><strong>{testConsoleStatus.last_event ?? 'n/a'}</strong></li>
                       <li><span>Last reason code</span><strong>{testConsoleStatus.last_reason_code ?? 'n/a'}</strong></li>
+                      <li><span>Stop availability</span><strong>{testConsoleCanStop ? 'available' : 'not available'}{testConsoleStatus.can_stop_reason ? ` · ${testConsoleStatus.can_stop_reason}` : ''}</strong></li>
                       <li><span>Next action hint</span><strong>{testConsoleStatus.next_action_hint ?? 'n/a'}</strong></li>
                       {testConsoleStatus.blocker_summary ? (
                         <li><span>Blocker summary</span><strong>{testConsoleStatus.blocker_summary}</strong></li>

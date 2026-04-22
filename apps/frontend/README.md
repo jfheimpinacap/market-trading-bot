@@ -2767,6 +2767,19 @@ Esta integración es solo lectura, paper-only, y complementa la investigación e
 
 The compact tuning investigation view in `/cockpit` now includes a small **Recent Timeline** strip that reuses `GET /api/runtime-governor/tuning-scope-timeline/<source_scope>/` (default compact limit, `Show only non-stable`, and `Show more timeline`). The complete investigation workflow remains available at `/runtime?tuningScope=<scope>&investigate=1`. This is a read-only/paper-only observability addition; no operational behavior was changed.
 
+## Test Console stop/hang wiring hardening (Prompt 353)
+
+- Cockpit now consumes canonical stop fields from Test Console status:
+  - `stop_available`
+  - `can_stop_reason`
+  while keeping backward compatibility with `can_stop`.
+- `Stop test` enablement is now tied to those canonical fields so non-terminal stalled runs remain stoppable in real usage.
+- Temporary instrumentation logs were added in Cockpit (`console.debug`) to verify end-to-end behavior in real runs:
+  - payload status reception (`can_stop`/`stop_available`/terminal flags),
+  - stop-click handler execution,
+  - actual `POST /api/mission-control/test-console/stop/` dispatch,
+  - stop response reception.
+
 
 ## Runtime manual tuning review UX (new)
 

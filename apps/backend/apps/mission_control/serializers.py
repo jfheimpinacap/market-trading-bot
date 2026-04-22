@@ -653,6 +653,8 @@ class TestConsoleStatusSerializer(serializers.Serializer):
     is_terminal = serializers.BooleanField(required=False)
     is_hung = serializers.BooleanField(required=False)
     can_stop = serializers.BooleanField(required=False)
+    stop_available = serializers.BooleanField(required=False)
+    can_stop_reason = serializers.CharField(required=False, allow_blank=True)
 
 
 class TestConsoleExportLogQuerySerializer(serializers.Serializer):
