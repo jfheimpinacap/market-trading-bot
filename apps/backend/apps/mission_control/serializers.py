@@ -561,6 +561,9 @@ class TestConsoleStopRequestSerializer(serializers.Serializer):
 
 
 class TestConsoleStatusSerializer(serializers.Serializer):
+    exists = serializers.BooleanField(required=False)
+    status = serializers.CharField(required=False)
+    reason_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     test_status = serializers.ChoiceField(choices=['IDLE', 'RUNNING', 'STOPPED', 'COMPLETED', 'COMPLETED_WITH_WARNINGS', 'BLOCKED', 'FAILED', 'TIMED_OUT', 'HUNG'])
     test_profile = serializers.CharField(required=False)
     available_test_profiles = serializers.DictField(required=False)

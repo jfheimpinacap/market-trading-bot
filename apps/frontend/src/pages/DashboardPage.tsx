@@ -8,7 +8,7 @@ import { useSystemHealth } from '../app/SystemHealthProvider';
 import { PROJECT_NAME } from '../lib/config';
 import { getViewCache, setViewCache } from '../lib/viewCache';
 import { navigate } from '../lib/router';
-import { resolveTestConsoleLifecycleState } from '../lib/testConsoleLifecycle';
+import { resolveTestConsoleLifecycleState, type TestConsoleLifecycleState } from '../lib/testConsoleLifecycle';
 import { getTestConsoleStatus } from '../services/missionControl';
 import { getPaperSnapshots, getPaperSummary } from '../services/paperTrading';
 import type { LlmAuxSignalSummary, TestConsoleStatusResponse } from '../types/missionControl';
@@ -54,9 +54,8 @@ const statusTone = (status: string | null | undefined): 'ready' | 'pending' | 'o
   return 'neutral';
 };
 
-const getExecutivePhrase = (status: TestConsoleStatusResponse | null) => {
-  if (!status) return 'Sin snapshot operativo reciente';
-  const lifecycle = resolveTestConsoleLifecycleState(status, null);
+const getExecutivePhrase = (status: TestConsoleStatusResponse | null, lifecycle: TestConsoleLifecycleState | null) => {
+  if (!status || !lifecycle?.exists) return 'Sin snapshot operativo reciente';
   if (status.gate_status === 'BLOCK' || status.validation_status === 'BLOCKED') {
     return 'Bloqueado: requiere revisión';
   }
@@ -183,19 +182,27 @@ export function DashboardPage() {
 
   const executiveTone = statusTone(testConsoleStatus?.validation_status ?? health.backendStatus);
   const llmHint = testConsoleStatus?.llm_aux_signal_summary ?? null;
+  const testConsoleLifecycle = useMemo(
+    () => resolveTestConsoleLifecycleState(testConsoleStatus, null),
+    [testConsoleStatus],
+  );
   const hasPaperData = paperLoaded || Boolean(paperSummary) || paperSnapshots.length > 0;
   const hasStatusData = statusLoaded || Boolean(testConsoleStatus);
 
   const quickState = useMemo(
     () => [
-      { label: 'Bot', value: testConsoleStatus?.test_status ?? 'Sin dato', tone: statusTone(testConsoleStatus?.test_status) },
+      {
+        label: 'Bot',
+        value: testConsoleLifecycle.contractStatus === 'NO_RUN_YET' ? 'NO_RUN_YET' : (testConsoleStatus?.test_status ?? 'Sin dato'),
+        tone: statusTone(testConsoleLifecycle.contractStatus === 'NO_RUN_YET' ? 'UNKNOWN' : testConsoleStatus?.test_status),
+      },
       { label: 'Funnel', value: testConsoleStatus?.funnel_status ?? 'Sin dato', tone: statusTone(testConsoleStatus?.funnel_status) },
       { label: 'Validation', value: testConsoleStatus?.validation_status ?? 'Sin dato', tone: statusTone(testConsoleStatus?.validation_status) },
       { label: 'Gate', value: testConsoleStatus?.gate_status ?? 'Sin dato', tone: statusTone(testConsoleStatus?.gate_status) },
       { label: 'Trial', value: testConsoleStatus?.trial_status ?? 'Sin dato', tone: statusTone(testConsoleStatus?.trial_status) },
       { label: 'Attention', value: testConsoleStatus?.attention_mode ?? 'Sin dato', tone: statusTone(testConsoleStatus?.attention_mode) },
     ],
-    [testConsoleStatus],
+    [testConsoleLifecycle.contractStatus, testConsoleStatus],
   );
 
   const kpis = useMemo(
@@ -231,7 +238,7 @@ export function DashboardPage() {
         title={`${PROJECT_NAME} · Dashboard`}
         actions={(
           <div className="button-row">
-            <StatusBadge tone={executiveTone}>{getExecutivePhrase(testConsoleStatus)}</StatusBadge>
+            <StatusBadge tone={executiveTone}>{getExecutivePhrase(testConsoleStatus, testConsoleLifecycle)}</StatusBadge>
             <details className="dashboard-inline-actions">
               <summary>Más</summary>
               <div className="button-row">
@@ -274,7 +281,7 @@ export function DashboardPage() {
               <p className="muted-text">Último evento: {testConsoleStatus?.last_event ?? 'n/a'}</p>
               <p className="muted-text">Hora último trade: {latestTrade ? formatTimestamp(latestTrade.executed_at) : 'n/a'}</p>
               <p className="muted-text">{testConsoleStatus?.next_action_hint ?? 'Sin recomendaciones inmediatas.'}</p>
-              {testConsoleStatus?.last_reason_code ? <p className="muted-text">Código: {testConsoleStatus.last_reason_code}</p> : null}
+              {(testConsoleStatus?.reason_code ?? testConsoleStatus?.last_reason_code) ? <p className="muted-text">Código: {testConsoleStatus?.reason_code ?? testConsoleStatus?.last_reason_code}</p> : null}
             </details>
           </DataStateWrapper>
         </SectionCard>

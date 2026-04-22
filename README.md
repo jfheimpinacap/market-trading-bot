@@ -29,6 +29,12 @@ Referencias enlazadas: auditoría base `docs/architecture/stabilization-audit-20
 Se ejecutó una validación de estabilización (sin features nuevas ni refactor masivo) para medir reducción real de síntomas en contratos/lifecycle entre Mission Control, Cockpit, Test Console y Dashboard.  
 Reporte corto de hallazgos residuales y foco recomendado para Batch 3: `docs/architecture/stabilization-validation-after-batch-2-2026-04-22.md`.
 
+### Stabilization Batch 3 completed (2026-04-22)
+
+Se ejecutó Batch 3 acotado para alinear tipado y contrato canónico end-to-end (`status/export/snapshot`) entre Mission Control/Test Console/Cockpit/Dashboard, sin features nuevas y sin refactor masivo.  
+Detalle del batch: `docs/architecture/stabilization-batch-3-2026-04-22.md`.  
+Referencias enlazadas: auditoría base `docs/architecture/stabilization-audit-2026-04-22.md` + Batch 1 `docs/architecture/stabilization-batch-1-2026-04-22.md` + Batch 2 `docs/architecture/stabilization-batch-2-2026-04-22.md` + validación posterior `docs/architecture/stabilization-validation-after-batch-2-2026-04-22.md`.
+
 ### Test Console lifecycle hardening for real-progress hangs (Prompt 352)
 
 Mission Control Test Console lifecycle now distinguishes **real pipeline progress** from **refresh noise** so runs cannot stay `RUNNING` indefinitely due to minor snapshot churn.
