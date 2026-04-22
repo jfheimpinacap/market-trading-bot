@@ -7886,6 +7886,39 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('paper_trade_dispatch_summary:', text_payload)
         self.assertIn('paper_trade_dispatch_reason_codes=', text_payload)
         self.assertIn('paper_trade_dispatch_examples=', text_payload)
+
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_export_log_prefers_current_status_when_run_id_differs_from_last_log(self, mock_state_snapshot):
+        from apps.mission_control.services.test_console import export_test_console_log
+
+        now = timezone.now()
+        active_status_payload = self._status_payload()
+        active_status_payload.update(
+            {
+                'test_status': 'RUNNING',
+                'ended_at': None,
+                'current_phase': 'validation',
+                'current_run_id': 'run-current',
+                'last_run_id': 'run-last',
+                'updated_at': now,
+            }
+        )
+        stale_log_payload = self._status_payload()
+        stale_log_payload.update(
+            {
+                'test_status': 'COMPLETED',
+                'current_run_id': None,
+                'last_run_id': 'run-old',
+                'updated_at': now - timedelta(minutes=5),
+            }
+        )
+        mock_state_snapshot.return_value = (active_status_payload, stale_log_payload, [stale_log_payload])
+
+        json_payload = export_test_console_log(fmt='json')
+        text_payload = export_test_console_log(fmt='text')
+        self.assertEqual(json_payload.get('test_status'), 'RUNNING')
+        self.assertEqual(json_payload.get('current_run_id'), 'run-current')
+        self.assertEqual(json_payload.get('last_run_id'), 'run-last')
         self.assertIn('paper_trade_final_summary:', text_payload)
         self.assertIn('final_trade_reason_codes=', text_payload)
         self.assertIn('paper_trade_final_examples=', text_payload)

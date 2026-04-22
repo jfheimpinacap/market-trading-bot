@@ -2409,8 +2409,24 @@ def get_test_console_status() -> dict[str, Any]:
 
 
 def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
-    _status, last_log, history = _get_state_snapshot()
-    payload = last_log or {
+    status_snapshot, last_log, history = _get_state_snapshot()
+    normalized_status = _normalize_test_console_payload(status_snapshot)
+    normalized_last_log = _normalize_test_console_payload(last_log) if last_log else None
+
+    payload = normalized_last_log
+    if payload and normalized_status:
+        status_run_id = str(normalized_status.get('current_run_id') or normalized_status.get('last_run_id') or '')
+        log_run_id = str(payload.get('current_run_id') or payload.get('last_run_id') or '')
+        status_updated_at = normalized_status.get('updated_at') or normalized_status.get('timestamp')
+        log_updated_at = payload.get('updated_at') or payload.get('timestamp')
+        status_is_running = str(normalized_status.get('test_status') or '').upper() == TEST_STATUS_RUNNING
+        if (status_run_id and status_run_id != log_run_id) or (
+            status_is_running and status_updated_at and log_updated_at and status_updated_at > log_updated_at
+        ):
+            payload = normalized_status
+
+    if payload is None:
+        payload = normalized_status if normalized_status.get('started_at') else {
         'timestamp': timezone.now(),
         'test_status': TEST_STATUS_IDLE,
         'summary': 'No test has been executed yet.',

@@ -439,6 +439,14 @@ export function CockpitPage() {
     () => resolveTestConsoleLifecycleState(testConsoleStatus, lastCompletedTestConsoleSnapshot),
     [lastCompletedTestConsoleSnapshot, testConsoleStatus],
   );
+  const testConsolePrimaryStatusLabel = testConsoleLifecycle.contractStatus === 'NO_RUN_YET'
+    ? 'NO_RUN_YET'
+    : (testConsoleStatus?.test_status ?? 'UNKNOWN');
+  const testConsolePrimaryStatusTone = toneFromStatus(
+    testConsoleLifecycle.contractStatus === 'NO_RUN_YET'
+      ? 'UNKNOWN'
+      : testConsoleStatus?.test_status,
+  );
   const testConsoleRunActive = testConsoleLifecycle.runActive;
   const hasLastCompletedRun = testConsoleLifecycle.hasLastCompletedRun;
   const currentTestConsoleSnapshot = testConsoleLifecycle.currentSnapshot;
@@ -1439,7 +1447,7 @@ export function CockpitPage() {
                   description="Compact supervised runner for V1 paper validation: start, stop, refresh status, export/copy logs. This does not enable live trading."
                 >
                   <div className="button-row">
-                    <StatusBadge tone={toneFromStatus(testConsoleStatus?.test_status)}>{testConsoleStatus?.test_status ?? 'UNKNOWN'}</StatusBadge>
+                    <StatusBadge tone={testConsolePrimaryStatusTone}>{testConsolePrimaryStatusLabel}</StatusBadge>
                     <StatusBadge tone={toneFromStatus(testConsoleStatus?.progress_state)}>{testConsoleStatus?.progress_state ?? 'idle'}</StatusBadge>
                     <StatusBadge tone={toneFromStatus(currentTestConsoleSnapshot?.validation_status)}>{currentTestConsoleSnapshot?.validation_status ?? 'n/a'}</StatusBadge>
                     <StatusBadge tone={toneFromStatus(currentTestConsoleSnapshot?.trial_status)}>{currentTestConsoleSnapshot?.trial_status ?? 'n/a'}</StatusBadge>
