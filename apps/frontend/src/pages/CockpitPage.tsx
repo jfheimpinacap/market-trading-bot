@@ -1167,8 +1167,11 @@ export function CockpitPage() {
   usePollingTicker(
     'cockpit:live-paper-funnel',
     async () => {
-      await Promise.all([loadLivePaperAutonomyFunnel(), loadLivePaperTrialStatus()]);
-      return { idle: livePaperTrialStatus !== 'RUNNING' };
+      const [, trialStatusPayload] = await Promise.all([loadLivePaperAutonomyFunnel(), loadLivePaperTrialStatus()]);
+      const nextTrialStatus = trialStatusPayload
+        ? (trialStatusPayload.exists === false ? 'IDLE' : trialStatusPayload.trial_status)
+        : livePaperTrialStatus;
+      return { idle: nextTrialStatus !== 'RUNNING' };
     },
     10000,
     livePaperDeferredEnabled,
