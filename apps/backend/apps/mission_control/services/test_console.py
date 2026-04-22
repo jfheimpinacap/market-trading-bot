@@ -92,7 +92,16 @@ _TERMINAL_TEST_STATUSES = {
 }
 _HANG_TIMEOUT_SECONDS = 20 * 60
 _PHASE_HANG_TIMEOUT_SECONDS = {
+    'validation': 15 * 60,
     'gate': 15 * 60,
+}
+_REUSED_SESSION_STRICT_TIMEOUT_SECONDS = {
+    'validation': 8 * 60,
+    'gate': 8 * 60,
+}
+_REUSED_SESSION_REASON_CODES = {
+    'REUSED_EXISTING_SESSION',
+    'STARTED_EXISTING_SAFE_SESSION',
 }
 TEST_PROFILE_FULL_E2E = 'full_e2e'
 TEST_PROFILE_SCOPE_THROTTLE_DIAGNOSTICS = 'scope_throttle_diagnostics'
@@ -374,12 +383,47 @@ def _compute_real_progress_marker(payload: dict[str, Any]) -> tuple[Any, ...]:
     )
 
 
+def _compute_strict_progress_marker(payload: dict[str, Any]) -> tuple[Any, ...]:
+    step_results = payload.get('step_results') or []
+    return (
+        str(payload.get('test_status') or ''),
+        str(payload.get('current_phase') or ''),
+        int(payload.get('current_step') or _phase_index(payload.get('current_phase')) or 0),
+        len(step_results),
+        bool(payload.get('ended_at')),
+    )
+
+
+def _is_reused_existing_session_path(payload: dict[str, Any]) -> bool:
+    bootstrap_action = str(payload.get('bootstrap_action') or '')
+    last_reason_code = str(payload.get('last_reason_code') or '')
+    reason_codes = {str(code) for code in (payload.get('reason_codes') or [])}
+    return (
+        bootstrap_action in _REUSED_SESSION_REASON_CODES
+        or last_reason_code in _REUSED_SESSION_REASON_CODES
+        or bool(reason_codes.intersection(_REUSED_SESSION_REASON_CODES))
+    )
+
+
+def _uses_strict_reused_session_hang_rules(payload: dict[str, Any]) -> bool:
+    current_phase = str(payload.get('current_phase') or '')
+    return current_phase in {'validation', 'gate'} and _is_reused_existing_session_path(payload)
+
+
 def _annotate_runtime_flags(payload: dict[str, Any]) -> None:
     normalized_status = str(payload.get('test_status') or '').upper()
     is_terminal = _is_terminal_test_status(normalized_status)
+    stop_available = (normalized_status != TEST_STATUS_IDLE) and not is_terminal
     payload['is_terminal'] = is_terminal
     payload['is_hung'] = normalized_status in {TEST_STATUS_TIMED_OUT, TEST_STATUS_HUNG}
-    payload['can_stop'] = bool(payload.get('started_at')) and not is_terminal
+    payload['can_stop'] = stop_available
+    payload['stop_available'] = stop_available
+    if stop_available:
+        payload['can_stop_reason'] = 'STOP_ALLOWED_NON_TERMINAL'
+    elif is_terminal:
+        payload['can_stop_reason'] = f'STOP_UNAVAILABLE_TERMINAL_{normalized_status or "UNKNOWN"}'
+    else:
+        payload['can_stop_reason'] = 'STOP_UNAVAILABLE_IDLE'
 
 
 def _record_non_progress_refresh(payload: dict[str, Any], *, reason: str) -> None:
@@ -443,6 +487,8 @@ def _apply_hang_timeout_if_needed(status_payload: dict[str, Any]) -> tuple[dict[
     phase_entered_at = payload.get('phase_entered_at')
     current_phase = str(payload.get('current_phase') or '')
     timeout_seconds = int(_PHASE_HANG_TIMEOUT_SECONDS.get(current_phase, _HANG_TIMEOUT_SECONDS))
+    if _uses_strict_reused_session_hang_rules(payload):
+        timeout_seconds = int(_REUSED_SESSION_STRICT_TIMEOUT_SECONDS.get(current_phase, timeout_seconds))
     no_progress_seconds = int(max(0, (now - last_progress_at).total_seconds()))
     phase_no_progress_seconds = int(max(0, (now - phase_entered_at).total_seconds())) if phase_entered_at else no_progress_seconds
     observed_seconds = max(no_progress_seconds, phase_no_progress_seconds)
@@ -516,6 +562,8 @@ def _normalize_test_console_payload(status_payload: dict[str, Any] | None) -> di
     payload['hang_detection_reason'] = str(payload.get('hang_detection_reason') or '')
     payload['hang_reason_classification'] = str(payload.get('hang_reason_classification') or '')
     payload['stop_requested_at'] = payload.get('stop_requested_at')
+    payload['stop_available'] = bool(payload.get('stop_available'))
+    payload['can_stop_reason'] = str(payload.get('can_stop_reason') or '')
     return payload
 
 
@@ -2303,10 +2351,19 @@ def get_test_console_status() -> dict[str, Any]:
                 profile_modules=resolve_test_profile(profile_id=refreshed.get('test_profile'))[1],
             )
             after_marker = _compute_real_progress_marker(refreshed)
-            if after_marker != before_marker:
+            if _uses_strict_reused_session_hang_rules(payload):
+                strict_before = _compute_strict_progress_marker(payload)
+                strict_after = _compute_strict_progress_marker(refreshed)
+                has_real_progress = strict_after != strict_before
+            else:
+                has_real_progress = after_marker != before_marker
+            if has_real_progress:
                 _mark_real_progress(refreshed, event=str(refreshed.get('last_event') or 'Pipeline progress observed during status refresh'))
             else:
-                _record_non_progress_refresh(refreshed, reason='NON_PROGRESS_REFRESH_STATUS_POLL')
+                refresh_reason = 'NON_PROGRESS_REFRESH_STATUS_POLL'
+                if _uses_strict_reused_session_hang_rules(payload):
+                    refresh_reason = 'NON_PROGRESS_REFRESH_REUSED_SESSION_VALIDATION_GATE'
+                _record_non_progress_refresh(refreshed, reason=refresh_reason)
             payload = refreshed
             _set_state(status=_augment_progress(_normalize_test_console_payload(payload)))
         except Exception:

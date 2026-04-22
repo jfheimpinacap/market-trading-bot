@@ -5007,3 +5007,14 @@ Actualización semántica de `prediction_risk_path`:
 
 - El perfil ahora aísla explícitamente el tramo prediction→risk actual y evita mezclar telemetría global de runtime risk/execution (por ejemplo `active_exposure_risk_throttle_summary` y `risk_execution_scope_alignment_summary` quedan marcados `OUT_OF_SCOPE_FOR_PREDICTION_PATH_PROFILE` en este perfil).
 - Si no hay datos actuales de handoff/prediction en ventana útil, publica estado canónico `NO_CURRENT_PREDICTION_PATH_DATA` y mantiene salida limpia para diagnóstico del path.
+
+## Prompt 353 (test-console stop + reused-session hang hardening end-to-end)
+
+- Se endureció la terminalización por hang para corridas `RUNNING` en `validation`/`gate` sobre paths reutilizados (`REUSED_EXISTING_SESSION` / `STARTED_EXISTING_SAFE_SESSION`), ignorando pseudo-progreso cosmético de refresh y aplicando timeout más estricto por fase.
+- `get_test_console_status` ahora distingue progreso real vs ruido de refresh para esos paths (avance de fase/paso/step-results/terminalidad) y evita resetear el reloj de hang por cambios superficiales.
+- El contrato de status ahora publica campos canónicos de stop:
+  - `stop_available`
+  - `can_stop_reason`
+  además de `can_stop`, para simplificar UI y depuración.
+- `stop_test_console` mantiene terminalización forzada consistente (`STOPPED` + `ended_at` + export parcial) incluso cuando no hay primitivas activas de pause en sesión/runner.
+- Alcance: integración/lifecycle de Test Console únicamente; sin cambios de policy ni lógica central de decisión del bot.
