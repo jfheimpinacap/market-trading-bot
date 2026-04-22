@@ -540,9 +540,12 @@ export type TestConsoleStatusResponse = {
   started_at: string | null;
   updated_at?: string | null;
   last_progress_at?: string | null;
+  last_real_progress_at?: string | null;
+  last_non_progress_refresh_at?: string | null;
   phase_entered_at?: string | null;
   hang_detected_at?: string | null;
   hang_detection_reason?: string | null;
+  hang_reason_classification?: string | null;
   stop_requested_at?: string | null;
   ended_at: string | null;
   elapsed_seconds?: number | null;
@@ -550,6 +553,9 @@ export type TestConsoleStatusResponse = {
   last_reason_code?: string | null;
   export_available?: boolean;
   is_stale?: boolean;
+  is_terminal?: boolean;
+  is_hung?: boolean;
+  can_stop?: boolean;
   validation_status: string | null;
   trial_status: string | null;
   trend_status: string | null;

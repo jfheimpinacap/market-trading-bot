@@ -12,6 +12,21 @@ Professional initial scaffold for a modular prediction markets intelligence and 
 - **Architecture:** monorepo organized for future apps, engines, provider adapters, and documentation.
 - **Precedent-aware decision support (new):** research, prediction, risk, signal-fusion, and postmortem now consume semantic precedents automatically in internal flows with conservative influence and explicit audit trails (`AgentPrecedentUse`).
 
+### Test Console lifecycle hardening for real-progress hangs (Prompt 352)
+
+Mission Control Test Console lifecycle now distinguishes **real pipeline progress** from **refresh noise** so runs cannot stay `RUNNING` indefinitely due to minor snapshot churn.
+
+- Hang timeout now uses `last_real_progress_at` (phase/step/event pipeline progress), not generic payload refresh activity.
+- Status refreshes that only update secondary telemetry are tracked as non-progress via:
+  - `last_non_progress_refresh_at`
+  - `hang_reason_classification`
+- Canonical lifecycle flags are now exposed for UI safety:
+  - `is_terminal`
+  - `is_hung`
+  - `can_stop`
+- `Stop test` enablement is now based on non-terminal run state (`can_stop`) rather than narrow/ambiguous UI-only conditions.
+- Validation/gate stuck states (including reused safe session bootstrap paths) now converge to timeout classification when no real progress occurs, even if polling/refresh traffic continues.
+
 ### Dashboard operator-first compact layout (Prompt 329)
 
 The main dashboard was compacted for operator-first scanning with less vertical noise and less default explanatory text.

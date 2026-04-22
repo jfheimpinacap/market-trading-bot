@@ -7626,8 +7626,9 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(body['summary'], 'Stop applied conservatively.')
 
     @patch('apps.mission_control.services.test_console._set_state')
+    @patch('apps.mission_control.services.test_console._sync_operational_snapshot_for_profile')
     @patch('apps.mission_control.services.test_console._get_state_snapshot')
-    def test_get_test_console_status_marks_running_gate_as_timed_out_when_stale(self, mock_state_snapshot, mock_set_state):
+    def test_get_test_console_status_marks_running_gate_as_timed_out_when_stale(self, mock_state_snapshot, _mock_sync, mock_set_state):
         from apps.mission_control.services.test_console import get_test_console_status
 
         stale_time = timezone.now() - timedelta(minutes=25)
@@ -7639,6 +7640,7 @@ class TestConsoleApiTests(TestCase):
                 'started_at': stale_time,
                 'updated_at': stale_time,
                 'last_progress_at': stale_time,
+                'last_real_progress_at': stale_time,
                 'phase_entered_at': stale_time,
                 'ended_at': None,
             }
@@ -7651,6 +7653,65 @@ class TestConsoleApiTests(TestCase):
         self.assertIsNotNone(status_payload.get('ended_at'))
         self.assertIn('TEST_CONSOLE_HANG_TIMEOUT', status_payload.get('reason_codes', []))
         mock_set_state.assert_called()
+
+    @patch('apps.mission_control.services.test_console._set_state')
+    @patch('apps.mission_control.services.test_console._sync_operational_snapshot_for_profile')
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_get_test_console_status_non_progress_refresh_does_not_reset_real_progress_clock(
+        self,
+        mock_state_snapshot,
+        mock_sync,
+        _mock_set_state,
+    ):
+        from apps.mission_control.services.test_console import get_test_console_status
+
+        stale_time = timezone.now() - timedelta(minutes=25)
+        payload = self._status_payload()
+        payload.update(
+            {
+                'test_status': 'RUNNING',
+                'current_phase': 'validation',
+                'started_at': stale_time,
+                'updated_at': stale_time,
+                'last_progress_at': timezone.now(),
+                'last_real_progress_at': stale_time,
+                'phase_entered_at': stale_time,
+                'ended_at': None,
+            }
+        )
+        mock_state_snapshot.return_value = (payload, payload, [])
+        mock_sync.side_effect = lambda **kwargs: kwargs['payload'].update({'funnel_status': 'ACTIVE'})
+
+        status_payload = get_test_console_status()
+        self.assertEqual(status_payload['test_status'], 'TIMED_OUT')
+        self.assertTrue(status_payload.get('is_hung'))
+        self.assertIn('NO_REAL_PROGRESS_IN_validation', status_payload.get('hang_reason_classification', ''))
+
+    @patch('apps.mission_control.services.test_console._set_state')
+    @patch('apps.mission_control.services.test_console._sync_operational_snapshot_for_profile')
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_get_test_console_status_exposes_can_stop_for_non_terminal_runs(
+        self,
+        mock_state_snapshot,
+        _mock_sync,
+        _mock_set_state,
+    ):
+        from apps.mission_control.services.test_console import get_test_console_status
+
+        payload = self._status_payload()
+        payload.update(
+            {
+                'test_status': 'RUNNING',
+                'current_phase': 'gate',
+                'started_at': timezone.now() - timedelta(minutes=2),
+                'ended_at': None,
+            }
+        )
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        status_payload = get_test_console_status()
+        self.assertFalse(status_payload.get('is_terminal'))
+        self.assertTrue(status_payload.get('can_stop'))
 
     @patch('apps.mission_control.services.test_console.get_live_paper_bootstrap_status')
     @patch('apps.mission_control.services.test_console._find_active_preset_session')

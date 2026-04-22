@@ -441,6 +441,7 @@ export function CockpitPage() {
   const executedRunScope = testConsoleStatus?.run_scope ?? selectedProfileRunScope;
   const normalizedTestConsoleStatus = (testConsoleStatus?.test_status ?? '').toUpperCase();
   const testConsoleRunActive = Boolean(testConsoleStatus?.test_status) && !TEST_CONSOLE_TERMINAL_STATUSES.has(normalizedTestConsoleStatus);
+  const testConsoleCanStop = testConsoleStatus?.can_stop ?? testConsoleRunActive;
   const testConsoleCurrentStep = testConsoleStatus?.current_step ?? (testConsoleStatus?.current_phase ? TEST_CONSOLE_PHASES.indexOf(testConsoleStatus.current_phase) + 1 : null);
   const testConsoleTotalSteps = testConsoleStatus?.total_steps ?? TEST_CONSOLE_PHASES.length;
   const testConsoleProgressPercent = testConsoleCurrentStep && testConsoleTotalSteps
@@ -1502,11 +1503,11 @@ export function CockpitPage() {
                     <button
                       className="secondary-button"
                       type="button"
-                      title={testConsoleRunActive ? 'Stop active/non-terminal test run' : 'Not available: no active test'}
-                      disabled={testConsoleStopLoading || testConsoleStartLoading || !testConsoleRunActive}
+                      title={testConsoleCanStop ? 'Stop active/non-terminal test run' : 'Not available: no active test'}
+                      disabled={testConsoleStopLoading || !testConsoleCanStop}
                       onClick={() => void stopTestConsoleFromCockpit()}
                     >
-                      {testConsoleStopLoading ? 'Stopping…' : testConsoleRunActive ? 'Stop test' : 'Stop test · Not available'}
+                      {testConsoleStopLoading ? 'Stopping…' : testConsoleCanStop ? 'Stop test' : 'Stop test · Not available'}
                     </button>
                     <button className="ghost-button" type="button" disabled={testConsoleStatusLoading} onClick={() => void loadTestConsoleStatus()}>
                       Refresh status
