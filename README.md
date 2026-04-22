@@ -46,6 +46,11 @@ Se ejecutó Batch 4 acotado de estabilización enfocado en polling por dominio (
 Detalle del batch: `docs/architecture/stabilization-batch-4-2026-04-22.md`.  
 Referencias enlazadas: auditoría base `docs/architecture/stabilization-audit-2026-04-22.md` + Batch 1 `docs/architecture/stabilization-batch-1-2026-04-22.md` + Batch 2 `docs/architecture/stabilization-batch-2-2026-04-22.md` + Batch 3 `docs/architecture/stabilization-batch-3-2026-04-22.md` + validación posterior `docs/architecture/stabilization-validation-after-batch-3-2026-04-22.md`.
 
+### Stabilization validation after Batch 4 (2026-04-22)
+
+Se ejecutó una validación de estabilización posterior a Batch 4 para comprobar reducción real de drift/cadencia, ruido de refresh en hidden/idle y protección contra payload stale entre Dashboard/Cockpit/Test Console.  
+Reporte corto con resultados y recomendación del siguiente paso: `docs/architecture/stabilization-validation-after-batch-4-2026-04-22.md`.
+
 ### Test Console lifecycle hardening for real-progress hangs (Prompt 352)
 
 Mission Control Test Console lifecycle now distinguishes **real pipeline progress** from **refresh noise** so runs cannot stay `RUNNING` indefinitely due to minor snapshot churn.
