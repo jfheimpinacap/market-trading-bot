@@ -8,6 +8,7 @@ import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
 import { usePollingTicker } from '../hooks/usePollingTicker';
 import { isSettledRejected, resolveExpectedStatusError } from '../lib/missionControlStatus';
+import { resolveTestConsoleLifecycleState } from '../lib/testConsoleLifecycle';
 import { getCockpitAttention, getCockpitQuickLinks, getCockpitSummary, runCockpitAction } from '../services/cockpit';
 import {
   bootstrapLivePaperSession,
@@ -108,7 +109,6 @@ const formatRelativeSeconds = (value: string | null | undefined) => {
   return `${seconds}s`;
 };
 const TEST_CONSOLE_PHASES = ['bootstrap', 'scan', 'consensus_review', 'pursuit_review', 'trial', 'validation', 'trend', 'gate', 'extended_run', 'finalize'];
-const TEST_CONSOLE_TERMINAL_STATUSES = new Set(['IDLE', 'STOPPED', 'COMPLETED', 'COMPLETED_WITH_WARNINGS', 'BLOCKED', 'FAILED', 'TIMED_OUT', 'HUNG']);
 const TEST_CONSOLE_PROFILE_OPTIONS = [
   { id: 'full_e2e', label: 'Full E2E' },
   { id: 'scope_throttle_diagnostics', label: 'Scope + Throttle Diagnostics' },
@@ -435,19 +435,14 @@ export function CockpitPage() {
     [selectedProfileModules],
   );
   const selectedProfileRunScope = selectedTestProfileId === 'full_e2e' ? 'fresh_full_run' : 'targeted_diagnostic_run';
-  const normalizedTestConsoleStatus = (testConsoleStatus?.test_status ?? '').toUpperCase();
-  const testConsoleRunActive = testConsoleStatus?.has_active_run
-    ?? (Boolean(testConsoleStatus?.test_status) && !TEST_CONSOLE_TERMINAL_STATUSES.has(normalizedTestConsoleStatus));
-  const currentTestConsoleSnapshot = testConsoleRunActive ? testConsoleStatus : null;
-  const hasLastCompletedRun = testConsoleStatus?.has_last_completed_run
-    ?? Boolean(
-      !testConsoleRunActive
-      && testConsoleStatus?.ended_at
-      && TEST_CONSOLE_TERMINAL_STATUSES.has(normalizedTestConsoleStatus),
-    );
-  const effectiveLastCompletedSnapshot = hasLastCompletedRun
-    ? (testConsoleStatus ?? lastCompletedTestConsoleSnapshot)
-    : lastCompletedTestConsoleSnapshot;
+  const testConsoleLifecycle = useMemo(
+    () => resolveTestConsoleLifecycleState(testConsoleStatus, lastCompletedTestConsoleSnapshot),
+    [lastCompletedTestConsoleSnapshot, testConsoleStatus],
+  );
+  const testConsoleRunActive = testConsoleLifecycle.runActive;
+  const hasLastCompletedRun = testConsoleLifecycle.hasLastCompletedRun;
+  const currentTestConsoleSnapshot = testConsoleLifecycle.currentSnapshot;
+  const effectiveLastCompletedSnapshot = testConsoleLifecycle.effectiveLastCompletedSnapshot;
   const executedTestProfileId = currentTestConsoleSnapshot?.test_profile ?? effectiveLastCompletedSnapshot?.test_profile ?? 'none';
   const executedRunScope = currentTestConsoleSnapshot?.run_scope ?? effectiveLastCompletedSnapshot?.run_scope ?? 'none';
   const testConsoleCanStop = testConsoleRunActive && Boolean(
@@ -1110,19 +1105,10 @@ export function CockpitPage() {
 
   useEffect(() => {
     if (!testConsoleStatus) return;
-    const normalizedStatus = (testConsoleStatus.test_status ?? '').toUpperCase();
-    const activeRun = testConsoleStatus.has_active_run
-      ?? (Boolean(testConsoleStatus.test_status) && !TEST_CONSOLE_TERMINAL_STATUSES.has(normalizedStatus));
-    const completedRun = testConsoleStatus.has_last_completed_run
-      ?? Boolean(
-        !activeRun
-        && testConsoleStatus.ended_at
-        && TEST_CONSOLE_TERMINAL_STATUSES.has(normalizedStatus),
-      );
-    if (completedRun) {
+    if (testConsoleLifecycle.hasLastCompletedRun) {
       setLastCompletedTestConsoleSnapshot(testConsoleStatus);
     }
-  }, [testConsoleStatus]);
+  }, [testConsoleLifecycle.hasLastCompletedRun, testConsoleStatus]);
 
   usePollingTicker(
     'cockpit:test-console-status',
