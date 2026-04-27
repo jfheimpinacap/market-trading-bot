@@ -7050,6 +7050,83 @@ class ExtendedPaperRunGateApiTests(TestCase):
         self.assertEqual(payload['state_mismatch_summary']['consistency_status'], 'MISMATCH')
         self.assertIn('state_mismatch_examples', payload)
 
+    def test_gate_stays_blocked_when_only_open_positions_without_recent_window_flow(self):
+        with patch('apps.mission_control.services.extended_paper_run_gate.build_live_paper_validation_digest', return_value=self._base_validation('READY')), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_live_paper_trial_trend_digest',
+            return_value=self._base_trend(),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.list_live_paper_trial_history',
+            return_value=self._base_history(),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_live_paper_attention_alert_status',
+            return_value=self._base_attention('HEALTHY'),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_live_paper_autonomy_funnel_snapshot',
+            return_value={'funnel_status': 'STALLED'},
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_live_paper_bootstrap_status',
+            return_value=self._base_bootstrap(),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_active_account',
+            return_value=SimpleNamespace(slug='demo-paper-account'),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_account_summary',
+            return_value={'open_positions_count': 1, 'recent_trades': []},
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_account_financial_summary',
+            return_value={'summary_status': 'PAPER_ACCOUNT_SUMMARY_OK'},
+        ):
+            response = self.client.get(reverse('mission_control:extended-paper-run-gate'))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['gate_status'], 'BLOCK')
+        self.assertIn('FUNNEL_STALLED', payload['reason_codes'])
+        self.assertNotIn('STATE_GATE_BLOCKED_ON_STALE_VIEW', payload['reason_codes'])
+
+    def test_gate_ignores_stale_funnel_block_when_scan_only_and_recent_runtime_trades_exist(self):
+        with patch('apps.mission_control.services.extended_paper_run_gate.build_live_paper_validation_digest', return_value=self._base_validation('READY')), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_live_paper_trial_trend_digest',
+            return_value=self._base_trend(),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.list_live_paper_trial_history',
+            return_value=self._base_history(),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_live_paper_attention_alert_status',
+            return_value=self._base_attention('HEALTHY'),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_live_paper_autonomy_funnel_snapshot',
+            return_value={
+                'funnel_status': 'STALLED',
+                'scan_count': 3,
+                'shortlisted_signals': 0,
+                'handoff_candidates': 0,
+                'consensus_reviews': 0,
+                'prediction_candidates': 0,
+                'risk_decisions': 0,
+                'paper_execution_candidates': 0,
+            },
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_live_paper_bootstrap_status',
+            return_value=self._base_bootstrap(),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.get_active_account',
+            return_value=SimpleNamespace(slug='demo-paper-account'),
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_account_summary',
+            return_value={'open_positions_count': 1, 'recent_trades': [{'id': 10}]},
+        ), patch(
+            'apps.mission_control.services.extended_paper_run_gate.build_account_financial_summary',
+            return_value={'summary_status': 'PAPER_ACCOUNT_SUMMARY_OK'},
+        ):
+            response = self.client.get(reverse('mission_control:extended-paper-run-gate'))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['gate_status'], 'ALLOW')
+        self.assertIn('STATE_GATE_BLOCKED_ON_STALE_VIEW', payload['reason_codes'])
+        self.assertIn('STATE_PORTFOLIO_ACTIVE_BUT_FUNNEL_EMPTY', payload['state_mismatch_summary']['state_consistency_reason_codes'])
+
     def test_gate_reuses_existing_signal_services(self):
         with patch('apps.mission_control.services.extended_paper_run_gate.build_live_paper_validation_digest', return_value=self._base_validation('READY')) as mock_validation, patch(
             'apps.mission_control.services.extended_paper_run_gate.build_live_paper_trial_trend_digest',
@@ -7343,6 +7420,30 @@ class StateConsistencyDiagnosticsTests(TestCase):
         self.assertEqual(snapshot.summary['consistency_status'], 'MISMATCH')
         self.assertIn('STATE_PORTFOLIO_ACTIVE_BUT_FUNNEL_EMPTY', snapshot.reason_codes)
         self.assertTrue(snapshot.examples)
+
+    def test_scan_only_counts_do_not_hide_empty_current_window_diagnostics(self):
+        from apps.mission_control.services.state_consistency import build_state_consistency_snapshot
+
+        snapshot = build_state_consistency_snapshot(
+            funnel={
+                'funnel_status': 'STALLED',
+                'scan_count': 5,
+                'shortlisted_signals': 0,
+                'handoff_candidates': 0,
+                'consensus_reviews': 0,
+                'prediction_candidates': 0,
+                'risk_decisions': 0,
+                'paper_execution_candidates': 0,
+            },
+            portfolio_summary={'open_positions': 1, 'recent_trades_count': 2},
+            funnel_session_detected='runtime_session:10',
+            portfolio_session_detected='runtime_session:10',
+            funnel_scope='live_read_only_paper_conservative',
+            portfolio_scope='live_read_only_paper_conservative',
+        )
+        self.assertIn('STATE_EMPTY_FALLBACK_APPLIED', snapshot.reason_codes)
+        self.assertIn('STATE_PORTFOLIO_ACTIVE_BUT_FUNNEL_EMPTY', snapshot.reason_codes)
+        self.assertTrue(snapshot.should_ignore_funnel_block)
 
 
 class TestConsoleApiTests(TestCase):
