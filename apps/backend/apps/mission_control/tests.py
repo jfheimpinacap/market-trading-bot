@@ -7047,7 +7047,11 @@ class ExtendedPaperRunGateApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload['gate_status'], 'ALLOW')
         self.assertIn('STATE_GATE_BLOCKED_ON_STALE_VIEW', payload['reason_codes'])
+        self.assertIn('STALE_VIEW_BLOCK_DEGRADED_RECENT_ALIGNED_EVIDENCE', payload['reason_codes'])
+        self.assertIn('STALE_VIEW_REVIEW_REQUIRED', payload['reason_codes'])
         self.assertEqual(payload['state_mismatch_summary']['consistency_status'], 'MISMATCH')
+        evidence = payload['state_mismatch_summary'].get('recent_operational_evidence') or {}
+        self.assertTrue(evidence.get('aligned_recent_operational_evidence'))
         self.assertIn('state_mismatch_examples', payload)
 
     def test_gate_stays_blocked_when_only_open_positions_without_recent_window_flow(self):
@@ -7082,6 +7086,7 @@ class ExtendedPaperRunGateApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload['gate_status'], 'BLOCK')
         self.assertIn('FUNNEL_STALLED', payload['reason_codes'])
+        self.assertIn('STALE_VIEW_BLOCK_CONFIRMED_NO_RECENT_ALIGNED_EVIDENCE', payload['reason_codes'])
         self.assertNotIn('STATE_GATE_BLOCKED_ON_STALE_VIEW', payload['reason_codes'])
 
     def test_gate_ignores_stale_funnel_block_when_scan_only_and_recent_runtime_trades_exist(self):
@@ -7125,6 +7130,7 @@ class ExtendedPaperRunGateApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload['gate_status'], 'ALLOW')
         self.assertIn('STATE_GATE_BLOCKED_ON_STALE_VIEW', payload['reason_codes'])
+        self.assertIn('STALE_VIEW_BLOCK_DEGRADED_RECENT_ALIGNED_EVIDENCE', payload['reason_codes'])
         self.assertIn('STATE_PORTFOLIO_ACTIVE_BUT_FUNNEL_EMPTY', payload['state_mismatch_summary']['state_consistency_reason_codes'])
 
     def test_gate_reuses_existing_signal_services(self):
@@ -7440,10 +7446,33 @@ class StateConsistencyDiagnosticsTests(TestCase):
             portfolio_session_detected='runtime_session:10',
             funnel_scope='live_read_only_paper_conservative',
             portfolio_scope='live_read_only_paper_conservative',
+            runtime_status={'session_active': True, 'heartbeat_active': True, 'current_session_status': 'RUNNING'},
         )
         self.assertIn('STATE_EMPTY_FALLBACK_APPLIED', snapshot.reason_codes)
         self.assertIn('STATE_PORTFOLIO_ACTIVE_BUT_FUNNEL_EMPTY', snapshot.reason_codes)
         self.assertTrue(snapshot.should_ignore_funnel_block)
+        self.assertTrue(snapshot.summary['recent_operational_evidence']['aligned_recent_operational_evidence'])
+
+    def test_recent_trades_without_active_runtime_do_not_bypass_stale_gate(self):
+        from apps.mission_control.services.state_consistency import build_state_consistency_snapshot
+
+        snapshot = build_state_consistency_snapshot(
+            funnel={
+                'funnel_status': 'STALLED',
+                'shortlisted_signals': 0,
+                'handoff_candidates': 0,
+                'consensus_reviews': 0,
+                'prediction_candidates': 0,
+                'risk_decisions': 0,
+                'paper_execution_candidates': 0,
+            },
+            portfolio_summary={'open_positions': 1, 'recent_trades_count': 2},
+            funnel_session_detected='runtime_session:10',
+            portfolio_session_detected='runtime_session:10',
+            runtime_status={'session_active': False, 'heartbeat_active': False, 'current_session_status': 'IDLE'},
+        )
+        self.assertFalse(snapshot.should_ignore_funnel_block)
+        self.assertFalse(snapshot.summary['recent_operational_evidence']['aligned_recent_operational_evidence'])
 
 
 class TestConsoleApiTests(TestCase):

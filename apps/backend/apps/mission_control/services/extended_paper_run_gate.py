@@ -58,6 +58,9 @@ _REASON_ATTENTION_DEGRADED = 'ATTENTION_DEGRADED'
 _REASON_ATTENTION_BLOCKING = 'ATTENTION_BLOCKING'
 _REASON_FUNNEL_THIN_FLOW = 'FUNNEL_THIN_FLOW'
 _REASON_FUNNEL_STALLED = 'FUNNEL_STALLED'
+_REASON_STALE_VIEW_BLOCK_CONFIRMED = 'STALE_VIEW_BLOCK_CONFIRMED_NO_RECENT_ALIGNED_EVIDENCE'
+_REASON_STALE_VIEW_BLOCK_DEGRADED = 'STALE_VIEW_BLOCK_DEGRADED_RECENT_ALIGNED_EVIDENCE'
+_REASON_STALE_VIEW_REVIEW_REQUIRED = 'STALE_VIEW_REVIEW_REQUIRED'
 
 
 def _check(*, check_name: str, status: str, summary: str) -> dict[str, str]:
@@ -101,6 +104,11 @@ def build_extended_paper_run_gate(*, preset_name: str | None = None) -> dict[str
         portfolio_session_detected=None,
         funnel_scope=None,
         portfolio_scope=account.slug,
+        runtime_status={
+            'session_active': bool(bootstrap.get('session_active')),
+            'heartbeat_active': bool(bootstrap.get('heartbeat_active')),
+            'current_session_status': str(bootstrap.get('current_session_status') or ''),
+        },
     )
 
     validation_status = str(validation.get('validation_status') or VALIDATION_BLOCKED).upper()
@@ -176,8 +184,11 @@ def build_extended_paper_run_gate(*, preset_name: str | None = None) -> dict[str
         reason_codes.append(_REASON_FUNNEL_THIN_FLOW)
     if block_by_funnel:
         reason_codes.append(_REASON_FUNNEL_STALLED)
+        reason_codes.append(_REASON_STALE_VIEW_BLOCK_CONFIRMED)
     elif funnel_status == FUNNEL_STALLED and state_consistency.should_ignore_funnel_block:
         reason_codes.append(STATE_GATE_BLOCKED_ON_STALE_VIEW)
+        reason_codes.append(_REASON_STALE_VIEW_BLOCK_DEGRADED)
+        reason_codes.append(_REASON_STALE_VIEW_REVIEW_REQUIRED)
 
     validation_check_status = _CHECK_FAIL if validation_status == VALIDATION_BLOCKED else (_CHECK_WARN if validation_status == VALIDATION_WARNING else _CHECK_PASS)
     trend_check_status = _CHECK_FAIL if (readiness_status == READINESS_NOT_READY or trend_status == 'DEGRADING') else (_CHECK_WARN if trend_status == 'INSUFFICIENT_DATA' or latest_trial_status == 'WARN' else _CHECK_PASS)
