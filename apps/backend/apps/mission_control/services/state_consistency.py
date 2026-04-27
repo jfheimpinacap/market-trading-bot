@@ -40,16 +40,19 @@ def _is_funnel_empty(funnel: dict[str, Any]) -> bool:
 
 
 def _is_current_window_empty(funnel: dict[str, Any]) -> bool:
-    handoff_counters = [
-        int(funnel.get('shortlisted_signals') or 0),
-        int(funnel.get('handoff_candidates') or 0),
-        int(funnel.get('consensus_reviews') or 0),
-        int(funnel.get('prediction_candidates') or 0),
-        int(funnel.get('risk_decisions') or 0),
-        int(funnel.get('paper_execution_candidates') or 0),
-    ]
+    window_counter_keys = (
+        'shortlisted_signals',
+        'handoff_candidates',
+        'consensus_reviews',
+        'prediction_candidates',
+        'risk_decisions',
+        'paper_execution_candidates',
+    )
+    handoff_counters = [int(funnel.get(key) or 0) for key in window_counter_keys]
     if any(value > 0 for value in handoff_counters):
         return False
+    if any(key in funnel for key in window_counter_keys):
+        return True
     return _is_funnel_empty(funnel)
 
 

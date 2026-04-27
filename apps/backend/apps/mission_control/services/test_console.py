@@ -560,6 +560,10 @@ def _normalize_test_console_payload(status_payload: dict[str, Any] | None) -> di
     payload['run_scope'] = str(payload.get('run_scope') or ('fresh_full_run' if resolved_profile_id == TEST_PROFILE_FULL_E2E else 'targeted_diagnostic_run'))
 
     payload['test_status'] = str(payload.get('test_status') or TEST_STATUS_IDLE)
+    payload['exists'] = bool(payload.get('exists') or payload['test_status'] != TEST_STATUS_IDLE)
+    payload['status'] = str(payload.get('status') or payload['test_status'])
+    payload['reason_code'] = str(payload.get('reason_code') or payload.get('last_reason_code') or '')
+    payload['summary'] = str(payload.get('summary') or '')
     payload['preset_name'] = str(payload.get('preset_name') or PRESET_NAME)
     payload['session_active'] = bool(payload.get('session_active'))
     payload['heartbeat_active'] = bool(payload.get('heartbeat_active'))
@@ -1269,7 +1273,16 @@ def _sync_operational_snapshot_for_profile(
         payload['position_exposure_summary'] = position_exposure
     payload['funnel_status_window'] = str(funnel.get('funnel_status') or 'UNKNOWN')
     payload['funnel_status'] = effective_funnel_status
-    _apply_profile_payload_scope(payload=payload, profile_modules=profile_modules, profile_id=str(payload.get('test_profile') or TEST_PROFILE_FULL_E2E))
+    profile_id = str(payload.get('test_profile') or '').strip()
+    if not profile_id:
+        for candidate_id, candidate_modules in _TEST_PROFILE_DEFINITIONS.items():
+            if candidate_modules == profile_modules:
+                profile_id = candidate_id
+                break
+    if not profile_id:
+        profile_id = TEST_PROFILE_FULL_E2E
+    payload['test_profile'] = profile_id
+    _apply_profile_payload_scope(payload=payload, profile_modules=profile_modules, profile_id=profile_id)
     payload['summary'] = (
         f"funnel_status={payload.get('funnel_status')} window_funnel_status={payload.get('funnel_status_window')} "
         f"overlay_status={overlay_summary.get('overlay_status')} gate_status={payload.get('gate_status')}. "
