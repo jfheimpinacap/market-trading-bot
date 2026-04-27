@@ -73,18 +73,22 @@ def build_state_consistency_snapshot(
     funnel_scope: str | None = None,
     portfolio_scope: str | None = None,
     stale_view_gate_blocked: bool = False,
+    runtime_status: dict[str, Any] | None = None,
 ) -> StateConsistencySnapshot:
     reason_codes: list[str] = []
     examples: list[dict[str, Any]] = []
     portfolio_active = _is_portfolio_active(portfolio_summary)
     recent_trades_count = int(portfolio_summary.get('recent_trades_count') or 0)
-    funnel_empty = _is_funnel_empty(funnel)
+    open_positions = int(portfolio_summary.get('open_positions') or 0)
     current_window_empty = _is_current_window_empty(funnel)
+    runtime_status = runtime_status or {}
+    session_active = bool(runtime_status.get('session_active'))
+    heartbeat_active = bool(runtime_status.get('heartbeat_active'))
+    session_status = str(runtime_status.get('current_session_status') or '').upper().strip()
+    runtime_session_aligned = session_alignment = 'ALIGNED'
 
     state_window_alignment = 'ALIGNED'
     state_scope_alignment = 'ALIGNED'
-    session_alignment = 'ALIGNED'
-
     funnel_namespace = _session_namespace(funnel_session_detected)
     portfolio_namespace = _session_namespace(portfolio_session_detected)
     if (
@@ -117,6 +121,20 @@ def build_state_consistency_snapshot(
                 'reason_code': STATE_SCOPE_MISMATCH,
             }
         )
+
+    if session_status in {'RUNNING', 'ACTIVE'}:
+        runtime_session_aligned = 'ALIGNED'
+    elif runtime_status:
+        runtime_session_aligned = 'MISMATCH'
+
+    aligned_recent_operational_evidence = bool(
+        recent_trades_count > 0
+        and session_alignment == 'ALIGNED'
+        and state_scope_alignment == 'ALIGNED'
+        and session_active
+        and heartbeat_active
+        and runtime_session_aligned == 'ALIGNED'
+    )
 
     if portfolio_active and current_window_empty:
         state_window_alignment = 'MISMATCH'
@@ -168,12 +186,26 @@ def build_state_consistency_snapshot(
         'state_window_alignment': state_window_alignment,
         'state_scope_alignment': state_scope_alignment if session_alignment == 'ALIGNED' else 'MISMATCH',
         'state_consistency_reason_codes': unique_reason_codes,
+        'recent_operational_evidence': {
+            'measurement_scope': 'rolling_60m_current_window_vs_runtime_portfolio',
+            'source_of_truth': ['live_paper_autonomy_funnel', 'paper_trading.portfolio', 'live_paper_bootstrap_status'],
+            'recent_trades_count': recent_trades_count,
+            'open_positions': open_positions,
+            'current_window_empty': current_window_empty,
+            'session_active': session_active,
+            'heartbeat_active': heartbeat_active,
+            'current_session_status': session_status or 'UNKNOWN',
+            'session_alignment': session_alignment,
+            'scope_alignment': state_scope_alignment,
+            'runtime_session_alignment': runtime_session_aligned,
+            'aligned_recent_operational_evidence': aligned_recent_operational_evidence,
+        },
     }
     return StateConsistencySnapshot(
         summary=summary,
         examples=examples[:3],
         reason_codes=unique_reason_codes,
         should_ignore_funnel_block=(
-            recent_trades_count > 0 and current_window_empty and session_alignment == 'ALIGNED' and (state_scope_alignment == 'ALIGNED')
+            aligned_recent_operational_evidence and current_window_empty
         ),
     )

@@ -1256,6 +1256,11 @@ def _sync_operational_snapshot_for_profile(
         funnel_scope=None,
         portfolio_scope=None,
         stale_view_gate_blocked=bool(payload.get('gate_status') == 'BLOCK' and int(portfolio.get('open_positions') or 0) > 0 and str(funnel.get('funnel_status') or '').upper() == 'STALLED'),
+        runtime_status={
+            'session_active': bool(payload.get('session_active')),
+            'heartbeat_active': bool(payload.get('heartbeat_active')),
+            'current_session_status': str(payload.get('current_session_status') or ''),
+        },
     )
     payload['state_mismatch_summary'] = consistency.summary
     payload['state_mismatch_examples'] = consistency.examples
