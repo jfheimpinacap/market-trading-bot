@@ -39,6 +39,20 @@ def _is_funnel_empty(funnel: dict[str, Any]) -> bool:
     return all(value == 0 for value in counters)
 
 
+def _is_current_window_empty(funnel: dict[str, Any]) -> bool:
+    handoff_counters = [
+        int(funnel.get('shortlisted_signals') or 0),
+        int(funnel.get('handoff_candidates') or 0),
+        int(funnel.get('consensus_reviews') or 0),
+        int(funnel.get('prediction_candidates') or 0),
+        int(funnel.get('risk_decisions') or 0),
+        int(funnel.get('paper_execution_candidates') or 0),
+    ]
+    if any(value > 0 for value in handoff_counters):
+        return False
+    return _is_funnel_empty(funnel)
+
+
 def _session_namespace(value: str | None) -> str | None:
     if not value:
         return None
@@ -60,7 +74,9 @@ def build_state_consistency_snapshot(
     reason_codes: list[str] = []
     examples: list[dict[str, Any]] = []
     portfolio_active = _is_portfolio_active(portfolio_summary)
+    recent_trades_count = int(portfolio_summary.get('recent_trades_count') or 0)
     funnel_empty = _is_funnel_empty(funnel)
+    current_window_empty = _is_current_window_empty(funnel)
 
     state_window_alignment = 'ALIGNED'
     state_scope_alignment = 'ALIGNED'
@@ -99,7 +115,7 @@ def build_state_consistency_snapshot(
             }
         )
 
-    if portfolio_active and funnel_empty:
+    if portfolio_active and current_window_empty:
         state_window_alignment = 'MISMATCH'
         reason_codes.extend([STATE_PORTFOLIO_ACTIVE_BUT_FUNNEL_EMPTY, STATE_WINDOW_MISMATCH])
         examples.append(
@@ -112,7 +128,7 @@ def build_state_consistency_snapshot(
             }
         )
 
-    if funnel_empty and str(funnel.get('funnel_status') or '').upper() == 'STALLED':
+    if current_window_empty and str(funnel.get('funnel_status') or '').upper() == 'STALLED':
         reason_codes.append(STATE_EMPTY_FALLBACK_APPLIED)
         examples.append(
             {
@@ -155,6 +171,6 @@ def build_state_consistency_snapshot(
         examples=examples[:3],
         reason_codes=unique_reason_codes,
         should_ignore_funnel_block=(
-            portfolio_active and funnel_empty and session_alignment == 'ALIGNED' and (state_scope_alignment == 'ALIGNED')
+            recent_trades_count > 0 and current_window_empty and session_alignment == 'ALIGNED' and (state_scope_alignment == 'ALIGNED')
         ),
     )
