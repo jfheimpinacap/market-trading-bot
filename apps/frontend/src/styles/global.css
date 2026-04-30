@@ -3300,3 +3300,51 @@ button {
   display: grid;
   gap: 0.5rem;
 }
+
+.markets-mobile-filter-trigger {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .markets-secondary-blocks {
+    display: none;
+  }
+
+  .markets-mobile-filter-trigger {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .markets-mobile-filter-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: grid;
+    align-items: end;
+  }
+
+  .markets-mobile-filter-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(15, 23, 42, 0.45);
+  }
+
+  .markets-mobile-filter-drawer {
+    position: relative;
+    z-index: 1;
+    background: var(--bg-panel);
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    padding: 12px;
+    max-height: 75vh;
+    overflow-y: auto;
+  }
+
+  .markets-mobile-filter-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+}
