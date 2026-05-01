@@ -51,7 +51,6 @@ export function MarketsPage() {
   const [marketsError, setMarketsError] = useState<string | null>(null);
   const [catalogLoaded, setCatalogLoaded] = useState(cached?.catalogLoaded ?? false);
   const [marketsLoaded, setMarketsLoaded] = useState(cached?.marketsLoaded ?? false);
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -228,43 +227,6 @@ export function MarketsPage() {
           </summary>
           <MarketsFilters filters={filters} providers={providers} events={events} onChange={setFilters} onReset={() => setFilters(defaultFilters)} />
         </details>
-
-        <div className="markets-mobile-filter-trigger">
-          <button className="secondary-button" type="button" onClick={() => setMobileFiltersOpen(true)}>
-            Filtro{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-          </button>
-        </div>
-
-        {mobileFiltersOpen ? (
-          <div className="markets-mobile-filter-overlay" role="dialog" aria-modal="true" aria-label="Filtros de mercados">
-            <div className="markets-mobile-filter-drawer">
-              <div className="markets-mobile-filter-header">
-                <strong>Filtros</strong>
-                <button className="ghost-button" type="button" onClick={() => setMobileFiltersOpen(false)}>
-                  Cerrar
-                </button>
-              </div>
-              <MarketsFilters
-                filters={filters}
-                providers={providers}
-                events={events}
-                onChange={(nextFilters) => {
-                  setFilters(nextFilters);
-                  setMobileFiltersOpen(false);
-                }}
-                onReset={() => {
-                  setFilters(defaultFilters);
-                }}
-              />
-            </div>
-            <button
-              className="markets-mobile-filter-backdrop"
-              type="button"
-              aria-label="Cerrar filtros"
-              onClick={() => setMobileFiltersOpen(false)}
-            />
-          </div>
-        ) : null}
 
         <SectionCard
           title="Mercados"
