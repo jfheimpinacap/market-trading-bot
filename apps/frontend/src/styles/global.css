@@ -253,14 +253,15 @@ button {
   top: 0;
   z-index: 40;
   padding: 10px 12px;
-  display: flex;
-  align-items: center;
+  display: grid;
   gap: 8px;
   margin-bottom: 14px;
 }
 
 .public-topbar__row {
-  display: contents;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .topbar__brand { font-weight: 700; white-space: nowrap; }
@@ -268,22 +269,12 @@ button {
 .topbar__search { display:flex; align-items:center; flex:1; min-width: 0; border:1px solid var(--border-soft); border-radius:10px; overflow:hidden; }
 .topbar__search input { flex:1; min-width:0; border:0; padding:8px 10px; background:transparent; }
 .topbar__search button { border:0; border-left:1px solid var(--border-soft); padding:8px 10px; background:var(--bg-panel-alt); }
-.topbar__action { display:inline-flex; align-items:center; border:1px solid var(--border-soft); border-radius:10px; padding:6px 10px; text-decoration:none; color:var(--text-main); white-space: nowrap; }
-.topbar__brand { order:1; }
-.topbar__categories { order:2; }
-.topbar__search { order:3; }
-.topbar__action--cotizar { order:4; }
-.topbar__action--whatsapp { order:5; }
-.topbar__action--login { order:6; margin-left:auto; }
+.topbar__actions { display:flex; align-items:center; gap:8px; margin-left:auto; }
+.topbar__action { display:inline-flex; align-items:center; border:1px solid var(--border-soft); border-radius:10px; padding:6px 10px; text-decoration:none; color:var(--text-main); }
+.public-topbar__row--primary .topbar__action--login { margin-left: auto; }
+.public-topbar__row--secondary { gap:10px; }
 
 .app-shell__main { padding-top: 10px; }
-
-@media (max-width: 640px) {
-  .app-shell__content {
-    padding-top: 6px;
-  }
-}
-
 .app-shell__content,
 .page-stack {
   display: grid;
@@ -513,6 +504,9 @@ button {
     flex-direction: column;
   }
 
+  .public-topbar__row--secondary .topbar__actions {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
@@ -531,24 +525,10 @@ button {
 
 
 @media (max-width: 640px) {
-  .public-topbar {
-    display: grid;
-    grid-template-columns: auto auto auto;
-    row-gap: 8px;
-    column-gap: 8px;
-  }
-
-  .public-topbar__row {
-    display: contents;
-  }
-
-  .topbar__brand { order: 1; }
-  .topbar__action--cotizar { order: 2; justify-self: end; }
-  .topbar__action--whatsapp { order: 3; justify-self: end; }
-  .topbar__action--login { display: none; }
-
-  .topbar__categories { order: 4; }
-  .topbar__search { order: 5; grid-column: 2 / 4; }
+  .public-topbar__row--primary { justify-content: space-between; }
+  .public-topbar__row--primary .topbar__action--login { display:none; }
+  .public-topbar__row--secondary { display:grid; grid-template-columns:auto 1fr; }
+  .public-topbar__row--secondary .topbar__actions { display:none; }
 }
 .markets-summary-grid {
   display: grid;
