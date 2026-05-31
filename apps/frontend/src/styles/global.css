@@ -891,6 +891,8 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  max-width: 100%;
+  min-width: 0;
   padding: 2px 7px;
   border-radius: 999px;
   font-size: 0.72rem;
@@ -4209,6 +4211,8 @@ body {
 }
 
 .test-console-activity-line {
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
   padding: 8px 10px;
   border: 1px solid var(--border-soft);
@@ -4218,7 +4222,8 @@ body {
   font-size: 0.86rem;
   font-weight: 700;
   line-height: 1.35;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .test-console-workspace {
@@ -4305,6 +4310,7 @@ body {
 
 .test-console-kv-list li {
   grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
+  min-width: 0;
 }
 
 .test-console-kv-list li span {
@@ -4314,13 +4320,28 @@ body {
 .test-console-kv-list li strong {
   min-width: 0;
   max-width: 100%;
+  overflow-wrap: break-word;
 }
 
 .test-console-long-value strong,
+.test-console-lifecycle-note,
 .test-console-output,
-.test-console-module-row--advanced .status-badge {
+.test-console-module-row--advanced .status-badge,
+.test-console-status-strip .dashboard-badge {
   overflow-wrap: anywhere;
   word-break: break-word;
+  white-space: normal;
+}
+
+.test-console-lifecycle-panel {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.test-console-lifecycle-note {
+  margin: 0 0 6px;
+  min-width: 0;
 }
 
 .test-console-actions {
@@ -4450,5 +4471,10 @@ body {
 
   .test-console-actions {
     grid-template-columns: 1fr;
+  }
+
+  .test-console-kv-list li span {
+    min-width: 0;
+    white-space: normal;
   }
 }

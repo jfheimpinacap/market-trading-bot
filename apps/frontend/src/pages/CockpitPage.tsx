@@ -116,6 +116,12 @@ const formatClockDuration = (value: number | null | undefined) => {
   const seconds = safeValue % 60;
   return [hours, minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':');
 };
+const formatTestConsoleSource = (value: string | null | undefined) => {
+  if (value === 'current_run') return 'current run';
+  if (value === 'last_completed') return 'last completed';
+  return value ?? 'empty';
+};
+const formatTestConsoleBoolean = (value: boolean | null | undefined) => (value === undefined || value === null ? 'n/a' : value ? 'yes' : 'no');
 const TEST_CONSOLE_PHASES = ['idle', 'scan', 'handoff', 'prediction', 'risk', 'execution', 'export', 'finalize'];
 const TEST_CONSOLE_PROFILE_OPTIONS = [
   { id: 'full_e2e', label: 'Full E2E' },
@@ -503,8 +509,18 @@ export function CockpitPage() {
   const currentTestConsoleSnapshot = testConsoleLifecycle.currentSnapshot;
   const effectiveLastCompletedSnapshot = testConsoleLifecycle.effectiveLastCompletedSnapshot;
   const displayTestConsoleSnapshot = currentTestConsoleSnapshot ?? effectiveLastCompletedSnapshot ?? null;
-  const testConsoleDisplaySource = testConsoleLifecycle.runActive ? 'current run' : effectiveLastCompletedSnapshot ? 'last completed' : 'empty';
-  const executedTestProfileId = currentTestConsoleSnapshot?.test_profile ?? effectiveLastCompletedSnapshot?.test_profile ?? 'none';
+  const testConsoleDisplaySource = formatTestConsoleSource(
+    testConsoleStatus?.display_source
+      ?? (testConsoleLifecycle.runActive ? 'current_run' : effectiveLastCompletedSnapshot ? 'last_completed' : 'empty'),
+  );
+  const testConsoleViewingCurrentRun = Boolean(testConsoleStatus?.active_run ?? testConsoleLifecycle.runActive);
+  const testConsoleViewingLastCompleted = testConsoleStatus?.display_source === 'last_completed' || (!testConsoleViewingCurrentRun && Boolean(effectiveLastCompletedSnapshot));
+  const executedTestProfileId = displayTestConsoleSnapshot?.effective_profile
+    ?? displayTestConsoleSnapshot?.test_profile
+    ?? effectiveLastCompletedSnapshot?.test_profile
+    ?? 'none';
+  const selectedTestProfileLabel = testConsoleStatus?.selected_profile ?? selectedTestProfileId;
+  const effectiveTestProfileLabel = displayTestConsoleSnapshot?.effective_profile ?? executedTestProfileId;
   const executedRunScope = currentTestConsoleSnapshot?.run_scope ?? effectiveLastCompletedSnapshot?.run_scope ?? 'none';
   const testConsoleCanStop = testConsoleLifecycle.canStop;
   const testConsoleCurrentStep = displayTestConsoleSnapshot?.current_step ?? (displayTestConsoleSnapshot?.current_phase ? Math.max(TEST_CONSOLE_PHASES.indexOf(TEST_CONSOLE_PHASE_LABELS[displayTestConsoleSnapshot.current_phase] ?? displayTestConsoleSnapshot.current_phase), 0) + 1 : null);
@@ -517,10 +533,30 @@ export function CockpitPage() {
   const testConsoleStageIndex = Math.max(TEST_CONSOLE_PHASES.indexOf(testConsoleStageLabel), 0);
   const testConsoleCurrentStepLabel = displayTestConsoleSnapshot?.current_step_label ?? testConsoleStageLabel ?? 'No active run';
   const testConsoleUpdatedAgo = formatRelativeSeconds(displayTestConsoleSnapshot?.updated_at);
-  const testConsoleLastProgressAgo = formatRelativeSeconds(displayTestConsoleSnapshot?.last_progress_at ?? displayTestConsoleSnapshot?.last_real_progress_at ?? displayTestConsoleSnapshot?.updated_at);
+  const testConsoleSecondsSinceLastProgress = displayTestConsoleSnapshot?.seconds_since_last_progress;
+  const testConsoleLastProgressAgo = testConsoleSecondsSinceLastProgress !== null && testConsoleSecondsSinceLastProgress !== undefined
+    ? formatDurationSeconds(testConsoleSecondsSinceLastProgress)
+    : formatRelativeSeconds(displayTestConsoleSnapshot?.last_progress_at ?? displayTestConsoleSnapshot?.last_real_progress_at ?? displayTestConsoleSnapshot?.updated_at);
+  const testConsoleLastBackendEvent = displayTestConsoleSnapshot?.last_backend_event ?? displayTestConsoleSnapshot?.last_event ?? 'n/a';
+  const testConsoleNextExpectedEvent = displayTestConsoleSnapshot?.next_expected_event ?? 'waiting for backend event';
+  const testConsoleExportReady = Boolean(displayTestConsoleSnapshot?.export_available ?? testConsoleStatus?.export_available);
+  const testConsoleLifecycleWarning = displayTestConsoleSnapshot?.lifecycle_warning ?? null;
+  const testConsoleTerminalReason = displayTestConsoleSnapshot?.terminal_reason ?? null;
+  const testConsoleInterruptedByStop = Boolean(displayTestConsoleSnapshot?.interrupted_by_stop);
+  const testConsoleRunId = displayTestConsoleSnapshot?.current_run_id ?? displayTestConsoleSnapshot?.run_id ?? testConsoleStatus?.current_run_id ?? testConsoleStatus?.run_id ?? 'n/a';
   const testConsoleActivitySummary = displayTestConsoleSnapshot
-    ? `${testConsoleLifecycle.runActive ? 'Running' : 'Showing'} ${executedTestProfileId} · phase=${testConsoleStageLabel} · elapsed=${formatClockDuration(displayTestConsoleSnapshot.elapsed_seconds)} · last progress ${testConsoleLastProgressAgo} ago`
-    : `Ready for ${selectedTestProfileId} · phase=idle · display source=empty`;
+    ? [
+        testConsoleViewingCurrentRun ? `Running ${effectiveTestProfileLabel}` : `Showing ${testConsoleViewingLastCompleted ? 'last completed' : testConsoleDisplaySource}`,
+        `status=${displayTestConsoleSnapshot.test_status ?? 'UNKNOWN'}`,
+        `phase=${testConsoleStageLabel}`,
+        `elapsed=${formatClockDuration(displayTestConsoleSnapshot.elapsed_seconds)}`,
+        `last event=${testConsoleLastBackendEvent}`,
+        `next=${testConsoleNextExpectedEvent}`,
+        testConsoleExportReady ? 'export available' : null,
+        testConsoleLifecycleWarning ? `warning=${testConsoleLifecycleWarning}` : null,
+        testConsoleTerminalReason ? `terminal=${testConsoleTerminalReason}` : null,
+      ].filter(Boolean).join(' · ')
+    : `No run yet · selected=${selectedTestProfileLabel} · phase=idle · next=waiting for backend event`;
   const testConsoleHasExportableLog = Boolean(
     testConsoleLog
       && testConsoleLog !== 'No log exported yet'
@@ -581,6 +617,11 @@ export function CockpitPage() {
         can_stop_reason: payload.can_stop_reason,
         is_terminal: payload.is_terminal,
         last_event: payload.last_event,
+        last_backend_event: payload.last_backend_event,
+        next_expected_event: payload.next_expected_event,
+        active_run: payload.active_run,
+        display_source: payload.display_source,
+        export_available: payload.export_available,
       });
       setTestConsoleStatus((previous) => (shouldApplyFreshTestConsoleStatus(previous, payload) ? payload : previous));
       return payload;
@@ -1566,8 +1607,13 @@ export function CockpitPage() {
                       <StatusBadge tone={toneFromStatus(displayTestConsoleSnapshot?.validation_status)}>{displayTestConsoleSnapshot?.validation_status ?? 'n/a'}</StatusBadge>
                       <StatusBadge tone={toneFromStatus(displayTestConsoleSnapshot?.trial_status)}>{displayTestConsoleSnapshot?.trial_status ?? 'n/a'}</StatusBadge>
                       <StatusBadge tone={toneFromStatus(displayTestConsoleSnapshot?.gate_status)}>{displayTestConsoleSnapshot?.gate_status ?? 'n/a'}</StatusBadge>
+                      {testConsoleViewingCurrentRun ? <StatusBadge tone="ready">CURRENT RUN</StatusBadge> : null}
+                      {testConsoleViewingLastCompleted ? <StatusBadge tone="neutral">LAST COMPLETED</StatusBadge> : null}
                       {testConsoleStatus?.is_stale ? <StatusBadge tone="pending">STALE</StatusBadge> : null}
-                      {testConsoleStatus?.export_available ? <StatusBadge tone="ready">EXPORT AVAILABLE</StatusBadge> : null}
+                      {testConsoleExportReady ? <StatusBadge tone="ready">export ready</StatusBadge> : null}
+                      {testConsoleLifecycleWarning ? <StatusBadge tone="pending">LIFECYCLE WARNING</StatusBadge> : null}
+                      {testConsoleTerminalReason ? <StatusBadge tone="neutral">TERMINAL REASON</StatusBadge> : null}
+                      {testConsoleInterruptedByStop ? <StatusBadge tone="pending">STOPPED</StatusBadge> : null}
                     </div>
                     {testConsoleStatusLoading ? <p>Loading Test Console status…</p> : null}
                     {!testConsoleStatusLoading && testConsoleStatusError ? <p className="warning-text">{testConsoleStatusError}</p> : null}
@@ -1624,14 +1670,36 @@ export function CockpitPage() {
                             <span className="section-label">Current state</span>
                           </div>
                           <ul className="key-value-list test-console-kv-list">
-                            <li><span>Selected profile</span><strong>{selectedTestProfileId}</strong></li>
-                            <li><span>Running profile</span><strong>{executedTestProfileId}</strong></li>
+                            <li><span>Selected profile</span><strong>{selectedTestProfileLabel}</strong></li>
+                            <li><span>Effective profile</span><strong>{effectiveTestProfileLabel}</strong></li>
+                            <li><span>Run ID</span><strong>{testConsoleRunId}</strong></li>
                             <li><span>Display source</span><strong>{testConsoleDisplaySource}</strong></li>
                             <li><span>Run scope</span><strong>{executedRunScope}</strong></li>
                             <li><span>Phase</span><strong>{testConsoleStageLabel}</strong></li>
                             <li><span>Elapsed time</span><strong>{formatClockDuration(displayTestConsoleSnapshot?.elapsed_seconds)}</strong></li>
                             <li><span>Last progress</span><strong>{testConsoleLastProgressAgo} ago</strong></li>
                             <li><span>Last update</span><strong>{testConsoleUpdatedAgo} ago</strong></li>
+                            <li><span>Active run</span><strong>{formatTestConsoleBoolean(testConsoleViewingCurrentRun)}</strong></li>
+                            <li><span>Can stop</span><strong>{formatTestConsoleBoolean(displayTestConsoleSnapshot?.can_stop ?? testConsoleStatus?.can_stop)}</strong></li>
+                          </ul>
+                        </div>
+
+                        <div className="test-console-panel test-console-lifecycle-panel">
+                          <div className="test-console-panel__heading">
+                            <span className="section-label">Lifecycle</span>
+                            {testConsoleExportReady ? <StatusBadge tone="ready">export ready</StatusBadge> : <StatusBadge tone="neutral">no export yet</StatusBadge>}
+                          </div>
+                          {testConsoleLifecycleWarning ? <p className="warning-text test-console-lifecycle-note">Lifecycle warning: {testConsoleLifecycleWarning}</p> : null}
+                          {testConsoleTerminalReason ? <p className="muted-text test-console-lifecycle-note">Terminal reason: {testConsoleTerminalReason}</p> : null}
+                          {testConsoleInterruptedByStop ? <p className="muted-text test-console-lifecycle-note">Stopped by user/system.</p> : null}
+                          <ul className="key-value-list test-console-kv-list">
+                            <li className="test-console-long-value"><span>Last backend event</span><strong>{testConsoleLastBackendEvent}</strong></li>
+                            <li className="test-console-long-value"><span>Next expected</span><strong>{testConsoleNextExpectedEvent}</strong></li>
+                            <li className="test-console-long-value"><span>Terminal reason</span><strong>{testConsoleTerminalReason ?? 'n/a'}</strong></li>
+                            <li className="test-console-long-value"><span>Lifecycle warning</span><strong>{testConsoleLifecycleWarning ?? 'n/a'}</strong></li>
+                            <li><span>Export available</span><strong>{formatTestConsoleBoolean(testConsoleExportReady)}</strong></li>
+                            <li><span>Interrupted stop</span><strong>{formatTestConsoleBoolean(displayTestConsoleSnapshot?.interrupted_by_stop)}</strong></li>
+                            <li><span>Seconds since progress</span><strong>{testConsoleSecondsSinceLastProgress ?? 'n/a'}</strong></li>
                           </ul>
                         </div>
 
@@ -1639,6 +1707,7 @@ export function CockpitPage() {
                           <div className="test-console-panel">
                             <div className="test-console-panel__heading"><span className="section-label">Current run</span></div>
                             <ul className="key-value-list test-console-kv-list">
+                              <li><span>Run ID</span><strong>{currentTestConsoleSnapshot.current_run_id ?? currentTestConsoleSnapshot.run_id ?? 'n/a'}</strong></li>
                               <li><span>Raw phase</span><strong>{currentTestConsoleSnapshot.current_phase ?? 'n/a'}</strong></li>
                               <li><span>Started</span><strong>{formatDate(currentTestConsoleSnapshot.started_at)}</strong></li>
                               <li><span>Updated</span><strong>{formatDate(currentTestConsoleSnapshot.updated_at)}</strong></li>
@@ -1662,7 +1731,8 @@ export function CockpitPage() {
                             <ul className="key-value-list test-console-kv-list">
                               <li><span>Status</span><strong>{effectiveLastCompletedSnapshot.test_status ?? 'n/a'}</strong></li>
                               <li><span>Completed at</span><strong>{formatDate(effectiveLastCompletedSnapshot.ended_at)}</strong></li>
-                              <li><span>Last event</span><strong>{effectiveLastCompletedSnapshot.last_event ?? 'n/a'}</strong></li>
+                              <li><span>Run ID</span><strong>{effectiveLastCompletedSnapshot.current_run_id ?? effectiveLastCompletedSnapshot.run_id ?? effectiveLastCompletedSnapshot.last_run_id ?? 'n/a'}</strong></li>
+                              <li><span>Last event</span><strong>{effectiveLastCompletedSnapshot.last_backend_event ?? effectiveLastCompletedSnapshot.last_event ?? 'n/a'}</strong></li>
                               <li className="test-console-long-value"><span>Reason code</span><strong>{effectiveLastCompletedSnapshot.last_reason_code ?? 'n/a'}</strong></li>
                               <li><span>Run scope</span><strong>{effectiveLastCompletedSnapshot.run_scope ?? 'n/a'}</strong></li>
                               <li><span>Executed profile</span><strong>{effectiveLastCompletedSnapshot.test_profile ?? 'n/a'}</strong></li>
@@ -1727,7 +1797,7 @@ export function CockpitPage() {
                               <li key={phase} className={index < testConsoleStageIndex ? 'is-complete' : index === testConsoleStageIndex ? 'is-current' : undefined}>{phase}</li>
                             ))}
                           </ol>
-                          <p className="muted-text">Stage-based progress, not a backend percentage · {testConsoleCurrentStepLabel} · step {testConsoleCurrentStep ?? 0}/{testConsoleTotalSteps} · update {testConsoleUpdatedAgo} ago · last progress {testConsoleLastProgressAgo} ago.</p>
+                          <p className="muted-text">Stage-based progress, not a backend percentage · {testConsoleCurrentStepLabel} · step {testConsoleCurrentStep ?? 0}/{testConsoleTotalSteps} · last event {testConsoleLastBackendEvent} · next {testConsoleNextExpectedEvent} · update {testConsoleUpdatedAgo} ago · last progress {testConsoleLastProgressAgo} ago.</p>
                         </div>
 
                         <div className="test-console-panel">
@@ -1737,6 +1807,7 @@ export function CockpitPage() {
                             <li><span>Elapsed</span><strong>{formatClockDuration(displayTestConsoleSnapshot?.elapsed_seconds)}</strong></li>
                             <li><span>Updated</span><strong>{formatDate(displayTestConsoleSnapshot?.updated_at)}</strong></li>
                             <li><span>Last progress</span><strong>{formatDate(displayTestConsoleSnapshot?.last_progress_at ?? displayTestConsoleSnapshot?.last_real_progress_at ?? displayTestConsoleSnapshot?.updated_at)}</strong></li>
+                            <li><span>Since progress</span><strong>{testConsoleLastProgressAgo} ago</strong></li>
                           </ul>
                         </div>
                       </div>

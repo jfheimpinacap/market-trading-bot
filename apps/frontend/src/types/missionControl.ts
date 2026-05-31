@@ -531,6 +531,11 @@ export type TestConsoleStatusResponse = {
   summary?: string | null;
   test_status: string;
   test_profile?: string;
+  run_id?: string | null;
+  active_run?: boolean;
+  selected_profile?: string | null;
+  effective_profile?: string | null;
+  display_source?: 'current_run' | 'last_completed' | 'empty' | string | null;
   available_test_profiles?: Record<string, Record<string, boolean>>;
   modules_included?: string[];
   modules_omitted?: string[];
@@ -553,7 +558,10 @@ export type TestConsoleStatusResponse = {
   stop_requested_at?: string | null;
   ended_at: string | null;
   elapsed_seconds?: number | null;
+  seconds_since_last_progress?: number | null;
   last_event?: string | null;
+  last_backend_event?: string | null;
+  next_expected_event?: string | null;
   last_reason_code?: string | null;
   export_available?: boolean;
   is_stale?: boolean;
@@ -564,6 +572,9 @@ export type TestConsoleStatusResponse = {
   current_run_id?: string | null;
   last_run_id?: string | null;
   can_stop?: boolean;
+  terminal_reason?: string | null;
+  lifecycle_warning?: string | null;
+  interrupted_by_stop?: boolean;
   stop_available?: boolean;
   can_stop_reason?: string | null;
   validation_status: string | null;

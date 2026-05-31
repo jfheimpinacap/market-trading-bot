@@ -29,7 +29,8 @@ export function resolveTestConsoleLifecycleState(
   historicalSnapshot: TestConsoleStatusResponse | null,
 ): TestConsoleLifecycleState {
   const normalizedStatus = (currentStatus?.test_status ?? '').toUpperCase();
-  const runActive = currentStatus?.has_active_run
+  const runActive = currentStatus?.active_run
+    ?? currentStatus?.has_active_run
     ?? (Boolean(currentStatus?.test_status) && !TERMINAL_TEST_CONSOLE_STATUSES.has(normalizedStatus));
   const hasLastCompletedRun = currentStatus?.has_last_completed_run
     ?? Boolean(
@@ -40,7 +41,7 @@ export function resolveTestConsoleLifecycleState(
   const exists = currentStatus?.exists ?? Boolean(currentStatus?.started_at);
   const contractStatus = (currentStatus?.status ?? (exists ? 'AVAILABLE' : 'NO_RUN_YET')).toUpperCase();
   const reasonCode = currentStatus?.reason_code ?? currentStatus?.last_reason_code ?? null;
-  const canStop = runActive && Boolean(currentStatus?.stop_available ?? currentStatus?.can_stop ?? false);
+  const canStop = runActive && Boolean(currentStatus?.can_stop ?? currentStatus?.stop_available ?? false);
   const canExport = Boolean(currentStatus?.export_available || runActive || hasLastCompletedRun);
 
   return {
