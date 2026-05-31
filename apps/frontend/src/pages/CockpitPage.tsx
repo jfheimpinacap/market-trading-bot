@@ -106,9 +106,9 @@ const formatDurationSeconds = (value: number | null | undefined) => {
 const formatRelativeSeconds = (value: string | null | undefined) => {
   if (!value) return 'n/a';
   const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
-  return `${seconds}s`;
+  return formatDurationSeconds(seconds);
 };
-const TEST_CONSOLE_PHASES = ['bootstrap', 'scan', 'consensus_review', 'pursuit_review', 'trial', 'validation', 'trend', 'gate', 'extended_run', 'finalize'];
+const TEST_CONSOLE_PHASES = ['idle', 'scan', 'handoff', 'prediction', 'risk', 'execution', 'export', 'finalize'];
 const TEST_CONSOLE_PROFILE_OPTIONS = [
   { id: 'full_e2e', label: 'Full E2E' },
   { id: 'scope_throttle_diagnostics', label: 'Scope + Throttle Diagnostics' },
@@ -117,6 +117,25 @@ const TEST_CONSOLE_PROFILE_OPTIONS = [
   { id: 'export_snapshot_integrity', label: 'Export / Snapshot Integrity' },
 ] as const;
 type TestConsoleProfileId = typeof TEST_CONSOLE_PROFILE_OPTIONS[number]['id'];
+
+const TEST_CONSOLE_PHASE_LABELS: Record<string, string> = {
+  idle: 'idle',
+  bootstrap: 'scan',
+  scan: 'scan',
+  handoff: 'handoff',
+  consensus_review: 'prediction',
+  prediction: 'prediction',
+  pursuit_review: 'risk',
+  validation: 'risk',
+  risk: 'risk',
+  trial: 'execution',
+  extended_run: 'execution',
+  execution: 'execution',
+  trend: 'export',
+  gate: 'finalize',
+  export: 'export',
+  finalize: 'finalize',
+};
 const TEST_CONSOLE_MODULE_LABELS: Record<string, string> = {
   include_scan: 'Scan',
   include_handoff: 'Handoff',
@@ -478,13 +497,17 @@ export function CockpitPage() {
   const executedTestProfileId = currentTestConsoleSnapshot?.test_profile ?? effectiveLastCompletedSnapshot?.test_profile ?? 'none';
   const executedRunScope = currentTestConsoleSnapshot?.run_scope ?? effectiveLastCompletedSnapshot?.run_scope ?? 'none';
   const testConsoleCanStop = testConsoleLifecycle.canStop;
-  const testConsoleCurrentStep = currentTestConsoleSnapshot?.current_step ?? (currentTestConsoleSnapshot?.current_phase ? TEST_CONSOLE_PHASES.indexOf(currentTestConsoleSnapshot.current_phase) + 1 : null);
+  const testConsoleCurrentStep = currentTestConsoleSnapshot?.current_step ?? (currentTestConsoleSnapshot?.current_phase ? Math.max(TEST_CONSOLE_PHASES.indexOf(TEST_CONSOLE_PHASE_LABELS[currentTestConsoleSnapshot.current_phase] ?? currentTestConsoleSnapshot.current_phase), 0) + 1 : null);
   const testConsoleTotalSteps = currentTestConsoleSnapshot?.total_steps ?? TEST_CONSOLE_PHASES.length;
   const testConsoleProgressPercent = testConsoleCurrentStep && testConsoleTotalSteps
     ? Math.min(100, Math.max(0, Math.round((testConsoleCurrentStep / testConsoleTotalSteps) * 100)))
     : 0;
-  const testConsoleCurrentStepLabel = currentTestConsoleSnapshot?.current_step_label ?? currentTestConsoleSnapshot?.current_phase ?? 'No active run';
+  const rawTestConsolePhase = currentTestConsoleSnapshot?.current_phase ?? (testConsoleLifecycle.runActive ? 'scan' : 'idle');
+  const testConsoleStageLabel = TEST_CONSOLE_PHASE_LABELS[rawTestConsolePhase] ?? rawTestConsolePhase ?? 'idle';
+  const testConsoleStageIndex = Math.max(TEST_CONSOLE_PHASES.indexOf(testConsoleStageLabel), 0);
+  const testConsoleCurrentStepLabel = currentTestConsoleSnapshot?.current_step_label ?? testConsoleStageLabel ?? 'No active run';
   const testConsoleUpdatedAgo = formatRelativeSeconds(currentTestConsoleSnapshot?.updated_at);
+  const testConsoleLastProgressAgo = formatRelativeSeconds(currentTestConsoleSnapshot?.last_progress_at ?? currentTestConsoleSnapshot?.last_real_progress_at ?? currentTestConsoleSnapshot?.updated_at);
   const testConsoleHasExportableLog = Boolean(
     testConsoleLog
       && testConsoleLog !== 'No log exported yet'
@@ -1520,10 +1543,11 @@ export function CockpitPage() {
                 </div>
                 <SectionCard
                   eyebrow="Single-pane V1 operator flow"
-                  title="Test Console"
-                  description="Compact supervised runner for V1 paper validation: start, stop, refresh status, export/copy logs. This does not enable live trading."
+                  title="Operational Test Console"
+                  description="Unified paper/live-read-only validation console: Scope + Throttle, Prediction + Risk, Full E2E, status, progress, exports and logs."
                 >
-                  <div className="button-row">
+                  <div className="test-console-shell">
+                    <div className="button-row test-console-status-strip">
                     <StatusBadge tone={testConsolePrimaryStatusTone}>{testConsolePrimaryStatusLabel}</StatusBadge>
                     <StatusBadge tone={toneFromStatus(testConsoleStatus?.progress_state)}>{testConsoleStatus?.progress_state ?? 'idle'}</StatusBadge>
                     <StatusBadge tone={toneFromStatus(currentTestConsoleSnapshot?.validation_status)}>{currentTestConsoleSnapshot?.validation_status ?? 'n/a'}</StatusBadge>
@@ -1538,32 +1562,43 @@ export function CockpitPage() {
                     <>
                       {currentTestConsoleSnapshot ? (
                         <>
-                          <div className="test-console-progress">
-                            <div className="test-console-progress__bar" role="progressbar" aria-valuenow={testConsoleProgressPercent} aria-valuemin={0} aria-valuemax={100}>
-                              <div className="test-console-progress__fill" style={{ width: `${testConsoleProgressPercent}%` }} />
+                          <div className="test-console-run-grid">
+                            <div className="test-console-progress test-console-panel">
+                              <div className="test-console-progress__header">
+                                <strong>{testConsoleStageLabel}</strong>
+                                <span>{testConsoleLifecycle.runActive ? 'RUNNING' : 'CURRENT/LAST'} · {formatDurationSeconds(currentTestConsoleSnapshot.elapsed_seconds)}</span>
+                              </div>
+                              <div className="test-console-progress__bar" role="progressbar" aria-valuenow={testConsoleProgressPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Estimated test phase progress">
+                                <div className="test-console-progress__fill" style={{ width: `${testConsoleProgressPercent}%` }} />
+                              </div>
+                              <ol className="test-console-phase-rail" aria-label="Estimated phase rail">
+                                {TEST_CONSOLE_PHASES.map((phase, index) => (
+                                  <li key={phase} className={index < testConsoleStageIndex ? 'is-complete' : index === testConsoleStageIndex ? 'is-current' : undefined}>{phase}</li>
+                                ))}
+                              </ol>
+                              <p className="muted-text">Estimated by exposed phase/step · {testConsoleCurrentStepLabel} · step {testConsoleCurrentStep ?? 0}/{testConsoleTotalSteps} · update {testConsoleUpdatedAgo} ago · no-progress {testConsoleLastProgressAgo}</p>
                             </div>
-                            <p className="muted-text">Etapa actual: {testConsoleCurrentStepLabel} · Paso {testConsoleCurrentStep ?? 0} de {testConsoleTotalSteps} · Última actualización hace {testConsoleUpdatedAgo}</p>
+                            <ul className="key-value-list test-console-panel test-console-kv-grid">
+                              <li><span>Raw phase</span><strong>{currentTestConsoleSnapshot.current_phase ?? 'n/a'}</strong></li>
+                              <li><span>Started</span><strong>{formatDate(currentTestConsoleSnapshot.started_at)}</strong></li>
+                              <li><span>Updated</span><strong>{formatDate(currentTestConsoleSnapshot.updated_at)}</strong></li>
+                              <li><span>Ended</span><strong>{formatDate(currentTestConsoleSnapshot.ended_at)}</strong></li>
+                              <li><span>Elapsed timer</span><strong>{formatDurationSeconds(currentTestConsoleSnapshot.elapsed_seconds)}</strong></li>
+                              <li><span>Validation</span><strong>{currentTestConsoleSnapshot.validation_status ?? 'n/a'}</strong></li>
+                              <li><span>Trial</span><strong>{currentTestConsoleSnapshot.trial_status ?? 'n/a'}</strong></li>
+                              <li><span>Trend</span><strong>{currentTestConsoleSnapshot.trend_status ?? 'n/a'}</strong></li>
+                              <li><span>Readiness</span><strong>{currentTestConsoleSnapshot.readiness_status ?? 'n/a'}</strong></li>
+                              <li><span>Gate</span><strong>{currentTestConsoleSnapshot.gate_status ?? 'n/a'}</strong></li>
+                              <li><span>Stop</span><strong>{testConsoleCanStop ? 'available' : 'not available'}{currentTestConsoleSnapshot.can_stop_reason ? ` · ${currentTestConsoleSnapshot.can_stop_reason}` : ''}</strong></li>
+                              <li><span>Next action</span><strong>{currentTestConsoleSnapshot.next_action_hint ?? 'n/a'}</strong></li>
+                            </ul>
                           </div>
-                          <ul className="key-value-list">
-                            <li><span>Current phase</span><strong>{currentTestConsoleSnapshot.current_phase ?? 'n/a'}</strong></li>
-                            <li><span>Started at</span><strong>{formatDate(currentTestConsoleSnapshot.started_at)}</strong></li>
-                            <li><span>Updated at</span><strong>{formatDate(currentTestConsoleSnapshot.updated_at)}</strong></li>
-                            <li><span>Ended at</span><strong>{formatDate(currentTestConsoleSnapshot.ended_at)}</strong></li>
-                            <li><span>Elapsed time</span><strong>{formatDurationSeconds(currentTestConsoleSnapshot.elapsed_seconds)}</strong></li>
-                            <li><span>Validation status</span><strong>{currentTestConsoleSnapshot.validation_status ?? 'n/a'}</strong></li>
-                            <li><span>Trial status</span><strong>{currentTestConsoleSnapshot.trial_status ?? 'n/a'}</strong></li>
-                            <li><span>Trend status</span><strong>{currentTestConsoleSnapshot.trend_status ?? 'n/a'}</strong></li>
-                            <li><span>Readiness status</span><strong>{currentTestConsoleSnapshot.readiness_status ?? 'n/a'}</strong></li>
-                            <li><span>Gate status</span><strong>{currentTestConsoleSnapshot.gate_status ?? 'n/a'}</strong></li>
-                            <li><span>Stop availability</span><strong>{testConsoleCanStop ? 'available' : 'not available'}{currentTestConsoleSnapshot.can_stop_reason ? ` · ${currentTestConsoleSnapshot.can_stop_reason}` : ''}</strong></li>
-                            <li><span>Next action hint</span><strong>{currentTestConsoleSnapshot.next_action_hint ?? 'n/a'}</strong></li>
-                          </ul>
                         </>
                       ) : (
                         <p className="muted-text">No active run. Current run panel is clean while idle/terminal.</p>
                       )}
                       {effectiveLastCompletedSnapshot ? (
-                        <ul className="key-value-list">
+                        <ul className="key-value-list test-console-last-run">
                           <li><span>Last completed run</span><strong>{effectiveLastCompletedSnapshot.test_status ?? 'n/a'}</strong></li>
                           <li><span>Completed at</span><strong>{formatDate(effectiveLastCompletedSnapshot.ended_at)}</strong></li>
                           <li><span>Last event</span><strong>{effectiveLastCompletedSnapshot.last_event ?? 'n/a'}</strong></li>
@@ -1574,7 +1609,8 @@ export function CockpitPage() {
                       ) : null}
                     </>
                   ) : null}
-                  <div className="stack-md">
+                  <div className="test-console-config-grid">
+                    <div className="stack-md test-console-panel">
                     <div className="button-row">
                       <label htmlFor="test-console-profile-select"><strong>Profile</strong></label>
                       <select
@@ -1618,11 +1654,12 @@ export function CockpitPage() {
                     ) : null}
                     <ul className="key-value-list">
                       <li><span>Selected profile</span><strong>{selectedTestProfileId}</strong></li>
-                      <li><span>Executed profile</span><strong>{executedTestProfileId}</strong></li>
+                      <li><span>Running/display profile</span><strong>{executedTestProfileId}</strong></li>
+                      <li><span>Display source</span><strong>{testConsoleLifecycle.runActive ? 'current run' : effectiveLastCompletedSnapshot ? 'last completed' : 'empty'}</strong></li>
                       <li><span>Run scope</span><strong>{executedRunScope}</strong></li>
                     </ul>
                   </div>
-                  <div className="button-row test-console-actions">
+                  <div className="button-row test-console-actions test-console-panel">
                     <button className="secondary-button" type="button" disabled={testConsoleStartLoading || testConsoleStopLoading} onClick={() => void startTestConsoleFromCockpit()}>
                       {testConsoleStartLoading ? 'Starting…' : 'Run selected profile'}
                     </button>
@@ -1659,6 +1696,7 @@ export function CockpitPage() {
                     <button className="ghost-button" type="button" onClick={() => setTestConsoleRawJsonOpen((value) => !value)}>
                       {testConsoleRawJsonOpen ? 'Hide raw JSON' : 'View raw JSON'}
                     </button>
+                  </div>
                   </div>
                   {testConsoleCopyMessage ? <p className="muted-text">{testConsoleCopyMessage}</p> : null}
                   {testConsoleLogError ? <p className="warning-text">{testConsoleLogError}</p> : null}
@@ -1730,6 +1768,7 @@ export function CockpitPage() {
                       <pre className="test-console-output">{JSON.stringify(testConsoleStatus ?? {}, null, 2)}</pre>
                     </div>
                   ) : null}
+                  </div>
                 </SectionCard>
                 <SectionCard
                   eyebrow="Economic snapshot"

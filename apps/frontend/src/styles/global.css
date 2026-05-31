@@ -3288,3 +3288,494 @@ button {
   display: grid;
   gap: 0.5rem;
 }
+
+/* Prompt 368: transversal frontend-only operational compaction pass. */
+:root {
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 6px;
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 6px;
+  --space-md: 8px;
+  --shadow-soft: 0 8px 18px rgba(24, 39, 75, 0.055);
+}
+
+body {
+  font-size: 14px;
+}
+
+.app-shell {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.sidebar {
+  padding: 10px 8px;
+  gap: 7px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sidebar__brand h2 {
+  font-size: 0.98rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.sidebar__section,
+.sidebar__nav {
+  gap: 4px;
+}
+
+.sidebar__advanced {
+  border-radius: var(--radius-md);
+  padding: 6px;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.sidebar__advanced summary {
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sidebar__advanced summary span,
+.nav-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__advanced summary small {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+}
+
+.sidebar__advanced-hint {
+  display: none;
+}
+
+.sidebar__advanced .sidebar__nav {
+  max-height: calc(100vh - 246px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.nav-item {
+  min-width: 0;
+  border-radius: var(--radius-sm);
+  padding: 5px 7px;
+  font-size: 0.8rem;
+  line-height: 1.15;
+}
+
+.sidebar__footer {
+  gap: 4px;
+}
+
+.sidebar__tag {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  font-size: 0.72rem;
+}
+
+.sidebar__version {
+  padding-top: 6px;
+}
+
+.app-shell__main {
+  padding: 8px 10px 10px;
+}
+
+.topbar,
+.page-header,
+.panel,
+.dashboard-stat-card,
+.dashboard-link-card,
+.dashboard-recent-list__item,
+.market-metric-card,
+.module-grid__item,
+.subsection,
+.mission-control-deep-details,
+.test-console-output,
+.data-table,
+.markets-table,
+.executive-chart svg {
+  border-radius: var(--radius-md);
+}
+
+.topbar,
+.page-header {
+  padding: 7px 9px;
+}
+
+.topbar h1,
+.page-header h1 {
+  font-size: 1rem;
+}
+
+.section-card h2 {
+  font-size: 0.9rem;
+}
+
+.panel,
+.markets-page .panel,
+.portfolio-page .panel,
+.cockpit-page .panel,
+.mission-control-page .panel {
+  padding: 7px 8px;
+}
+
+.app-shell__content,
+.page-stack,
+.cockpit-page,
+.dashboard-page,
+.mission-control-page,
+.content-grid {
+  gap: 6px;
+}
+
+.content-grid--two-columns {
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+}
+
+.content-grid--three-columns {
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+}
+
+.section-card__header {
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.section-card__header > div {
+  gap: 0;
+}
+
+.section-card__description,
+.page-header__description,
+.topbar__description {
+  margin: 1px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.section-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.07em;
+}
+
+.button-row,
+.markets-page .button-row,
+.portfolio-page .button-row,
+.cockpit-page .button-row,
+.mission-control-page .button-row {
+  gap: 4px;
+}
+
+.secondary-button,
+.primary-button,
+.ghost-button,
+.markets-page .secondary-button,
+.markets-page .primary-button,
+.markets-page .ghost-button,
+.portfolio-page .secondary-button,
+.portfolio-page .primary-button,
+.portfolio-page .ghost-button,
+.cockpit-page .secondary-button,
+.cockpit-page .primary-button,
+.cockpit-page .ghost-button,
+.mission-control-page .secondary-button,
+.mission-control-page .primary-button,
+.mission-control-page .ghost-button {
+  min-height: 25px;
+  border-radius: var(--radius-sm);
+  padding: 3px 7px;
+  font-size: 0.78rem;
+}
+
+.ghost-button {
+  color: var(--text-main);
+  border-color: var(--border-strong);
+}
+
+.dashboard-badge,
+.status-badge,
+.pill,
+.market-badge,
+.paper-badge,
+.trace-badge {
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+  font-size: 0.64rem;
+  line-height: 1.55;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.key-value-list {
+  gap: 3px;
+  font-size: 0.8rem;
+}
+
+.key-value-list li {
+  gap: 8px;
+  padding-bottom: 3px;
+  align-items: baseline;
+}
+
+.key-value-list li strong {
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.subsection {
+  padding: 5px 7px;
+  gap: 4px;
+}
+
+.data-table th,
+.data-table td,
+.markets-table th,
+.markets-table td {
+  padding: 4px 6px;
+  font-size: 0.8rem;
+  line-height: 1.22;
+}
+
+.table-wrapper,
+.markets-table-wrapper {
+  max-height: min(64vh, 720px);
+  overflow: auto;
+}
+
+.cockpit-metric-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px 8px;
+  font-size: 0.8rem;
+}
+
+.cockpit-page > .panel:nth-of-type(n + 3) {
+  min-width: 0;
+}
+
+.test-console-shell {
+  display: grid;
+  gap: 6px;
+}
+
+.test-console-status-strip {
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.test-console-run-grid,
+.test-console-config-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.25fr) minmax(280px, 0.75fr);
+  gap: 6px;
+  align-items: start;
+}
+
+.test-console-panel {
+  min-width: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel-alt);
+  padding: 6px 7px;
+}
+
+.test-console-progress {
+  margin: 0;
+}
+
+.test-console-progress__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 0.82rem;
+}
+
+.test-console-progress__header strong {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.test-console-progress__header span {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.test-console-progress__bar {
+  height: 7px;
+  border-radius: var(--radius-sm);
+}
+
+.test-console-phase-rail {
+  list-style: none;
+  margin: 5px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.test-console-phase-rail li {
+  min-width: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xs);
+  padding: 2px 3px;
+  color: var(--text-soft);
+  background: #fff;
+  font-size: 0.58rem;
+  line-height: 1.2;
+  text-align: center;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.test-console-phase-rail li.is-complete {
+  border-color: rgba(15, 159, 110, 0.3);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.test-console-phase-rail li.is-current {
+  border-color: rgba(40, 75, 206, 0.35);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.test-console-kv-grid,
+.test-console-last-run {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 10px;
+}
+
+.test-console-kv-grid li,
+.test-console-last-run li {
+  min-width: 0;
+}
+
+.test-console-actions {
+  align-content: start;
+}
+
+.test-console-output-block {
+  max-height: 220px;
+  overflow: hidden;
+}
+
+.test-console-output {
+  max-height: 160px;
+  font-size: 0.76rem;
+  line-height: 1.25;
+  padding: 6px 7px;
+}
+
+.cockpit-page .section-card .section-card {
+  padding: 6px 7px;
+  box-shadow: none;
+  background: var(--bg-panel-alt);
+}
+
+.cockpit-page .section-card .section-card__description {
+  display: none;
+}
+
+.executive-dashboard-page {
+  gap: 6px;
+}
+
+.dashboard-quick-strip {
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 4px;
+}
+
+.dashboard-quick-pill,
+.dashboard-stat-card--tight {
+  border-radius: var(--radius-md);
+  padding: 5px 6px;
+}
+
+.dashboard-stat-grid--compact {
+  grid-template-columns: repeat(6, minmax(100px, 1fr));
+  gap: 4px;
+}
+
+.dashboard-stat-card--tight strong {
+  font-size: 0.9rem;
+}
+
+.executive-chart svg {
+  height: 76px;
+}
+
+@media (min-width: 1320px) {
+  .cockpit-page .content-grid--two-columns {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .content-grid--three-columns,
+  .content-grid--two-columns,
+  .test-console-run-grid,
+  .test-console-config-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cockpit-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 920px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    height: auto;
+    max-height: none;
+  }
+
+  .sidebar__advanced .sidebar__nav {
+    max-height: 260px;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell__main {
+    padding: 8px;
+  }
+
+  .topbar,
+  .page-header,
+  .panel {
+    padding: 7px 8px;
+    border-radius: var(--radius-md);
+  }
+
+  .test-console-kv-grid,
+  .test-console-last-run,
+  .cockpit-metric-grid,
+  .dashboard-quick-strip,
+  .dashboard-stat-grid--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .test-console-phase-rail {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
