@@ -53,6 +53,9 @@ TEST_STATUS_FAILED = 'FAILED'
 TEST_STATUS_TIMED_OUT = 'TIMED_OUT'
 TEST_STATUS_HUNG = 'HUNG'
 
+TEST_CONSOLE_HANG_TIMEOUT_REASON_CODE = 'TEST_CONSOLE_HANG_TIMEOUT'
+TEST_CONSOLE_FINALIZE_SLOW_WARNING_REASON_CODE = 'TEST_CONSOLE_FINALIZE_SLOW_WARNING'
+
 _PHASES = [
     'bootstrap',
     'scan',
@@ -505,6 +508,119 @@ def _augment_progress(status_payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _is_complete_finalize_payload(payload: dict[str, Any]) -> bool:
+    if str(payload.get('current_phase') or '') != 'finalize':
+        return False
+    has_export = bool(payload.get('text_export') or payload.get('ended_at'))
+    if not has_export:
+        return False
+    known_operational_status = any(
+        str(payload.get(key) or '').upper() not in {'', 'UNKNOWN', 'NOT_RUN'}
+        for key in (
+            'trial_status',
+            'validation_status',
+            'trend_status',
+            'readiness_status',
+            'gate_status',
+            'extended_run_status',
+            'funnel_status',
+        )
+    )
+    has_step_payload = bool(payload.get('step_results'))
+    return known_operational_status or has_step_payload
+
+
+def _infer_finalize_operational_status(payload: dict[str, Any]) -> str | None:
+    current_status = str(payload.get('test_status') or '').upper()
+    if current_status in {
+        TEST_STATUS_COMPLETED,
+        TEST_STATUS_COMPLETED_WITH_WARNINGS,
+        TEST_STATUS_BLOCKED,
+        TEST_STATUS_FAILED,
+        TEST_STATUS_STOPPED,
+    }:
+        return current_status
+    if payload.get('errors'):
+        return TEST_STATUS_FAILED
+    if str(payload.get('gate_status') or '').upper() == 'BLOCK':
+        return TEST_STATUS_BLOCKED
+    if payload.get('warnings') or payload.get('blocker_summary'):
+        return TEST_STATUS_COMPLETED_WITH_WARNINGS
+    if _is_complete_finalize_payload(payload):
+        return TEST_STATUS_COMPLETED
+    return None
+
+
+def _next_action_hint_for_operational_status(test_status: str) -> str:
+    normalized = str(test_status or '').upper()
+    if normalized == TEST_STATUS_BLOCKED:
+        return 'Review gate/blocker evidence in the completed export before deciding whether to rerun.'
+    if normalized == TEST_STATUS_COMPLETED_WITH_WARNINGS:
+        return 'Review lifecycle warnings and operational diagnostics in the completed export.'
+    if normalized == TEST_STATUS_FAILED:
+        return 'Review errors in the completed export before rerunning.'
+    if normalized == TEST_STATUS_COMPLETED:
+        return 'Review completed export and start the next paper diagnostic run when ready.'
+    return 'Review test console log.'
+
+
+def _finalize_summary(payload: dict[str, Any]) -> str:
+    overlay = payload.get('active_operational_overlay_summary') or {}
+    return (
+        f"{payload.get('test_status')}: phase={payload.get('current_phase')} trial={payload.get('trial_status')} "
+        f"validation={payload.get('validation_status')} gate={payload.get('gate_status')} "
+        f"funnel_status={payload.get('funnel_status')} window_funnel_status={payload.get('funnel_status_window') or payload.get('funnel_status')} "
+        f"overlay_status={overlay.get('overlay_status') or 'UNKNOWN'}"
+    )
+
+
+def _apply_finalize_slow_warning_if_usable(
+    payload: dict[str, Any],
+    *,
+    observed_seconds: int,
+    current_phase: str,
+) -> tuple[dict[str, Any], bool]:
+    if current_phase != 'finalize' or not _is_complete_finalize_payload(payload):
+        return payload, False
+
+    operational_status = _infer_finalize_operational_status(payload)
+    if not operational_status:
+        return payload, False
+
+    now = timezone.now()
+    reason = f'FINALIZE_SLOW_EXPORT_AVAILABLE_{observed_seconds}s'
+    payload['test_status'] = operational_status
+    payload['ended_at'] = payload.get('ended_at') or now
+    payload['updated_at'] = now
+    payload['hang_detected_at'] = now
+    payload['hang_detection_reason'] = reason
+    payload['hang_reason_classification'] = 'FINALIZE_SLOW_EXPORT_AVAILABLE'
+    payload['last_event'] = 'Finalize slow warning recorded after usable export/status was available'
+    payload['last_reason_code'] = TEST_CONSOLE_FINALIZE_SLOW_WARNING_REASON_CODE
+    payload['warnings'] = list(
+        dict.fromkeys(
+            [
+                code
+                for code in [*(payload.get('warnings') or []), TEST_CONSOLE_FINALIZE_SLOW_WARNING_REASON_CODE]
+                if code != TEST_CONSOLE_HANG_TIMEOUT_REASON_CODE
+            ]
+        )
+    )
+    payload['reason_codes'] = list(
+        dict.fromkeys(
+            [
+                code
+                for code in [*(payload.get('reason_codes') or []), TEST_CONSOLE_FINALIZE_SLOW_WARNING_REASON_CODE]
+                if code != TEST_CONSOLE_HANG_TIMEOUT_REASON_CODE
+            ]
+        )
+    )
+    payload['next_action_hint'] = _next_action_hint_for_operational_status(operational_status)
+    payload['summary'] = _finalize_summary(payload)
+    payload['text_export'] = _log_line_items(payload)
+    return payload, True
+
+
 def _apply_hang_timeout_if_needed(status_payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     payload = _normalize_test_console_payload(status_payload)
     if _is_terminal_test_status(payload.get('test_status')):
@@ -527,6 +643,14 @@ def _apply_hang_timeout_if_needed(status_payload: dict[str, Any]) -> tuple[dict[
     if observed_seconds < timeout_seconds:
         return payload, False
 
+    payload, finalize_warning_applied = _apply_finalize_slow_warning_if_usable(
+        payload,
+        observed_seconds=observed_seconds,
+        current_phase=current_phase,
+    )
+    if finalize_warning_applied:
+        return payload, True
+
     reason = (
         f'HANG_DETECTED_NO_PROGRESS_{observed_seconds}s_PHASE_{current_phase or "unknown"}'
     )
@@ -539,8 +663,8 @@ def _apply_hang_timeout_if_needed(status_payload: dict[str, Any]) -> tuple[dict[
     payload['last_event'] = 'Test console marked TIMED_OUT due to no progress'
     payload['last_reason_code'] = reason
     payload['next_action_hint'] = 'Run timed out while waiting for progress. Review partial export and restart or stop explicitly.'
-    payload['warnings'] = list(dict.fromkeys([*(payload.get('warnings') or []), 'TEST_CONSOLE_HANG_TIMEOUT']))
-    payload['reason_codes'] = list(dict.fromkeys([*(payload.get('reason_codes') or []), 'TEST_CONSOLE_HANG_TIMEOUT']))
+    payload['warnings'] = list(dict.fromkeys([*(payload.get('warnings') or []), TEST_CONSOLE_HANG_TIMEOUT_REASON_CODE]))
+    payload['reason_codes'] = list(dict.fromkeys([*(payload.get('reason_codes') or []), TEST_CONSOLE_HANG_TIMEOUT_REASON_CODE]))
     payload['summary'] = (
         f"{TEST_STATUS_TIMED_OUT}: no progress for {observed_seconds}s while phase={current_phase or 'unknown'}"
     )
@@ -2310,13 +2434,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['updated_at'] = timezone.now()
         payload['last_progress_at'] = payload['updated_at']
         payload['last_real_progress_at'] = payload['updated_at']
-        overlay = payload.get('active_operational_overlay_summary') or {}
-        payload['summary'] = (
-            f"{payload['test_status']}: phase={payload.get('current_phase')} trial={payload.get('trial_status')} "
-            f"validation={payload.get('validation_status')} gate={payload.get('gate_status')} "
-            f"funnel_status={payload.get('funnel_status')} window_funnel_status={payload.get('funnel_status_window') or payload.get('funnel_status')} "
-            f"overlay_status={overlay.get('overlay_status') or 'UNKNOWN'}"
-        )
+        payload['summary'] = _finalize_summary(payload)
         payload['text_export'] = _log_line_items(payload)
         payload = _augment_progress(_normalize_test_console_payload(payload))
         _set_state(status=payload, log=payload, append_history=True)
