@@ -8022,6 +8022,168 @@ class TestConsoleApiTests(TestCase):
         self.assertIsNotNone(stopped_payload.get('ended_at'))
         self.assertFalse(stopped_payload.get('stop_available'))
 
+    @patch('apps.mission_control.services.test_console.bootstrap_live_read_only_paper_session', side_effect=RuntimeError('stop after initial state'))
+    def test_start_creates_run_id_and_records_initial_lifecycle_state(self, _mock_bootstrap):
+        from apps.mission_control.services import test_console
+
+        captured_statuses = []
+        original_set_state = test_console._set_state
+
+        def capture_set_state(*, status=None, log=None, append_history=False):
+            if status is not None:
+                captured_statuses.append(dict(status))
+            return original_set_state(status=status, log=log, append_history=append_history)
+
+        with patch('apps.mission_control.services.test_console._set_state', side_effect=capture_set_state), self.assertLogs(
+            'apps.mission_control.services.test_console', level='INFO'
+        ) as logs:
+            payload = test_console.start_test_console(profile_id='scope_throttle_diagnostics')
+
+        initial = captured_statuses[0]
+        self.assertEqual(initial['test_status'], 'RUNNING')
+        self.assertEqual(initial['selected_profile'], 'scope_throttle_diagnostics')
+        self.assertEqual(initial['effective_profile'], 'scope_throttle_diagnostics')
+        self.assertTrue(initial['current_run_id'].startswith('tc-'))
+        self.assertEqual(initial['current_phase'], 'bootstrap')
+        self.assertIn('[test-console] start-request-received', '\n'.join(logs.output))
+        self.assertEqual(payload['test_status'], 'FAILED')
+        self.assertEqual(payload['last_run_id'], initial['current_run_id'])
+
+    def test_phase_transition_status_fields_update_backend_event_and_progress_age(self):
+        from apps.mission_control.services.test_console import finalize_test_console_payload_for_serializer
+
+        payload = self._status_payload()
+        now = timezone.now()
+        payload.update(
+            {
+                'test_status': 'RUNNING',
+                'current_run_id': 'tc-test-run',
+                'last_run_id': None,
+                'current_phase': 'scan',
+                'last_event': 'Scan phase started',
+                'last_progress_at': now - timedelta(seconds=4),
+                'last_real_progress_at': now - timedelta(seconds=4),
+                'ended_at': None,
+            }
+        )
+
+        status = finalize_test_console_payload_for_serializer(payload, source='test')
+        self.assertEqual(status['last_backend_event'], 'Scan phase started')
+        self.assertEqual(status['next_expected_event'], 'scan_completed_or_skipped')
+        self.assertGreaterEqual(status['seconds_since_last_progress'], 0)
+        self.assertTrue(status['can_stop'])
+        self.assertEqual(status['active_run']['run_id'], 'tc-test-run')
+
+    @patch('apps.mission_control.services.test_console.get_live_paper_bootstrap_status')
+    @patch('apps.mission_control.services.test_console._find_active_preset_session', return_value=None)
+    @patch('apps.mission_control.services.test_console.get_runner_state')
+    def test_stop_marks_interruption_and_terminal_reason(self, mock_runner_state, _mock_find_active_session, mock_bootstrap_status):
+        from apps.mission_control.services.test_console import stop_test_console, _set_state
+
+        payload = self._status_payload()
+        payload.update({'test_status': 'RUNNING', 'current_run_id': 'tc-stop-run', 'last_run_id': None, 'ended_at': None, 'current_phase': 'gate'})
+        _set_state(status=payload)
+        mock_runner_state.return_value = SimpleNamespace(runner_status='PAUSED')
+        mock_bootstrap_status.return_value = {
+            'session_active': False,
+            'heartbeat_active': False,
+            'current_session_status': 'PAUSED',
+        }
+
+        stopped_payload = stop_test_console()
+        self.assertEqual(stopped_payload['test_status'], 'STOPPED')
+        self.assertTrue(stopped_payload['interrupted_by_stop'])
+        self.assertEqual(stopped_payload['last_run_id'], 'tc-stop-run')
+        self.assertEqual(stopped_payload['last_backend_event'], 'Stop requested by operator')
+        self.assertTrue(stopped_payload['terminal_reason'])
+
+    def test_finalize_with_export_available_keeps_operational_outcome(self):
+        from apps.mission_control.services.test_console import _apply_hang_timeout_if_needed
+
+        payload = self._status_payload()
+        payload.update(
+            {
+                'test_status': 'RUNNING',
+                'current_phase': 'finalize',
+                'ended_at': timezone.now() - timedelta(minutes=30),
+                'last_progress_at': timezone.now() - timedelta(minutes=30),
+                'last_real_progress_at': timezone.now() - timedelta(minutes=30),
+                'phase_entered_at': timezone.now() - timedelta(minutes=30),
+                'text_export': 'ready export',
+                'errors': [],
+                'warnings': [],
+                'blocker_summary': [],
+            }
+        )
+
+        result, mutated = _apply_hang_timeout_if_needed(payload)
+        self.assertTrue(mutated)
+        self.assertEqual(result['test_status'], 'COMPLETED')
+        self.assertEqual(result['last_reason_code'], 'TEST_CONSOLE_FINALIZE_SLOW_WARNING')
+        self.assertNotEqual(result['test_status'], 'TIMED_OUT')
+
+    def test_timeout_real_without_export_marks_timeout(self):
+        from apps.mission_control.services.test_console import _apply_hang_timeout_if_needed
+
+        payload = self._status_payload()
+        payload.update(
+            {
+                'test_status': 'RUNNING',
+                'current_phase': 'gate',
+                'ended_at': None,
+                'text_export': '',
+                'step_results': [],
+                'last_progress_at': timezone.now() - timedelta(minutes=30),
+                'last_real_progress_at': timezone.now() - timedelta(minutes=30),
+                'phase_entered_at': timezone.now() - timedelta(minutes=30),
+            }
+        )
+
+        result, mutated = _apply_hang_timeout_if_needed(payload)
+        self.assertTrue(mutated)
+        self.assertEqual(result['test_status'], 'TIMED_OUT')
+        self.assertIn('TEST_CONSOLE_HANG_TIMEOUT', result['warnings'])
+        self.assertIn('NO_REAL_PROGRESS_IN_gate', result['hang_reason_classification'])
+
+    def test_status_serializer_exposes_lifecycle_fields_for_ui(self):
+        from apps.mission_control.serializers import TestConsoleStatusSerializer
+        from apps.mission_control.services.test_console import finalize_test_console_payload_for_serializer
+
+        payload = self._status_payload()
+        payload.update(
+            {
+                'test_status': 'RUNNING',
+                'current_run_id': 'tc-ui-run',
+                'last_run_id': None,
+                'current_phase': 'validation',
+                'last_event': 'Validation phase started',
+                'ended_at': None,
+            }
+        )
+
+        data = TestConsoleStatusSerializer(finalize_test_console_payload_for_serializer(payload, source='test')).data
+        for field in [
+            'current_run_id',
+            'active_run',
+            'selected_profile',
+            'effective_profile',
+            'display_source',
+            'current_phase',
+            'elapsed_seconds',
+            'last_progress_at',
+            'seconds_since_last_progress',
+            'last_backend_event',
+            'next_expected_event',
+            'export_available',
+            'can_stop',
+            'terminal_reason',
+            'lifecycle_warning',
+            'interrupted_by_stop',
+            'interrupted_by_reload',
+            'interrupted_by_server_restart',
+        ]:
+            self.assertIn(field, data)
+
     @patch('apps.mission_control.views.export_test_console_log')
     def test_export_log_text_works(self, mock_export):
         mock_export.return_value = 'copy paste friendly log\nhandoff_summary:\n  shortlisted_signals=1'

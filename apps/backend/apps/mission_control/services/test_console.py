@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 import logging
 from threading import Lock
+from uuid import uuid4
 from typing import Any
 
 from django.utils import timezone
@@ -55,6 +56,7 @@ TEST_STATUS_HUNG = 'HUNG'
 
 TEST_CONSOLE_HANG_TIMEOUT_REASON_CODE = 'TEST_CONSOLE_HANG_TIMEOUT'
 TEST_CONSOLE_FINALIZE_SLOW_WARNING_REASON_CODE = 'TEST_CONSOLE_FINALIZE_SLOW_WARNING'
+TEST_CONSOLE_LOG_PREFIX = '[test-console]'
 
 _PHASES = [
     'bootstrap',
@@ -80,6 +82,19 @@ _PHASE_LABELS = {
     'gate': 'Risk',
     'extended_run': 'Execution',
     'finalize': 'Finalizando',
+}
+
+_NEXT_EXPECTED_EVENT_BY_PHASE = {
+    'bootstrap': 'bootstrap_completed',
+    'scan': 'scan_completed_or_skipped',
+    'consensus_review': 'handoff_completed_or_skipped',
+    'pursuit_review': 'prediction_completed_or_skipped',
+    'trial': 'trial_completed_or_skipped',
+    'validation': 'validation_completed_or_skipped',
+    'trend': 'trend_completed_or_skipped',
+    'gate': 'gate_completed_or_skipped',
+    'extended_run': 'extended_run_completed_or_skipped',
+    'finalize': 'terminal_status_or_export_available',
 }
 
 _HISTORY_SIZE = 10
@@ -304,6 +319,27 @@ def _list_field(payload: dict[str, Any], key: str) -> list[Any]:
     return list(payload.get(key) or [])
 
 
+def _test_console_log_context(payload: dict[str, Any] | None) -> dict[str, Any]:
+    payload = payload or {}
+    return {
+        'run_id': payload.get('current_run_id') or payload.get('last_run_id'),
+        'test_status': payload.get('test_status'),
+        'phase': payload.get('current_phase'),
+        'selected_profile': payload.get('selected_profile') or payload.get('test_profile'),
+        'effective_profile': payload.get('effective_profile') or payload.get('test_profile'),
+        'scope': payload.get('run_scope'),
+        'last_event': payload.get('last_backend_event') or payload.get('last_event'),
+        'reason': payload.get('terminal_reason') or payload.get('last_reason_code') or payload.get('reason_code'),
+        'export_available': payload.get('export_available'),
+    }
+
+
+def _log_test_console(event: str, payload: dict[str, Any] | None = None, *, level: int = logging.INFO, **extra: Any) -> None:
+    context = _test_console_log_context(payload)
+    context.update({key: value for key, value in extra.items() if value is not None})
+    logger.log(level, '%s %s %s', TEST_CONSOLE_LOG_PREFIX, event, context)
+
+
 def list_test_profiles() -> dict[str, dict[str, bool]]:
     return {profile_id: dict(_TEST_PROFILE_DEFINITIONS[profile_id]) for profile_id in _TEST_PROFILE_ORDER}
 
@@ -335,13 +371,34 @@ def _profile_module_lists(profile_modules: dict[str, bool]) -> tuple[list[str], 
 
 
 def _set_state(*, status: dict[str, Any] | None = None, log: dict[str, Any] | None = None, append_history: bool = False) -> None:
+    lifecycle_events: list[tuple[str, dict[str, Any], int, dict[str, Any]]] = []
     with _state_lock:
+        previous_status = deepcopy(_state.status)
+        previous_phase = str(previous_status.get('current_phase') or '')
+        previous_run_id = str(previous_status.get('current_run_id') or previous_status.get('last_run_id') or '')
+        previous_terminal = _is_terminal_test_status(previous_status.get('test_status'))
+        previous_progress_at = previous_status.get('last_progress_at')
         if status is not None:
-            _state.status = deepcopy(_normalize_test_console_payload(status))
+            normalized_status = deepcopy(_normalize_test_console_payload(status))
+            _state.status = normalized_status
+            current_run_id = str(normalized_status.get('current_run_id') or normalized_status.get('last_run_id') or '')
+            current_phase = str(normalized_status.get('current_phase') or '')
+            if current_run_id and current_run_id != previous_run_id:
+                lifecycle_events.append(('run-id-assigned', normalized_status, logging.INFO, {}))
+            if current_phase and current_phase != previous_phase:
+                lifecycle_events.append(('phase-transition', normalized_status, logging.INFO, {'from_phase': previous_phase or None, 'to_phase': current_phase}))
+            if normalized_status.get('last_progress_at') and normalized_status.get('last_progress_at') != previous_progress_at:
+                lifecycle_events.append(('progress-heartbeat', normalized_status, logging.DEBUG, {}))
+            if _is_terminal_test_status(normalized_status.get('test_status')) and not previous_terminal:
+                lifecycle_events.append(('terminal', normalized_status, logging.INFO, {}))
         if log is not None:
-            _state.last_log = deepcopy(_normalize_test_console_payload(log))
+            normalized_log = deepcopy(_normalize_test_console_payload(log))
+            _state.last_log = normalized_log
             if append_history:
-                _state.history.appendleft(deepcopy(_normalize_test_console_payload(log)))
+                _state.history.appendleft(deepcopy(normalized_log))
+
+    for event, event_payload, level, extra in lifecycle_events:
+        _log_test_console(event, event_payload, level=level, **extra)
 
 
 def _phase_index(phase: str | None) -> int:
@@ -429,8 +486,28 @@ def _annotate_runtime_flags(payload: dict[str, Any]) -> None:
     payload['has_last_completed_run'] = has_last_completed_run
     payload['current_run_id'] = str(payload.get('current_run_id') or '') or None
     payload['last_run_id'] = str(payload.get('last_run_id') or '') or None
+    payload['active_run'] = {
+        'run_id': payload['current_run_id'],
+        'profile': payload.get('effective_profile') or payload.get('test_profile'),
+        'phase': payload.get('current_phase'),
+        'status': normalized_status,
+    } if has_active_run else None
+    payload['active_run_profile'] = (payload.get('effective_profile') or payload.get('test_profile')) if has_active_run else None
     payload['can_stop'] = stop_available
     payload['stop_available'] = stop_available
+    payload['interrupted_by_stop'] = bool(payload.get('interrupted_by_stop') or normalized_status == TEST_STATUS_STOPPED or payload.get('stop_requested_at'))
+    payload['interrupted_by_reload'] = bool(payload.get('interrupted_by_reload') or False)
+    payload['interrupted_by_server_restart'] = bool(payload.get('interrupted_by_server_restart') or False)
+    if is_terminal:
+        payload['terminal_reason'] = str(
+            payload.get('terminal_reason')
+            or payload.get('hang_detection_reason')
+            or payload.get('last_reason_code')
+            or normalized_status
+        )
+    else:
+        payload['terminal_reason'] = str(payload.get('terminal_reason') or '')
+    payload['lifecycle_warning'] = str(payload.get('lifecycle_warning') or payload.get('hang_reason_classification') or '')
     if stop_available:
         payload['can_stop_reason'] = 'STOP_ALLOWED_NON_TERMINAL'
     elif is_terminal:
@@ -475,6 +552,7 @@ def _mark_real_progress(payload: dict[str, Any], *, event: str | None = None, re
     payload['hang_reason_classification'] = 'REAL_PROGRESS'
     if event is not None:
         payload['last_event'] = event
+        payload['last_backend_event'] = event
     if reason_code is not None:
         payload['last_reason_code'] = reason_code
 
@@ -494,6 +572,10 @@ def _augment_progress(status_payload: dict[str, Any]) -> dict[str, Any]:
         elapsed_seconds = int(max(0, (now - started_at).total_seconds()))
     stale_seconds = int(max(0, (now - updated_at).total_seconds())) if updated_at else 0
     export_available = bool(payload.get('ended_at') or payload.get('text_export'))
+    seconds_since_last_progress = None
+    last_progress_at = payload.get('last_real_progress_at') or payload.get('last_progress_at')
+    if last_progress_at:
+        seconds_since_last_progress = int(max(0, (now - last_progress_at).total_seconds()))
     payload['updated_at'] = updated_at
     payload['current_step'] = current_step if current_step > 0 else None
     payload['current_step_label'] = _PHASE_LABELS.get(current_phase or '', str(current_phase or 'Sin etapa'))
@@ -501,6 +583,12 @@ def _augment_progress(status_payload: dict[str, Any]) -> dict[str, Any]:
     payload['total_steps'] = total_steps
     payload['progress_state'] = _progress_state_for_status(str(payload.get('test_status') or TEST_STATUS_IDLE))
     payload['elapsed_seconds'] = elapsed_seconds
+    payload['seconds_since_last_progress'] = seconds_since_last_progress
+    payload['last_backend_event'] = str(payload.get('last_backend_event') or payload.get('last_event') or '')
+    payload['next_expected_event'] = str(
+        payload.get('next_expected_event')
+        or ('no_action_until_start' if not current_phase else _NEXT_EXPECTED_EVENT_BY_PHASE.get(str(current_phase), 'status_update_or_terminal_event'))
+    )
     payload['export_available'] = export_available
     payload['is_stale'] = stale_seconds > 30 and payload['progress_state'] != 'running'
     _annotate_runtime_flags(payload)
@@ -618,6 +706,7 @@ def _apply_finalize_slow_warning_if_usable(
     payload['next_action_hint'] = _next_action_hint_for_operational_status(operational_status)
     payload['summary'] = _finalize_summary(payload)
     payload['text_export'] = _log_line_items(payload)
+    _log_test_console('finalize-slow-warning', payload, observed_seconds=observed_seconds)
     return payload, True
 
 
@@ -669,6 +758,7 @@ def _apply_hang_timeout_if_needed(status_payload: dict[str, Any]) -> tuple[dict[
         f"{TEST_STATUS_TIMED_OUT}: no progress for {observed_seconds}s while phase={current_phase or 'unknown'}"
     )
     payload['text_export'] = _log_line_items(payload)
+    _log_test_console('timeout-real-applied', payload, observed_seconds=observed_seconds, timeout_seconds=timeout_seconds)
     return payload, True
 
 
@@ -677,7 +767,12 @@ def _normalize_test_console_payload(status_payload: dict[str, Any] | None) -> di
     resolved_profile_id, resolved_modules = resolve_test_profile(profile_id=payload.get('test_profile'))
     modules_included, modules_omitted = _profile_module_lists(resolved_modules)
 
+    selected_profile = str(payload.get('selected_profile') or payload.get('requested_profile') or payload.get('test_profile') or resolved_profile_id)
     payload['test_profile'] = resolved_profile_id
+    payload['selected_profile'] = selected_profile
+    payload['effective_profile'] = str(payload.get('effective_profile') or resolved_profile_id)
+    payload['profile'] = payload['effective_profile']
+    payload['display_source'] = str(payload.get('display_source') or ('active_run' if str(payload.get('test_status') or '').upper() == TEST_STATUS_RUNNING else 'last_completed_run' if payload.get('ended_at') else 'idle'))
     payload['available_test_profiles'] = list_test_profiles()
     payload['modules_included'] = list(payload.get('modules_included') or modules_included)
     payload['modules_omitted'] = list(payload.get('modules_omitted') or modules_omitted)
@@ -724,6 +819,14 @@ def _normalize_test_console_payload(status_payload: dict[str, Any] | None) -> di
     payload['stop_requested_at'] = payload.get('stop_requested_at')
     payload['stop_available'] = bool(payload.get('stop_available'))
     payload['can_stop_reason'] = str(payload.get('can_stop_reason') or '')
+    payload['last_backend_event'] = str(payload.get('last_backend_event') or payload.get('last_event') or '')
+    payload['next_expected_event'] = str(payload.get('next_expected_event') or '')
+    payload['seconds_since_last_progress'] = payload.get('seconds_since_last_progress')
+    payload['terminal_reason'] = str(payload.get('terminal_reason') or '')
+    payload['lifecycle_warning'] = str(payload.get('lifecycle_warning') or '')
+    payload['interrupted_by_stop'] = bool(payload.get('interrupted_by_stop'))
+    payload['interrupted_by_reload'] = bool(payload.get('interrupted_by_reload'))
+    payload['interrupted_by_server_restart'] = bool(payload.get('interrupted_by_server_restart'))
     return payload
 
 
@@ -2088,15 +2191,34 @@ def _log_line_items(payload: dict[str, Any]) -> str:
 
 def start_test_console(*, preset_name: str | None = None, profile_id: str | None = None) -> dict[str, Any]:
     target_preset = (preset_name or PRESET_NAME).strip() or PRESET_NAME
+    selected_profile_id = str(profile_id or TEST_PROFILE_FULL_E2E).strip() or TEST_PROFILE_FULL_E2E
     resolved_profile_id, profile_modules = resolve_test_profile(profile_id=profile_id)
     modules_included, modules_omitted = _profile_module_lists(profile_modules)
     run_scope = 'fresh_full_run' if resolved_profile_id == TEST_PROFILE_FULL_E2E else 'targeted_diagnostic_run'
+    run_id = f'tc-{timezone.now().strftime("%Y%m%d%H%M%S")}-{uuid4().hex[:8]}'
     now = timezone.now()
+    _log_test_console(
+        'start-request-received',
+        {
+            'current_run_id': run_id,
+            'preset_name': target_preset,
+            'selected_profile': selected_profile_id,
+            'effective_profile': resolved_profile_id,
+            'test_profile': resolved_profile_id,
+            'run_scope': run_scope,
+            'test_status': TEST_STATUS_RUNNING,
+        },
+    )
     payload: dict[str, Any] = {
         'timestamp': now,
         'started_at': now,
         'ended_at': None,
         'preset_name': target_preset,
+        'current_run_id': run_id,
+        'last_run_id': None,
+        'selected_profile': selected_profile_id,
+        'effective_profile': resolved_profile_id,
+        'display_source': 'active_run',
         'test_profile': resolved_profile_id,
         'available_test_profiles': list_test_profiles(),
         'modules_included': modules_included,
@@ -2126,6 +2248,8 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         'step_results': [],
         'next_action_hint': 'Running test console pipeline',
         'last_event': 'Test console run started',
+        'last_backend_event': 'Test console run started',
+        'next_expected_event': 'bootstrap_completed',
         'last_progress_at': now,
         'last_real_progress_at': now,
         'last_non_progress_refresh_at': None,
@@ -2434,6 +2558,10 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['updated_at'] = timezone.now()
         payload['last_progress_at'] = payload['updated_at']
         payload['last_real_progress_at'] = payload['updated_at']
+        payload['last_run_id'] = payload.get('current_run_id') or payload.get('last_run_id')
+        payload['current_run_id'] = None
+        payload['display_source'] = 'last_completed_run'
+        payload['terminal_reason'] = str(payload.get('last_reason_code') or payload.get('test_status') or '')
         payload['summary'] = _finalize_summary(payload)
         payload['text_export'] = _log_line_items(payload)
         payload = _augment_progress(_normalize_test_console_payload(payload))
@@ -2445,6 +2573,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
 def stop_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
     target_preset = (preset_name or PRESET_NAME).strip() or PRESET_NAME
     status_snapshot, _last_log, _history = _get_state_snapshot()
+    _log_test_console('stop-request-received', status_snapshot, preset_name=target_preset)
 
     runner_state = get_runner_state()
     runner_before = str(runner_state.runner_status)
@@ -2483,6 +2612,9 @@ def stop_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         'timestamp': timezone.now(),
         'preset_name': target_preset,
         'test_status': stop_status,
+        'current_run_id': None,
+        'last_run_id': status_snapshot.get('current_run_id') or status_snapshot.get('last_run_id'),
+        'display_source': 'last_completed_run',
         'current_phase': 'finalize',
         'ended_at': timezone.now(),
         'session_active': bool(bootstrap_status.get('session_active')),
@@ -2496,12 +2628,17 @@ def stop_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         'last_progress_at': timezone.now(),
         'last_real_progress_at': timezone.now(),
         'last_event': 'Stop requested by operator',
+        'last_backend_event': 'Stop requested by operator',
         'last_reason_code': warnings[0] if warnings else (actions[0] if actions else None),
+        'terminal_reason': warnings[0] if warnings else (actions[0] if actions else TEST_STATUS_STOPPED),
+        'interrupted_by_stop': True,
+        'next_expected_event': 'export_available',
         'stop_requested_at': timezone.now(),
     }
     payload['text_export'] = _log_line_items(payload)
     payload = _augment_progress(_normalize_test_console_payload(payload))
     _set_state(status=payload, log=payload, append_history=True)
+    _log_test_console('stop-applied', payload, actions=actions, warnings=warnings)
     return payload
 
 
@@ -2527,11 +2664,13 @@ def get_test_console_status() -> dict[str, Any]:
                 has_real_progress = after_marker != before_marker
             if has_real_progress:
                 _mark_real_progress(refreshed, event=str(refreshed.get('last_event') or 'Pipeline progress observed during status refresh'))
+                _log_test_console('status-refresh-real-progress', refreshed, level=logging.DEBUG)
             else:
                 refresh_reason = 'NON_PROGRESS_REFRESH_STATUS_POLL'
                 if _uses_strict_reused_session_hang_rules(payload):
                     refresh_reason = 'NON_PROGRESS_REFRESH_REUSED_SESSION_VALIDATION_GATE'
                 _record_non_progress_refresh(refreshed, reason=refresh_reason)
+                _log_test_console('status-refresh-heartbeat', refreshed, level=logging.DEBUG, refresh_reason=refresh_reason)
             payload = refreshed
             _set_state(status=_augment_progress(_normalize_test_console_payload(payload)))
         except Exception:
@@ -2600,6 +2739,7 @@ def export_test_console_log(*, fmt: str = 'text') -> dict[str, Any] | str:
         payload['warnings'] = list(dict.fromkeys(list(payload.get('warnings') or []) + [TEST_CONSOLE_EXPORT_PARTIAL_DIAGNOSTIC_RECOVERED]))
         payload['reason_codes'] = list(dict.fromkeys(list(payload.get('reason_codes') or []) + [TEST_CONSOLE_EXPORT_PARTIAL_DIAGNOSTIC_RECOVERED]))
     payload = finalize_test_console_payload_for_serializer(payload, source=f'export_test_console_log:{fmt}')
+    _log_test_console('export-generated', payload, fmt=fmt, level=logging.INFO)
     if fmt == 'json':
         return payload
     return str(payload.get('text_export') or _log_line_items(payload))
