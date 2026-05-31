@@ -4150,3 +4150,305 @@ body {
     overflow-y: auto;
   }
 }
+
+/* Prompt 370: targeted Cockpit/Test Console visual pass after real-browser validation. */
+.cockpit-page .content-grid--two-columns {
+  grid-template-columns: minmax(360px, 1.05fr) minmax(420px, 1.35fr);
+  align-items: start;
+}
+
+.cockpit-page .content-grid--three-columns {
+  grid-template-columns: repeat(3, minmax(300px, 1fr));
+  align-items: start;
+}
+
+.cockpit-page .section-card,
+.cockpit-page .panel,
+.cockpit-page .section-card .section-card {
+  min-width: 0;
+  overflow: visible;
+}
+
+.cockpit-page .key-value-list li,
+.mission-control-page .key-value-list li {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+  justify-content: stretch;
+  column-gap: 12px;
+  align-items: start;
+}
+
+.cockpit-page .key-value-list li span,
+.mission-control-page .key-value-list li span {
+  min-width: 96px;
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+}
+
+.cockpit-page .key-value-list li strong,
+.mission-control-page .key-value-list li strong {
+  text-align: right;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.test-console-shell {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.test-console-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.test-console-activity-line {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--brand-soft);
+  color: var(--text-main);
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: break-word;
+}
+
+.test-console-workspace {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.15fr) minmax(340px, 0.85fr);
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+}
+
+.test-console-column {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.test-console-panel {
+  min-width: 0;
+  padding: 9px 10px;
+  overflow: visible;
+}
+
+.test-console-panel__heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 7px;
+  min-width: 0;
+}
+
+.test-console-panel__heading .section-label {
+  min-width: 0;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.test-console-profile-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.test-console-select-field {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(220px, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.test-console-select-field span {
+  color: var(--text-muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.test-console-select-field select {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.test-console-module-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  min-width: 0;
+}
+
+.test-console-module-row .muted-text {
+  flex: 0 0 auto;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.test-console-advanced-toggle {
+  justify-self: start;
+}
+
+.test-console-kv-list {
+  gap: 5px;
+}
+
+.test-console-kv-list li {
+  grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
+}
+
+.test-console-kv-list li span {
+  min-width: 112px;
+}
+
+.test-console-kv-list li strong {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.test-console-long-value strong,
+.test-console-output,
+.test-console-module-row--advanced .status-badge {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.test-console-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 6px;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+}
+
+.test-console-actions .secondary-button,
+.test-console-actions .ghost-button {
+  width: 100%;
+  min-width: 0;
+  min-height: 31px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.test-console-progress {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.test-console-progress__header {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 0;
+}
+
+.test-console-progress__header strong,
+.test-console-progress__header span {
+  min-width: 0;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.test-console-progress__header span {
+  text-align: right;
+  white-space: normal;
+}
+
+.test-console-progress__bar {
+  height: 10px;
+  min-height: 10px;
+}
+
+.test-console-phase-rail {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(58px, 1fr));
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.test-console-phase-rail li {
+  min-width: 58px;
+  padding: 3px 4px;
+  font-size: 0.61rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: visible;
+  overflow-wrap: normal;
+  word-break: normal;
+  text-overflow: clip;
+}
+
+.test-console-output-block {
+  max-height: 260px;
+  overflow: hidden;
+}
+
+.test-console-output {
+  max-height: 220px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.73rem;
+  line-height: 1.3;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sidebar__scroll {
+  padding-bottom: 8px;
+}
+
+.sidebar__footer {
+  max-height: 96px;
+  overflow: hidden;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar__footer:hover,
+.sidebar__footer:focus-within {
+  max-height: 150px;
+  overflow: auto;
+}
+
+@media (max-width: 1180px) {
+  .cockpit-page .content-grid--two-columns,
+  .cockpit-page .content-grid--three-columns,
+  .test-console-workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .cockpit-page .key-value-list li,
+  .mission-control-page .key-value-list li,
+  .test-console-kv-list li,
+  .test-console-select-field,
+  .test-console-progress__header {
+    grid-template-columns: 1fr;
+  }
+
+  .cockpit-page .key-value-list li strong,
+  .mission-control-page .key-value-list li strong,
+  .test-console-progress__header span {
+    text-align: left;
+  }
+
+  .test-console-actions {
+    grid-template-columns: 1fr;
+  }
+}
