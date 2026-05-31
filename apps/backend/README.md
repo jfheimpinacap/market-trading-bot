@@ -5018,3 +5018,21 @@ Actualización semántica de `prediction_risk_path`:
   además de `can_stop`, para simplificar UI y depuración.
 - `stop_test_console` mantiene terminalización forzada consistente (`STOPPED` + `ended_at` + export parcial) incluso cuando no hay primitivas activas de pause en sesión/runner.
 - Alcance: integración/lifecycle de Test Console únicamente; sin cambios de policy ni lógica central de decisión del bot.
+
+## Test Console Full E2E phase timing budgets (Prompt 373)
+
+The Operational Test Console now records a bounded timing budget for each externally visible Full E2E phase: `scan`, `handoff`, `prediction`, `risk`, `execution`, `export`, and `finalize`. Each phase exposes `phase_started_at`, `phase_finished_at`, `phase_elapsed_seconds`, `phase_expected_seconds`, `phase_warning_after_seconds`, `phase_timeout_after_seconds`, `slow_phase_reason_code`, and `slow_phase_hint` in `phase_timings`, plus a top-level `phase_budget_summary` with total elapsed time, slowest phase, likely cause, and the recommended operator action.
+
+Expected profile duration guidance:
+
+- **Scope + Throttle Diagnostics** should normally finish in a few minutes. It skips fresh scan and prediction work, keeps the focus on current throttle/exposure diagnostics, and should usually be exported if a warning identifies the risk/execution diagnostics as slow.
+- **Prediction + Risk Path** should normally finish faster than Full E2E because execution launch is omitted and prediction/risk diagnostics are isolated to the current window. If no current prediction-path data exists, export the snapshot instead of waiting for historical material to be reprocessed.
+- **Full E2E** remains heavier by design because it performs scan, handoff, prediction, risk, paper-only execution diagnostics, export composition, and final status reconciliation. Its expected phase budgets are documented in code and warnings are emitted when a phase exceeds its warning threshold; a slow run should end with a clear warning rather than an ambiguous “still running” state.
+
+Operator guidance:
+
+- **Wait** while the run is active and no phase budget warning is present.
+- **Export** when the run is terminal, or when `phase_budget_summary.recommendation` asks for `export_then_review_slowest_phase`.
+- **Stop or retry** only after exporting if a running diagnostic exceeds its warning budget and `phase_budget_summary` points to repetitive diagnostic volume rather than new current-window progress.
+
+Large diagnostic example lists are capped in the Test Console payload/export while aggregate counts are preserved. This keeps Full E2E debugging bounded without changing trading policy, risk decisions, LLM/training behavior, or opening real execution/trade paths.
