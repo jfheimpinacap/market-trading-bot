@@ -178,6 +178,26 @@ const normalizeTextList = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item ?? '').trim()).filter((item) => Boolean(item));
 };
+const asRecord = (value: unknown): Record<string, unknown> | null => (value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null);
+const getRecordValue = (source: unknown, key: string): unknown => asRecord(source)?.[key];
+const firstPresentValue = (...values: unknown[]) => values.find((value) => value !== null && value !== undefined && value !== '');
+const formatCompactValue = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return 'n/a';
+  if (typeof value === 'boolean') return value ? 'yes' : 'no';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'n/a';
+  return String(value);
+};
+const getNumericMetric = (source: unknown, ...keys: string[]) => {
+  for (const key of keys) {
+    const value = getRecordValue(source, key);
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return null;
+};
 
 const toneFromStatus = (status: string | null | undefined): 'ready' | 'pending' | 'offline' | 'neutral' => {
   const normalized = (status ?? '').toUpperCase();
@@ -578,6 +598,23 @@ export function CockpitPage() {
   const llmAuxSignalSummary = testConsoleStatus?.llm_aux_signal_summary ?? null;
   const llmAuxReasonCodes = normalizeTextList(llmAuxSignalSummary?.aux_signal_reason_codes);
   const llmShadowHistoryCount = testConsoleStatus?.llm_shadow_history_count ?? llmShadowHistory.length;
+  const testConsolePipelineCards = useMemo(() => {
+    const snapshot = displayTestConsoleSnapshot;
+    const scanSummary = snapshot?.scan_summary;
+    const portfolioSummary = snapshot?.portfolio_summary;
+    const riskApprovedCount = getNumericMetric(snapshot, 'risk_approved_count', 'approved_count');
+    const riskBlockedCount = getNumericMetric(snapshot, 'risk_blocked_count', 'blocked_count');
+    const riskCount = riskApprovedCount !== null || riskBlockedCount !== null ? (riskApprovedCount ?? 0) + (riskBlockedCount ?? 0) : null;
+    const cards = [
+      { key: 'scan', label: 'Scan', enabled: Boolean(selectedProfileModules.include_scan), count: getNumericMetric(scanSummary, 'count') ?? getNumericMetric(snapshot, 'scan_count', 'opportunities_built', 'candidate_count'), status: firstPresentValue(getRecordValue(scanSummary, 'status'), snapshot?.funnel_status, snapshot?.progress_state), reason: firstPresentValue(getRecordValue(scanSummary, 'reason_code'), snapshot?.last_reason_code, getRecordValue(scanSummary, 'summary')) },
+      { key: 'handoff', label: 'Handoff', enabled: Boolean(selectedProfileModules.include_handoff), count: getNumericMetric(snapshot, 'handoff_count', 'handoffs_count', 'postmortem_handoff_count'), status: firstPresentValue(getRecordValue(snapshot, 'handoff_status'), snapshot?.progress_state), reason: firstPresentValue(getRecordValue(snapshot, 'handoff_reason_code'), snapshot?.last_reason_code) },
+      { key: 'prediction', label: 'Prediction', enabled: Boolean(selectedProfileModules.include_prediction), count: getNumericMetric(snapshot, 'prediction_count', 'predictions_count', 'proposals_generated'), status: firstPresentValue(getRecordValue(snapshot, 'prediction_status'), snapshot?.validation_status, snapshot?.progress_state), reason: firstPresentValue(getRecordValue(snapshot, 'prediction_reason_code'), snapshot?.last_reason_code) },
+      { key: 'risk', label: 'Risk', enabled: Boolean(selectedProfileModules.include_risk), count: riskCount, status: firstPresentValue(getRecordValue(snapshot, 'risk_status'), snapshot?.gate_status, snapshot?.readiness_status), reason: firstPresentValue(getRecordValue(snapshot, 'risk_reason_code'), snapshot?.last_reason_code) },
+      { key: 'execution', label: 'Execution', enabled: Boolean(selectedProfileModules.include_execution), count: getNumericMetric(snapshot, 'paper_execution_count', 'execution_count', 'recent_trades_count') ?? getNumericMetric(portfolioSummary, 'open_positions'), status: firstPresentValue(getRecordValue(snapshot, 'execution_status'), snapshot?.trial_status, snapshot?.extended_run_status), reason: firstPresentValue(getRecordValue(snapshot, 'execution_reason_code'), snapshot?.last_reason_code) },
+      { key: 'export', label: 'Export / finalize', enabled: Boolean(selectedProfileModules.include_export_text || selectedProfileModules.include_export_json), count: testConsoleExportReady ? 1 : 0, status: testConsoleExportReady ? 'READY' : firstPresentValue(snapshot?.progress_state, snapshot?.test_status), reason: firstPresentValue(snapshot?.terminal_reason, snapshot?.lifecycle_warning, snapshot?.last_reason_code) },
+    ];
+    return cards.map((card) => ({ ...card, status: card.enabled ? formatCompactValue(card.status) : 'omitted', reason: card.enabled ? formatCompactValue(card.reason) : 'profile module disabled', countLabel: card.enabled ? formatCompactValue(card.count) : '—' }));
+  }, [displayTestConsoleSnapshot, selectedProfileModules, testConsoleExportReady]);
   const stage2Enabled = loadStage >= 2;
 
   const registerFanout = useCallback((bucket: 'critical' | 'deferred', endpoint: string, count = 1) => {
@@ -1567,7 +1604,7 @@ export function CockpitPage() {
               </div>
             </SectionCard>
 
-            <div className="content-grid content-grid--two-columns">
+            <div className="content-grid content-grid--two-columns cockpit-live-paper-grid">
               <SectionCard
                 eyebrow="Mission control bootstrap"
                 title="Live Paper Autopilot"
@@ -1601,12 +1638,23 @@ export function CockpitPage() {
                   description="Unified paper/live-read-only validation console: Scope + Throttle, Prediction + Risk, Full E2E, status, progress, exports and logs."
                 >
                   <div className="test-console-shell">
+                    <div className="test-console-summary-grid" aria-label="Operational Test Console compact summary">
+                      <div className="test-console-summary-item"><span>Status</span><strong>{testConsolePrimaryStatusLabel}</strong></div>
+                      <div className="test-console-summary-item"><span>Profile</span><strong>{effectiveTestProfileLabel}</strong></div>
+                      <div className="test-console-summary-item"><span>Phase</span><strong>{testConsoleStageLabel}</strong></div>
+                      {displayTestConsoleSnapshot?.gate_status ? <div className="test-console-summary-item"><span>Gate</span><strong>{displayTestConsoleSnapshot.gate_status}</strong></div> : null}
+                      {displayTestConsoleSnapshot?.validation_status ? <div className="test-console-summary-item"><span>Validation</span><strong>{displayTestConsoleSnapshot.validation_status}</strong></div> : null}
+                      {displayTestConsoleSnapshot?.trial_status ? <div className="test-console-summary-item"><span>Trial</span><strong>{displayTestConsoleSnapshot.trial_status}</strong></div> : null}
+                      <div className="test-console-summary-item"><span>Elapsed</span><strong>{formatClockDuration(displayTestConsoleSnapshot?.elapsed_seconds)}</strong></div>
+                      <div className="test-console-summary-item"><span>Export</span><strong>{testConsoleExportReady ? 'ready' : 'not ready'}</strong></div>
+                      <div className="test-console-summary-item"><span>Source</span><strong>{testConsoleViewingCurrentRun ? 'active' : testConsoleViewingLastCompleted ? 'last completed' : 'empty'}</strong></div>
+                    </div>
                     <div className="test-console-status-strip" aria-label="Operational Test Console status badges">
                       <StatusBadge tone={testConsolePrimaryStatusTone}>{testConsolePrimaryStatusLabel}</StatusBadge>
                       <StatusBadge tone={toneFromStatus(testConsoleStatus?.progress_state)}>{testConsoleStatus?.progress_state ?? 'idle'}</StatusBadge>
-                      <StatusBadge tone={toneFromStatus(displayTestConsoleSnapshot?.validation_status)}>{displayTestConsoleSnapshot?.validation_status ?? 'n/a'}</StatusBadge>
-                      <StatusBadge tone={toneFromStatus(displayTestConsoleSnapshot?.trial_status)}>{displayTestConsoleSnapshot?.trial_status ?? 'n/a'}</StatusBadge>
-                      <StatusBadge tone={toneFromStatus(displayTestConsoleSnapshot?.gate_status)}>{displayTestConsoleSnapshot?.gate_status ?? 'n/a'}</StatusBadge>
+                      <StatusBadge tone={toneFromStatus(displayTestConsoleSnapshot?.validation_status)}>{displayTestConsoleSnapshot?.validation_status ?? 'validation n/a'}</StatusBadge>
+                      <StatusBadge tone={toneFromStatus(displayTestConsoleSnapshot?.trial_status)}>{displayTestConsoleSnapshot?.trial_status ?? 'trial n/a'}</StatusBadge>
+                      <StatusBadge tone={toneFromStatus(displayTestConsoleSnapshot?.gate_status)}>{displayTestConsoleSnapshot?.gate_status ?? 'gate n/a'}</StatusBadge>
                       {testConsoleViewingCurrentRun ? <StatusBadge tone="ready">CURRENT RUN</StatusBadge> : null}
                       {testConsoleViewingLastCompleted ? <StatusBadge tone="neutral">LAST COMPLETED</StatusBadge> : null}
                       {testConsoleStatus?.is_stale ? <StatusBadge tone="pending">STALE</StatusBadge> : null}
@@ -1618,200 +1666,31 @@ export function CockpitPage() {
                     {testConsoleStatusLoading ? <p>Loading Test Console status…</p> : null}
                     {!testConsoleStatusLoading && testConsoleStatusError ? <p className="warning-text">{testConsoleStatusError}</p> : null}
                     <p className="test-console-activity-line">{testConsoleActivitySummary}</p>
-                    <div className="test-console-workspace">
-                      <div className="test-console-column test-console-column--left">
-                        <div className="test-console-panel test-console-profile-panel">
-                          <div className="test-console-panel__heading">
-                            <span className="section-label">Profile selection</span>
-                            <StatusBadge tone={executedRunScope === 'fresh_full_run' ? 'ready' : 'pending'}>
-                              {executedRunScope === 'fresh_full_run' ? 'FULL' : 'TARGETED'}
-                            </StatusBadge>
-                          </div>
-                          <label className="test-console-select-field" htmlFor="test-console-profile-select">
-                            <span>Profile</span>
-                            <select
-                              id="test-console-profile-select"
-                              value={selectedTestProfileId}
-                              disabled={testConsoleStartLoading || testConsoleStopLoading}
-                              onChange={(event: ChangeEvent<HTMLSelectElement>) => {
-                                const nextProfile = TEST_CONSOLE_PROFILE_OPTIONS.find((profile) => profile.id === event.target.value)?.id;
-                                if (nextProfile) {
-                                  setSelectedTestProfileId(nextProfile);
-                                }
-                              }}
-                            >
-                              {TEST_CONSOLE_PROFILE_OPTIONS.map((profile) => (
-                                <option key={profile.id} value={profile.id}>{profile.label}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <div className="test-console-module-row">
-                            <span className="muted-text">Includes:</span>
-                            {(selectedProfileIncludedModules.length > 0 ? selectedProfileIncludedModules : ['none']).map((moduleName) => (
-                              <StatusBadge key={moduleName} tone="neutral">{TEST_CONSOLE_MODULE_LABELS[moduleName] ?? moduleName}</StatusBadge>
-                            ))}
-                          </div>
-                          <button className="ghost-button test-console-advanced-toggle" type="button" onClick={() => setTestConsoleAdvancedOpen((value) => !value)}>
-                            {testConsoleAdvancedOpen ? 'Hide advanced modules' : 'Advanced modules'}
-                          </button>
-                          {testConsoleAdvancedOpen ? (
-                            <div className="test-console-module-row test-console-module-row--advanced">
-                              {Object.keys(TEST_CONSOLE_MODULE_LABELS).map((moduleName) => (
-                                <StatusBadge key={moduleName} tone={selectedProfileModules[moduleName] ? 'ready' : 'pending'}>
-                                  {selectedProfileModules[moduleName] ? '✓' : '·'} {moduleName}
-                                </StatusBadge>
-                              ))}
-                            </div>
-                          ) : null}
+                    <div className="test-console-dashboard-grid">
+                      <div className="test-console-panel test-console-profile-panel">
+                        <div className="test-console-panel__heading"><span className="section-label">Profile selection</span><StatusBadge tone={executedRunScope === 'fresh_full_run' ? 'ready' : 'pending'}>{executedRunScope === 'fresh_full_run' ? 'FULL' : 'TARGETED'}</StatusBadge></div>
+                        <label className="test-console-select-field" htmlFor="test-console-profile-select"><span>Profile</span><select id="test-console-profile-select" value={selectedTestProfileId} disabled={testConsoleStartLoading || testConsoleStopLoading} onChange={(event: ChangeEvent<HTMLSelectElement>) => { const nextProfile = TEST_CONSOLE_PROFILE_OPTIONS.find((profile) => profile.id === event.target.value)?.id; if (nextProfile) setSelectedTestProfileId(nextProfile); }}>{TEST_CONSOLE_PROFILE_OPTIONS.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}</select></label>
+                        <div className="test-console-module-row"><span className="muted-text">Includes:</span>{(selectedProfileIncludedModules.length > 0 ? selectedProfileIncludedModules : ['none']).map((moduleName) => <StatusBadge key={moduleName} tone="neutral">{TEST_CONSOLE_MODULE_LABELS[moduleName] ?? moduleName}</StatusBadge>)}</div>
+                        <div className="test-console-actions test-console-actions--compact">
+                          <button className="secondary-button" type="button" disabled={testConsoleStartLoading || testConsoleStopLoading} onClick={() => void startTestConsoleFromCockpit()}>{testConsoleStartLoading ? 'Starting…' : 'Run selected profile'}</button>
+                          <button className="secondary-button" type="button" title={testConsoleCanStop ? 'Stop active/non-terminal test run' : 'Not available: no active test'} disabled={testConsoleStopLoading || !testConsoleCanStop} onClick={() => void stopTestConsoleFromCockpit()}>{testConsoleStopLoading ? 'Stopping…' : testConsoleCanStop ? 'Stop test' : 'Stop unavailable'}</button>
+                          <button className="ghost-button" type="button" disabled={testConsoleStatusLoading} onClick={() => void loadTestConsoleStatus()}>Refresh</button>
+                          <button className="ghost-button" type="button" title={testConsoleCanExportLog ? 'Export current test log' : 'Not available: no test status yet'} disabled={testConsoleExportLoading || !testConsoleCanExportLog} onClick={() => void exportTestConsoleLog()}>{testConsoleExportLoading ? 'Exporting…' : 'Export'}</button>
+                          <button className="ghost-button" type="button" title={testConsoleHasExportableLog ? 'Copy exported log' : 'Not available: export log first'} disabled={testConsoleExportLoading || !testConsoleHasExportableLog} onClick={() => void copyTestConsoleLog()}>Copy</button>
+                          <button className="ghost-button" type="button" onClick={() => setTestConsoleRawJsonOpen((value) => !value)}>{testConsoleRawJsonOpen ? 'Hide JSON' : 'View JSON'}</button>
                         </div>
-
-                        <div className="test-console-panel">
-                          <div className="test-console-panel__heading">
-                            <span className="section-label">Current state</span>
-                          </div>
-                          <ul className="key-value-list test-console-kv-list">
-                            <li><span>Selected profile</span><strong>{selectedTestProfileLabel}</strong></li>
-                            <li><span>Effective profile</span><strong>{effectiveTestProfileLabel}</strong></li>
-                            <li><span>Run ID</span><strong>{testConsoleRunId}</strong></li>
-                            <li><span>Display source</span><strong>{testConsoleDisplaySource}</strong></li>
-                            <li><span>Run scope</span><strong>{executedRunScope}</strong></li>
-                            <li><span>Phase</span><strong>{testConsoleStageLabel}</strong></li>
-                            <li><span>Elapsed time</span><strong>{formatClockDuration(displayTestConsoleSnapshot?.elapsed_seconds)}</strong></li>
-                            <li><span>Last progress</span><strong>{testConsoleLastProgressAgo} ago</strong></li>
-                            <li><span>Last update</span><strong>{testConsoleUpdatedAgo} ago</strong></li>
-                            <li><span>Active run</span><strong>{formatTestConsoleBoolean(testConsoleViewingCurrentRun)}</strong></li>
-                            <li><span>Can stop</span><strong>{formatTestConsoleBoolean(displayTestConsoleSnapshot?.can_stop ?? testConsoleStatus?.can_stop)}</strong></li>
-                          </ul>
-                        </div>
-
-                        <div className="test-console-panel test-console-lifecycle-panel">
-                          <div className="test-console-panel__heading">
-                            <span className="section-label">Lifecycle</span>
-                            {testConsoleExportReady ? <StatusBadge tone="ready">export ready</StatusBadge> : <StatusBadge tone="neutral">no export yet</StatusBadge>}
-                          </div>
-                          {testConsoleLifecycleWarning ? <p className="warning-text test-console-lifecycle-note">Lifecycle warning: {testConsoleLifecycleWarning}</p> : null}
-                          {testConsoleTerminalReason ? <p className="muted-text test-console-lifecycle-note">Terminal reason: {testConsoleTerminalReason}</p> : null}
-                          {testConsoleInterruptedByStop ? <p className="muted-text test-console-lifecycle-note">Stopped by user/system.</p> : null}
-                          <ul className="key-value-list test-console-kv-list">
-                            <li className="test-console-long-value"><span>Last backend event</span><strong>{testConsoleLastBackendEvent}</strong></li>
-                            <li className="test-console-long-value"><span>Next expected</span><strong>{testConsoleNextExpectedEvent}</strong></li>
-                            <li className="test-console-long-value"><span>Terminal reason</span><strong>{testConsoleTerminalReason ?? 'n/a'}</strong></li>
-                            <li className="test-console-long-value"><span>Lifecycle warning</span><strong>{testConsoleLifecycleWarning ?? 'n/a'}</strong></li>
-                            <li><span>Export available</span><strong>{formatTestConsoleBoolean(testConsoleExportReady)}</strong></li>
-                            <li><span>Interrupted stop</span><strong>{formatTestConsoleBoolean(displayTestConsoleSnapshot?.interrupted_by_stop)}</strong></li>
-                            <li><span>Seconds since progress</span><strong>{testConsoleSecondsSinceLastProgress ?? 'n/a'}</strong></li>
-                          </ul>
-                        </div>
-
-                        {currentTestConsoleSnapshot ? (
-                          <div className="test-console-panel">
-                            <div className="test-console-panel__heading"><span className="section-label">Current run</span></div>
-                            <ul className="key-value-list test-console-kv-list">
-                              <li><span>Run ID</span><strong>{currentTestConsoleSnapshot.current_run_id ?? currentTestConsoleSnapshot.run_id ?? 'n/a'}</strong></li>
-                              <li><span>Raw phase</span><strong>{currentTestConsoleSnapshot.current_phase ?? 'n/a'}</strong></li>
-                              <li><span>Started</span><strong>{formatDate(currentTestConsoleSnapshot.started_at)}</strong></li>
-                              <li><span>Updated</span><strong>{formatDate(currentTestConsoleSnapshot.updated_at)}</strong></li>
-                              <li><span>Ended</span><strong>{formatDate(currentTestConsoleSnapshot.ended_at)}</strong></li>
-                              <li><span>Validation</span><strong>{currentTestConsoleSnapshot.validation_status ?? 'n/a'}</strong></li>
-                              <li><span>Trial</span><strong>{currentTestConsoleSnapshot.trial_status ?? 'n/a'}</strong></li>
-                              <li><span>Trend</span><strong>{currentTestConsoleSnapshot.trend_status ?? 'n/a'}</strong></li>
-                              <li><span>Readiness</span><strong>{currentTestConsoleSnapshot.readiness_status ?? 'n/a'}</strong></li>
-                              <li><span>Gate</span><strong>{currentTestConsoleSnapshot.gate_status ?? 'n/a'}</strong></li>
-                              <li className="test-console-long-value"><span>Stop reason</span><strong>{testConsoleCanStop ? 'available' : 'not available'}{currentTestConsoleSnapshot.can_stop_reason ? ` · ${currentTestConsoleSnapshot.can_stop_reason}` : ''}</strong></li>
-                              <li className="test-console-long-value"><span>Next action</span><strong>{currentTestConsoleSnapshot.next_action_hint ?? 'n/a'}</strong></li>
-                            </ul>
-                          </div>
-                        ) : (
-                          <div className="test-console-panel"><p className="muted-text">No active run. Current run remains separated from the last completed snapshot.</p></div>
-                        )}
-
-                        {effectiveLastCompletedSnapshot ? (
-                          <div className="test-console-panel">
-                            <div className="test-console-panel__heading"><span className="section-label">Last completed</span></div>
-                            <ul className="key-value-list test-console-kv-list">
-                              <li><span>Status</span><strong>{effectiveLastCompletedSnapshot.test_status ?? 'n/a'}</strong></li>
-                              <li><span>Completed at</span><strong>{formatDate(effectiveLastCompletedSnapshot.ended_at)}</strong></li>
-                              <li><span>Run ID</span><strong>{effectiveLastCompletedSnapshot.current_run_id ?? effectiveLastCompletedSnapshot.run_id ?? effectiveLastCompletedSnapshot.last_run_id ?? 'n/a'}</strong></li>
-                              <li><span>Last event</span><strong>{effectiveLastCompletedSnapshot.last_backend_event ?? effectiveLastCompletedSnapshot.last_event ?? 'n/a'}</strong></li>
-                              <li className="test-console-long-value"><span>Reason code</span><strong>{effectiveLastCompletedSnapshot.last_reason_code ?? 'n/a'}</strong></li>
-                              <li><span>Run scope</span><strong>{effectiveLastCompletedSnapshot.run_scope ?? 'n/a'}</strong></li>
-                              <li><span>Executed profile</span><strong>{effectiveLastCompletedSnapshot.test_profile ?? 'n/a'}</strong></li>
-                            </ul>
-                          </div>
-                        ) : null}
+                        <button className="ghost-button test-console-advanced-toggle" type="button" onClick={() => setTestConsoleAdvancedOpen((value) => !value)}>{testConsoleAdvancedOpen ? 'Hide advanced modules' : 'Advanced modules'}</button>
+                        {testConsoleAdvancedOpen ? <div className="test-console-module-row test-console-module-row--advanced">{Object.keys(TEST_CONSOLE_MODULE_LABELS).map((moduleName) => <StatusBadge key={moduleName} tone={selectedProfileModules[moduleName] ? 'ready' : 'pending'}>{selectedProfileModules[moduleName] ? '✓' : '·'} {moduleName}</StatusBadge>)}</div> : null}
                       </div>
-
-                      <div className="test-console-column test-console-column--right">
-                        <div className="test-console-panel test-console-actions-panel">
-                          <div className="test-console-panel__heading"><span className="section-label">Actions</span></div>
-                          <div className="test-console-actions">
-                            <button className="secondary-button" type="button" disabled={testConsoleStartLoading || testConsoleStopLoading} onClick={() => void startTestConsoleFromCockpit()}>
-                              {testConsoleStartLoading ? 'Starting…' : 'Run selected profile'}
-                            </button>
-                            <button
-                              className="secondary-button"
-                              type="button"
-                              title={testConsoleCanStop ? 'Stop active/non-terminal test run' : 'Not available: no active test'}
-                              disabled={testConsoleStopLoading || !testConsoleCanStop}
-                              onClick={() => void stopTestConsoleFromCockpit()}
-                            >
-                              {testConsoleStopLoading ? 'Stopping…' : testConsoleCanStop ? 'Stop test' : 'Stop test · Not available'}
-                            </button>
-                            <button className="ghost-button" type="button" disabled={testConsoleStatusLoading} onClick={() => void loadTestConsoleStatus()}>
-                              Refresh status
-                            </button>
-                            <button
-                              className="ghost-button"
-                              type="button"
-                              title={testConsoleCanExportLog ? 'Export current test log' : 'Not available: no test status yet'}
-                              disabled={testConsoleExportLoading || !testConsoleCanExportLog}
-                              onClick={() => void exportTestConsoleLog()}
-                            >
-                              {testConsoleExportLoading ? 'Exporting…' : 'Export log'}
-                            </button>
-                            <button
-                              className="ghost-button"
-                              type="button"
-                              title={testConsoleHasExportableLog ? 'Copy exported log' : 'Not available: export log first'}
-                              disabled={testConsoleExportLoading || !testConsoleHasExportableLog}
-                              onClick={() => void copyTestConsoleLog()}
-                            >
-                              {testConsoleHasExportableLog ? 'Copy log' : 'Copy log · No data yet'}
-                            </button>
-                            <button className="ghost-button" type="button" onClick={() => setTestConsoleRawJsonOpen((value) => !value)}>
-                              {testConsoleRawJsonOpen ? 'Hide raw JSON' : 'View raw JSON'}
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="test-console-progress test-console-panel">
-                          <div className="test-console-progress__header">
-                            <strong>Stage progress</strong>
-                            <span>{testConsoleDisplaySource} · phase={testConsoleStageLabel} · elapsed={formatClockDuration(displayTestConsoleSnapshot?.elapsed_seconds)}</span>
-                          </div>
-                          <div className="test-console-progress__bar" role="progressbar" aria-valuenow={testConsoleProgressPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Stage-based test progress">
-                            <div className="test-console-progress__fill" style={{ width: `${testConsoleProgressPercent}%` }} />
-                          </div>
-                          <ol className="test-console-phase-rail" aria-label="Stage-based phase rail">
-                            {TEST_CONSOLE_PHASES.map((phase, index) => (
-                              <li key={phase} className={index < testConsoleStageIndex ? 'is-complete' : index === testConsoleStageIndex ? 'is-current' : undefined}>{phase}</li>
-                            ))}
-                          </ol>
-                          <p className="muted-text">Stage-based progress, not a backend percentage · {testConsoleCurrentStepLabel} · step {testConsoleCurrentStep ?? 0}/{testConsoleTotalSteps} · last event {testConsoleLastBackendEvent} · next {testConsoleNextExpectedEvent} · update {testConsoleUpdatedAgo} ago · last progress {testConsoleLastProgressAgo} ago.</p>
-                        </div>
-
-                        <div className="test-console-panel">
-                          <div className="test-console-panel__heading"><span className="section-label">Timer / phase</span></div>
-                          <ul className="key-value-list test-console-kv-list">
-                            <li><span>Phase</span><strong>{testConsoleStageLabel}</strong></li>
-                            <li><span>Elapsed</span><strong>{formatClockDuration(displayTestConsoleSnapshot?.elapsed_seconds)}</strong></li>
-                            <li><span>Updated</span><strong>{formatDate(displayTestConsoleSnapshot?.updated_at)}</strong></li>
-                            <li><span>Last progress</span><strong>{formatDate(displayTestConsoleSnapshot?.last_progress_at ?? displayTestConsoleSnapshot?.last_real_progress_at ?? displayTestConsoleSnapshot?.updated_at)}</strong></li>
-                            <li><span>Since progress</span><strong>{testConsoleLastProgressAgo} ago</strong></li>
-                          </ul>
-                        </div>
-                      </div>
+                      <div className="test-console-panel"><div className="test-console-panel__heading"><span className="section-label">Current state</span></div><ul className="key-value-list test-console-kv-list"><li><span>Run ID</span><strong className="test-console-mono-value">{testConsoleRunId}</strong></li><li><span>Selected profile</span><strong>{selectedTestProfileLabel}</strong></li><li><span>Effective profile</span><strong>{effectiveTestProfileLabel}</strong></li><li><span>Display source</span><strong>{testConsoleDisplaySource}</strong></li><li><span>Active run</span><strong>{formatTestConsoleBoolean(testConsoleViewingCurrentRun)}</strong></li><li><span>Can stop</span><strong>{formatTestConsoleBoolean(displayTestConsoleSnapshot?.can_stop ?? testConsoleStatus?.can_stop)}</strong></li></ul></div>
+                      <div className="test-console-progress test-console-panel"><div className="test-console-progress__header"><strong>Stage progress</strong><span>{testConsoleCurrentStepLabel} · step {testConsoleCurrentStep ?? 0}/{testConsoleTotalSteps}</span></div><div className="test-console-progress__bar" role="progressbar" aria-valuenow={testConsoleProgressPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Stage-based test progress"><div className="test-console-progress__fill" style={{ width: `${testConsoleProgressPercent}%` }} /></div><ol className="test-console-phase-rail" aria-label="Stage-based phase rail">{TEST_CONSOLE_PHASES.map((phase, index) => <li key={phase} className={index < testConsoleStageIndex ? 'is-complete' : index === testConsoleStageIndex ? 'is-current' : undefined}>{phase}</li>)}</ol><ul className="key-value-list test-console-kv-list test-console-kv-list--compact"><li><span>Phase</span><strong>{testConsoleStageLabel}</strong></li><li><span>Elapsed</span><strong>{formatClockDuration(displayTestConsoleSnapshot?.elapsed_seconds)}</strong></li><li><span>Last progress</span><strong>{testConsoleLastProgressAgo} ago</strong></li><li><span>Last update</span><strong>{testConsoleUpdatedAgo} ago</strong></li></ul></div>
+                      <div className="test-console-panel test-console-lifecycle-panel"><div className="test-console-panel__heading"><span className="section-label">Lifecycle</span>{testConsoleExportReady ? <StatusBadge tone="ready">export ready</StatusBadge> : <StatusBadge tone="neutral">no export yet</StatusBadge>}</div>{testConsoleLifecycleWarning ? <p className="warning-text test-console-lifecycle-note">Lifecycle warning: {testConsoleLifecycleWarning}</p> : null}<ul className="key-value-list test-console-kv-list"><li className="test-console-long-value"><span>Last backend event</span><strong>{testConsoleLastBackendEvent}</strong></li><li className="test-console-long-value"><span>Next expected</span><strong>{testConsoleNextExpectedEvent}</strong></li><li className="test-console-long-value"><span>Terminal reason</span><strong>{testConsoleTerminalReason ?? 'n/a'}</strong></li><li><span>Export available</span><strong>{formatTestConsoleBoolean(testConsoleExportReady)}</strong></li><li><span>Can stop</span><strong>{formatTestConsoleBoolean(displayTestConsoleSnapshot?.can_stop ?? testConsoleStatus?.can_stop)}</strong></li></ul></div>
                     </div>
+                    <div className="test-console-run-strips">
+                      <details className="test-console-run-strip" open={Boolean(currentTestConsoleSnapshot)}><summary><span>Current run</span><strong>{currentTestConsoleSnapshot?.test_status ?? 'No active run'} · {currentTestConsoleSnapshot?.current_phase ?? 'idle'} · {formatClockDuration(currentTestConsoleSnapshot?.elapsed_seconds)}</strong></summary>{currentTestConsoleSnapshot ? <ul className="key-value-list test-console-kv-list test-console-kv-list--compact"><li><span>Run ID</span><strong className="test-console-mono-value">{currentTestConsoleSnapshot.current_run_id ?? currentTestConsoleSnapshot.run_id ?? 'n/a'}</strong></li><li><span>Started</span><strong>{formatDate(currentTestConsoleSnapshot.started_at)}</strong></li><li><span>Updated</span><strong>{formatDate(currentTestConsoleSnapshot.updated_at)}</strong></li><li><span>Gate</span><strong>{currentTestConsoleSnapshot.gate_status ?? 'n/a'}</strong></li><li className="test-console-long-value"><span>Stop reason</span><strong>{testConsoleCanStop ? 'available' : 'not available'}{currentTestConsoleSnapshot.can_stop_reason ? ` · ${currentTestConsoleSnapshot.can_stop_reason}` : ''}</strong></li><li className="test-console-long-value"><span>Next action</span><strong>{currentTestConsoleSnapshot.next_action_hint ?? 'n/a'}</strong></li></ul> : <p className="muted-text">No active run. Use Run selected profile to start a fresh operational check.</p>}</details>
+                      <details className="test-console-run-strip"><summary><span>Last completed</span><strong>{effectiveLastCompletedSnapshot?.test_status ?? 'No completed run'} · {formatDate(effectiveLastCompletedSnapshot?.ended_at)}</strong></summary>{effectiveLastCompletedSnapshot ? <ul className="key-value-list test-console-kv-list test-console-kv-list--compact"><li><span>Run ID</span><strong className="test-console-mono-value">{effectiveLastCompletedSnapshot.current_run_id ?? effectiveLastCompletedSnapshot.run_id ?? effectiveLastCompletedSnapshot.last_run_id ?? 'n/a'}</strong></li><li><span>Last event</span><strong>{effectiveLastCompletedSnapshot.last_backend_event ?? effectiveLastCompletedSnapshot.last_event ?? 'n/a'}</strong></li><li className="test-console-long-value"><span>Reason code</span><strong>{effectiveLastCompletedSnapshot.last_reason_code ?? 'n/a'}</strong></li><li><span>Run scope</span><strong>{effectiveLastCompletedSnapshot.run_scope ?? 'n/a'}</strong></li><li><span>Executed profile</span><strong>{effectiveLastCompletedSnapshot.test_profile ?? 'n/a'}</strong></li></ul> : <p className="muted-text">No completed test snapshot available yet.</p>}</details>
+                    </div>
+                    <div className="test-console-pipeline-section"><div className="test-console-panel__heading"><span className="section-label">Pipeline result</span><span className="muted-text">module counts, status and primary reason</span></div><div className="test-console-pipeline-grid">{testConsolePipelineCards.map((card) => <div key={card.key} className="test-console-pipeline-card"><div className="test-console-pipeline-card__top"><span>{card.label}</span><StatusBadge tone={card.enabled ? toneFromStatus(card.status) : 'neutral'}>{card.status}</StatusBadge></div><strong>{card.countLabel}</strong><p>{card.reason}</p><button className="ghost-button" type="button" onClick={() => setTestConsoleRawJsonOpen(true)}>Details / JSON</button></div>)}</div></div>
                   </div>
                   {testConsoleCopyMessage ? <p className="muted-text">{testConsoleCopyMessage}</p> : null}
                   {testConsoleLogError ? <p className="warning-text">{testConsoleLogError}</p> : null}
@@ -1872,17 +1751,18 @@ export function CockpitPage() {
                       )}
                     </div>
                   </SectionCard>
-                  <div className="subsection test-console-output-block">
-                    <p className="section-label">Exported log</p>
-                    <p className="muted-text">profile={executedTestProfileId} · scope={executedRunScope}</p>
-                    <pre className="test-console-output">{testConsoleLog || 'No log exported yet'}</pre>
+                  <div className="test-console-log-dock">
+                    <details className="subsection test-console-output-block">
+                      <summary><span className="section-label">Exported log</span><span className="muted-text">profile={executedTestProfileId} · scope={executedRunScope}</span></summary>
+                      <pre className="test-console-output">{testConsoleLog || 'No log exported yet'}</pre>
+                    </details>
+                    {testConsoleRawJsonOpen ? (
+                      <details className="subsection test-console-output-block" open>
+                        <summary><span className="section-label">Raw status JSON</span><span className="muted-text">status payload</span></summary>
+                        <pre className="test-console-output">{JSON.stringify(testConsoleStatus ?? {}, null, 2)}</pre>
+                      </details>
+                    ) : null}
                   </div>
-                  {testConsoleRawJsonOpen ? (
-                    <div className="subsection test-console-output-block">
-                      <p className="section-label">Raw status JSON</p>
-                      <pre className="test-console-output">{JSON.stringify(testConsoleStatus ?? {}, null, 2)}</pre>
-                    </div>
-                  ) : null}
                 </SectionCard>
                 <SectionCard
                   eyebrow="Economic snapshot"

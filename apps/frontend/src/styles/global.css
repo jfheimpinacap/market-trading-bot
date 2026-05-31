@@ -4478,3 +4478,59 @@ body {
     white-space: normal;
   }
 }
+
+/* Prompt 374: wide dashboard layout for Cockpit Operational Test Console. */
+.test-console-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 6px; min-width: 0; }
+.test-console-summary-item { min-width: 0; padding: 7px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.025); }
+.test-console-summary-item span,
+.test-console-summary-item strong { display: block; min-width: 0; }
+.test-console-summary-item span { color: var(--text-muted); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; line-height: 1.15; text-transform: uppercase; white-space: nowrap; }
+.test-console-summary-item strong { margin-top: 3px; font-size: 0.82rem; line-height: 1.2; overflow-wrap: anywhere; }
+.test-console-dashboard-grid { display: grid; grid-template-columns: minmax(250px, 1.05fr) minmax(230px, 0.95fr) minmax(300px, 1.2fr) minmax(260px, 1fr); gap: 10px; align-items: start; min-width: 0; }
+.test-console-dashboard-grid .test-console-panel { height: 100%; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.018); }
+.test-console-actions--compact { grid-template-columns: repeat(2, minmax(92px, 1fr)); }
+.test-console-kv-list--compact { grid-template-columns: 1fr; }
+.test-console-mono-value { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 0.74rem; overflow-wrap: anywhere; }
+.test-console-run-strips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+.test-console-run-strip,
+.test-console-pipeline-section,
+.test-console-log-dock { min-width: 0; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.018); }
+.test-console-run-strip { padding: 7px 9px; }
+.test-console-run-strip summary,
+.test-console-output-block summary { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; cursor: pointer; min-width: 0; }
+.test-console-run-strip summary span,
+.test-console-run-strip summary strong,
+.test-console-output-block summary span { min-width: 0; overflow-wrap: anywhere; }
+.test-console-run-strip summary span { color: var(--text-muted); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.test-console-run-strip summary strong { font-size: 0.82rem; text-align: right; }
+.test-console-run-strip[open] summary { margin-bottom: 7px; }
+.test-console-pipeline-section { padding: 9px 10px; }
+.test-console-pipeline-section .test-console-panel__heading { margin-bottom: 8px; }
+.test-console-pipeline-grid { display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap: 8px; min-width: 0; }
+.test-console-pipeline-card { display: grid; gap: 5px; min-width: 0; padding: 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.02); }
+.test-console-pipeline-card__top { display: flex; justify-content: space-between; gap: 6px; align-items: center; min-width: 0; }
+.test-console-pipeline-card__top span { min-width: 0; color: var(--text-muted); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; }
+.test-console-pipeline-card > strong { font-size: 1.18rem; line-height: 1; }
+.test-console-pipeline-card p { min-height: 2.3em; margin: 0; color: var(--text-muted); font-size: 0.73rem; line-height: 1.25; overflow-wrap: anywhere; }
+.test-console-pipeline-card .ghost-button { min-height: 27px; padding: 4px 6px; font-size: 0.72rem; }
+.test-console-log-dock { display: grid; gap: 8px; margin-top: 10px; padding: 8px; }
+.test-console-log-dock .test-console-output-block { max-height: none; margin: 0; padding: 7px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); overflow: visible; }
+.test-console-log-dock .test-console-output-block[open] .test-console-output { margin-top: 7px; }
+.test-console-log-dock .test-console-output { max-height: 240px; }
+@media (max-width: 1380px) {
+  .test-console-dashboard-grid { grid-template-columns: repeat(2, minmax(280px, 1fr)); }
+  .test-console-pipeline-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
+}
+@media (max-width: 1180px) {
+  .test-console-dashboard-grid,
+  .test-console-run-strips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .test-console-dashboard-grid,
+  .test-console-run-strips,
+  .test-console-pipeline-grid { grid-template-columns: 1fr; }
+  .test-console-run-strip summary,
+  .test-console-output-block summary { display: grid; grid-template-columns: 1fr; }
+  .test-console-run-strip summary strong { text-align: left; }
+}
+.cockpit-page .cockpit-live-paper-grid { grid-template-columns: minmax(0, 1fr); }
