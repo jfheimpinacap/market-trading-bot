@@ -66,6 +66,15 @@ Mission Control Test Console lifecycle now distinguishes **real pipeline progres
 - `Stop test` enablement is now based on non-terminal run state (`can_stop`) rather than narrow/ambiguous UI-only conditions.
 - Validation/gate stuck states (including reused safe session bootstrap paths) now converge to timeout classification when no real progress occurs, even if polling/refresh traffic continues.
 
+### Test Console finalize timeout semantics (Prompt 367)
+
+Mission Control Test Console lifecycle now separates a real runner timeout from a slow `finalize` phase that already has a usable operational export/status payload.
+
+- `TEST_CONSOLE_HANG_TIMEOUT` is reserved for runs that are still missing usable final output when the no-progress timeout fires.
+- A stale `finalize` snapshot with export/status available is terminalized to the inferred operational outcome (`BLOCKED`, `COMPLETED`, `COMPLETED_WITH_WARNINGS`, or `FAILED`) instead of being dominated by `TIMED_OUT`.
+- Slow finalize after usable output is reported as `TEST_CONSOLE_FINALIZE_SLOW_WARNING`, keeping lifecycle diagnostics visible without replacing gate/review outcomes.
+- The next Full E2E after this fix should be read from `test_status`/`gate_status` first; a finalize-slow warning means the export was available before lifecycle cleanup, not that the operational run failed by timeout.
+
 ### Dashboard operator-first compact layout (Prompt 329)
 
 The main dashboard was compacted for operator-first scanning with less vertical noise and less default explanatory text.

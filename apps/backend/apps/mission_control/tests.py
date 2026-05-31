@@ -7787,6 +7787,84 @@ class TestConsoleApiTests(TestCase):
     @patch('apps.mission_control.services.test_console._set_state')
     @patch('apps.mission_control.services.test_console._sync_operational_snapshot_for_profile')
     @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_get_test_console_status_finalize_with_export_preserves_operational_blocked_status(
+        self,
+        mock_state_snapshot,
+        _mock_sync,
+        mock_set_state,
+    ):
+        from apps.mission_control.services.test_console import get_test_console_status
+
+        stale_time = timezone.now() - timedelta(minutes=25)
+        payload = self._status_payload()
+        payload.update(
+            {
+                'test_status': 'RUNNING',
+                'current_phase': 'finalize',
+                'started_at': stale_time,
+                'updated_at': stale_time,
+                'last_progress_at': stale_time,
+                'last_real_progress_at': stale_time,
+                'phase_entered_at': stale_time,
+                'ended_at': None,
+                'gate_status': 'BLOCK',
+                'trial_status': 'PASS',
+                'blocker_summary': [],
+                'reason_codes': ['STALE_VIEW_REVIEW_REQUIRED'],
+                'text_export': 'completed operational export',
+                'next_action_hint': 'Review gate result',
+            }
+        )
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        status_payload = get_test_console_status()
+        self.assertEqual(status_payload['test_status'], 'BLOCKED')
+        self.assertEqual(status_payload['progress_state'], 'blocked')
+        self.assertFalse(status_payload.get('is_hung'))
+        self.assertIn('TEST_CONSOLE_FINALIZE_SLOW_WARNING', status_payload.get('reason_codes', []))
+        self.assertIn('TEST_CONSOLE_FINALIZE_SLOW_WARNING', status_payload.get('warnings', []))
+        self.assertNotIn('TEST_CONSOLE_HANG_TIMEOUT', status_payload.get('reason_codes', []))
+        self.assertIn('Review gate/blocker evidence', status_payload.get('next_action_hint', ''))
+        self.assertIn('test_status: BLOCKED', status_payload.get('text_export', ''))
+        mock_set_state.assert_called()
+
+    @patch('apps.mission_control.services.test_console._set_state')
+    @patch('apps.mission_control.services.test_console._sync_operational_snapshot_for_profile')
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
+    def test_get_test_console_status_finalize_without_export_still_times_out(
+        self,
+        mock_state_snapshot,
+        _mock_sync,
+        _mock_set_state,
+    ):
+        from apps.mission_control.services.test_console import get_test_console_status
+
+        stale_time = timezone.now() - timedelta(minutes=25)
+        payload = self._status_payload()
+        payload.update(
+            {
+                'test_status': 'RUNNING',
+                'current_phase': 'finalize',
+                'started_at': stale_time,
+                'updated_at': stale_time,
+                'last_progress_at': stale_time,
+                'last_real_progress_at': stale_time,
+                'phase_entered_at': stale_time,
+                'ended_at': None,
+                'text_export': '',
+            }
+        )
+        mock_state_snapshot.return_value = (payload, payload, [])
+
+        status_payload = get_test_console_status()
+        self.assertEqual(status_payload['test_status'], 'TIMED_OUT')
+        self.assertTrue(status_payload.get('is_hung'))
+        self.assertIn('TEST_CONSOLE_HANG_TIMEOUT', status_payload.get('reason_codes', []))
+        self.assertNotIn('TEST_CONSOLE_FINALIZE_SLOW_WARNING', status_payload.get('reason_codes', []))
+
+    @patch('apps.mission_control.services.test_console._set_state')
+    @patch('apps.mission_control.services.test_console._sync_operational_snapshot_for_profile')
+    @patch('apps.mission_control.services.test_console._get_state_snapshot')
     def test_get_test_console_status_non_progress_refresh_does_not_reset_real_progress_clock(
         self,
         mock_state_snapshot,

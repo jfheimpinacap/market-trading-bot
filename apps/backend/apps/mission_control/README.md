@@ -43,6 +43,12 @@ Scope:
   - export header metadata (`profile` and `scope`).
 - Optional advanced panel (collapsed by default) shows module checklist visibility for diagnostics without changing trading logic.
 
+## Prompt 367 (finalize timeout semantics)
+
+Test Console hang detection now treats `finalize` specially when final output already exists. If a run reaches `finalize` with usable export/status data, the lifecycle no-progress detector preserves the operational terminal status and records `TEST_CONSOLE_FINALIZE_SLOW_WARNING` as a diagnostic warning. `TEST_CONSOLE_HANG_TIMEOUT` remains the terminal reason only when the runner is stale before producing usable final output.
+
+This continues the debug plan from the hang-lifecycle hardening work: timeout before export is a real runner timeout; slow finalize after export is a lifecycle warning layered on top of the operational outcome.
+
 ## Prompt 349 (targeted profile canonical payload wiring closure)
 
 - Backend wiring fix only: start/status/export now run a **final canonical normalization pass immediately before serializer/export output**.
