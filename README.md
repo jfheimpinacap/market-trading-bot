@@ -75,6 +75,14 @@ Mission Control Test Console lifecycle now separates a real runner timeout from 
 - Slow finalize after usable output is reported as `TEST_CONSOLE_FINALIZE_SLOW_WARNING`, keeping lifecycle diagnostics visible without replacing gate/review outcomes.
 - The next Full E2E after this fix should be read from `test_status`/`gate_status` first; a finalize-slow warning means the export was available before lifecycle cleanup, not that the operational run failed by timeout.
 
+### Operational Test Console observability bridge (Prompt 372)
+
+Operational Test Console now consumes the backend observability fields added in Prompt 371 directly in the frontend, without changing backend execution, policy, trading logic, endpoints, polling, start/stop, or export contracts.
+
+- The Cockpit Test Console activity line now distinguishes active runs from last-completed display state and shows phase, elapsed time, last backend event, next expected event, export readiness, lifecycle warning, and terminal reason when present.
+- A compact Lifecycle panel surfaces `last_backend_event`, `next_expected_event`, `terminal_reason`, `lifecycle_warning`, `export_available`, `interrupted_by_stop`, and `seconds_since_last_progress` with wrapping for long reason codes.
+- Stage progress remains phase-based (`idle`, `scan`, `handoff`, `prediction`, `risk`, `execution`, `export`, `finalize`) and uses `current_phase` when available rather than inventing backend percentages.
+
 ### Dashboard operator-first compact layout (Prompt 329)
 
 The main dashboard was compacted for operator-first scanning with less vertical noise and less default explanatory text.
