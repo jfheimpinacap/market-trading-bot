@@ -552,6 +552,28 @@ export type TestConsoleStatusResponse = {
   last_real_progress_at?: string | null;
   last_non_progress_refresh_at?: string | null;
   phase_entered_at?: string | null;
+  phase_timings?: Record<string, {
+    phase_started_at?: string | null;
+    phase_finished_at?: string | null;
+    phase_elapsed_seconds?: number | null;
+    phase_expected_seconds?: number | null;
+    phase_warning_after_seconds?: number | null;
+    phase_timeout_after_seconds?: number | null;
+    slow_phase_reason_code?: string | null;
+    slow_phase_hint?: string | null;
+  }>;
+  phase_budget_summary?: {
+    total_elapsed_seconds?: number | null;
+    phase_count?: number | null;
+    slowest_phase?: string | null;
+    slowest_phase_elapsed_seconds?: number | null;
+    slowest_phase_reason_code?: string | null;
+    slowest_phase_hint?: string | null;
+    budget_warning?: boolean;
+    recommendation?: 'wait' | 'export' | 'export_then_review_slowest_phase' | 'stop_or_retry_after_export' | string;
+  };
+  diagnostic_example_pagination?: Record<string, unknown>;
+  diagnostic_workload_summary?: Record<string, unknown>;
   hang_detected_at?: string | null;
   hang_detection_reason?: string | null;
   hang_reason_classification?: string | null;

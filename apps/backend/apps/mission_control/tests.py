@@ -8184,6 +8184,62 @@ class TestConsoleApiTests(TestCase):
         ]:
             self.assertIn(field, data)
 
+    def test_phase_timing_records_budget_warning_and_slowest_phase(self):
+        from apps.mission_control.services.test_console import _finish_timed_phase, _start_timed_phase
+
+        payload = self._status_payload()
+        payload['phase_timings'] = {}
+        _start_timed_phase(payload, 'risk')
+        payload['phase_timings']['risk']['phase_current_started_at'] = timezone.now() - timedelta(seconds=421)
+        _finish_timed_phase(payload, 'risk')
+
+        risk_timing = payload['phase_timings']['risk']
+        self.assertGreaterEqual(risk_timing['phase_elapsed_seconds'], 421)
+        self.assertEqual(risk_timing['phase_expected_seconds'], 240)
+        self.assertEqual(risk_timing['phase_warning_after_seconds'], 420)
+        self.assertEqual(payload['phase_budget_summary']['slowest_phase'], 'risk')
+        self.assertTrue(payload['phase_budget_summary']['budget_warning'])
+        self.assertIn('PREDICTION_RISK_REUSE_THROTTLE_WINDOW_VOLUME', payload['reason_codes'])
+
+    def test_export_log_includes_phase_budget_summary_and_capped_examples(self):
+        from apps.mission_control.services.test_console import _cap_diagnostic_examples, _log_line_items
+
+        payload = self._status_payload()
+        payload['phase_timings'] = {
+            'export': {
+                'phase_started_at': timezone.now(),
+                'phase_finished_at': timezone.now(),
+                'phase_elapsed_seconds': 95,
+                'phase_expected_seconds': 45,
+                'phase_warning_after_seconds': 90,
+                'phase_timeout_after_seconds': 180,
+                'slow_phase_reason_code': 'EXPORT_FINALIZE_PAYLOAD_DIAGNOSTIC_VOLUME',
+                'slow_phase_hint': 'payload volume',
+            }
+        }
+        payload['phase_budget_summary'] = {
+            'total_elapsed_seconds': 95,
+            'slowest_phase': 'export',
+            'slowest_phase_elapsed_seconds': 95,
+            'slowest_phase_reason_code': 'EXPORT_FINALIZE_PAYLOAD_DIAGNOSTIC_VOLUME',
+            'slowest_phase_hint': 'payload volume',
+            'budget_warning': True,
+            'recommendation': 'export_then_review_slowest_phase',
+        }
+        payload['paper_execution_examples'] = [{'id': index} for index in range(8)]
+        _cap_diagnostic_examples(payload, limit=5)
+
+        export_text = _log_line_items(payload)
+        self.assertEqual(len(payload['paper_execution_examples']), 5)
+        self.assertEqual(
+            payload['diagnostic_example_pagination']['capped_example_lists']['paper_execution_examples']['original_count'],
+            8,
+        )
+        self.assertIn('phase_budget_summary:', export_text)
+        self.assertIn('slowest_phase=export elapsed_seconds=95', export_text)
+        self.assertIn('diagnostic_example_pagination=', export_text)
+        self.assertIn('diagnostic_workload_summary:', export_text)
+
     @patch('apps.mission_control.views.export_test_console_log')
     def test_export_log_text_works(self, mock_export):
         mock_export.return_value = 'copy paste friendly log\nhandoff_summary:\n  shortlisted_signals=1'

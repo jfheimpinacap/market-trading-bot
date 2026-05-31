@@ -97,6 +97,38 @@ _NEXT_EXPECTED_EVENT_BY_PHASE = {
     'finalize': 'terminal_status_or_export_available',
 }
 
+_TEST_CONSOLE_PHASE_BUDGETS = {
+    'full_e2e': {
+        'scan': {'expected': 360, 'warning': 600, 'timeout': 900},
+        'handoff': {'expected': 240, 'warning': 420, 'timeout': 600},
+        'prediction': {'expected': 180, 'warning': 300, 'timeout': 480},
+        'risk': {'expected': 240, 'warning': 420, 'timeout': 600},
+        'execution': {'expected': 180, 'warning': 300, 'timeout': 480},
+        'export': {'expected': 45, 'warning': 90, 'timeout': 180},
+        'finalize': {'expected': 180, 'warning': 300, 'timeout': 480},
+    },
+    'scope_throttle_diagnostics': {
+        'scan': {'expected': 0, 'warning': 30, 'timeout': 60},
+        'handoff': {'expected': 60, 'warning': 120, 'timeout': 180},
+        'prediction': {'expected': 0, 'warning': 30, 'timeout': 60},
+        'risk': {'expected': 90, 'warning': 180, 'timeout': 300},
+        'execution': {'expected': 60, 'warning': 120, 'timeout': 180},
+        'export': {'expected': 15, 'warning': 45, 'timeout': 90},
+        'finalize': {'expected': 60, 'warning': 120, 'timeout': 180},
+    },
+    'prediction_risk_path': {
+        'scan': {'expected': 0, 'warning': 30, 'timeout': 60},
+        'handoff': {'expected': 90, 'warning': 180, 'timeout': 300},
+        'prediction': {'expected': 120, 'warning': 240, 'timeout': 360},
+        'risk': {'expected': 120, 'warning': 240, 'timeout': 360},
+        'execution': {'expected': 0, 'warning': 30, 'timeout': 60},
+        'export': {'expected': 15, 'warning': 45, 'timeout': 90},
+        'finalize': {'expected': 60, 'warning': 120, 'timeout': 180},
+    },
+}
+_DEFAULT_PHASE_BUDGET = {'expected': 60, 'warning': 120, 'timeout': 180}
+_DIAGNOSTIC_EXAMPLE_LIMIT = 5
+
 _HISTORY_SIZE = 10
 _TERMINAL_TEST_STATUSES = {
     TEST_STATUS_IDLE,
@@ -556,6 +588,202 @@ def _mark_real_progress(payload: dict[str, Any], *, event: str | None = None, re
     if reason_code is not None:
         payload['last_reason_code'] = reason_code
 
+
+def _budget_for_phase(profile_id: str | None, phase: str) -> dict[str, int]:
+    profile_budget = _TEST_CONSOLE_PHASE_BUDGETS.get(str(profile_id or TEST_PROFILE_FULL_E2E), {})
+    budget = profile_budget.get(phase, _DEFAULT_PHASE_BUDGET)
+    return {
+        'expected': int(budget.get('expected') or 0),
+        'warning': int(budget.get('warning') or 0),
+        'timeout': int(budget.get('timeout') or 0),
+    }
+
+
+def _phase_slow_reason(*, phase: str, payload: dict[str, Any]) -> tuple[str, str]:
+    scan_summary = payload.get('scan_summary') or {}
+    handoff_summary = payload.get('handoff_summary') or {}
+    risk_scope = payload.get('risk_execution_scope_alignment_summary') or {}
+    risk_throttle = payload.get('active_exposure_risk_throttle_summary') or {}
+    execution_visibility = payload.get('paper_execution_visibility_summary') or {}
+    if phase == 'scan':
+        return (
+            'SCAN_SOURCE_CLUSTER_VOLUME',
+            'Scan time is driven by source fetches, dedupe, clustering and shortlist creation; inspect rss/reddit/x item counts and clusters.',
+        )
+    if phase == 'handoff':
+        return (
+            'HANDOFF_CONSENSUS_AND_SCORING_VOLUME',
+            f"Handoff reviewed consensus/scoring evidence; consensus_reviews={handoff_summary.get('consensus_reviews', 0)}.",
+        )
+    if phase in {'prediction', 'risk'}:
+        return (
+            'PREDICTION_RISK_REUSE_THROTTLE_WINDOW_VOLUME',
+            (
+                'Prediction/risk time is driven by current-window decisions plus reuse/throttle diagnostics; '
+                f"risk_decisions_current_window={risk_scope.get('risk_decisions_current_window', 0)} "
+                f"execution_routes_current_window={risk_scope.get('execution_routes_current_window', 0)} "
+                f"redundant_risk_decisions_throttled={risk_throttle.get('redundant_risk_decisions_throttled', 0)}."
+            ),
+        )
+    if phase == 'execution':
+        return (
+            'EXECUTION_ROUTE_DIAGNOSTIC_NO_REAL_TRADE_PATH',
+            (
+                'Execution phase audits route availability in paper-only/read-only mode; '
+                f"execution_routes_current_window={risk_scope.get('execution_routes_current_window', 0)} "
+                f"paper_execution_candidates={handoff_summary.get('paper_execution_candidates', 0)} "
+                f"visible={execution_visibility.get('visible', 0)}."
+            ),
+        )
+    if phase in {'export', 'finalize'}:
+        return (
+            'EXPORT_FINALIZE_PAYLOAD_DIAGNOSTIC_VOLUME',
+            'Export/finalize time is driven by snapshot composition, diagnostic summaries and capped examples rather than trading execution.',
+        )
+    return ('PHASE_BUDGET_EXCEEDED', 'Phase exceeded its diagnostic time budget.')
+
+
+def _start_timed_phase(payload: dict[str, Any], phase: str) -> None:
+    now = timezone.now()
+    timings = payload.setdefault('phase_timings', {})
+    budget = _budget_for_phase(payload.get('effective_profile') or payload.get('test_profile'), phase)
+    previous = timings.get(phase, {})
+    previous_elapsed = int(previous.get('phase_elapsed_seconds') or 0)
+    timings[phase] = {
+        **previous,
+        'phase_started_at': previous.get('phase_started_at') or now,
+        'phase_current_started_at': now,
+        'phase_finished_at': None,
+        'phase_elapsed_seconds': previous_elapsed,
+        'phase_expected_seconds': budget['expected'],
+        'phase_warning_after_seconds': budget['warning'],
+        'phase_timeout_after_seconds': budget['timeout'],
+        'slow_phase_reason_code': previous.get('slow_phase_reason_code') or '',
+        'slow_phase_hint': previous.get('slow_phase_hint') or '',
+    }
+
+
+def _finish_timed_phase(payload: dict[str, Any], phase: str) -> None:
+    now = timezone.now()
+    timings = payload.setdefault('phase_timings', {})
+    if phase not in timings:
+        _start_timed_phase(payload, phase)
+    entry = timings[phase]
+    started_at = entry.get('phase_current_started_at') or entry.get('phase_started_at') or now
+    previous_elapsed = int(entry.get('phase_elapsed_seconds') or 0)
+    elapsed = previous_elapsed + int(max(0, (now - started_at).total_seconds()))
+    entry['phase_finished_at'] = now
+    entry['phase_current_started_at'] = None
+    entry['phase_elapsed_seconds'] = elapsed
+    warning_after = int(entry.get('phase_warning_after_seconds') or 0)
+    timeout_after = int(entry.get('phase_timeout_after_seconds') or 0)
+    if warning_after and elapsed >= warning_after:
+        reason_code, hint = _phase_slow_reason(phase=phase, payload=payload)
+        entry['slow_phase_reason_code'] = reason_code if elapsed < timeout_after or not timeout_after else f'{reason_code}_TIMEOUT_BUDGET_EXCEEDED'
+        entry['slow_phase_hint'] = hint
+        payload.setdefault('warnings', []).append(f"{phase}_phase_slow:{elapsed}s")
+        payload.setdefault('reason_codes', []).append(entry['slow_phase_reason_code'])
+    _update_phase_budget_summary(payload)
+
+
+def _update_phase_budget_summary(payload: dict[str, Any]) -> None:
+    timings = payload.get('phase_timings') or {}
+    completed = {
+        phase: entry
+        for phase, entry in timings.items()
+        if entry.get('phase_elapsed_seconds') is not None
+    }
+    slowest_phase = None
+    slowest_entry = None
+    if completed:
+        slowest_phase, slowest_entry = max(
+            completed.items(), key=lambda item: int(item[1].get('phase_elapsed_seconds') or 0)
+        )
+    total_elapsed = sum(int(entry.get('phase_elapsed_seconds') or 0) for entry in completed.values())
+    budget_warning = any(
+        int(entry.get('phase_warning_after_seconds') or 0) > 0
+        and int(entry.get('phase_elapsed_seconds') or 0) >= int(entry.get('phase_warning_after_seconds') or 0)
+        for entry in completed.values()
+    )
+    recommendation = 'wait'
+    if _is_terminal_test_status(payload.get('test_status')):
+        recommendation = 'export' if not budget_warning else 'export_then_review_slowest_phase'
+    elif budget_warning:
+        recommendation = 'stop_or_retry_after_export'
+    payload['phase_budget_summary'] = {
+        'total_elapsed_seconds': int(payload.get('elapsed_seconds') or total_elapsed),
+        'phase_count': len(timings),
+        'slowest_phase': slowest_phase,
+        'slowest_phase_elapsed_seconds': int((slowest_entry or {}).get('phase_elapsed_seconds') or 0),
+        'slowest_phase_reason_code': str((slowest_entry or {}).get('slow_phase_reason_code') or ''),
+        'slowest_phase_hint': str((slowest_entry or {}).get('slow_phase_hint') or ''),
+        'budget_warning': budget_warning,
+        'recommendation': recommendation,
+    }
+
+
+def _cap_diagnostic_examples(payload: dict[str, Any], *, limit: int = _DIAGNOSTIC_EXAMPLE_LIMIT) -> None:
+    capped: dict[str, dict[str, int]] = {}
+    for key, value in list(payload.items()):
+        if not key.endswith('_examples') or not isinstance(value, list):
+            continue
+        original_count = len(value)
+        if original_count > limit:
+            payload[key] = value[:limit]
+            capped[key] = {'original_count': original_count, 'retained_count': limit}
+    if capped:
+        payload['diagnostic_example_pagination'] = {
+            'limit_per_example_list': limit,
+            'capped_example_lists': capped,
+            'summary': 'Aggregated counts are preserved; diagnostic examples are capped to keep Full E2E export/debug payloads bounded.',
+        }
+        payload.setdefault('reason_codes', []).append('DIAGNOSTIC_EXAMPLES_CAPPED')
+
+
+def _annotate_diagnostic_workload(payload: dict[str, Any]) -> None:
+    handoff = payload.get('handoff_summary') or {}
+    risk_scope = payload.get('risk_execution_scope_alignment_summary') or {}
+    risk_throttle = payload.get('active_exposure_risk_throttle_summary') or {}
+    execution_visibility = payload.get('paper_execution_visibility_summary') or {}
+    historical_reuse_count = int(risk_scope.get('historical_reuse_detected_count') or 0)
+    risk_current_window = int(risk_scope.get('risk_decisions_current_window') or 0)
+    execution_current_window = int(risk_scope.get('execution_routes_current_window') or 0)
+    redundant_throttled = int(risk_throttle.get('redundant_risk_decisions_throttled') or 0)
+    created_normally = int(risk_throttle.get('risk_decisions_created_normally') or risk_throttle.get('risk_decisions_created_normally_current_window') or 0)
+    consensus_reviews = int(handoff.get('consensus_reviews') or 0)
+    paper_execution_candidates = int(handoff.get('paper_execution_candidates') or 0)
+    high_volume = any(
+        value > 100
+        for value in (
+            consensus_reviews,
+            redundant_throttled,
+            created_normally,
+            risk_current_window,
+            execution_current_window,
+        )
+    )
+    payload['diagnostic_workload_summary'] = {
+        'summary_window': handoff.get('summary_window') or 'rolling_60m',
+        'consensus_reviews': consensus_reviews,
+        'redundant_risk_decisions_throttled': redundant_throttled,
+        'risk_decisions_created_normally': created_normally,
+        'risk_decisions_current_window': risk_current_window,
+        'execution_routes_current_window': execution_current_window,
+        'historical_reuse_detected_count': historical_reuse_count,
+        'paper_execution_candidates': paper_execution_candidates,
+        'paper_execution_visible': int(execution_visibility.get('visible') or 0),
+        'classification': 'HIGH_DIAGNOSTIC_VOLUME' if high_volume else 'NORMAL_DIAGNOSTIC_VOLUME',
+        'current_window_only': True,
+        'historical_reuse_treatment': 'counted_and_labeled_not_reprocessed' if historical_reuse_count else 'none_detected',
+        'real_execution_paths_opened': False,
+        'summary': (
+            'High counts represent current-window diagnostic volume plus labeled historical reuse counters; '
+            'aggregate counts are preserved while example lists are capped.'
+            if high_volume
+            else 'Diagnostic workload is within the expected current-window range.'
+        ),
+    }
+
 def _augment_progress(status_payload: dict[str, Any]) -> dict[str, Any]:
     payload = status_payload
     now = timezone.now()
@@ -583,6 +811,7 @@ def _augment_progress(status_payload: dict[str, Any]) -> dict[str, Any]:
     payload['total_steps'] = total_steps
     payload['progress_state'] = _progress_state_for_status(str(payload.get('test_status') or TEST_STATUS_IDLE))
     payload['elapsed_seconds'] = elapsed_seconds
+    _update_phase_budget_summary(payload)
     payload['seconds_since_last_progress'] = seconds_since_last_progress
     payload['last_backend_event'] = str(payload.get('last_backend_event') or payload.get('last_event') or '')
     payload['next_expected_event'] = str(
@@ -654,11 +883,14 @@ def _next_action_hint_for_operational_status(test_status: str) -> str:
 
 def _finalize_summary(payload: dict[str, Any]) -> str:
     overlay = payload.get('active_operational_overlay_summary') or {}
+    phase_budget = payload.get('phase_budget_summary') or {}
     return (
         f"{payload.get('test_status')}: phase={payload.get('current_phase')} trial={payload.get('trial_status')} "
         f"validation={payload.get('validation_status')} gate={payload.get('gate_status')} "
         f"funnel_status={payload.get('funnel_status')} window_funnel_status={payload.get('funnel_status_window') or payload.get('funnel_status')} "
-        f"overlay_status={overlay.get('overlay_status') or 'UNKNOWN'}"
+        f"overlay_status={overlay.get('overlay_status') or 'UNKNOWN'} "
+        f"slowest_phase={phase_budget.get('slowest_phase') or 'n/a'} "
+        f"recommendation={phase_budget.get('recommendation') or 'wait'}"
     )
 
 
@@ -813,6 +1045,10 @@ def _normalize_test_console_payload(status_payload: dict[str, Any] | None) -> di
     payload['last_real_progress_at'] = payload.get('last_real_progress_at') or payload.get('last_progress_at')
     payload['last_non_progress_refresh_at'] = payload.get('last_non_progress_refresh_at')
     payload['phase_entered_at'] = payload.get('phase_entered_at')
+    payload['phase_timings'] = dict(payload.get('phase_timings') or {})
+    payload['phase_budget_summary'] = dict(payload.get('phase_budget_summary') or {})
+    payload['diagnostic_example_pagination'] = dict(payload.get('diagnostic_example_pagination') or {})
+    payload['diagnostic_workload_summary'] = dict(payload.get('diagnostic_workload_summary') or {})
     payload['hang_detected_at'] = payload.get('hang_detected_at')
     payload['hang_detection_reason'] = str(payload.get('hang_detection_reason') or '')
     payload['hang_reason_classification'] = str(payload.get('hang_reason_classification') or '')
@@ -1599,6 +1835,10 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     active_operational_overlay = payload.get('active_operational_overlay_summary') or {}
     llm_shadow = payload.get('llm_shadow_summary') or {}
     llm_aux_signal = payload.get('llm_aux_signal_summary') or {}
+    phase_timings = payload.get('phase_timings') or {}
+    phase_budget = payload.get('phase_budget_summary') or {}
+    diagnostic_pagination = payload.get('diagnostic_example_pagination') or {}
+    diagnostic_workload = payload.get('diagnostic_workload_summary') or {}
 
     lines = [
         '=== Mission Control Test Console Export ===',
@@ -1610,6 +1850,20 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         f"modules_included: {','.join(payload.get('modules_included') or []) or 'none'}",
         f"modules_omitted: {','.join(payload.get('modules_omitted') or []) or 'none'}",
         f"current_phase: {payload.get('current_phase')}",
+        f"total_elapsed_seconds: {payload.get('elapsed_seconds') or phase_budget.get('total_elapsed_seconds') or 0}",
+        'phase_budget_summary:',
+        f"  slowest_phase={phase_budget.get('slowest_phase') or 'n/a'} elapsed_seconds={phase_budget.get('slowest_phase_elapsed_seconds') or 0}",
+        f"  slowest_phase_reason_code={phase_budget.get('slowest_phase_reason_code') or 'none'}",
+        f"  slowest_phase_hint={phase_budget.get('slowest_phase_hint') or ''}",
+        f"  recommendation={phase_budget.get('recommendation') or 'wait'} budget_warning={bool(phase_budget.get('budget_warning'))}",
+        f"  phase_timings={phase_timings}",
+        f"  diagnostic_example_pagination={diagnostic_pagination}",
+        'diagnostic_workload_summary:',
+        f"  classification={diagnostic_workload.get('classification') or 'UNKNOWN'} current_window_only={diagnostic_workload.get('current_window_only')} real_execution_paths_opened={diagnostic_workload.get('real_execution_paths_opened')}",
+        f"  consensus_reviews={diagnostic_workload.get('consensus_reviews', 0)} redundant_risk_decisions_throttled={diagnostic_workload.get('redundant_risk_decisions_throttled', 0)} risk_decisions_created_normally={diagnostic_workload.get('risk_decisions_created_normally', 0)}",
+        f"  risk_decisions_current_window={diagnostic_workload.get('risk_decisions_current_window', 0)} execution_routes_current_window={diagnostic_workload.get('execution_routes_current_window', 0)} historical_reuse_detected_count={diagnostic_workload.get('historical_reuse_detected_count', 0)}",
+        f"  historical_reuse_treatment={diagnostic_workload.get('historical_reuse_treatment') or 'unknown'}",
+        f"  summary={diagnostic_workload.get('summary') or ''}",
         f"validation_status: {payload.get('validation_status')}",
         f"trial_status: {payload.get('trial_status')}",
         f"trend_status: {payload.get('trend_status')}",
@@ -2272,6 +2526,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         if str(bootstrap_result.get('bootstrap_action')) in {'BLOCKED', 'FAILED'}:
             payload['warnings'].append(f"bootstrap action={bootstrap_result.get('bootstrap_action')}")
 
+        _start_timed_phase(payload, 'scan')
         payload['current_phase'] = 'scan'
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
@@ -2316,8 +2571,10 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             payload['last_progress_at'] = payload['updated_at']
             payload['last_real_progress_at'] = payload['updated_at']
             payload['last_event'] = 'Scan skipped by test profile'
+        _finish_timed_phase(payload, 'scan')
         _set_state(status=_augment_progress(payload))
 
+        _start_timed_phase(payload, 'handoff')
         payload['current_phase'] = 'consensus_review'
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
@@ -2337,6 +2594,9 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             payload['last_progress_at'] = payload['updated_at']
             payload['last_real_progress_at'] = payload['updated_at']
             payload['last_event'] = 'Handoff skipped by test profile'
+            _finish_timed_phase(payload, 'handoff')
+            _start_timed_phase(payload, 'prediction')
+            _finish_timed_phase(payload, 'prediction')
             _set_state(status=_augment_progress(payload))
         elif shortlisted_count > 0:
             try:
@@ -2363,7 +2623,9 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
                 payload['last_real_progress_at'] = payload['updated_at']
                 payload['last_event'] = 'Consensus review warning'
                 payload['last_reason_code'] = 'CONSENSUS_WARNING'
+            _finish_timed_phase(payload, 'handoff')
             _set_state(status=_augment_progress(payload))
+            _start_timed_phase(payload, 'prediction')
             if profile_modules.get(TEST_CONSOLE_MODULE_PREDICTION, False):
                 try:
                     pursuit = run_pursuit_review(
@@ -2399,6 +2661,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
                 payload['last_progress_at'] = payload['updated_at']
                 payload['last_real_progress_at'] = payload['updated_at']
                 payload['last_event'] = 'Pursuit skipped by test profile'
+            _finish_timed_phase(payload, 'prediction')
             _set_state(status=_augment_progress(payload))
         else:
             payload['step_results'].append({'phase': 'consensus_review', 'status': 'skipped', 'result': {'reason': 'no_shortlisted_signals'}})
@@ -2408,8 +2671,12 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             payload['last_real_progress_at'] = payload['updated_at']
             payload['last_event'] = 'Handoff skipped'
             payload['last_reason_code'] = 'NO_SHORTLISTED_SIGNALS'
+            _finish_timed_phase(payload, 'handoff')
+            _start_timed_phase(payload, 'prediction')
+            _finish_timed_phase(payload, 'prediction')
             _set_state(status=_augment_progress(payload))
 
+        _start_timed_phase(payload, 'execution')
         payload['current_phase'] = 'trial'
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
@@ -2428,8 +2695,10 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['last_progress_at'] = payload['updated_at']
         payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Execution trial completed'
+        _finish_timed_phase(payload, 'execution')
         _set_state(status=_augment_progress(payload))
 
+        _start_timed_phase(payload, 'risk')
         payload['current_phase'] = 'validation'
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
@@ -2494,8 +2763,10 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['last_progress_at'] = payload['updated_at']
         payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Gate evaluation completed'
+        _finish_timed_phase(payload, 'risk')
         _set_state(status=_augment_progress(payload))
 
+        _start_timed_phase(payload, 'execution')
         payload['current_phase'] = 'extended_run'
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
@@ -2520,8 +2791,10 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['updated_at'] = timezone.now()
         payload['last_progress_at'] = payload['updated_at']
         payload['last_real_progress_at'] = payload['updated_at']
+        _finish_timed_phase(payload, 'execution')
         _set_state(status=_augment_progress(payload))
 
+        _start_timed_phase(payload, 'finalize')
         payload['current_phase'] = 'finalize'
         payload['updated_at'] = timezone.now()
         payload['phase_entered_at'] = payload['updated_at']
@@ -2535,6 +2808,9 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             scan_run=scan_run,
             profile_modules=profile_modules,
         )
+        _cap_diagnostic_examples(payload)
+        _annotate_diagnostic_workload(payload)
+        _finish_timed_phase(payload, 'finalize')
 
         has_errors = bool(payload['errors'])
         has_warnings = bool(payload['warnings'] or payload['blocker_summary'])
@@ -2563,8 +2839,15 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['display_source'] = 'last_completed_run'
         payload['terminal_reason'] = str(payload.get('last_reason_code') or payload.get('test_status') or '')
         payload['summary'] = _finalize_summary(payload)
+        _start_timed_phase(payload, 'export')
         payload['text_export'] = _log_line_items(payload)
+        _finish_timed_phase(payload, 'export')
+        payload['summary'] = _finalize_summary(payload)
         payload = _augment_progress(_normalize_test_console_payload(payload))
+        if (payload.get('phase_budget_summary') or {}).get('budget_warning'):
+            payload['next_action_hint'] = (
+                'Export and review phase_budget_summary before retrying; the slowest phase identifies the likely diagnostic bottleneck.'
+            )
         _set_state(status=payload, log=payload, append_history=True)
 
     return payload
