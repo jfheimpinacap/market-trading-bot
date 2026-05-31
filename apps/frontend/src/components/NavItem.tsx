@@ -20,7 +20,7 @@ export function NavItem({ label, path, active }: NavItemProps) {
   }
 
   return (
-    <a className={className} href={path} onClick={handleClick} aria-current={active ? 'page' : undefined}>
+    <a className={className} href={path} onClick={handleClick} aria-current={active ? 'page' : undefined} title={label}>
       <span>{label}</span>
     </a>
   );
