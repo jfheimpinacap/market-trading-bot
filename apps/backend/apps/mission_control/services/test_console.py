@@ -518,6 +518,7 @@ def _annotate_runtime_flags(payload: dict[str, Any]) -> None:
     payload['has_last_completed_run'] = has_last_completed_run
     payload['current_run_id'] = str(payload.get('current_run_id') or '') or None
     payload['last_run_id'] = str(payload.get('last_run_id') or '') or None
+    payload['run_id'] = payload['current_run_id'] or payload['last_run_id']
     payload['active_run'] = {
         'run_id': payload['current_run_id'],
         'profile': payload.get('effective_profile') or payload.get('test_profile'),
@@ -2443,26 +2444,45 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     return '\n'.join(lines)
 
 
+class TestConsoleStartRejected(RuntimeError):
+    def __init__(self, message: str, *, payload: dict[str, Any] | None = None, status_code: int = 409) -> None:
+        super().__init__(message)
+        self.payload = payload or {}
+        self.status_code = status_code
+
+
 def start_test_console(*, preset_name: str | None = None, profile_id: str | None = None) -> dict[str, Any]:
     target_preset = (preset_name or PRESET_NAME).strip() or PRESET_NAME
     selected_profile_id = str(profile_id or TEST_PROFILE_FULL_E2E).strip() or TEST_PROFILE_FULL_E2E
+    status_snapshot, _last_log, _history = _get_state_snapshot()
+    normalized_snapshot = _normalize_test_console_payload(status_snapshot)
+    _log_test_console(
+        'start-request-received',
+        normalized_snapshot,
+        requested_profile=selected_profile_id,
+        preset_name=target_preset,
+    )
+    if bool(normalized_snapshot.get('has_active_run')) or (
+        str(normalized_snapshot.get('test_status') or '').upper() != TEST_STATUS_IDLE
+        and not _is_terminal_test_status(normalized_snapshot.get('test_status'))
+    ):
+        rejection_payload = finalize_test_console_payload_for_serializer(normalized_snapshot, source='start:active-run-rejected')
+        _log_test_console(
+            'start-rejected',
+            rejection_payload,
+            reason='active_run_already_in_progress',
+            requested_profile=selected_profile_id,
+        )
+        raise TestConsoleStartRejected(
+            'Start rejected: an active Test Console run is already in progress.',
+            payload=rejection_payload,
+            status_code=409,
+        )
     resolved_profile_id, profile_modules = resolve_test_profile(profile_id=profile_id)
     modules_included, modules_omitted = _profile_module_lists(profile_modules)
     run_scope = 'fresh_full_run' if resolved_profile_id == TEST_PROFILE_FULL_E2E else 'targeted_diagnostic_run'
     run_id = f'tc-{timezone.now().strftime("%Y%m%d%H%M%S")}-{uuid4().hex[:8]}'
     now = timezone.now()
-    _log_test_console(
-        'start-request-received',
-        {
-            'current_run_id': run_id,
-            'preset_name': target_preset,
-            'selected_profile': selected_profile_id,
-            'effective_profile': resolved_profile_id,
-            'test_profile': resolved_profile_id,
-            'run_scope': run_scope,
-            'test_status': TEST_STATUS_RUNNING,
-        },
-    )
     payload: dict[str, Any] = {
         'timestamp': now,
         'started_at': now,
@@ -2501,8 +2521,8 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         'reason_codes': [],
         'step_results': [],
         'next_action_hint': 'Running test console pipeline',
-        'last_event': 'Test console run started',
-        'last_backend_event': 'Test console run started',
+        'last_event': 'Start requested',
+        'last_backend_event': 'start-request-received',
         'next_expected_event': 'bootstrap_completed',
         'last_progress_at': now,
         'last_real_progress_at': now,
@@ -2511,6 +2531,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         'phase_entered_at': now,
     }
     _set_state(status=_augment_progress(payload))
+    _log_test_console('start-accepted', payload)
 
     scan_run: SourceScanRun | None = None
 

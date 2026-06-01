@@ -7742,6 +7742,31 @@ class TestConsoleApiTests(TestCase):
         self.assertIn('full_e2e', body['available_test_profiles'])
         self.assertIn('prediction_risk_path', body['available_test_profiles'])
 
+    def test_start_test_console_rejects_when_active_run_exists(self):
+        from apps.mission_control.services.test_console import _set_state
+
+        payload = self._status_payload()
+        payload.update({
+            'test_status': 'RUNNING',
+            'current_run_id': 'tc-active-run',
+            'last_run_id': None,
+            'current_phase': 'scan',
+            'ended_at': None,
+        })
+        _set_state(status=payload)
+
+        with self.assertLogs('apps.mission_control.services.test_console', level='INFO') as logs:
+            response = self.client.post(reverse('mission_control:test-console-start'), data='{}', content_type='application/json')
+
+        self.assertEqual(response.status_code, 409)
+        body = response.json()
+        self.assertEqual(body['reason_code'], 'TEST_CONSOLE_START_REJECTED_ACTIVE_RUN')
+        self.assertIn('active Test Console run', body['detail'])
+        self.assertEqual(body['current_status']['current_run_id'], 'tc-active-run')
+        self.assertIn('[test-console] start-rejected', '\n'.join(logs.output))
+        payload.update({'test_status': 'COMPLETED', 'current_run_id': None, 'last_run_id': 'tc-active-run', 'ended_at': timezone.now()})
+        _set_state(status=payload)
+
     @patch('apps.mission_control.views.stop_test_console')
     def test_stop_test_console_is_explicit_and_safe(self, mock_stop):
         payload = self._status_payload()
@@ -8045,7 +8070,10 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(initial['effective_profile'], 'scope_throttle_diagnostics')
         self.assertTrue(initial['current_run_id'].startswith('tc-'))
         self.assertEqual(initial['current_phase'], 'bootstrap')
+        self.assertEqual(initial['last_backend_event'], 'start-request-received')
+        self.assertEqual(initial['display_source'], 'active_run')
         self.assertIn('[test-console] start-request-received', '\n'.join(logs.output))
+        self.assertIn('[test-console] start-accepted', '\n'.join(logs.output))
         self.assertEqual(payload['test_status'], 'FAILED')
         self.assertEqual(payload['last_run_id'], initial['current_run_id'])
 

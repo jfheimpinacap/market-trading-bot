@@ -8,6 +8,7 @@ import { DataStateWrapper } from '../components/markets/DataStateWrapper';
 import { navigate } from '../lib/router';
 import { usePollingTicker } from '../hooks/usePollingTicker';
 import { isSettledRejected, resolveExpectedStatusError } from '../lib/missionControlStatus';
+import { ApiError } from '../services/api/client';
 import { resolveTestConsoleLifecycleState } from '../lib/testConsoleLifecycle';
 import { getCockpitAttention, getCockpitQuickLinks, getCockpitSummary, runCockpitAction } from '../services/cockpit';
 import {
@@ -131,6 +132,9 @@ const TEST_CONSOLE_PROFILE_OPTIONS = [
   { id: 'export_snapshot_integrity', label: 'Export / Snapshot Integrity' },
 ] as const;
 type TestConsoleProfileId = typeof TEST_CONSOLE_PROFILE_OPTIONS[number]['id'];
+type TestConsoleStartState = 'idle' | 'requested' | 'confirmed' | 'failed' | 'not_confirmed' | 'running';
+
+const TEST_CONSOLE_START_CONFIRM_TIMEOUT_MS = 12_000;
 
 const TEST_CONSOLE_PHASE_LABELS: Record<string, string> = {
   idle: 'idle',
@@ -279,6 +283,28 @@ const toneFromAttentionFunnelStatus = (status: LivePaperFunnelStatus | null | un
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+function getStartErrorMessage(error: unknown) {
+  const message = getErrorMessage(error, 'Start failed.');
+  if (error instanceof ApiError) {
+    return `Start failed · HTTP ${error.status} · ${message}`;
+  }
+  return `Start failed · ${message}`;
+}
+
+function isTestConsoleBackendIdle(payload: TestConsoleStatusResponse | null) {
+  if (!payload) return true;
+  const status = String(payload.status ?? payload.test_status ?? '').toUpperCase();
+  const phase = String(payload.current_phase ?? '').toLowerCase();
+  const activeRun = Boolean(payload.active_run ?? payload.has_active_run);
+  const runId = payload.current_run_id ?? payload.run_id;
+  return !activeRun && !runId && (status === 'NO_RUN_YET' || status === 'IDLE' || status === '') && (phase === 'idle' || phase === '');
+}
+
+function isTestConsoleStartConfirmed(payload: TestConsoleStatusResponse | null) {
+  if (!payload) return false;
+  return Boolean(payload.active_run ?? payload.has_active_run ?? payload.current_run_id ?? payload.run_id);
 }
 
 function toTimestampMs(value: string | null | undefined) {
@@ -453,6 +479,8 @@ export function CockpitPage() {
   const [testConsoleStatusLoading, setTestConsoleStatusLoading] = useState(true);
   const [testConsoleStatusError, setTestConsoleStatusError] = useState<string | null>(null);
   const [testConsoleStartLoading, setTestConsoleStartLoading] = useState(false);
+  const [testConsoleStartState, setTestConsoleStartState] = useState<TestConsoleStartState>('idle');
+  const [testConsoleStartMessage, setTestConsoleStartMessage] = useState<string | null>(null);
   const [testConsoleStopLoading, setTestConsoleStopLoading] = useState(false);
   const [testConsoleExportLoading, setTestConsoleExportLoading] = useState(false);
   const [testConsoleLog, setTestConsoleLog] = useState('No log exported yet');
@@ -587,6 +615,25 @@ export function CockpitPage() {
       && !testConsoleStatusError
       && (testConsoleLifecycle.canExport || Boolean(lastCompletedTestConsoleSnapshot)),
   );
+  const testConsoleOperationalStartState: TestConsoleStartState = testConsoleRunActive
+    ? 'running'
+    : testConsoleStartState;
+  const testConsoleStartStateLabel: Record<TestConsoleStartState, string> = {
+    idle: 'Idle',
+    requested: 'Start requested',
+    confirmed: 'Start confirmed',
+    failed: 'Start failed',
+    not_confirmed: 'Start not confirmed',
+    running: 'Running',
+  };
+  const testConsoleStartStateTone: Record<TestConsoleStartState, 'ready' | 'pending' | 'offline' | 'neutral'> = {
+    idle: 'neutral',
+    requested: 'pending',
+    confirmed: 'ready',
+    failed: 'offline',
+    not_confirmed: 'pending',
+    running: 'ready',
+  };
   const llmShadowSummary = testConsoleStatus?.llm_shadow_summary ?? null;
   const latestLlmShadowSummary = (testConsoleStatus?.latest_llm_shadow_summary ?? llmShadowSummary) as LlmShadowSummary | null;
   const llmShadowHistory = useMemo(
@@ -661,6 +708,10 @@ export function CockpitPage() {
         export_available: payload.export_available,
       });
       setTestConsoleStatus((previous) => (shouldApplyFreshTestConsoleStatus(previous, payload) ? payload : previous));
+      if (isTestConsoleStartConfirmed(payload)) {
+        setTestConsoleStartState('running');
+        setTestConsoleStartMessage('Running · backend status reports active_run/run_id.');
+      }
       return payload;
     } catch {
       setTestConsoleStatus(null);
@@ -687,17 +738,58 @@ export function CockpitPage() {
   }, []);
 
   const startTestConsoleFromCockpit = useCallback(async () => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), TEST_CONSOLE_START_CONFIRM_TIMEOUT_MS);
     setTestConsoleStartLoading(true);
+    setTestConsoleStartState('requested');
+    setTestConsoleStartMessage(`Start requested for profile=${selectedTestProfileId}. Waiting for POST /api/mission-control/test-console/start/ confirmation.`);
     setTestConsoleStatusError(null);
     setTestConsoleCopyMessage(null);
     try {
-      const payload = await startTestConsoleRun({ profile_id: selectedTestProfileId });
+      console.debug('[test-console] sending POST /api/mission-control/test-console/start/', { profile_id: selectedTestProfileId });
+      const payload = await startTestConsoleRun({ profile_id: selectedTestProfileId }, { signal: controller.signal });
+      console.debug('[test-console] start response', {
+        test_status: payload.test_status,
+        current_phase: payload.current_phase,
+        active_run: Boolean(payload.active_run ?? payload.has_active_run),
+        current_run_id: payload.current_run_id ?? payload.run_id,
+      });
       setTestConsoleStatus(payload);
-      await loadTestConsoleStatus();
-      await exportTestConsoleLog();
-    } catch {
-      setTestConsoleStatusError('Test Console unavailable');
+      const refreshedStatus = await loadTestConsoleStatus();
+      const confirmationPayload = refreshedStatus ?? payload;
+      if (isTestConsoleStartConfirmed(confirmationPayload)) {
+        setTestConsoleStartState('confirmed');
+        setTestConsoleStartMessage('Start confirmed · backend accepted POST start and returned an active run.');
+        await exportTestConsoleLog();
+        return;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, TEST_CONSOLE_START_CONFIRM_TIMEOUT_MS));
+      const delayedStatus = await loadTestConsoleStatus();
+      if (isTestConsoleStartConfirmed(delayedStatus)) {
+        setTestConsoleStartState('confirmed');
+        setTestConsoleStartMessage('Start confirmed · backend status now reports an active run.');
+        await exportTestConsoleLog();
+        return;
+      }
+      if (isTestConsoleBackendIdle(delayedStatus)) {
+        setTestConsoleStartState('not_confirmed');
+        setTestConsoleStartMessage('Start not confirmed · backend still idle · no POST/start event received.');
+        setTestConsoleStatusError('Start not confirmed · backend still idle · no POST/start event received.');
+      } else {
+        setTestConsoleStartState('not_confirmed');
+        setTestConsoleStartMessage('Start not confirmed · backend did not expose active_run/run_id after POST start.');
+        setTestConsoleStatusError('Start not confirmed · backend did not expose active_run/run_id after POST start.');
+      }
+    } catch (startError) {
+      const message = controller.signal.aborted
+        ? 'Start not confirmed · backend still idle · no POST/start event received before confirmation timeout.'
+        : getStartErrorMessage(startError);
+      setTestConsoleStartState(controller.signal.aborted ? 'not_confirmed' : 'failed');
+      setTestConsoleStartMessage(message);
+      setTestConsoleStatusError(message);
     } finally {
+      window.clearTimeout(timeoutId);
       setTestConsoleStartLoading(false);
     }
   }, [exportTestConsoleLog, loadTestConsoleStatus, selectedTestProfileId]);
@@ -1664,6 +1756,8 @@ export function CockpitPage() {
                       {testConsoleInterruptedByStop ? <StatusBadge tone="pending">STOPPED</StatusBadge> : null}
                     </div>
                     {testConsoleStatusLoading ? <p>Loading Test Console status…</p> : null}
+                    <div className="test-console-module-row"><span className="muted-text">Start flow:</span><StatusBadge tone={testConsoleStartStateTone[testConsoleOperationalStartState]}>{testConsoleStartStateLabel[testConsoleOperationalStartState]}</StatusBadge></div>
+                    {testConsoleStartMessage ? <p className={testConsoleOperationalStartState === 'failed' || testConsoleOperationalStartState === 'not_confirmed' ? 'warning-text' : 'muted-text'}>{testConsoleStartMessage}</p> : null}
                     {!testConsoleStatusLoading && testConsoleStatusError ? <p className="warning-text">{testConsoleStatusError}</p> : null}
                     <p className="test-console-activity-line">{testConsoleActivitySummary}</p>
                     <div className="test-console-dashboard-grid">
