@@ -240,6 +240,7 @@ from apps.mission_control.services.test_console import (
     get_test_console_status,
     start_test_console,
     stop_test_console,
+    TestConsoleStartRejected,
 )
 
 
@@ -678,10 +679,21 @@ class StartTestConsoleView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = TestConsoleStartRequestSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        payload = start_test_console(
-            preset_name=serializer.validated_data.get('preset'),
-            profile_id=serializer.validated_data.get('profile_id'),
-        )
+        try:
+            payload = start_test_console(
+                preset_name=serializer.validated_data.get('preset'),
+                profile_id=serializer.validated_data.get('profile_id'),
+            )
+        except TestConsoleStartRejected as exc:
+            response_payload = {
+                'detail': str(exc),
+                'reason_code': 'TEST_CONSOLE_START_REJECTED_ACTIVE_RUN',
+                'status': 'START_REJECTED',
+                'current_status': TestConsoleStatusSerializer(
+                    finalize_test_console_payload_for_serializer(exc.payload, source='view:start-rejected')
+                ).data,
+            }
+            return Response(response_payload, status=exc.status_code)
         return Response(
             TestConsoleStatusSerializer(finalize_test_console_payload_for_serializer(payload, source='view:start')).data,
             status=status.HTTP_200_OK,

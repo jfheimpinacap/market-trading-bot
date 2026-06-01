@@ -258,10 +258,11 @@ export function getLivePaperAutonomyFunnel(params?: { preset?: string; window_mi
   return requestJson<LivePaperAutonomyFunnelResponse>(`/api/mission-control/live-paper-autonomy-funnel/${suffix}`);
 }
 
-export function startTestConsoleRun(payload: TestConsoleRunRequest = {}) {
+export function startTestConsoleRun(payload: TestConsoleRunRequest = {}, init?: Pick<RequestInit, 'signal'>) {
   return requestJson<TestConsoleStatusResponse>('/api/mission-control/test-console/start/', {
     method: 'POST',
     body: JSON.stringify(payload),
+    signal: init?.signal,
   });
 }
 
