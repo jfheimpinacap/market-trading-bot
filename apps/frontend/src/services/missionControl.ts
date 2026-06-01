@@ -1,4 +1,4 @@
-import { ApiError, requestJson } from './api/client';
+import { ApiError, requestCriticalJson, requestJson, type CriticalMutationOptions } from './api/client';
 import { API_BASE_URL } from '../lib/config';
 import type {
   AutonomousCycleExecution,
@@ -273,11 +273,6 @@ export function buildTestConsoleStartRequest(
   payload: TestConsoleRunRequest = {},
   init?: Pick<RequestInit, 'signal'>,
 ): { path: string; init: TestConsoleStartRequestInit } {
-  debugTestConsoleStart('start-request-building', {
-    path: TEST_CONSOLE_START_PATH,
-    method: 'POST',
-    payload,
-  });
   return {
     path: TEST_CONSOLE_START_PATH,
     init: {
@@ -288,14 +283,36 @@ export function buildTestConsoleStartRequest(
   };
 }
 
-export function startTestConsoleRun(payload: TestConsoleRunRequest = {}, init?: Pick<RequestInit, 'signal'>) {
+export function startTestConsoleRun(
+  payload: TestConsoleRunRequest = {},
+  init?: Pick<RequestInit, 'signal'>,
+  criticalOptions?: CriticalMutationOptions,
+) {
   const request = buildTestConsoleStartRequest(payload, init);
-  debugTestConsoleStart('start-request-sending', {
-    path: request.path,
-    method: request.init.method,
-    body: request.init.body,
+  return requestCriticalJson<TestConsoleStatusResponse>(request.path, request.init, {
+    allowGetPathsDuringMutation: ['/api/mission-control/test-console/status/'],
+    ...criticalOptions,
+    onCreated: (details) => {
+      debugTestConsoleStart('start-post-created', { ...details, body: request.init.body });
+      criticalOptions?.onCreated?.(details);
+    },
+    onDispatched: (details) => {
+      debugTestConsoleStart('start-post-dispatched', { ...details, body: request.init.body });
+      criticalOptions?.onDispatched?.(details);
+    },
+    onAborted: (details) => {
+      debugTestConsoleStart('start-post-aborted', details);
+      criticalOptions?.onAborted?.(details);
+    },
+    onTimeout: (details) => {
+      debugTestConsoleStart('start-post-timeout', details);
+      criticalOptions?.onTimeout?.(details);
+    },
+    onStarved: (details) => {
+      debugTestConsoleStart('start-post-starved', details);
+      criticalOptions?.onStarved?.(details);
+    },
   });
-  return requestJson<TestConsoleStatusResponse>(request.path, request.init);
 }
 
 export function stopTestConsoleRun() {

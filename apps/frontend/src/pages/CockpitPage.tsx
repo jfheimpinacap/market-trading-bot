@@ -294,12 +294,12 @@ function getStartErrorMessage(error: unknown) {
     return `Start failed · HTTP ${error.status} · ${message}${body}`;
   }
   if (error instanceof DOMException && error.name === 'AbortError') {
-    return 'Start request did not reach backend or was aborted.';
+    return 'Start request aborted by client. POST did not reach backend; polling was paused for retry.';
   }
   if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
     return `Network/CORS error · ${message}`;
   }
-  return `Start request did not reach backend or was aborted. ${message}`;
+  return `Start request did not reach backend or was aborted. ${message} POST did not reach backend; polling was paused for retry.`;
 }
 
 function debugTestConsoleStart(event: string, details?: Record<string, unknown>) {
@@ -679,6 +679,8 @@ export function CockpitPage() {
     return cards.map((card) => ({ ...card, status: card.enabled ? formatCompactValue(card.status) : 'omitted', reason: card.enabled ? formatCompactValue(card.reason) : 'profile module disabled', countLabel: card.enabled ? formatCompactValue(card.count) : '—' }));
   }, [displayTestConsoleSnapshot, selectedProfileModules, testConsoleExportReady]);
   const stage2Enabled = loadStage >= 2;
+  const testConsoleStartPending = testConsoleStartLoading || testConsoleStartState === 'requested';
+  const secondaryPollingEnabled = !testConsoleStartPending;
 
   const registerFanout = useCallback((bucket: 'critical' | 'deferred', endpoint: string, count = 1) => {
     if (!countInitialFanout) return;
@@ -754,17 +756,8 @@ export function CockpitPage() {
   }, []);
 
   const startTestConsoleFromCockpit = useCallback(async () => {
-    const controller = new AbortController();
     let requestTimedOut = false;
-    const requestTimeoutId = window.setTimeout(() => {
-      requestTimedOut = true;
-      debugTestConsoleStart('start-request-aborted', {
-        path: TEST_CONSOLE_START_PATH,
-        reason: 'request_timeout_before_backend_response',
-        timeout_ms: TEST_CONSOLE_START_REQUEST_TIMEOUT_MS,
-      });
-      controller.abort();
-    }, TEST_CONSOLE_START_REQUEST_TIMEOUT_MS);
+    let requestStarved = false;
     const startPayload = { profile_id: selectedTestProfileId };
     debugTestConsoleStart('start-clicked', {
       path: TEST_CONSOLE_START_PATH,
@@ -773,14 +766,29 @@ export function CockpitPage() {
       request_timeout_ms: TEST_CONSOLE_START_REQUEST_TIMEOUT_MS,
       confirmation_timeout_ms: TEST_CONSOLE_START_CONFIRM_TIMEOUT_MS,
     });
+    debugTestConsoleStart('polling-paused-for-start', {
+      allowed_polling: ['test-console/status'],
+      suspended_polling: ['mission-control/status', 'live-paper-validation', 'paper summaries', 'scan-agent summaries', 'runtime dashboards'],
+    });
     setTestConsoleStartLoading(true);
     setTestConsoleStartState('requested');
     setTestConsoleStartMessage(`Start requested for profile=${selectedTestProfileId}. Waiting for POST ${TEST_CONSOLE_START_PATH} confirmation.`);
     setTestConsoleStatusError(null);
     setTestConsoleCopyMessage(null);
     try {
-      const payload = await startTestConsoleRun(startPayload, { signal: controller.signal });
-      window.clearTimeout(requestTimeoutId);
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+      const payload = await startTestConsoleRun(startPayload, undefined, {
+        timeoutMs: TEST_CONSOLE_START_REQUEST_TIMEOUT_MS,
+        starvationWarningMs: 8_000,
+        starvationPendingGetThreshold: 2,
+        onStarved: () => {
+          requestStarved = true;
+          setTestConsoleStartMessage('Start request starved by pending requests. POST did not reach backend; polling was paused for retry.');
+        },
+        onTimeout: () => {
+          requestTimedOut = true;
+        },
+      });
       debugTestConsoleStart('start-response-received', {
         test_status: payload.test_status,
         current_phase: payload.current_phase,
@@ -818,18 +826,24 @@ export function CockpitPage() {
       debugTestConsoleStart('start-request-error', {
         path: TEST_CONSOLE_START_PATH,
         timed_out: requestTimedOut,
-        aborted: controller.signal.aborted,
+        aborted: requestTimedOut,
         error_name: startError instanceof Error ? startError.name : typeof startError,
         error_message: startError instanceof Error ? startError.message : String(startError),
       });
       const message = requestTimedOut
-        ? 'Start request timed out before backend response.'
+        ? (requestStarved
+          ? 'Start request starved by pending requests. POST did not reach backend; polling was paused for retry.'
+          : 'Start request timed out before backend response. POST did not reach backend; polling was paused for retry.')
         : getStartErrorMessage(startError);
       setTestConsoleStartState('failed');
       setTestConsoleStartMessage(message);
       setTestConsoleStatusError(message);
     } finally {
-      window.clearTimeout(requestTimeoutId);
+      debugTestConsoleStart('polling-resumed-after-start', {
+        state: requestTimedOut ? 'failed' : 'completed_or_not_confirmed',
+        timed_out: requestTimedOut,
+        starved: requestStarved,
+      });
       setTestConsoleStartLoading(false);
     }
   }, [exportTestConsoleLog, loadTestConsoleStatus, selectedTestProfileId]);
@@ -1341,10 +1355,11 @@ export function CockpitPage() {
   ]);
 
   const loadCockpit = useCallback(async () => {
+    if (!secondaryPollingEnabled) return;
     await loadCockpitCore();
     if (stage2Enabled) await loadCockpitSummaries();
     if (runtimeAdvancedEnabled) await loadCockpitAdvanced();
-  }, [loadCockpitAdvanced, loadCockpitCore, loadCockpitSummaries, runtimeAdvancedEnabled, stage2Enabled]);
+  }, [loadCockpitAdvanced, loadCockpitCore, loadCockpitSummaries, runtimeAdvancedEnabled, secondaryPollingEnabled, stage2Enabled]);
 
   useEffect(() => {
     const stage2Timer = window.setTimeout(() => setLoadStage(2), 200);
@@ -1358,18 +1373,19 @@ export function CockpitPage() {
   }, []);
 
   useEffect(() => {
+    if (!secondaryPollingEnabled) return;
     void loadCockpitCore();
-  }, [loadCockpitCore]);
+  }, [loadCockpitCore, secondaryPollingEnabled]);
 
   useEffect(() => {
-    if (!stage2Enabled) return;
+    if (!stage2Enabled || !secondaryPollingEnabled) return;
     void loadCockpitSummaries();
-  }, [loadCockpitSummaries, stage2Enabled]);
+  }, [loadCockpitSummaries, secondaryPollingEnabled, stage2Enabled]);
 
   useEffect(() => {
-    if (!runtimeAdvancedEnabled) return;
+    if (!runtimeAdvancedEnabled || !secondaryPollingEnabled) return;
     void loadCockpitAdvanced();
-  }, [loadCockpitAdvanced, runtimeAdvancedEnabled]);
+  }, [loadCockpitAdvanced, runtimeAdvancedEnabled, secondaryPollingEnabled]);
 
   useEffect(() => {
     void loadLivePaperStatus();
@@ -1406,7 +1422,7 @@ export function CockpitPage() {
       return { idle: !payload || payload.validation_status !== 'WARNING' };
     },
     8000,
-    stage2Enabled,
+    stage2Enabled && secondaryPollingEnabled,
     { maxBackoffMs: 25000 },
   );
 
@@ -1420,7 +1436,7 @@ export function CockpitPage() {
       return { idle: nextTrialStatus !== 'RUNNING' };
     },
     10000,
-    livePaperDeferredEnabled,
+    livePaperDeferredEnabled && secondaryPollingEnabled,
     { maxBackoffMs: 30000 },
   );
 
@@ -1431,7 +1447,7 @@ export function CockpitPage() {
       return { idle: !paperPortfolioSummary };
     },
     12000,
-    livePaperDeferredEnabled,
+    livePaperDeferredEnabled && secondaryPollingEnabled,
     { maxBackoffMs: 30000 },
   );
 
@@ -1442,58 +1458,59 @@ export function CockpitPage() {
       return { idle: !runtimeAdvancedEnabled };
     },
     9000,
-    runtimeAdvancedEnabled,
+    runtimeAdvancedEnabled && secondaryPollingEnabled,
     { maxBackoffMs: 25000 },
   );
 
   useEffect(() => {
-    if (!livePaperDeferredEnabled) return;
+    if (!livePaperDeferredEnabled || !secondaryPollingEnabled) return;
     void loadLivePaperOperationalSnapshot();
-  }, [livePaperDeferredEnabled, loadLivePaperOperationalSnapshot]);
+  }, [livePaperDeferredEnabled, loadLivePaperOperationalSnapshot, secondaryPollingEnabled]);
 
   useEffect(() => {
+    if (!secondaryPollingEnabled) return;
     void loadLivePaperValidation();
-  }, [loadLivePaperValidation]);
+  }, [loadLivePaperValidation, secondaryPollingEnabled]);
 
   useEffect(() => {
-    if (!livePaperDeferredEnabled) return;
+    if (!livePaperDeferredEnabled || !secondaryPollingEnabled) return;
     void loadLivePaperSmokeTestStatus();
-  }, [livePaperDeferredEnabled, loadLivePaperSmokeTestStatus]);
+  }, [livePaperDeferredEnabled, loadLivePaperSmokeTestStatus, secondaryPollingEnabled]);
 
   useEffect(() => {
-    if (!livePaperDeferredEnabled) return;
+    if (!livePaperDeferredEnabled || !secondaryPollingEnabled) return;
     void loadLivePaperTrialStatus();
-  }, [livePaperDeferredEnabled, loadLivePaperTrialStatus]);
+  }, [livePaperDeferredEnabled, loadLivePaperTrialStatus, secondaryPollingEnabled]);
 
   useEffect(() => {
-    if (!livePaperDeferredEnabled) return;
+    if (!livePaperDeferredEnabled || !secondaryPollingEnabled) return;
     void loadLivePaperTrialHistory();
-  }, [livePaperDeferredEnabled, loadLivePaperTrialHistory]);
+  }, [livePaperDeferredEnabled, loadLivePaperTrialHistory, secondaryPollingEnabled]);
 
   useEffect(() => {
-    if (!livePaperDeferredEnabled) return;
+    if (!livePaperDeferredEnabled || !secondaryPollingEnabled) return;
     void loadLivePaperTrialTrend();
-  }, [livePaperDeferredEnabled, loadLivePaperTrialTrend]);
+  }, [livePaperDeferredEnabled, loadLivePaperTrialTrend, secondaryPollingEnabled]);
 
   useEffect(() => {
-    if (!livePaperDeferredEnabled) return;
+    if (!livePaperDeferredEnabled || !secondaryPollingEnabled) return;
     void loadExtendedRunGate();
-  }, [livePaperDeferredEnabled, loadExtendedRunGate]);
+  }, [livePaperDeferredEnabled, loadExtendedRunGate, secondaryPollingEnabled]);
 
   useEffect(() => {
-    if (!livePaperDeferredEnabled) return;
+    if (!livePaperDeferredEnabled || !secondaryPollingEnabled) return;
     void loadExtendedPaperRunStatus();
-  }, [livePaperDeferredEnabled, loadExtendedPaperRunStatus]);
+  }, [livePaperDeferredEnabled, loadExtendedPaperRunStatus, secondaryPollingEnabled]);
 
   useEffect(() => {
-    if (!livePaperDeferredEnabled) return;
+    if (!livePaperDeferredEnabled || !secondaryPollingEnabled) return;
     void loadLivePaperAutonomyFunnel();
-  }, [livePaperDeferredEnabled, loadLivePaperAutonomyFunnel]);
+  }, [livePaperDeferredEnabled, loadLivePaperAutonomyFunnel, secondaryPollingEnabled]);
 
   useEffect(() => {
-    if (!livePaperDeferredEnabled) return;
+    if (!livePaperDeferredEnabled || !secondaryPollingEnabled) return;
     void loadPaperPortfolioSnapshot();
-  }, [livePaperDeferredEnabled, loadPaperPortfolioSnapshot]);
+  }, [livePaperDeferredEnabled, loadPaperPortfolioSnapshot, secondaryPollingEnabled]);
 
   useEffect(() => {
     if (!runtimeAdvancedEnabled) return;
