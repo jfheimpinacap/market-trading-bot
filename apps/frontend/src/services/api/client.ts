@@ -15,6 +15,10 @@ export class ApiError extends Error {
 type InFlightEntry = {
   promise: Promise<unknown>;
   startedAt: number;
+  method: string;
+  path: string;
+  controller: AbortController | null;
+  critical: boolean;
 };
 
 type CachedSuccessEntry = {
@@ -22,8 +26,32 @@ type CachedSuccessEntry = {
   resolvedAt: number;
 };
 
+export type CriticalMutationOptions = {
+  timeoutMs?: number;
+  starvationWarningMs?: number;
+  starvationPendingGetThreshold?: number;
+  allowGetPathsDuringMutation?: string[];
+  onCreated?: (details: CriticalMutationDetails) => void;
+  onDispatched?: (details: CriticalMutationDetails) => void;
+  onAborted?: (details: CriticalMutationDetails) => void;
+  onTimeout?: (details: CriticalMutationDetails) => void;
+  onStarved?: (details: CriticalMutationDetails) => void;
+};
+
+export type CriticalMutationDetails = {
+  path: string;
+  method: string;
+  pendingGetCount: number;
+  abortedGetCount: number;
+  timeoutMs?: number;
+  elapsedMs?: number;
+};
+
 const GET_DEDUP_COOLDOWN_MS = 800;
 const SUCCESS_CACHE_TTL_MS = 1200;
+const DEFAULT_CRITICAL_MUTATION_TIMEOUT_MS = 90_000;
+const DEFAULT_CRITICAL_MUTATION_STARVATION_MS = 8_000;
+const DEFAULT_CRITICAL_MUTATION_PENDING_GET_THRESHOLD = 4;
 const DEBUG_PREFIX = '[frontend-fetch]';
 const requestCounters = new Map<string, number>();
 const inFlightRequests = new Map<string, InFlightEntry>();
@@ -47,6 +75,8 @@ function isNoisyResource(path: string) {
     '/api/paper/trades/',
     '/api/paper/snapshots/',
     '/api/reviews/',
+    '/api/mission-control/status/',
+    '/api/mission-control/live-paper-validation/',
     '/api/mission-control/test-console/status/',
   ].some((prefix) => path.startsWith(prefix));
 }
@@ -80,6 +110,26 @@ function trackRequestEnd(path: string) {
 
 function getCacheKey(path: string, method: string) {
   return `${method}:${path}`;
+}
+
+function getPendingGetEntries(allowPaths: string[] = []) {
+  return Array.from(inFlightRequests.values()).filter((entry) => (
+    entry.method === 'GET'
+    && !entry.critical
+    && !allowPaths.some((allowedPath) => entry.path.startsWith(allowedPath))
+  ));
+}
+
+export function countPendingGetRequests(allowPaths: string[] = []) {
+  return getPendingGetEntries(allowPaths).length;
+}
+
+export function abortSecondaryGetRequests(allowPaths: string[] = []) {
+  const entries = getPendingGetEntries(allowPaths);
+  entries.forEach((entry) => {
+    entry.controller?.abort();
+  });
+  return entries.length;
 }
 
 function extractErrorMessage(value: unknown): string | null {
@@ -173,9 +223,11 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
     recentSuccessCache.clear();
   }
 
+  const controller = dedupeEnabled && !init?.signal ? new AbortController() : null;
+  const requestInit = controller ? { ...init, signal: controller.signal } : init;
   trackRequestStart(path);
 
-  const requestPromise = performRequest<T>(path, init)
+  const requestPromise = performRequest<T>(path, requestInit)
     .then((value) => {
       if (dedupeEnabled) {
         recentSuccessCache.set(cacheKey, {
@@ -194,10 +246,103 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
     inFlightRequests.set(cacheKey, {
       promise: requestPromise,
       startedAt: now,
+      method,
+      path,
+      controller,
+      critical: false,
     });
   }
 
   return requestPromise;
+}
+
+export async function requestCriticalJson<T>(path: string, init: RequestInit, options: CriticalMutationOptions = {}): Promise<T> {
+  const method = normalizeMethod(init);
+  const externalSignal = init.signal;
+  const cacheKey = getCacheKey(path, method);
+  const allowGetPaths = options.allowGetPathsDuringMutation ?? [];
+  const pendingGetCount = countPendingGetRequests(allowGetPaths);
+  const abortedGetCount = abortSecondaryGetRequests(allowGetPaths);
+  const createdDetails: CriticalMutationDetails = { path, method, pendingGetCount, abortedGetCount };
+  options.onCreated?.(createdDetails);
+
+  trackRequestStart(path);
+  const startedAt = Date.now();
+  let timedOut = false;
+  const timeoutController = new AbortController();
+  const timeoutMs = options.timeoutMs ?? DEFAULT_CRITICAL_MUTATION_TIMEOUT_MS;
+  const requestInit = { ...init, signal: timeoutController.signal };
+
+  let timeoutId: number | null = null;
+  let starvationId: number | null = null;
+
+  const requestPromise = performRequest<T>(path, requestInit)
+    .finally(() => {
+      inFlightRequests.delete(cacheKey);
+      trackRequestEnd(path);
+      recentSuccessCache.clear();
+    });
+
+  inFlightRequests.set(cacheKey, {
+    promise: requestPromise,
+    startedAt,
+    method,
+    path,
+    controller: timeoutController,
+    critical: true,
+  });
+
+  const dispatchedDetails = { ...createdDetails, timeoutMs };
+  options.onDispatched?.(dispatchedDetails);
+
+  let handleExternalAbort: (() => void) | null = null;
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      timeoutController.abort();
+    } else {
+      handleExternalAbort = () => timeoutController.abort();
+      externalSignal.addEventListener('abort', handleExternalAbort, { once: true });
+    }
+  }
+
+  if (isBrowser) {
+    timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      const elapsedMs = Date.now() - startedAt;
+      options.onTimeout?.({ ...dispatchedDetails, elapsedMs });
+      timeoutController.abort();
+    }, timeoutMs);
+  }
+
+  if (isBrowser) {
+    const starvationWarningMs = options.starvationWarningMs ?? DEFAULT_CRITICAL_MUTATION_STARVATION_MS;
+    starvationId = window.setTimeout(() => {
+      const activeGetCount = countPendingGetRequests(allowGetPaths);
+      const threshold = options.starvationPendingGetThreshold ?? DEFAULT_CRITICAL_MUTATION_PENDING_GET_THRESHOLD;
+      if (pendingGetCount >= threshold || activeGetCount >= threshold) {
+        options.onStarved?.({
+          ...dispatchedDetails,
+          pendingGetCount: activeGetCount,
+          elapsedMs: Date.now() - startedAt,
+        });
+      }
+    }, starvationWarningMs);
+  }
+
+  try {
+    return await requestPromise;
+  } catch (error) {
+    if (timedOut || (error instanceof DOMException && error.name === 'AbortError')) {
+      options.onAborted?.({ ...dispatchedDetails, elapsedMs: Date.now() - startedAt });
+    }
+    throw error;
+  } finally {
+    if (timeoutId !== null) window.clearTimeout(timeoutId);
+    if (starvationId !== null) window.clearTimeout(starvationId);
+    if (externalSignal && handleExternalAbort) {
+      externalSignal.removeEventListener('abort', handleExternalAbort);
+    }
+  }
 }
 
 export function isNotFoundApiError(error: unknown): error is ApiError {
