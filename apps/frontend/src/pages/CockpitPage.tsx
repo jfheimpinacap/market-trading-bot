@@ -119,7 +119,7 @@ const formatClockDuration = (value: number | null | undefined) => {
   return [hours, minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':');
 };
 const formatTestConsoleSource = (value: string | null | undefined) => {
-  if (value === 'current_run') return 'current run';
+  if (value === 'current_run' || value === 'active_run') return 'current run';
   if (value === 'last_completed') return 'last completed';
   return value ?? 'empty';
 };

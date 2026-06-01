@@ -5,7 +5,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from decimal import Decimal
 import logging
-from threading import Lock
+from threading import Lock, Thread
 from uuid import uuid4
 from typing import Any
 
@@ -59,6 +59,7 @@ TEST_CONSOLE_FINALIZE_SLOW_WARNING_REASON_CODE = 'TEST_CONSOLE_FINALIZE_SLOW_WAR
 TEST_CONSOLE_LOG_PREFIX = '[test-console]'
 
 _PHASES = [
+    'queued',
     'bootstrap',
     'scan',
     'consensus_review',
@@ -72,6 +73,7 @@ _PHASES = [
 ]
 
 _PHASE_LABELS = {
+    'queued': 'En cola',
     'bootstrap': 'Inicializando',
     'scan': 'Scan',
     'consensus_review': 'Handoff',
@@ -85,6 +87,7 @@ _PHASE_LABELS = {
 }
 
 _NEXT_EXPECTED_EVENT_BY_PHASE = {
+    'queued': 'bootstrap_started',
     'bootstrap': 'bootstrap_completed',
     'scan': 'scan_completed_or_skipped',
     'consensus_review': 'handoff_completed_or_skipped',
@@ -253,6 +256,11 @@ class _ConsoleState:
 
 
 _state_lock = Lock()
+_test_console_start_lock = Lock()
+_test_console_worker_lock = Lock()
+_test_console_worker_run_ids: set[str] = set()
+
+
 _state = _ConsoleState(
     status={
         'test_status': TEST_STATUS_IDLE,
@@ -519,12 +527,22 @@ def _annotate_runtime_flags(payload: dict[str, Any]) -> None:
     payload['current_run_id'] = str(payload.get('current_run_id') or '') or None
     payload['last_run_id'] = str(payload.get('last_run_id') or '') or None
     payload['run_id'] = payload['current_run_id'] or payload['last_run_id']
-    payload['active_run'] = {
+    active_run_detail = {
         'run_id': payload['current_run_id'],
+        'current_run_id': payload['current_run_id'],
         'profile': payload.get('effective_profile') or payload.get('test_profile'),
+        'selected_profile': payload.get('selected_profile'),
+        'effective_profile': payload.get('effective_profile') or payload.get('test_profile'),
         'phase': payload.get('current_phase'),
+        'current_phase': payload.get('current_phase'),
         'status': normalized_status,
+        'test_status': normalized_status,
+        'started_at': payload.get('started_at'),
+        'updated_at': payload.get('updated_at') or payload.get('timestamp'),
+        'run_scope': payload.get('run_scope'),
     } if has_active_run else None
+    payload['active_run'] = has_active_run
+    payload['active_run_detail'] = active_run_detail
     payload['active_run_profile'] = (payload.get('effective_profile') or payload.get('test_profile')) if has_active_run else None
     payload['can_stop'] = stop_available
     payload['stop_available'] = stop_available
@@ -814,11 +832,19 @@ def _augment_progress(status_payload: dict[str, Any]) -> dict[str, Any]:
     payload['elapsed_seconds'] = elapsed_seconds
     _update_phase_budget_summary(payload)
     payload['seconds_since_last_progress'] = seconds_since_last_progress
-    payload['last_backend_event'] = str(payload.get('last_backend_event') or payload.get('last_event') or '')
-    payload['next_expected_event'] = str(
-        payload.get('next_expected_event')
-        or ('no_action_until_start' if not current_phase else _NEXT_EXPECTED_EVENT_BY_PHASE.get(str(current_phase), 'status_update_or_terminal_event'))
-    )
+    previous_backend_event = str(payload.get('last_backend_event') or '')
+    if previous_backend_event == 'start-ack-returned' and str(current_phase or '') == 'queued':
+        payload['last_backend_event'] = previous_backend_event
+    else:
+        payload['last_backend_event'] = str(payload.get('last_event') or previous_backend_event or '')
+    if str(payload.get('test_status') or '').upper() == TEST_STATUS_RUNNING:
+        payload['next_expected_event'] = str(
+            'no_action_until_start'
+            if not current_phase
+            else _NEXT_EXPECTED_EVENT_BY_PHASE.get(str(current_phase), 'status_update_or_terminal_event')
+        )
+    else:
+        payload['next_expected_event'] = str(payload.get('next_expected_event') or 'terminal_status_or_export_available')
     payload['export_available'] = export_available
     payload['is_stale'] = stale_seconds > 30 and payload['progress_state'] != 'running'
     _annotate_runtime_flags(payload)
@@ -1005,7 +1031,12 @@ def _normalize_test_console_payload(status_payload: dict[str, Any] | None) -> di
     payload['selected_profile'] = selected_profile
     payload['effective_profile'] = str(payload.get('effective_profile') or resolved_profile_id)
     payload['profile'] = payload['effective_profile']
-    payload['display_source'] = str(payload.get('display_source') or ('active_run' if str(payload.get('test_status') or '').upper() == TEST_STATUS_RUNNING else 'last_completed_run' if payload.get('ended_at') else 'idle'))
+    inferred_display_source = 'active_run' if str(payload.get('test_status') or '').upper() == TEST_STATUS_RUNNING else 'last_completed' if payload.get('ended_at') else 'empty'
+    payload['display_source'] = str(payload.get('display_source') or inferred_display_source)
+    if payload['display_source'] == 'last_completed_run':
+        payload['display_source'] = 'last_completed'
+    if payload['display_source'] == 'idle':
+        payload['display_source'] = 'empty'
     payload['available_test_profiles'] = list_test_profiles()
     payload['modules_included'] = list(payload.get('modules_included') or modules_included)
     payload['modules_omitted'] = list(payload.get('modules_omitted') or modules_omitted)
@@ -2452,90 +2483,163 @@ class TestConsoleStartRejected(RuntimeError):
 
 
 def start_test_console(*, preset_name: str | None = None, profile_id: str | None = None) -> dict[str, Any]:
-    target_preset = (preset_name or PRESET_NAME).strip() or PRESET_NAME
-    selected_profile_id = str(profile_id or TEST_PROFILE_FULL_E2E).strip() or TEST_PROFILE_FULL_E2E
-    status_snapshot, _last_log, _history = _get_state_snapshot()
-    normalized_snapshot = _normalize_test_console_payload(status_snapshot)
-    _log_test_console(
-        'start-request-received',
-        normalized_snapshot,
-        requested_profile=selected_profile_id,
-        preset_name=target_preset,
-    )
-    if bool(normalized_snapshot.get('has_active_run')) or (
-        str(normalized_snapshot.get('test_status') or '').upper() != TEST_STATUS_IDLE
-        and not _is_terminal_test_status(normalized_snapshot.get('test_status'))
-    ):
-        rejection_payload = finalize_test_console_payload_for_serializer(normalized_snapshot, source='start:active-run-rejected')
+    with _test_console_start_lock:
+        target_preset = (preset_name or PRESET_NAME).strip() or PRESET_NAME
+        selected_profile_id = str(profile_id or TEST_PROFILE_FULL_E2E).strip() or TEST_PROFILE_FULL_E2E
+        status_snapshot, _last_log, _history = _get_state_snapshot()
+        normalized_snapshot = _normalize_test_console_payload(status_snapshot)
         _log_test_console(
-            'start-rejected',
-            rejection_payload,
-            reason='active_run_already_in_progress',
+            'start-request-received',
+            normalized_snapshot,
             requested_profile=selected_profile_id,
+            preset_name=target_preset,
         )
-        raise TestConsoleStartRejected(
-            'Start rejected: an active Test Console run is already in progress.',
-            payload=rejection_payload,
-            status_code=409,
+        if bool(normalized_snapshot.get('has_active_run')) or (
+            str(normalized_snapshot.get('test_status') or '').upper() != TEST_STATUS_IDLE
+            and not _is_terminal_test_status(normalized_snapshot.get('test_status'))
+        ):
+            rejection_payload = finalize_test_console_payload_for_serializer(normalized_snapshot, source='start:active-run-rejected')
+            _log_test_console(
+                'start-rejected active-run',
+                rejection_payload,
+                reason='active_run_already_in_progress',
+                requested_profile=selected_profile_id,
+            )
+            raise TestConsoleStartRejected(
+                'Start rejected: an active Test Console run is already in progress.',
+                payload=rejection_payload,
+                status_code=409,
+            )
+        resolved_profile_id, profile_modules = resolve_test_profile(profile_id=profile_id)
+        modules_included, modules_omitted = _profile_module_lists(profile_modules)
+        run_scope = 'fresh_full_run' if resolved_profile_id == TEST_PROFILE_FULL_E2E else 'targeted_diagnostic_run'
+        run_id = f'tc-{timezone.now().strftime("%Y%m%d%H%M%S")}-{uuid4().hex[:8]}'
+        now = timezone.now()
+        payload: dict[str, Any] = {
+            'timestamp': now,
+            'started_at': now,
+            'ended_at': None,
+            'preset_name': target_preset,
+            'current_run_id': run_id,
+            'last_run_id': None,
+            'selected_profile': selected_profile_id,
+            'effective_profile': resolved_profile_id,
+            'display_source': 'active_run',
+            'test_profile': resolved_profile_id,
+            'available_test_profiles': list_test_profiles(),
+            'modules_included': modules_included,
+            'modules_omitted': modules_omitted,
+            'run_scope': run_scope,
+            'test_status': TEST_STATUS_RUNNING,
+            'current_phase': 'queued',
+            'trial_status': 'SKIPPED',
+            'validation_status': 'UNKNOWN',
+            'trend_status': 'UNKNOWN',
+            'readiness_status': 'UNKNOWN',
+            'gate_status': 'UNKNOWN',
+            'extended_run_status': 'NOT_RUN',
+            'session_active': False,
+            'heartbeat_active': False,
+            'current_session_status': 'UNKNOWN',
+            'attention_mode': 'UNKNOWN',
+            'funnel_status': 'UNKNOWN',
+            'handoff_summary': {},
+            'shortlist_handoff_summary': {},
+            'downstream_route_summary': {},
+            'consensus_alignment': {},
+            'warnings': [],
+            'errors': [],
+            'blocker_summary': [],
+            'reason_codes': [],
+            'step_results': [],
+            'next_action_hint': 'Test console run queued; background worker will begin bootstrap.',
+            'last_event': 'Start ACK returned; worker queued',
+            'last_backend_event': 'start-ack-returned',
+            'next_expected_event': 'bootstrap_started',
+            'last_progress_at': now,
+            'last_real_progress_at': now,
+            'last_non_progress_refresh_at': None,
+            'hang_reason_classification': 'REAL_PROGRESS',
+            'phase_entered_at': now,
+        }
+        _set_state(status=_augment_progress(payload))
+        _log_test_console('start-ack-returned', payload)
+        ack_payload = finalize_test_console_payload_for_serializer(payload, source='start:ack')
+        _dispatch_test_console_worker(
+            run_id=run_id,
+            payload=deepcopy(payload),
+            target_preset=target_preset,
+            profile_modules=profile_modules,
         )
-    resolved_profile_id, profile_modules = resolve_test_profile(profile_id=profile_id)
-    modules_included, modules_omitted = _profile_module_lists(profile_modules)
-    run_scope = 'fresh_full_run' if resolved_profile_id == TEST_PROFILE_FULL_E2E else 'targeted_diagnostic_run'
-    run_id = f'tc-{timezone.now().strftime("%Y%m%d%H%M%S")}-{uuid4().hex[:8]}'
-    now = timezone.now()
-    payload: dict[str, Any] = {
-        'timestamp': now,
-        'started_at': now,
-        'ended_at': None,
-        'preset_name': target_preset,
-        'current_run_id': run_id,
-        'last_run_id': None,
-        'selected_profile': selected_profile_id,
-        'effective_profile': resolved_profile_id,
-        'display_source': 'active_run',
-        'test_profile': resolved_profile_id,
-        'available_test_profiles': list_test_profiles(),
-        'modules_included': modules_included,
-        'modules_omitted': modules_omitted,
-        'run_scope': run_scope,
-        'test_status': TEST_STATUS_RUNNING,
-        'current_phase': 'bootstrap',
-        'trial_status': 'SKIPPED',
-        'validation_status': 'UNKNOWN',
-        'trend_status': 'UNKNOWN',
-        'readiness_status': 'UNKNOWN',
-        'gate_status': 'UNKNOWN',
-        'extended_run_status': 'NOT_RUN',
-        'session_active': False,
-        'heartbeat_active': False,
-        'current_session_status': 'UNKNOWN',
-        'attention_mode': 'UNKNOWN',
-        'funnel_status': 'UNKNOWN',
-        'handoff_summary': {},
-        'shortlist_handoff_summary': {},
-        'downstream_route_summary': {},
-        'consensus_alignment': {},
-        'warnings': [],
-        'errors': [],
-        'blocker_summary': [],
-        'reason_codes': [],
-        'step_results': [],
-        'next_action_hint': 'Running test console pipeline',
-        'last_event': 'Start requested',
-        'last_backend_event': 'start-request-received',
-        'next_expected_event': 'bootstrap_completed',
-        'last_progress_at': now,
-        'last_real_progress_at': now,
-        'last_non_progress_refresh_at': None,
-        'hang_reason_classification': 'REAL_PROGRESS',
-        'phase_entered_at': now,
-    }
-    _set_state(status=_augment_progress(payload))
-    _log_test_console('start-accepted', payload)
+        return ack_payload
 
+
+def _dispatch_test_console_worker(
+    *,
+    run_id: str,
+    payload: dict[str, Any],
+    target_preset: str,
+    profile_modules: dict[str, bool],
+) -> None:
+    with _test_console_worker_lock:
+        if run_id in _test_console_worker_run_ids:
+            _log_test_console('start-worker-duplicate-suppressed', payload, run_id=run_id)
+            return
+        _test_console_worker_run_ids.add(run_id)
+
+    def _worker() -> None:
+        try:
+            _log_test_console('worker-started', payload, run_id=run_id)
+            _run_test_console_pipeline(
+                payload=payload,
+                target_preset=target_preset,
+                profile_modules=profile_modules,
+            )
+            status_snapshot, _last_log, _history = _get_state_snapshot()
+            final_snapshot = status_snapshot if (status_snapshot.get('last_run_id') == run_id or status_snapshot.get('current_run_id') == run_id) else payload
+            _log_test_console('worker-completed', final_snapshot, run_id=run_id)
+        except Exception as exc:  # defensive terminalization for unexpected worker-level failures
+            failed_payload = deepcopy(payload)
+            failed_payload['errors'] = list(failed_payload.get('errors') or []) + [str(exc)]
+            failed_payload['test_status'] = TEST_STATUS_FAILED
+            failed_payload['last_event'] = 'Worker failed before pipeline terminalized'
+            failed_payload['last_backend_event'] = 'worker-failed'
+            failed_payload['terminal_reason'] = str(exc)
+            failed_payload['ended_at'] = timezone.now()
+            failed_payload['updated_at'] = failed_payload['ended_at']
+            failed_payload['last_run_id'] = failed_payload.get('current_run_id') or run_id
+            failed_payload['current_run_id'] = None
+            failed_payload['display_source'] = 'last_completed'
+            failed_payload['summary'] = _finalize_summary(failed_payload)
+            failed_payload['text_export'] = _log_line_items(failed_payload)
+            final_payload = _augment_progress(_normalize_test_console_payload(failed_payload))
+            _set_state(status=final_payload, log=final_payload, append_history=True)
+            _log_test_console('worker-failed', final_payload, level=logging.ERROR, error=str(exc), run_id=run_id)
+        finally:
+            with _test_console_worker_lock:
+                _test_console_worker_run_ids.discard(run_id)
+
+    worker = Thread(target=_worker, name=f'test-console-{run_id}', daemon=True)
+    worker.start()
+    _log_test_console('start-worker-dispatched', payload, run_id=run_id)
+
+
+def _run_test_console_pipeline(
+    *,
+    payload: dict[str, Any],
+    target_preset: str,
+    profile_modules: dict[str, bool],
+) -> dict[str, Any]:
     scan_run: SourceScanRun | None = None
 
     try:
+        payload['current_phase'] = 'bootstrap'
+        payload['updated_at'] = timezone.now()
+        payload['phase_entered_at'] = payload['updated_at']
+        payload['last_progress_at'] = payload['updated_at']
+        payload['last_real_progress_at'] = payload['updated_at']
+        payload['last_event'] = 'Bootstrap phase started'
+        _set_state(status=_augment_progress(payload))
         bootstrap_result = bootstrap_live_read_only_paper_session(preset_name=target_preset, auto_start_heartbeat=True, start_now=True)
         payload['step_results'].append({'phase': 'bootstrap', 'status': 'ok', 'result': bootstrap_result})
         payload['updated_at'] = timezone.now()
@@ -2850,14 +2954,31 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
         payload['last_progress_at'] = payload['updated_at']
         payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Run failed'
+        payload['last_backend_event'] = 'worker-failed'
+        payload['terminal_reason'] = str(exc)
+        _log_test_console('worker-failed', payload, level=logging.ERROR, error=str(exc))
     finally:
+        current_run_id = str(payload.get('current_run_id') or '')
+        status_snapshot, _last_log, _history = _get_state_snapshot()
+        snapshot_run_id = str(status_snapshot.get('current_run_id') or status_snapshot.get('last_run_id') or '')
+        if current_run_id and snapshot_run_id == current_run_id and (
+            status_snapshot.get('stop_requested_at')
+            or str(status_snapshot.get('test_status') or '').upper() == TEST_STATUS_STOPPED
+        ):
+            payload['test_status'] = TEST_STATUS_STOPPED
+            payload['stop_requested_at'] = status_snapshot.get('stop_requested_at') or timezone.now()
+            payload['interrupted_by_stop'] = True
+            payload['last_event'] = 'Run stopped by operator while worker was active'
+            payload['last_backend_event'] = 'worker-stopped'
+            payload['terminal_reason'] = 'STOP_REQUESTED'
+
         payload['ended_at'] = timezone.now()
         payload['updated_at'] = timezone.now()
         payload['last_progress_at'] = payload['updated_at']
         payload['last_real_progress_at'] = payload['updated_at']
         payload['last_run_id'] = payload.get('current_run_id') or payload.get('last_run_id')
         payload['current_run_id'] = None
-        payload['display_source'] = 'last_completed_run'
+        payload['display_source'] = 'last_completed'
         payload['terminal_reason'] = str(payload.get('last_reason_code') or payload.get('test_status') or '')
         payload['summary'] = _finalize_summary(payload)
         _start_timed_phase(payload, 'export')
@@ -2918,7 +3039,7 @@ def stop_test_console(*, preset_name: str | None = None) -> dict[str, Any]:
         'test_status': stop_status,
         'current_run_id': None,
         'last_run_id': status_snapshot.get('current_run_id') or status_snapshot.get('last_run_id'),
-        'display_source': 'last_completed_run',
+        'display_source': 'last_completed',
         'current_phase': 'finalize',
         'ended_at': timezone.now(),
         'session_active': bool(bootstrap_status.get('session_active')),
