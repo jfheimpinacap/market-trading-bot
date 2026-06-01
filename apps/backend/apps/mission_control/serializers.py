@@ -561,6 +561,7 @@ class TestConsoleStopRequestSerializer(serializers.Serializer):
 
 
 class TestConsoleStatusSerializer(serializers.Serializer):
+    ok = serializers.BooleanField(required=False)
     exists = serializers.BooleanField(required=False)
     status = serializers.CharField(required=False)
     reason_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -570,7 +571,8 @@ class TestConsoleStatusSerializer(serializers.Serializer):
     selected_profile = serializers.CharField(required=False, allow_blank=True)
     effective_profile = serializers.CharField(required=False, allow_blank=True)
     display_source = serializers.CharField(required=False, allow_blank=True)
-    active_run = serializers.DictField(required=False, allow_null=True)
+    active_run = serializers.BooleanField(required=False)
+    active_run_detail = serializers.DictField(required=False, allow_null=True)
     active_run_profile = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     available_test_profiles = serializers.DictField(required=False)
     modules_included = serializers.ListField(child=serializers.CharField(), required=False)
@@ -670,6 +672,7 @@ class TestConsoleStatusSerializer(serializers.Serializer):
     is_hung = serializers.BooleanField(required=False)
     has_active_run = serializers.BooleanField(required=False)
     has_last_completed_run = serializers.BooleanField(required=False)
+    run_id = serializers.CharField(required=False, allow_null=True)
     current_run_id = serializers.CharField(required=False, allow_null=True)
     last_run_id = serializers.CharField(required=False, allow_null=True)
     can_stop = serializers.BooleanField(required=False)

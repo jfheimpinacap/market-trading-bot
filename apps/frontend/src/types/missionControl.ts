@@ -525,6 +525,7 @@ export type LlmAuxSignalSummary = {
 };
 
 export type TestConsoleStatusResponse = {
+  ok?: boolean;
   exists?: boolean;
   status?: 'AVAILABLE' | 'NO_RUN_YET' | string | null;
   reason_code?: string | null;
@@ -533,6 +534,20 @@ export type TestConsoleStatusResponse = {
   test_profile?: string;
   run_id?: string | null;
   active_run?: boolean;
+  active_run_detail?: {
+    run_id?: string | null;
+    current_run_id?: string | null;
+    profile?: string | null;
+    selected_profile?: string | null;
+    effective_profile?: string | null;
+    phase?: string | null;
+    current_phase?: string | null;
+    status?: string | null;
+    test_status?: string | null;
+    started_at?: string | null;
+    updated_at?: string | null;
+    run_scope?: string | null;
+  } | null;
   selected_profile?: string | null;
   effective_profile?: string | null;
   display_source?: 'current_run' | 'last_completed' | 'empty' | string | null;

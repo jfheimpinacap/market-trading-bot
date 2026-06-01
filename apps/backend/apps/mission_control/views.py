@@ -704,18 +704,28 @@ class StartTestConsoleView(APIView):
                 profile_id=serializer.validated_data.get('profile_id'),
             )
         except TestConsoleStartRejected as exc:
+            current_status = TestConsoleStatusSerializer(
+                finalize_test_console_payload_for_serializer(exc.payload, source='view:start-rejected')
+            ).data
+            run_id = current_status.get('current_run_id') or current_status.get('run_id') or current_status.get('last_run_id')
             response_payload = {
+                'ok': False,
                 'detail': str(exc),
+                'code': 'TEST_CONSOLE_START_REJECTED_ACTIVE_RUN',
                 'reason_code': 'TEST_CONSOLE_START_REJECTED_ACTIVE_RUN',
                 'status': 'START_REJECTED',
-                'current_status': TestConsoleStatusSerializer(
-                    finalize_test_console_payload_for_serializer(exc.payload, source='view:start-rejected')
-                ).data,
+                'active_run': bool(current_status.get('active_run') or current_status.get('has_active_run')),
+                'run_id': run_id,
+                'current_run_id': current_status.get('current_run_id'),
+                'active_run_detail': current_status.get('active_run_detail'),
+                'current_status': current_status,
             }
             return Response(response_payload, status=exc.status_code)
+        response_payload = TestConsoleStatusSerializer(finalize_test_console_payload_for_serializer(payload, source='view:start')).data
+        response_payload['ok'] = True
         return Response(
-            TestConsoleStatusSerializer(finalize_test_console_payload_for_serializer(payload, source='view:start')).data,
-            status=status.HTTP_200_OK,
+            response_payload,
+            status=status.HTTP_202_ACCEPTED,
         )
 
 

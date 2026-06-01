@@ -7699,7 +7699,7 @@ class TestConsoleApiTests(TestCase):
         mock_start.return_value = payload
 
         response = self.client.post(reverse('mission_control:test-console-start'), data='{}', content_type='application/json')
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 202)
         body = response.json()
         self.assertEqual(body['test_status'], 'COMPLETED')
         self.assertEqual(body['trial_status'], 'PASS')
@@ -7719,7 +7719,7 @@ class TestConsoleApiTests(TestCase):
             data='{"profile_id":"prediction_risk_path"}',
             content_type='application/json',
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 202)
         mock_start.assert_called_once_with(preset_name='live_read_only_paper_conservative', profile_id='prediction_risk_path')
         self.assertEqual(response.json()['test_profile'], 'prediction_risk_path')
 
@@ -7762,8 +7762,10 @@ class TestConsoleApiTests(TestCase):
         body = response.json()
         self.assertEqual(body['reason_code'], 'TEST_CONSOLE_START_REJECTED_ACTIVE_RUN')
         self.assertIn('active Test Console run', body['detail'])
+        self.assertTrue(body['active_run'])
+        self.assertEqual(body['run_id'], 'tc-active-run')
         self.assertEqual(body['current_status']['current_run_id'], 'tc-active-run')
-        self.assertIn('[test-console] start-rejected', '\n'.join(logs.output))
+        self.assertIn('[test-console] start-rejected active-run', '\n'.join(logs.output))
         payload.update({'test_status': 'COMPLETED', 'current_run_id': None, 'last_run_id': 'tc-active-run', 'ended_at': timezone.now()})
         _set_state(status=payload)
 
@@ -8047,8 +8049,8 @@ class TestConsoleApiTests(TestCase):
         self.assertIsNotNone(stopped_payload.get('ended_at'))
         self.assertFalse(stopped_payload.get('stop_available'))
 
-    @patch('apps.mission_control.services.test_console.bootstrap_live_read_only_paper_session', side_effect=RuntimeError('stop after initial state'))
-    def test_start_creates_run_id_and_records_initial_lifecycle_state(self, _mock_bootstrap):
+    @patch('apps.mission_control.services.test_console._dispatch_test_console_worker')
+    def test_start_creates_run_id_and_records_initial_lifecycle_state(self, mock_dispatch):
         from apps.mission_control.services import test_console
 
         captured_statuses = []
@@ -8069,13 +8071,150 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(initial['selected_profile'], 'scope_throttle_diagnostics')
         self.assertEqual(initial['effective_profile'], 'scope_throttle_diagnostics')
         self.assertTrue(initial['current_run_id'].startswith('tc-'))
-        self.assertEqual(initial['current_phase'], 'bootstrap')
-        self.assertEqual(initial['last_backend_event'], 'start-request-received')
+        self.assertEqual(initial['current_phase'], 'queued')
+        self.assertEqual(initial['last_backend_event'], 'start-ack-returned')
         self.assertEqual(initial['display_source'], 'active_run')
         self.assertIn('[test-console] start-request-received', '\n'.join(logs.output))
-        self.assertIn('[test-console] start-accepted', '\n'.join(logs.output))
-        self.assertEqual(payload['test_status'], 'FAILED')
-        self.assertEqual(payload['last_run_id'], initial['current_run_id'])
+        self.assertIn('[test-console] start-ack-returned', '\n'.join(logs.output))
+        self.assertTrue(payload['active_run'])
+        self.assertEqual(payload['active_run_detail']['run_id'], initial['current_run_id'])
+        self.assertEqual(payload['current_run_id'], initial['current_run_id'])
+        mock_dispatch.assert_called_once()
+
+    @patch('apps.mission_control.services.test_console._sync_operational_snapshot_for_profile')
+    @patch('apps.mission_control.services.test_console.bootstrap_live_read_only_paper_session', return_value={'bootstrap_action': 'REUSED'})
+    def test_background_pipeline_success_moves_active_run_to_last_completed(self, _mock_bootstrap, _mock_sync):
+        from apps.mission_control.services import test_console
+
+        resolved_profile_id, profile_modules = test_console.resolve_test_profile(profile_id='export_snapshot_integrity')
+        now = timezone.now()
+        payload = {
+            'timestamp': now,
+            'started_at': now,
+            'ended_at': None,
+            'preset_name': 'live_read_only_paper_conservative',
+            'current_run_id': 'tc-worker-success',
+            'last_run_id': None,
+            'selected_profile': 'export_snapshot_integrity',
+            'effective_profile': resolved_profile_id,
+            'test_profile': resolved_profile_id,
+            'test_status': 'RUNNING',
+            'current_phase': 'queued',
+            'display_source': 'active_run',
+            'modules_included': [],
+            'modules_omitted': [],
+            'warnings': [],
+            'errors': [],
+            'blocker_summary': [],
+            'reason_codes': [],
+            'step_results': [],
+        }
+
+        final_payload = test_console._run_test_console_pipeline(
+            payload=payload,
+            target_preset='live_read_only_paper_conservative',
+            profile_modules=profile_modules,
+        )
+
+        self.assertIn(final_payload['test_status'], {'COMPLETED', 'COMPLETED_WITH_WARNINGS'})
+        self.assertEqual(final_payload['last_run_id'], 'tc-worker-success')
+        self.assertIsNone(final_payload['current_run_id'])
+        self.assertEqual(final_payload['display_source'], 'last_completed')
+        self.assertFalse(final_payload['active_run'])
+
+    @patch('apps.mission_control.services.test_console._sync_operational_snapshot_for_profile')
+    def test_background_pipeline_preserves_stop_requested_terminal_state(self, _mock_sync):
+        from apps.mission_control.services import test_console
+
+        resolved_profile_id, profile_modules = test_console.resolve_test_profile(profile_id='export_snapshot_integrity')
+        now = timezone.now()
+        payload = {
+            'timestamp': now,
+            'started_at': now,
+            'ended_at': None,
+            'preset_name': 'live_read_only_paper_conservative',
+            'current_run_id': 'tc-worker-stopped',
+            'last_run_id': None,
+            'selected_profile': 'export_snapshot_integrity',
+            'effective_profile': resolved_profile_id,
+            'test_profile': resolved_profile_id,
+            'test_status': 'RUNNING',
+            'current_phase': 'queued',
+            'display_source': 'active_run',
+            'modules_included': [],
+            'modules_omitted': [],
+            'warnings': [],
+            'errors': [],
+            'blocker_summary': [],
+            'reason_codes': [],
+            'step_results': [],
+        }
+
+        def mark_stopped(*args, **kwargs):
+            stopped = dict(payload)
+            stopped.update({
+                'test_status': 'STOPPED',
+                'current_phase': 'finalize',
+                'stop_requested_at': timezone.now(),
+                'last_run_id': 'tc-worker-stopped',
+            })
+            test_console._set_state(status=stopped)
+            return {'bootstrap_action': 'REUSED'}
+
+        with patch('apps.mission_control.services.test_console.bootstrap_live_read_only_paper_session', side_effect=mark_stopped):
+            final_payload = test_console._run_test_console_pipeline(
+                payload=payload,
+                target_preset='live_read_only_paper_conservative',
+                profile_modules=profile_modules,
+            )
+
+        self.assertEqual(final_payload['test_status'], 'STOPPED')
+        self.assertEqual(final_payload['terminal_reason'], 'STOP_REQUESTED')
+        self.assertTrue(final_payload['interrupted_by_stop'])
+
+    @patch('apps.mission_control.services.test_console._run_test_console_pipeline', side_effect=RuntimeError('boom'))
+    def test_worker_exception_terminalizes_failed_run(self, _mock_pipeline):
+        from apps.mission_control.services import test_console
+
+        now = timezone.now()
+        payload = {
+            'timestamp': now,
+            'started_at': now,
+            'ended_at': None,
+            'preset_name': 'live_read_only_paper_conservative',
+            'current_run_id': 'tc-worker-failed',
+            'last_run_id': None,
+            'selected_profile': 'scope_throttle_diagnostics',
+            'effective_profile': 'scope_throttle_diagnostics',
+            'test_profile': 'scope_throttle_diagnostics',
+            'test_status': 'RUNNING',
+            'current_phase': 'queued',
+            'display_source': 'active_run',
+            'warnings': [],
+            'errors': [],
+            'blocker_summary': [],
+            'reason_codes': [],
+            'step_results': [],
+        }
+
+        with self.assertLogs('apps.mission_control.services.test_console', level='ERROR') as logs:
+            test_console._dispatch_test_console_worker(
+                run_id='tc-worker-failed',
+                payload=payload,
+                target_preset='live_read_only_paper_conservative',
+                profile_modules={},
+            )
+            for _attempt in range(50):
+                status_snapshot, _last_log, _history = test_console._get_state_snapshot()
+                if status_snapshot.get('last_run_id') == 'tc-worker-failed':
+                    break
+                import time
+                time.sleep(0.02)
+
+        self.assertEqual(status_snapshot['test_status'], 'FAILED')
+        self.assertEqual(status_snapshot['last_run_id'], 'tc-worker-failed')
+        self.assertFalse(status_snapshot['active_run'])
+        self.assertIn('worker-failed', '\n'.join(logs.output))
 
     def test_phase_transition_status_fields_update_backend_event_and_progress_age(self):
         from apps.mission_control.services.test_console import finalize_test_console_payload_for_serializer
@@ -8100,7 +8239,8 @@ class TestConsoleApiTests(TestCase):
         self.assertEqual(status['next_expected_event'], 'scan_completed_or_skipped')
         self.assertGreaterEqual(status['seconds_since_last_progress'], 0)
         self.assertTrue(status['can_stop'])
-        self.assertEqual(status['active_run']['run_id'], 'tc-test-run')
+        self.assertTrue(status['active_run'])
+        self.assertEqual(status['active_run_detail']['run_id'], 'tc-test-run')
 
     @patch('apps.mission_control.services.test_console.get_live_paper_bootstrap_status')
     @patch('apps.mission_control.services.test_console._find_active_preset_session', return_value=None)
@@ -9131,7 +9271,7 @@ class TestConsoleApiTests(TestCase):
                 content_type='application/json',
             )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 202)
         self.assertIn('[test-console] start-view-entered', '\\n'.join(logs.output))
         mock_start.assert_called_once_with(
             preset_name='live_read_only_paper_conservative',
@@ -9153,8 +9293,9 @@ class TestConsoleApiTests(TestCase):
 
         response = self.client.post(reverse('mission_control:test-console-start'), data='{}', content_type='application/json')
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 202)
         body = response.json()
+        self.assertTrue(body['ok'])
         self.assertEqual(body['current_run_id'], 'tc-test-accepted')
         self.assertEqual(body['test_status'], 'RUNNING')
         self.assertTrue(body['active_run'])
