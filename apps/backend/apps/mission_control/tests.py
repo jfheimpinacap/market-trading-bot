@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 from io import StringIO
 import json
+import tempfile
 from datetime import timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -8337,6 +8338,10 @@ class TestConsoleApiTests(TestCase):
             'effective_profile',
             'display_source',
             'current_phase',
+            'current_subphase',
+            'lifecycle_timeline_summary',
+            'timeout_source',
+            'persistent_log_path',
             'elapsed_seconds',
             'last_progress_at',
             'seconds_since_last_progress',
@@ -8351,6 +8356,135 @@ class TestConsoleApiTests(TestCase):
             'interrupted_by_server_restart',
         ]:
             self.assertIn(field, data)
+
+
+    def test_persistent_jsonl_log_writes_required_event_fields(self):
+        from apps.mission_control.services import test_console
+
+        payload = self._status_payload()
+        payload.update(
+            {
+                'current_run_id': 'tc-jsonl-test',
+                'last_run_id': None,
+                'test_status': 'RUNNING',
+                'current_phase': 'trial',
+                'current_subphase': 'execution_route_diagnostics_started',
+                'next_expected_event': 'execution_route_diagnostics_completed',
+                'elapsed_seconds': 12,
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmpdir, override_settings(MONOREPO_ROOT=tmpdir):
+            test_console._log_test_console('timeout-detected', payload, reason_code='TEST_REASON')
+            log_path = test_console._persistent_log_path()
+            self.assertTrue(log_path.exists())
+            records = [json.loads(line) for line in log_path.read_text(encoding='utf-8').splitlines()]
+
+        record = records[-1]
+        for field in [
+            'timestamp',
+            'run_id',
+            'profile',
+            'phase',
+            'raw_phase',
+            'subphase',
+            'current_subphase',
+            'event',
+            'next_expected_event',
+            'elapsed',
+            'reason_code',
+        ]:
+            self.assertIn(field, record)
+        self.assertEqual(record['phase'], 'execution')
+        self.assertEqual(record['raw_phase'], 'trial')
+        self.assertEqual(record['event'], 'timeout-detected')
+
+    def test_timeout_reason_includes_visible_raw_phase_and_subphase(self):
+        from apps.mission_control.services.test_console import _apply_hang_timeout_if_needed
+
+        payload = self._status_payload()
+        payload.update(
+            {
+                'test_status': 'RUNNING',
+                'current_run_id': 'tc-timeout-detail',
+                'current_phase': 'trial',
+                'current_subphase': 'execution_route_diagnostics_started',
+                'ended_at': None,
+                'text_export': '',
+                'step_results': [],
+                'last_progress_at': timezone.now() - timedelta(minutes=30),
+                'last_real_progress_at': timezone.now() - timedelta(minutes=30),
+                'phase_entered_at': timezone.now() - timedelta(minutes=30),
+            }
+        )
+
+        result, mutated = _apply_hang_timeout_if_needed(payload)
+        self.assertTrue(mutated)
+        self.assertEqual(result['test_status'], 'TIMED_OUT')
+        self.assertIn('PHASE_execution_RAW_trial_SUBPHASE_execution_route_diagnostics_started', result['last_reason_code'])
+        self.assertEqual(result['timeout_source']['visible_phase'], 'execution')
+        self.assertEqual(result['timeout_source']['raw_phase'], 'trial')
+        self.assertEqual(result['timeout_source']['subphase'], 'execution_route_diagnostics_started')
+
+    def test_worker_active_heartbeat_updates_last_progress_without_real_progress(self):
+        from apps.mission_control.services import test_console
+
+        payload = self._status_payload()
+        old_real_progress = timezone.now() - timedelta(minutes=30)
+        payload.update(
+            {
+                'test_status': 'RUNNING',
+                'current_run_id': 'tc-heartbeat-test',
+                'last_run_id': None,
+                'current_phase': 'trial',
+                'current_subphase': 'execution_route_diagnostics_started',
+                'ended_at': None,
+                'last_progress_at': old_real_progress,
+                'last_real_progress_at': old_real_progress,
+                'phase_entered_at': timezone.now(),
+            }
+        )
+        test_console._test_console_worker_run_ids.add('tc-heartbeat-test')
+        try:
+            test_console._record_lifecycle_event(
+                payload,
+                event='WORKER_ACTIVE_HEARTBEAT',
+                subphase='execution_route_diagnostics_started',
+                real_progress=False,
+                heartbeat=True,
+            )
+        finally:
+            test_console._test_console_worker_run_ids.discard('tc-heartbeat-test')
+
+        self.assertGreater(payload['last_progress_at'], old_real_progress)
+        self.assertEqual(payload['last_real_progress_at'], old_real_progress)
+        result, mutated = test_console._apply_hang_timeout_if_needed(payload)
+        self.assertFalse(mutated)
+        self.assertEqual(result['test_status'], 'RUNNING')
+
+    def test_export_includes_timeout_source_and_timeline_summary(self):
+        from apps.mission_control.services.test_console import _log_line_items, _record_lifecycle_event
+
+        payload = self._status_payload()
+        payload.update(
+            {
+                'current_run_id': 'tc-export-timeline',
+                'current_phase': 'trial',
+                'current_subphase': 'execution_route_diagnostics_started',
+                'timeout_source': {'visible_phase': 'execution', 'raw_phase': 'trial', 'subphase': 'execution_route_diagnostics_started'},
+            }
+        )
+        _record_lifecycle_event(payload, event='execution_route_diagnostics_started', subphase='execution_route_diagnostics_started')
+        text = _log_line_items(payload)
+        self.assertIn('lifecycle_timeline_summary:', text)
+        self.assertIn('persistent_log_path: logs/test_console.log', text)
+        self.assertIn('timeout_source:', text)
+        self.assertIn('raw_phase: trial', text)
+
+    def test_persistent_log_write_failure_does_not_raise(self):
+        from apps.mission_control.services import test_console
+
+        with patch('apps.mission_control.services.test_console.Path.open', side_effect=OSError('readonly')):
+            test_console._log_test_console('write-failure-safe', {'current_run_id': 'tc-log-fail', 'test_profile': 'full_e2e'})
 
     def test_phase_timing_records_budget_warning_and_slowest_phase(self):
         from apps.mission_control.services.test_console import _finish_timed_phase, _start_timed_phase

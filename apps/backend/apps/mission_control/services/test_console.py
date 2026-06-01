@@ -4,11 +4,14 @@ from collections import deque
 from copy import deepcopy
 from dataclasses import dataclass
 from decimal import Decimal
+import json
 import logging
+from pathlib import Path
 from threading import Lock, Thread
 from uuid import uuid4
 from typing import Any
 
+from django.conf import settings
 from django.utils import timezone
 
 from apps.mission_control.models import AutonomousRuntimeSession, AutonomousRuntimeSessionStatus
@@ -57,6 +60,7 @@ TEST_STATUS_HUNG = 'HUNG'
 TEST_CONSOLE_HANG_TIMEOUT_REASON_CODE = 'TEST_CONSOLE_HANG_TIMEOUT'
 TEST_CONSOLE_FINALIZE_SLOW_WARNING_REASON_CODE = 'TEST_CONSOLE_FINALIZE_SLOW_WARNING'
 TEST_CONSOLE_LOG_PREFIX = '[test-console]'
+TEST_CONSOLE_PERSISTENT_LOG_RELATIVE_PATH = 'logs/test_console.log'
 
 _PHASES = [
     'queued',
@@ -270,6 +274,14 @@ _state = _ConsoleState(
         'modules_omitted': [],
         'run_scope': 'fresh_full_run',
         'current_phase': None,
+        'phase': None,
+        'raw_phase': None,
+        'current_subphase': None,
+        'subphase': None,
+        'lifecycle_timeline': [],
+        'lifecycle_timeline_summary': {},
+        'timeout_source': {},
+        'persistent_log_path': TEST_CONSOLE_PERSISTENT_LOG_RELATIVE_PATH,
         'started_at': None,
         'ended_at': None,
         'preset_name': PRESET_NAME,
@@ -359,25 +371,154 @@ def _list_field(payload: dict[str, Any], key: str) -> list[Any]:
     return list(payload.get(key) or [])
 
 
+def _json_default(value: Any) -> str:
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    return str(value)
+
+
+def _persistent_log_path() -> Path:
+    base = Path(getattr(settings, 'MONOREPO_ROOT', None) or getattr(settings, 'BASE_DIR', None) or Path.cwd())
+    return base / TEST_CONSOLE_PERSISTENT_LOG_RELATIVE_PATH
+
+
+def _visible_phase_for(raw_phase: str | None) -> str | None:
+    mapping = {
+        'consensus_review': 'handoff',
+        'pursuit_review': 'prediction',
+        'validation': 'risk',
+        'trend': 'risk',
+        'gate': 'risk',
+        'trial': 'execution',
+        'extended_run': 'execution',
+    }
+    phase = str(raw_phase or '')
+    return mapping.get(phase, phase or None)
+
+
+def _test_console_run_id(payload: dict[str, Any] | None) -> str | None:
+    payload = payload or {}
+    return payload.get('current_run_id') or payload.get('last_run_id') or payload.get('run_id')
+
+
 def _test_console_log_context(payload: dict[str, Any] | None) -> dict[str, Any]:
     payload = payload or {}
+    raw_phase = payload.get('raw_phase') or payload.get('current_phase')
+    visible_phase = payload.get('phase') or _visible_phase_for(raw_phase)
     return {
-        'run_id': payload.get('current_run_id') or payload.get('last_run_id'),
+        'timestamp': timezone.now(),
+        'run_id': _test_console_run_id(payload),
+        'profile': payload.get('effective_profile') or payload.get('test_profile') or payload.get('profile'),
         'test_status': payload.get('test_status'),
-        'phase': payload.get('current_phase'),
+        'phase': visible_phase,
+        'raw_phase': raw_phase if raw_phase != visible_phase else payload.get('raw_phase'),
+        'subphase': payload.get('current_subphase') or payload.get('subphase'),
+        'current_subphase': payload.get('current_subphase') or payload.get('subphase'),
         'selected_profile': payload.get('selected_profile') or payload.get('test_profile'),
         'effective_profile': payload.get('effective_profile') or payload.get('test_profile'),
         'scope': payload.get('run_scope'),
         'last_event': payload.get('last_backend_event') or payload.get('last_event'),
-        'reason': payload.get('terminal_reason') or payload.get('last_reason_code') or payload.get('reason_code'),
+        'next_expected_event': payload.get('next_expected_event'),
+        'elapsed': payload.get('elapsed_seconds'),
+        'reason_code': payload.get('terminal_reason') or payload.get('last_reason_code') or payload.get('reason_code'),
         'export_available': payload.get('export_available'),
     }
+
+
+def _write_persistent_test_console_log(record: dict[str, Any]) -> None:
+    try:
+        path = _persistent_log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open('a', encoding='utf-8') as handle:
+            handle.write(json.dumps(record, default=_json_default, sort_keys=True) + '\n')
+    except Exception as exc:  # pragma: no cover - defensive: logging must never break a run
+        logger.debug('test console persistent log write failed: %s', exc)
 
 
 def _log_test_console(event: str, payload: dict[str, Any] | None = None, *, level: int = logging.INFO, **extra: Any) -> None:
     context = _test_console_log_context(payload)
     context.update({key: value for key, value in extra.items() if value is not None})
+    context['event'] = event
+    context.setdefault('persistent_log_path', TEST_CONSOLE_PERSISTENT_LOG_RELATIVE_PATH)
+    _write_persistent_test_console_log(context)
     logger.log(level, '%s %s %s', TEST_CONSOLE_LOG_PREFIX, event, context)
+
+
+def _record_lifecycle_event(
+    payload: dict[str, Any],
+    *,
+    event: str,
+    subphase: str | None = None,
+    next_expected_event: str | None = None,
+    reason_code: str | None = None,
+    real_progress: bool = True,
+    heartbeat: bool = False,
+) -> None:
+    now = timezone.now()
+    raw_phase = str(payload.get('current_phase') or payload.get('raw_phase') or '')
+    visible_phase = _visible_phase_for(raw_phase)
+    payload['raw_phase'] = raw_phase or None
+    payload['phase'] = visible_phase
+    payload['persistent_log_path'] = TEST_CONSOLE_PERSISTENT_LOG_RELATIVE_PATH
+    if subphase is not None:
+        payload['current_subphase'] = subphase
+        payload['subphase'] = subphase
+    if next_expected_event is not None:
+        payload['next_expected_event'] = next_expected_event
+    payload['updated_at'] = now
+    payload['last_progress_at'] = now
+    if real_progress:
+        payload['last_real_progress_at'] = now
+        payload['hang_reason_classification'] = 'REAL_PROGRESS'
+    elif heartbeat:
+        payload['last_worker_heartbeat_at'] = now
+        payload['hang_reason_classification'] = 'WORKER_ACTIVE_HEARTBEAT'
+    payload['last_event'] = event
+    payload['last_backend_event'] = event
+    if reason_code:
+        payload['last_reason_code'] = reason_code
+    started_at = payload.get('started_at') or now
+    elapsed = int(max(0, (now - started_at).total_seconds())) if started_at else 0
+    entry = {
+        'timestamp': now,
+        'elapsed': elapsed,
+        'event': event,
+        'phase': visible_phase,
+        'raw_phase': raw_phase or None,
+        'subphase': payload.get('current_subphase'),
+        'next_expected_event': payload.get('next_expected_event'),
+        'reason_code': reason_code or payload.get('last_reason_code') or '',
+    }
+    timeline = list(payload.get('lifecycle_timeline') or [])
+    timeline.append(entry)
+    payload['lifecycle_timeline'] = timeline[-50:]
+    _update_lifecycle_timeline_summary(payload)
+    _log_test_console(event, payload, reason_code=reason_code)
+
+
+def _update_lifecycle_timeline_summary(payload: dict[str, Any]) -> None:
+    timeline = list(payload.get('lifecycle_timeline') or [])
+    last_events = timeline[-10:]
+    subphase_durations: dict[str, int] = {}
+    previous = None
+    for entry in timeline:
+        if previous and previous.get('subphase'):
+            key = str(previous.get('subphase'))
+            subphase_durations[key] = subphase_durations.get(key, 0) + int(entry.get('elapsed') or 0) - int(previous.get('elapsed') or 0)
+        previous = entry
+    slowest_subphase = None
+    slowest_subphase_elapsed_seconds = 0
+    if subphase_durations:
+        slowest_subphase, slowest_subphase_elapsed_seconds = max(subphase_durations.items(), key=lambda item: item[1])
+    payload['lifecycle_timeline_summary'] = {
+        'run_id': _test_console_run_id(payload),
+        'persistent_log_path': TEST_CONSOLE_PERSISTENT_LOG_RELATIVE_PATH,
+        'last_events': last_events,
+        'event_count': len(timeline),
+        'slowest_subphase': slowest_subphase,
+        'slowest_subphase_elapsed_seconds': slowest_subphase_elapsed_seconds,
+        'timeout_source': payload.get('timeout_source') or {},
+    }
 
 
 def list_test_profiles() -> dict[str, dict[str, bool]]:
@@ -415,6 +556,7 @@ def _set_state(*, status: dict[str, Any] | None = None, log: dict[str, Any] | No
     with _state_lock:
         previous_status = deepcopy(_state.status)
         previous_phase = str(previous_status.get('current_phase') or '')
+        previous_subphase = str(previous_status.get('current_subphase') or previous_status.get('subphase') or '')
         previous_run_id = str(previous_status.get('current_run_id') or previous_status.get('last_run_id') or '')
         previous_terminal = _is_terminal_test_status(previous_status.get('test_status'))
         previous_progress_at = previous_status.get('last_progress_at')
@@ -426,7 +568,10 @@ def _set_state(*, status: dict[str, Any] | None = None, log: dict[str, Any] | No
             if current_run_id and current_run_id != previous_run_id:
                 lifecycle_events.append(('run-id-assigned', normalized_status, logging.INFO, {}))
             if current_phase and current_phase != previous_phase:
-                lifecycle_events.append(('phase-transition', normalized_status, logging.INFO, {'from_phase': previous_phase or None, 'to_phase': current_phase}))
+                lifecycle_events.append(('phase-transition', normalized_status, logging.INFO, {'from_phase': _visible_phase_for(previous_phase) if previous_phase else None, 'to_phase': _visible_phase_for(current_phase), 'raw_from_phase': previous_phase or None, 'raw_to_phase': current_phase}))
+            current_subphase = str(normalized_status.get('current_subphase') or normalized_status.get('subphase') or '')
+            if current_subphase and current_subphase != previous_subphase:
+                lifecycle_events.append(('subphase-transition', normalized_status, logging.INFO, {'from_subphase': previous_subphase or None, 'to_subphase': current_subphase}))
             if normalized_status.get('last_progress_at') and normalized_status.get('last_progress_at') != previous_progress_at:
                 lifecycle_events.append(('progress-heartbeat', normalized_status, logging.DEBUG, {}))
             if _is_terminal_test_status(normalized_status.get('test_status')) and not previous_terminal:
@@ -533,8 +678,10 @@ def _annotate_runtime_flags(payload: dict[str, Any]) -> None:
         'profile': payload.get('effective_profile') or payload.get('test_profile'),
         'selected_profile': payload.get('selected_profile'),
         'effective_profile': payload.get('effective_profile') or payload.get('test_profile'),
-        'phase': payload.get('current_phase'),
+        'phase': payload.get('phase') or _visible_phase_for(payload.get('current_phase')),
         'current_phase': payload.get('current_phase'),
+        'raw_phase': payload.get('raw_phase') or payload.get('current_phase'),
+        'current_subphase': payload.get('current_subphase') or payload.get('subphase'),
         'status': normalized_status,
         'test_status': normalized_status,
         'started_at': payload.get('started_at'),
@@ -807,6 +954,12 @@ def _augment_progress(status_payload: dict[str, Any]) -> dict[str, Any]:
     payload = status_payload
     now = timezone.now()
     current_phase = payload.get('current_phase')
+    payload['raw_phase'] = payload.get('raw_phase') or current_phase
+    payload['phase'] = _visible_phase_for(str(current_phase or payload.get('raw_phase') or ''))
+    payload['current_subphase'] = payload.get('current_subphase') or payload.get('subphase')
+    payload['subphase'] = payload.get('subphase') or payload.get('current_subphase')
+    payload['persistent_log_path'] = str(payload.get('persistent_log_path') or TEST_CONSOLE_PERSISTENT_LOG_RELATIVE_PATH)
+    _update_lifecycle_timeline_summary(payload)
     started_at = payload.get('started_at')
     updated_at = payload.get('updated_at') or payload.get('timestamp') or now
     current_step = _phase_index(current_phase)
@@ -977,7 +1130,7 @@ def _apply_hang_timeout_if_needed(status_payload: dict[str, Any]) -> tuple[dict[
         return payload, False
 
     now = timezone.now()
-    last_progress_at = payload.get('last_real_progress_at') or payload.get('last_progress_at') or payload.get('updated_at') or payload.get('timestamp')
+    last_progress_at = payload.get('last_progress_at') or payload.get('last_real_progress_at') or payload.get('updated_at') or payload.get('timestamp')
     if not last_progress_at:
         return payload, False
     phase_entered_at = payload.get('phase_entered_at')
@@ -999,9 +1152,27 @@ def _apply_hang_timeout_if_needed(status_payload: dict[str, Any]) -> tuple[dict[
     if finalize_warning_applied:
         return payload, True
 
+    raw_phase = str(payload.get('raw_phase') or current_phase or '')
+    visible_phase = _visible_phase_for(raw_phase) or 'unknown'
+    subphase = str(payload.get('current_subphase') or payload.get('subphase') or 'unknown')
     reason = (
-        f'HANG_DETECTED_NO_PROGRESS_{observed_seconds}s_PHASE_{current_phase or "unknown"}'
+        f'HANG_DETECTED_NO_PROGRESS_{observed_seconds}s_PHASE_{visible_phase}'
+        f'_RAW_{raw_phase or "unknown"}_SUBPHASE_{subphase}'
     )
+    payload['timeout_source'] = {
+        'visible_phase': visible_phase,
+        'raw_phase': raw_phase or None,
+        'subphase': subphase,
+        'seconds_without_progress': observed_seconds,
+        'budget_seconds': timeout_seconds,
+        'last_backend_event': payload.get('last_backend_event') or payload.get('last_event'),
+        'last_real_progress_at': payload.get('last_real_progress_at'),
+        'last_progress_at': payload.get('last_progress_at'),
+        'worker_alive': _test_console_run_id(payload) in _test_console_worker_run_ids,
+        'export_available': bool(payload.get('text_export') or payload.get('ended_at')),
+        'export_state': 'final' if payload.get('ended_at') else 'partial' if payload.get('text_export') else 'none',
+        'phase_mapping': f'raw_phase={raw_phase} is shown as visible_phase={visible_phase}' if raw_phase and raw_phase != visible_phase else '',
+    }
     payload['test_status'] = TEST_STATUS_TIMED_OUT
     payload['ended_at'] = now
     payload['updated_at'] = now
@@ -1014,8 +1185,9 @@ def _apply_hang_timeout_if_needed(status_payload: dict[str, Any]) -> tuple[dict[
     payload['warnings'] = list(dict.fromkeys([*(payload.get('warnings') or []), TEST_CONSOLE_HANG_TIMEOUT_REASON_CODE]))
     payload['reason_codes'] = list(dict.fromkeys([*(payload.get('reason_codes') or []), TEST_CONSOLE_HANG_TIMEOUT_REASON_CODE]))
     payload['summary'] = (
-        f"{TEST_STATUS_TIMED_OUT}: no progress for {observed_seconds}s while phase={current_phase or 'unknown'}"
+        f"{TEST_STATUS_TIMED_OUT}: no progress for {observed_seconds}s while phase={visible_phase} raw_phase={raw_phase or 'unknown'} subphase={subphase}"
     )
+    _record_lifecycle_event(payload, event='timeout-detected', subphase=subphase, next_expected_event='export_available', reason_code=reason)
     payload['text_export'] = _log_line_items(payload)
     _log_test_console('timeout-real-applied', payload, observed_seconds=observed_seconds, timeout_seconds=timeout_seconds)
     return payload, True
@@ -1041,6 +1213,15 @@ def _normalize_test_console_payload(status_payload: dict[str, Any] | None) -> di
     payload['modules_included'] = list(payload.get('modules_included') or modules_included)
     payload['modules_omitted'] = list(payload.get('modules_omitted') or modules_omitted)
     payload['run_scope'] = str(payload.get('run_scope') or ('fresh_full_run' if resolved_profile_id == TEST_PROFILE_FULL_E2E else 'targeted_diagnostic_run'))
+    raw_phase = payload.get('raw_phase') or payload.get('current_phase')
+    payload['raw_phase'] = raw_phase
+    payload['phase'] = _visible_phase_for(raw_phase) or payload.get('phase')
+    payload['current_subphase'] = payload.get('current_subphase') or payload.get('subphase')
+    payload['subphase'] = payload.get('subphase') or payload.get('current_subphase')
+    payload['persistent_log_path'] = str(payload.get('persistent_log_path') or TEST_CONSOLE_PERSISTENT_LOG_RELATIVE_PATH)
+    payload['timeout_source'] = dict(payload.get('timeout_source') or {})
+    payload['lifecycle_timeline'] = list(payload.get('lifecycle_timeline') or [])[-50:]
+    _update_lifecycle_timeline_summary(payload)
 
     payload['test_status'] = str(payload.get('test_status') or TEST_STATUS_IDLE)
     payload['exists'] = bool(payload.get('exists') or payload['test_status'] != TEST_STATUS_IDLE)
@@ -1871,6 +2052,13 @@ def _log_line_items(payload: dict[str, Any]) -> str:
     phase_budget = payload.get('phase_budget_summary') or {}
     diagnostic_pagination = payload.get('diagnostic_example_pagination') or {}
     diagnostic_workload = payload.get('diagnostic_workload_summary') or {}
+    lifecycle_summary = payload.get('lifecycle_timeline_summary') or {}
+    timeout_source = payload.get('timeout_source') or {}
+    interpretation = {
+        'timeout_real': bool(timeout_source and payload.get('test_status') == TEST_STATUS_TIMED_OUT and not timeout_source.get('worker_alive')),
+        'timeout_possible_missing_heartbeat': bool(timeout_source and payload.get('test_status') == TEST_STATUS_TIMED_OUT and timeout_source.get('worker_alive') is None),
+        'completed_with_slow_phase': bool((payload.get('phase_budget_summary') or {}).get('budget_warning') and payload.get('test_status') in {TEST_STATUS_COMPLETED, TEST_STATUS_COMPLETED_WITH_WARNINGS}),
+    }
 
     lines = [
         '=== Mission Control Test Console Export ===',
@@ -1881,7 +2069,16 @@ def _log_line_items(payload: dict[str, Any]) -> str:
         f"fresh_full_run_vs_targeted: {payload.get('run_scope') or 'fresh_full_run'}",
         f"modules_included: {','.join(payload.get('modules_included') or []) or 'none'}",
         f"modules_omitted: {','.join(payload.get('modules_omitted') or []) or 'none'}",
-        f"current_phase: {payload.get('current_phase')}",
+        f"current_phase: {payload.get('phase') or _visible_phase_for(payload.get('current_phase'))}",
+        f"raw_phase: {payload.get('raw_phase') or payload.get('current_phase')}",
+        f"last_subphase: {payload.get('current_subphase') or payload.get('subphase') or 'n/a'}",
+        f"persistent_log_path: {payload.get('persistent_log_path') or TEST_CONSOLE_PERSISTENT_LOG_RELATIVE_PATH}",
+        'lifecycle_timeline_summary:',
+        f"  run_id={lifecycle_summary.get('run_id') or payload.get('last_run_id') or payload.get('current_run_id') or 'n/a'} event_count={lifecycle_summary.get('event_count') or 0}",
+        f"  slowest_subphase={lifecycle_summary.get('slowest_subphase') or 'n/a'} elapsed_seconds={lifecycle_summary.get('slowest_subphase_elapsed_seconds') or 0}",
+        f"  last_events={lifecycle_summary.get('last_events') or []}",
+        f"timeout_source: {timeout_source}",
+        f"interpretation: {interpretation}",
         f"total_elapsed_seconds: {payload.get('elapsed_seconds') or phase_budget.get('total_elapsed_seconds') or 0}",
         'phase_budget_summary:',
         f"  slowest_phase={phase_budget.get('slowest_phase') or 'n/a'} elapsed_seconds={phase_budget.get('slowest_phase_elapsed_seconds') or 0}",
@@ -2532,6 +2729,14 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             'run_scope': run_scope,
             'test_status': TEST_STATUS_RUNNING,
             'current_phase': 'queued',
+            'phase': 'queued',
+            'raw_phase': 'queued',
+            'current_subphase': 'start_ack_returned',
+            'subphase': 'start_ack_returned',
+            'lifecycle_timeline': [],
+            'lifecycle_timeline_summary': {},
+            'timeout_source': {},
+            'persistent_log_path': TEST_CONSOLE_PERSISTENT_LOG_RELATIVE_PATH,
             'trial_status': 'SKIPPED',
             'validation_status': 'UNKNOWN',
             'trend_status': 'UNKNOWN',
@@ -2562,6 +2767,7 @@ def start_test_console(*, preset_name: str | None = None, profile_id: str | None
             'hang_reason_classification': 'REAL_PROGRESS',
             'phase_entered_at': now,
         }
+        _record_lifecycle_event(payload, event='start-ack-returned', subphase='start_ack_returned', next_expected_event='worker-started')
         _set_state(status=_augment_progress(payload))
         _log_test_console('start-ack-returned', payload)
         ack_payload = finalize_test_console_payload_for_serializer(payload, source='start:ack')
@@ -2589,6 +2795,7 @@ def _dispatch_test_console_worker(
 
     def _worker() -> None:
         try:
+            _record_lifecycle_event(payload, event='worker-started', subphase='worker_started', next_expected_event='bootstrap_completed')
             _log_test_console('worker-started', payload, run_id=run_id)
             _run_test_console_pipeline(
                 payload=payload,
@@ -2706,6 +2913,7 @@ def _run_test_console_pipeline(
         payload['last_progress_at'] = payload['updated_at']
         payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Handoff phase started'
+        _record_lifecycle_event(payload, event='handoff_diagnostics_started', subphase='handoff_diagnostics_started', next_expected_event='handoff_diagnostics_completed')
         _set_state(status=_augment_progress(payload))
         shortlisted_count = 0
         if scan_run:
@@ -2720,6 +2928,7 @@ def _run_test_console_pipeline(
             payload['last_real_progress_at'] = payload['updated_at']
             payload['last_event'] = 'Handoff skipped by test profile'
             _finish_timed_phase(payload, 'handoff')
+            _record_lifecycle_event(payload, event='handoff_diagnostics_completed', subphase='handoff_diagnostics_completed', next_expected_event='prediction_started')
             _start_timed_phase(payload, 'prediction')
             _finish_timed_phase(payload, 'prediction')
             _set_state(status=_augment_progress(payload))
@@ -2749,6 +2958,7 @@ def _run_test_console_pipeline(
                 payload['last_event'] = 'Consensus review warning'
                 payload['last_reason_code'] = 'CONSENSUS_WARNING'
             _finish_timed_phase(payload, 'handoff')
+            _record_lifecycle_event(payload, event='handoff_diagnostics_completed', subphase='handoff_diagnostics_completed', next_expected_event='prediction_or_execution_started')
             _set_state(status=_augment_progress(payload))
             _start_timed_phase(payload, 'prediction')
             if profile_modules.get(TEST_CONSOLE_MODULE_PREDICTION, False):
@@ -2797,6 +3007,7 @@ def _run_test_console_pipeline(
             payload['last_event'] = 'Handoff skipped'
             payload['last_reason_code'] = 'NO_SHORTLISTED_SIGNALS'
             _finish_timed_phase(payload, 'handoff')
+            _record_lifecycle_event(payload, event='handoff_diagnostics_completed', subphase='handoff_diagnostics_completed', next_expected_event='prediction_started')
             _start_timed_phase(payload, 'prediction')
             _finish_timed_phase(payload, 'prediction')
             _set_state(status=_augment_progress(payload))
@@ -2808,6 +3019,7 @@ def _run_test_console_pipeline(
         payload['last_progress_at'] = payload['updated_at']
         payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Execution trial started'
+        _record_lifecycle_event(payload, event='execution_route_diagnostics_started', subphase='execution_route_diagnostics_started', next_expected_event='execution_route_diagnostics_completed')
         _set_state(status=_augment_progress(payload))
         if profile_modules.get(TEST_CONSOLE_MODULE_EXECUTION, False):
             trial = run_live_paper_trial_run(preset_name=target_preset, heartbeat_passes=1)
@@ -2821,6 +3033,7 @@ def _run_test_console_pipeline(
         payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Execution trial completed'
         _finish_timed_phase(payload, 'execution')
+        _record_lifecycle_event(payload, event='execution_route_diagnostics_completed', subphase='execution_route_diagnostics_completed', next_expected_event='risk_throttle_diagnostics_started')
         _set_state(status=_augment_progress(payload))
 
         _start_timed_phase(payload, 'risk')
@@ -2830,6 +3043,7 @@ def _run_test_console_pipeline(
         payload['last_progress_at'] = payload['updated_at']
         payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Risk validation started'
+        _record_lifecycle_event(payload, event='risk_throttle_diagnostics_started', subphase='risk_throttle_diagnostics_started', next_expected_event='risk_throttle_diagnostics_completed')
         _set_state(status=_augment_progress(payload))
         if profile_modules.get(TEST_CONSOLE_MODULE_RISK, False):
             validation = build_live_paper_validation_digest(preset_name=target_preset)
@@ -2889,6 +3103,7 @@ def _run_test_console_pipeline(
         payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Gate evaluation completed'
         _finish_timed_phase(payload, 'risk')
+        _record_lifecycle_event(payload, event='risk_throttle_diagnostics_completed', subphase='risk_throttle_diagnostics_completed', next_expected_event='execution_route_diagnostics_started')
         _set_state(status=_augment_progress(payload))
 
         _start_timed_phase(payload, 'execution')
@@ -2898,6 +3113,7 @@ def _run_test_console_pipeline(
         payload['last_progress_at'] = payload['updated_at']
         payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Extended run phase started'
+        _record_lifecycle_event(payload, event='execution_route_diagnostics_started', subphase='execution_route_diagnostics_started', next_expected_event='execution_route_diagnostics_completed')
         _set_state(status=_augment_progress(payload))
         if not profile_modules.get(TEST_CONSOLE_MODULE_EXECUTION, False):
             payload['extended_run_status'] = 'SKIPPED_BY_PROFILE'
@@ -2917,6 +3133,7 @@ def _run_test_console_pipeline(
         payload['last_progress_at'] = payload['updated_at']
         payload['last_real_progress_at'] = payload['updated_at']
         _finish_timed_phase(payload, 'execution')
+        _record_lifecycle_event(payload, event='execution_route_diagnostics_completed', subphase='execution_route_diagnostics_completed', next_expected_event='finalize_started')
         _set_state(status=_augment_progress(payload))
 
         _start_timed_phase(payload, 'finalize')
@@ -2926,6 +3143,7 @@ def _run_test_console_pipeline(
         payload['last_progress_at'] = payload['updated_at']
         payload['last_real_progress_at'] = payload['updated_at']
         payload['last_event'] = 'Finalizing test console run'
+        _record_lifecycle_event(payload, event='finalize_started', subphase='finalize_started', next_expected_event='finalize_completed')
         _set_state(status=_augment_progress(payload))
         _sync_operational_snapshot_for_profile(
             payload=payload,
@@ -2936,6 +3154,7 @@ def _run_test_console_pipeline(
         _cap_diagnostic_examples(payload)
         _annotate_diagnostic_workload(payload)
         _finish_timed_phase(payload, 'finalize')
+        _record_lifecycle_event(payload, event='finalize_completed', subphase='finalize_completed', next_expected_event='export_generation_started')
 
         has_errors = bool(payload['errors'])
         has_warnings = bool(payload['warnings'] or payload['blocker_summary'])
@@ -2982,8 +3201,10 @@ def _run_test_console_pipeline(
         payload['terminal_reason'] = str(payload.get('last_reason_code') or payload.get('test_status') or '')
         payload['summary'] = _finalize_summary(payload)
         _start_timed_phase(payload, 'export')
+        _record_lifecycle_event(payload, event='export_generation_started', subphase='export_generation_started', next_expected_event='export_generation_completed')
         payload['text_export'] = _log_line_items(payload)
         _finish_timed_phase(payload, 'export')
+        _record_lifecycle_event(payload, event='export_generation_completed', subphase='export_generation_completed', next_expected_event='terminal_status_or_export_available')
         payload['summary'] = _finalize_summary(payload)
         payload = _augment_progress(_normalize_test_console_payload(payload))
         if (payload.get('phase_budget_summary') or {}).get('budget_warning'):
@@ -3094,7 +3315,17 @@ def get_test_console_status() -> dict[str, Any]:
                 refresh_reason = 'NON_PROGRESS_REFRESH_STATUS_POLL'
                 if _uses_strict_reused_session_hang_rules(payload):
                     refresh_reason = 'NON_PROGRESS_REFRESH_REUSED_SESSION_VALIDATION_GATE'
-                _record_non_progress_refresh(refreshed, reason=refresh_reason)
+                if _test_console_run_id(refreshed) in _test_console_worker_run_ids:
+                    _record_lifecycle_event(
+                        refreshed,
+                        event='WORKER_ACTIVE_HEARTBEAT',
+                        subphase=refreshed.get('current_subphase') or refreshed.get('subphase') or 'worker_active',
+                        next_expected_event=refreshed.get('next_expected_event') or 'worker_progress_or_terminal_event',
+                        real_progress=False,
+                        heartbeat=True,
+                    )
+                else:
+                    _record_non_progress_refresh(refreshed, reason=refresh_reason)
                 _log_test_console('status-refresh-heartbeat', refreshed, level=logging.DEBUG, refresh_reason=refresh_reason)
             payload = refreshed
             _set_state(status=_augment_progress(_normalize_test_console_payload(payload)))

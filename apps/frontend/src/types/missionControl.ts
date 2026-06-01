@@ -556,6 +556,13 @@ export type TestConsoleStatusResponse = {
   modules_omitted?: string[];
   run_scope?: 'fresh_full_run' | 'targeted_diagnostic_run' | string;
   current_phase: string | null;
+  phase?: string | null;
+  raw_phase?: string | null;
+  current_subphase?: string | null;
+  subphase?: string | null;
+  lifecycle_timeline_summary?: Record<string, unknown> | null;
+  timeout_source?: Record<string, unknown> | null;
+  persistent_log_path?: string | null;
   current_step?: number | null;
   current_step_label?: string | null;
   completed_steps?: number | null;
