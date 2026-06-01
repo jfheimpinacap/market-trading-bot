@@ -258,12 +258,44 @@ export function getLivePaperAutonomyFunnel(params?: { preset?: string; window_mi
   return requestJson<LivePaperAutonomyFunnelResponse>(`/api/mission-control/live-paper-autonomy-funnel/${suffix}`);
 }
 
-export function startTestConsoleRun(payload: TestConsoleRunRequest = {}, init?: Pick<RequestInit, 'signal'>) {
-  return requestJson<TestConsoleStatusResponse>('/api/mission-control/test-console/start/', {
+export const TEST_CONSOLE_START_PATH = '/api/mission-control/test-console/start/';
+
+type TestConsoleStartRequestInit = Pick<RequestInit, 'method' | 'body' | 'signal'>;
+
+function debugTestConsoleStart(event: string, details?: Record<string, unknown>) {
+  if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug(`[test-console] ${event}`, details ?? {});
+  }
+}
+
+export function buildTestConsoleStartRequest(
+  payload: TestConsoleRunRequest = {},
+  init?: Pick<RequestInit, 'signal'>,
+): { path: string; init: TestConsoleStartRequestInit } {
+  debugTestConsoleStart('start-request-building', {
+    path: TEST_CONSOLE_START_PATH,
     method: 'POST',
-    body: JSON.stringify(payload),
-    signal: init?.signal,
+    payload,
   });
+  return {
+    path: TEST_CONSOLE_START_PATH,
+    init: {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      signal: init?.signal,
+    },
+  };
+}
+
+export function startTestConsoleRun(payload: TestConsoleRunRequest = {}, init?: Pick<RequestInit, 'signal'>) {
+  const request = buildTestConsoleStartRequest(payload, init);
+  debugTestConsoleStart('start-request-sending', {
+    path: request.path,
+    method: request.init.method,
+    body: request.init.body,
+  });
+  return requestJson<TestConsoleStatusResponse>(request.path, request.init);
 }
 
 export function stopTestConsoleRun() {

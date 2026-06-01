@@ -27,6 +27,7 @@ import {
   getLivePaperValidation,
   getTestConsoleExportLog,
   getTestConsoleStatus,
+  TEST_CONSOLE_START_PATH,
   runLivePaperSmokeTest,
   startExtendedPaperRun,
   startTestConsoleRun,
@@ -135,6 +136,7 @@ type TestConsoleProfileId = typeof TEST_CONSOLE_PROFILE_OPTIONS[number]['id'];
 type TestConsoleStartState = 'idle' | 'requested' | 'confirmed' | 'failed' | 'not_confirmed' | 'running';
 
 const TEST_CONSOLE_START_CONFIRM_TIMEOUT_MS = 12_000;
+const TEST_CONSOLE_START_REQUEST_TIMEOUT_MS = 60_000;
 
 const TEST_CONSOLE_PHASE_LABELS: Record<string, string> = {
   idle: 'idle',
@@ -288,9 +290,23 @@ function getErrorMessage(error: unknown, fallback: string) {
 function getStartErrorMessage(error: unknown) {
   const message = getErrorMessage(error, 'Start failed.');
   if (error instanceof ApiError) {
-    return `Start failed · HTTP ${error.status} · ${message}`;
+    const body = error.responseBody && error.responseBody !== message ? ` · body=${error.responseBody}` : '';
+    return `Start failed · HTTP ${error.status} · ${message}${body}`;
   }
-  return `Start failed · ${message}`;
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return 'Start request did not reach backend or was aborted.';
+  }
+  if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
+    return `Network/CORS error · ${message}`;
+  }
+  return `Start request did not reach backend or was aborted. ${message}`;
+}
+
+function debugTestConsoleStart(event: string, details?: Record<string, unknown>) {
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug(`[test-console] ${event}`, details ?? {});
+  }
 }
 
 function isTestConsoleBackendIdle(payload: TestConsoleStatusResponse | null) {
@@ -739,16 +755,33 @@ export function CockpitPage() {
 
   const startTestConsoleFromCockpit = useCallback(async () => {
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), TEST_CONSOLE_START_CONFIRM_TIMEOUT_MS);
+    let requestTimedOut = false;
+    const requestTimeoutId = window.setTimeout(() => {
+      requestTimedOut = true;
+      debugTestConsoleStart('start-request-aborted', {
+        path: TEST_CONSOLE_START_PATH,
+        reason: 'request_timeout_before_backend_response',
+        timeout_ms: TEST_CONSOLE_START_REQUEST_TIMEOUT_MS,
+      });
+      controller.abort();
+    }, TEST_CONSOLE_START_REQUEST_TIMEOUT_MS);
+    const startPayload = { profile_id: selectedTestProfileId };
+    debugTestConsoleStart('start-clicked', {
+      path: TEST_CONSOLE_START_PATH,
+      method: 'POST',
+      profile_id: selectedTestProfileId,
+      request_timeout_ms: TEST_CONSOLE_START_REQUEST_TIMEOUT_MS,
+      confirmation_timeout_ms: TEST_CONSOLE_START_CONFIRM_TIMEOUT_MS,
+    });
     setTestConsoleStartLoading(true);
     setTestConsoleStartState('requested');
-    setTestConsoleStartMessage(`Start requested for profile=${selectedTestProfileId}. Waiting for POST /api/mission-control/test-console/start/ confirmation.`);
+    setTestConsoleStartMessage(`Start requested for profile=${selectedTestProfileId}. Waiting for POST ${TEST_CONSOLE_START_PATH} confirmation.`);
     setTestConsoleStatusError(null);
     setTestConsoleCopyMessage(null);
     try {
-      console.debug('[test-console] sending POST /api/mission-control/test-console/start/', { profile_id: selectedTestProfileId });
-      const payload = await startTestConsoleRun({ profile_id: selectedTestProfileId }, { signal: controller.signal });
-      console.debug('[test-console] start response', {
+      const payload = await startTestConsoleRun(startPayload, { signal: controller.signal });
+      window.clearTimeout(requestTimeoutId);
+      debugTestConsoleStart('start-response-received', {
         test_status: payload.test_status,
         current_phase: payload.current_phase,
         active_run: Boolean(payload.active_run ?? payload.has_active_run),
@@ -774,22 +807,29 @@ export function CockpitPage() {
       }
       if (isTestConsoleBackendIdle(delayedStatus)) {
         setTestConsoleStartState('not_confirmed');
-        setTestConsoleStartMessage('Start not confirmed · backend still idle · no POST/start event received.');
-        setTestConsoleStatusError('Start not confirmed · backend still idle · no POST/start event received.');
+        setTestConsoleStartMessage('Start accepted but status not active yet · backend still reports idle after POST start.');
+        setTestConsoleStatusError('Start accepted but status not active yet · backend still reports idle after POST start.');
       } else {
         setTestConsoleStartState('not_confirmed');
-        setTestConsoleStartMessage('Start not confirmed · backend did not expose active_run/run_id after POST start.');
-        setTestConsoleStatusError('Start not confirmed · backend did not expose active_run/run_id after POST start.');
+        setTestConsoleStartMessage('Start accepted but status not active yet · backend did not expose active_run/run_id after POST start.');
+        setTestConsoleStatusError('Start accepted but status not active yet · backend did not expose active_run/run_id after POST start.');
       }
     } catch (startError) {
-      const message = controller.signal.aborted
-        ? 'Start not confirmed · backend still idle · no POST/start event received before confirmation timeout.'
+      debugTestConsoleStart('start-request-error', {
+        path: TEST_CONSOLE_START_PATH,
+        timed_out: requestTimedOut,
+        aborted: controller.signal.aborted,
+        error_name: startError instanceof Error ? startError.name : typeof startError,
+        error_message: startError instanceof Error ? startError.message : String(startError),
+      });
+      const message = requestTimedOut
+        ? 'Start request timed out before backend response.'
         : getStartErrorMessage(startError);
-      setTestConsoleStartState(controller.signal.aborted ? 'not_confirmed' : 'failed');
+      setTestConsoleStartState('failed');
       setTestConsoleStartMessage(message);
       setTestConsoleStatusError(message);
     } finally {
-      window.clearTimeout(timeoutId);
+      window.clearTimeout(requestTimeoutId);
       setTestConsoleStartLoading(false);
     }
   }, [exportTestConsoleLog, loadTestConsoleStatus, selectedTestProfileId]);

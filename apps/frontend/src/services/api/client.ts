@@ -2,11 +2,13 @@ import { API_BASE_URL } from '../../lib/config';
 
 export class ApiError extends Error {
   status: number;
+  responseBody: string | null;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, responseBody: string | null = null) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.responseBody = responseBody;
   }
 }
 
@@ -110,25 +112,25 @@ function extractErrorMessage(value: unknown): string | null {
   return null;
 }
 
-async function getResponseErrorMessage(response: Response) {
+async function getResponseErrorDetails(response: Response) {
   const fallback = `Request failed with status ${response.status}`;
 
   let text = '';
   try {
     text = await response.text();
   } catch {
-    return fallback;
+    return { message: fallback, responseBody: null };
   }
 
   if (!text) {
-    return fallback;
+    return { message: fallback, responseBody: null };
   }
 
   try {
     const parsed = JSON.parse(text) as unknown;
-    return extractErrorMessage(parsed) ?? text;
+    return { message: extractErrorMessage(parsed) ?? text, responseBody: text };
   } catch {
-    return text;
+    return { message: text, responseBody: text };
   }
 }
 
@@ -142,7 +144,8 @@ async function performRequest<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new ApiError(response.status, await getResponseErrorMessage(response));
+    const errorDetails = await getResponseErrorDetails(response);
+    throw new ApiError(response.status, errorDetails.message, errorDetails.responseBody);
   }
 
   return (await response.json()) as T;
@@ -164,6 +167,10 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
     if (existing && now - existing.startedAt < GET_DEDUP_COOLDOWN_MS) {
       return existing.promise as Promise<T>;
     }
+  }
+
+  if (!dedupeEnabled) {
+    recentSuccessCache.clear();
   }
 
   trackRequestStart(path);
