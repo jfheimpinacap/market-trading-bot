@@ -9113,6 +9113,66 @@ class TestConsoleApiTests(TestCase):
         self.assertTrue(expected_keys.issubset(set(body.keys())))
 
     @patch('apps.mission_control.views.start_test_console')
+    def test_start_view_logs_entry_before_service_call(self, mock_start):
+        payload = self._status_payload()
+        payload.update({
+            'test_status': 'RUNNING',
+            'current_phase': 'bootstrap',
+            'current_run_id': 'tc-test-001',
+            'active_run': True,
+            'has_active_run': True,
+        })
+        mock_start.return_value = payload
+
+        with self.assertLogs('apps.mission_control.views', level='INFO') as logs:
+            response = self.client.post(
+                reverse('mission_control:test-console-start'),
+                data='{"profile_id":"prediction_risk_path"}',
+                content_type='application/json',
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('[test-console] start-view-entered', '\\n'.join(logs.output))
+        mock_start.assert_called_once_with(
+            preset_name='live_read_only_paper_conservative',
+            profile_id='prediction_risk_path',
+        )
+
+    @patch('apps.mission_control.views.start_test_console')
+    def test_start_accepted_returns_run_id_and_initial_status(self, mock_start):
+        payload = self._status_payload()
+        payload.update({
+            'test_status': 'RUNNING',
+            'current_phase': 'bootstrap',
+            'current_run_id': 'tc-test-accepted',
+            'run_id': 'tc-test-accepted',
+            'active_run': True,
+            'has_active_run': True,
+        })
+        mock_start.return_value = payload
+
+        response = self.client.post(reverse('mission_control:test-console-start'), data='{}', content_type='application/json')
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body['current_run_id'], 'tc-test-accepted')
+        self.assertEqual(body['test_status'], 'RUNNING')
+        self.assertTrue(body['active_run'])
+
+    def test_start_invalid_payload_returns_clear_json(self):
+        response = self.client.post(
+            reverse('mission_control:test-console-start'),
+            data='{"profile_id":"does_not_exist"}',
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertEqual(body['status'], 'START_REJECTED')
+        self.assertEqual(body['reason_code'], 'TEST_CONSOLE_START_INVALID_PAYLOAD')
+        self.assertIn('profile_id', body['errors'])
+
+    @patch('apps.mission_control.views.start_test_console')
     def test_scan_without_signals_is_logged_as_warning_blocker(self, mock_start):
         payload = self._status_payload()
         payload['test_status'] = 'COMPLETED_WITH_WARNINGS'

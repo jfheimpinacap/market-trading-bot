@@ -1,8 +1,12 @@
+import logging
+
 from rest_framework import generics, status
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.renderers import BaseRenderer, JSONRenderer
+
+logger = logging.getLogger(__name__)
 
 from apps.mission_control.models import (
     AutonomousCadenceDecision,
@@ -677,8 +681,23 @@ class ExtendedPaperRunStatusView(APIView):
 
 class StartTestConsoleView(APIView):
     def post(self, request, *args, **kwargs):
+        logger.info('[test-console] start-view-entered %s', {
+            'method': request.method,
+            'path': request.path,
+            'content_type': request.content_type,
+        })
         serializer = TestConsoleStartRequestSerializer(data=request.data or {})
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            logger.info('[test-console] start-rejected %s', {
+                'reason': 'invalid_payload',
+                'errors': serializer.errors,
+            })
+            return Response({
+                'detail': 'Invalid Test Console start payload.',
+                'reason_code': 'TEST_CONSOLE_START_INVALID_PAYLOAD',
+                'status': 'START_REJECTED',
+                'errors': serializer.errors,
+            }, status=status.HTTP_400_BAD_REQUEST)
         try:
             payload = start_test_console(
                 preset_name=serializer.validated_data.get('preset'),
